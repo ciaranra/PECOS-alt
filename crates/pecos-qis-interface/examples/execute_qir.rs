@@ -23,11 +23,11 @@ fn main() {
 
     let lib_path = match linker.compile(&qir_path, Some("bell_state_lib")) {
         Ok(path) => {
-            println!("  ✓ Compiled to: {}", path.display());
+            println!("  SUCCESS: Compiled to: {}", path.display());
             path
         }
         Err(e) => {
-            eprintln!("  ✗ Compilation failed: {}", e);
+            eprintln!("  FAILED: Compilation failed: {}", e);
             std::process::exit(1);
         }
     };
@@ -37,11 +37,11 @@ fn main() {
     unsafe {
         let lib = match libloading::Library::new(&lib_path) {
             Ok(lib) => {
-                println!("  ✓ Library loaded successfully");
+                println!("  SUCCESS: Library loaded successfully");
                 lib
             }
             Err(e) => {
-                eprintln!("  ✗ Failed to load library: {}", e);
+                eprintln!("  FAILED: Failed to load library: {}", e);
                 std::process::exit(1);
             }
         };
@@ -56,18 +56,18 @@ fn main() {
         let bell_state_fn: libloading::Symbol<unsafe extern "C" fn()> =
             match lib.get(b"bell_state") {
                 Ok(func) => {
-                    println!("  ✓ Found bell_state function");
+                    println!("  SUCCESS: Found bell_state function");
                     func
                 }
                 Err(e) => {
-                    eprintln!("  ✗ Failed to find bell_state function: {}", e);
+                    eprintln!("  FAILED: Failed to find bell_state function: {}", e);
                     std::process::exit(1);
                 }
             };
 
         // Execute the function
         bell_state_fn();
-        println!("  ✓ Executed bell_state function");
+        println!("  SUCCESS: Executed bell_state function");
 
         // Step 4: Collect the operations
         println!("\nStep 4: Collected quantum operations:");
@@ -83,5 +83,5 @@ fn main() {
         });
     }
 
-    println!("\n✓ Example completed successfully!");
+    println!("\nSUCCESS: Example completed successfully!");
 }

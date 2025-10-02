@@ -17,14 +17,14 @@ def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, 
 def get_measurement_tuples(results: dict, n_bits: int) -> list[tuple[bool, ...]]:
     """Extract measurement tuples from results, handling both formats."""
     # Try new format with individual measurement keys first
-    if "measurement_1" in results and n_bits > 1:
+    if "measurement_0" in results and n_bits > 1:
         # Combine individual measurement results into tuples
         measurements = []
-        measurement_keys = [f"measurement_{i+1}" for i in range(n_bits)]
+        measurement_keys = [f"measurement_{i}" for i in range(n_bits)]
 
         # Check all required keys exist
         if all(key in results for key in measurement_keys):
-            num_shots = len(results["measurement_1"])
+            num_shots = len(results["measurement_0"])
             for shot_idx in range(num_shots):
                 measurement_tuple = tuple(
                     bool(results[key][shot_idx]) for key in measurement_keys
@@ -35,7 +35,7 @@ def get_measurement_tuples(results: dict, n_bits: int) -> list[tuple[bool, ...]]
     # Fall back to old format with integer encoding
     measurements = results.get(
         "measurements",
-        results.get("measurement_1", results.get("result", [])),
+        results.get("measurement_0", results.get("result", [])),
     )
     if n_bits == 1:
         return [(bool(m),) for m in measurements]
@@ -83,10 +83,10 @@ class TestSingleQubitGates:
             x(q)
             return measure(q)
 
-        results = sim(x_test).qubits(5).quantum(state_vector()).run(10)
+        results = sim(x_test).qubits(10).quantum(state_vector()).run(10)
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         assert all(r == 1 for r in measurements)
 
@@ -102,7 +102,7 @@ class TestSingleQubitGates:
         results = sim(y_test).qubits(10).quantum(state_vector()).run(10)
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         assert all(r == 1 for r in measurements)
 
@@ -118,7 +118,7 @@ class TestSingleQubitGates:
         results = sim(z_test).qubits(10).quantum(state_vector()).run(10)
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         assert all(r == 0 for r in measurements)
 
@@ -135,7 +135,7 @@ class TestSingleQubitGates:
         # Should see both 0 and 1
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         zeros = sum(1 for r in measurements if r == 0)
         ones = sum(1 for r in measurements if r == 1)
@@ -156,7 +156,7 @@ class TestSingleQubitGates:
         # S gate doesn't change computational basis
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         assert all(r == 1 for r in measurements)
 
@@ -174,7 +174,7 @@ class TestSingleQubitGates:
         # T gate doesn't change computational basis
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         assert all(r == 1 for r in measurements)
 
@@ -251,7 +251,7 @@ class TestQuantumStateManagement:
         # Reset should give |0⟩
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         assert all(r == 0 for r in measurements)
 
@@ -271,7 +271,7 @@ class TestQuantumStateManagement:
         results = sim(discard_test).qubits(10).quantum(state_vector()).run(10)
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         assert all(r == 1 for r in measurements)
 
@@ -333,7 +333,7 @@ class TestRotationGates:
         results = sim(rx_test).qubits(10).quantum(state_vector()).run(10)
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         assert all(r == 1 for r in measurements)
 
@@ -349,7 +349,7 @@ class TestRotationGates:
         results = sim(ry_test).qubits(10).quantum(state_vector()).run(10)
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         assert all(r == 1 for r in measurements)
 
@@ -366,7 +366,7 @@ class TestRotationGates:
         # Rz doesn't change |0⟩ measurement
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         assert all(r == 0 for r in measurements)
 
@@ -403,11 +403,11 @@ class TestControlFlow:
 
         # Test with True condition - should apply X gate
         results_true = (
-            sim(test_true_condition).qubits(5).quantum(state_vector()).run(10)
+            sim(test_true_condition).qubits(10).quantum(state_vector()).run(10)
         )
         measurements_true = results_true.get(
             "measurements",
-            results_true.get("measurement_1", results_true.get("result", [])),
+            results_true.get("measurement_0", results_true.get("result", [])),
         )
         assert all(
             r == 1 for r in measurements_true
@@ -415,11 +415,11 @@ class TestControlFlow:
 
         # Test with False condition - should not apply X gate
         results_false = (
-            sim(test_false_condition).qubits(5).quantum(state_vector()).run(10)
+            sim(test_false_condition).qubits(10).quantum(state_vector()).run(10)
         )
         measurements_false = results_false.get(
             "measurements",
-            results_false.get("measurement_1", results_false.get("result", [])),
+            results_false.get("measurement_0", results_false.get("result", [])),
         )
         assert all(
             r == 0 for r in measurements_false
@@ -442,7 +442,7 @@ class TestControlFlow:
         # Should see values 0-3
         measurements = results.get(
             "measurements",
-            results.get("measurement_1", results.get("result", [])),
+            results.get("measurement_0", results.get("result", [])),
         )
         values = set(measurements)
         assert len(values) >= 2  # At least some variation

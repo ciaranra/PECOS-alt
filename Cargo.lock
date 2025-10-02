@@ -48,12 +48,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aliasable"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
-
-[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -271,6 +265,15 @@ version = "0.1.1"
 dependencies = [
  "criterion",
  "pecos",
+]
+
+[[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -509,7 +512,7 @@ version = "4.5.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbfd7eae0b0f1a6e63d4b13c9c478de77c2eb546fba158ad50b4203dc24b9f9c"
 dependencies = [
- "heck 0.5.0",
+ "heck",
  "proc-macro2",
  "quote",
  "syn",
@@ -677,7 +680,7 @@ dependencies = [
  "cranelift-assembler-x64-meta",
  "cranelift-codegen-shared",
  "cranelift-srcgen",
- "heck 0.5.0",
+ "heck",
  "pulley-interpreter",
 ]
 
@@ -1369,21 +1372,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
-name = "futures"
-version = "0.3.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65bc07b1a8bc7c85c5f2e110c476c7389b4554ba72af57d8445ea63a576b0876"
-dependencies = [
- "futures-channel",
- "futures-core",
- "futures-executor",
- "futures-io",
- "futures-sink",
- "futures-task",
- "futures-util",
-]
-
-[[package]]
 name = "futures-channel"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1398,17 +1386,6 @@ name = "futures-core"
 version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05f29059c0c2090612e8d742178b0580d2dc940c837851ad723096f87af6663e"
-
-[[package]]
-name = "futures-executor"
-version = "0.3.31"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e28d1d997f585e54aebc3f97d39e72338912123a67330d723fdbb564d646c9f"
-dependencies = [
- "futures-core",
- "futures-task",
- "futures-util",
-]
 
 [[package]]
 name = "futures-io"
@@ -1451,7 +1428,6 @@ version = "0.3.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fa08315bb612088cc391249efdc3bc77536f16c91f6cf495e6fbe85b20a4a81"
 dependencies = [
- "futures-channel",
  "futures-core",
  "futures-io",
  "futures-macro",
@@ -1589,12 +1565,6 @@ name = "hashbrown"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5419bdc4f6a9207fbeba6d11b604d481addf78ecd10c11ad51e76c2f6482748d"
-
-[[package]]
-name = "heck"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "heck"
@@ -2517,30 +2487,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ouroboros"
-version = "0.18.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e0f050db9c44b97a94723127e6be766ac5c340c48f2c4bb3ffa11713744be59"
-dependencies = [
- "aliasable",
- "ouroboros_macro",
- "static_assertions",
-]
-
-[[package]]
-name = "ouroboros_macro"
-version = "0.18.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c7028bdd3d43083f6d8d4d5187680d0d3560d54df4cc9d752005268b41e64d0"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2",
- "proc-macro2-diagnostics",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "parking_lot"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2583,11 +2529,8 @@ dependencies = [
  "pecos-qasm",
  "pecos-qis-ccengine",
  "pecos-qis-interface",
- "pecos-qis-runtime",
- "pecos-qis-sim",
  "pecos-qsim",
  "pecos-rng",
- "pecos-selene-engine",
  "serde_json",
  "tempfile",
 ]
@@ -2774,9 +2717,11 @@ version = "0.1.1"
 name = "pecos-qis-ccengine"
 version = "0.1.1"
 dependencies = [
+ "bincode",
  "dirs 5.0.1",
  "dyn-clone",
  "env_logger",
+ "inkwell",
  "libloading",
  "log",
  "pecos-core",
@@ -2785,7 +2730,10 @@ dependencies = [
  "pecos-programs",
  "pecos-qis-interface",
  "pecos-qis-runtime-trait",
+ "rand 0.9.2",
+ "rand_chacha",
  "regex",
+ "tempfile",
 ]
 
 [[package]]
@@ -2797,6 +2745,7 @@ dependencies = [
  "libloading",
  "log",
  "pecos-qis-interface",
+ "serde",
  "walkdir",
 ]
 
@@ -2811,45 +2760,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "pecos-qis-runtime"
-version = "0.1.1"
-dependencies = [
- "bytemuck",
- "libc",
- "libloading",
- "log",
- "pecos-core",
- "pecos-engines",
- "rand 0.9.2",
- "rand_chacha",
- "regex",
- "serial_test",
- "tempfile",
-]
-
-[[package]]
 name = "pecos-qis-runtime-trait"
 version = "0.1.1"
 dependencies = [
  "dyn-clone",
  "log",
  "pecos-qis-interface",
-]
-
-[[package]]
-name = "pecos-qis-sim"
-version = "0.1.1"
-dependencies = [
- "log",
- "pecos-core",
- "pecos-engines",
- "pecos-hugr-qis",
- "pecos-programs",
- "pecos-qis-runtime",
- "serde_json",
- "serial_test",
- "tempfile",
- "tket",
 ]
 
 [[package]]
@@ -2904,7 +2820,6 @@ version = "0.1.1"
 dependencies = [
  "log",
  "parking_lot",
- "pecos",
  "pecos-core",
  "pecos-cppsparsesim",
  "pecos-engines",
@@ -2913,64 +2828,15 @@ dependencies = [
  "pecos-phir-json",
  "pecos-programs",
  "pecos-qasm",
- "pecos-qis-runtime",
- "pecos-qis-sim",
+ "pecos-qis-ccengine",
  "pecos-qsim",
  "pecos-quest",
  "pecos-qulacs",
- "pecos-selene-engine",
+ "pecos-rng",
  "pyo3",
  "pyo3-build-config",
  "serde_json",
  "tempfile",
-]
-
-[[package]]
-name = "pecos-selene-bridge"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "backtrace",
- "chrono",
- "log",
- "pecos-engines",
- "rand 0.9.2",
- "selene-core",
-]
-
-[[package]]
-name = "pecos-selene-ccengine"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "libc",
- "libloading",
- "log",
- "pecos-core",
- "pecos-engines",
- "pecos-qis-runtime",
- "serial_test",
- "tempfile",
-]
-
-[[package]]
-name = "pecos-selene-engine"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "env_logger",
- "libloading",
- "log",
- "once_cell",
- "pecos-core",
- "pecos-engines",
- "pecos-hugr-qis",
- "pecos-programs",
- "pecos-qis-runtime",
- "pecos-selene-bridge",
- "serde_json",
- "tempfile",
- "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -3225,19 +3091,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro2-diagnostics"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af066a9c399a26e020ada66a034357a868728e72cd426f3adcd35f80d88d88c8"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "version_check",
- "yansi",
-]
-
-[[package]]
 name = "pulley-interpreter"
 version = "37.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3315,7 +3168,7 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "100246c0ecf400b475341b8455a9213344569af29a3c841d29270e53102e0fcf"
 dependencies = [
- "heck 0.5.0",
+ "heck",
  "proc-macro2",
  "pyo3-build-config",
  "quote",
@@ -3784,15 +3637,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scc"
-version = "2.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46e6f046b7fef48e2660c57ed794263155d713de679057f2d0c169bfc6e756cc"
-dependencies = [
- "sdd",
-]
-
-[[package]]
 name = "schemars"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3827,25 +3671,6 @@ name = "scratch"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d68f2ec51b097e4c1a75b681a8bec621909b5e91f15bb7b840c4f2f7b01148b2"
-
-[[package]]
-name = "sdd"
-version = "3.0.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490dcfcbfef26be6800d11870ff2df8774fa6e86d047e3e8c8a76b25655e41ca"
-
-[[package]]
-name = "selene-core"
-version = "0.2.1"
-source = "git+https://github.com/CQCL/selene.git?rev=c5533b8#c5533b829ad512d85035df79b5b09b7485135a7d"
-dependencies = [
- "anyhow",
- "delegate",
- "derive_more 2.0.1",
- "libloading",
- "ouroboros",
- "thiserror 2.0.16",
-]
 
 [[package]]
 name = "semver"
@@ -3954,31 +3779,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serial_test"
-version = "3.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b258109f244e1d6891bf1053a55d63a5cd4f8f4c30cf9a1280989f80e7a1fa9"
-dependencies = [
- "futures",
- "log",
- "once_cell",
- "parking_lot",
- "scc",
- "serial_test_derive",
-]
-
-[[package]]
-name = "serial_test_derive"
-version = "3.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d69265a08751de7844521fd15003ae0a888e035773ba05695c5c759a6f89eef"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4078,7 +3878,7 @@ version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
 dependencies = [
- "heck 0.5.0",
+ "heck",
  "proc-macro2",
  "quote",
  "syn",
@@ -5128,7 +4928,7 @@ checksum = "d04509ae5bfb09b509e22ce83168add9b2a92dc7a902d68f31d391c9b23a36d6"
 dependencies = [
  "anyhow",
  "bitflags",
- "heck 0.5.0",
+ "heck",
  "indexmap 2.11.4",
  "wit-parser",
 ]
@@ -5639,12 +5439,6 @@ dependencies = [
  "libc",
  "rustix",
 ]
-
-[[package]]
-name = "yansi"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "yoke"

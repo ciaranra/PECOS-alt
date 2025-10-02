@@ -141,10 +141,10 @@ class TestGuppyLLVMPipeline:
         assert result is not None, "Should get execution results"
 
         # Check for measurement results in various formats
-        if "measurement_1" in result and "measurement_2" in result:
+        if "measurement_0" in result and "measurement_1" in result:
             # Tuple return format - individual measurement keys
-            measurements1 = result["measurement_1"]
-            measurements2 = result["measurement_2"]
+            measurements1 = result["measurement_0"]
+            measurements2 = result["measurement_1"]
             assert len(measurements1) == 100, "Should have 100 measurements for qubit 1"
             assert len(measurements2) == 100, "Should have 100 measurements for qubit 2"
 
@@ -277,17 +277,17 @@ def test_superposition_statistics(n_qubits: int, expected_avg: float) -> None:
     # Calculate average number of 1s
     if n_qubits == 1:
         ones_count = (
-            sum(result["measurement_1"])
-            if "measurement_1" in result
+            sum(result["measurement_0"])
+            if "measurement_0" in result
             else sum(result.get("measurements", []))
         )
         avg_ones = ones_count / 1000
     else:
         # For multiple qubits, sum up all the 1s
         total_ones = 0
-        if "measurement_1" in result:
+        if "measurement_0" in result:
             # Separate measurement keys
-            for i in range(1, n_qubits + 1):
+            for i in range(0, n_qubits):
                 total_ones += sum(result[f"measurement_{i}"])
         elif "measurements" in result:
             measurements = result["measurements"]

@@ -96,8 +96,8 @@ class ExtendedGuppyTester:
             result_dict = builder.run(shots)
 
             # Format results
-            # Check if results are split into measurement_1, measurement_2, etc. (for tuple returns)
-            if "measurement_1" in result_dict:
+            # Check if results are split into measurement_0, measurement_2, etc. (for tuple returns)
+            if "measurement_0" in result_dict:
                 # Reconstruct tuples from separate measurement lists
                 measurement_keys = sorted(
                     [k for k in result_dict if k.startswith("measurement_")],

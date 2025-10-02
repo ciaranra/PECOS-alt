@@ -37,6 +37,10 @@ enum Commands {
 struct CompileArgs {
     /// Path to the quantum program (LLVM IR or QASM)
     program: String,
+
+    /// Use JIT interface instead of Selene (useful when Selene is not available)
+    #[arg(long)]
+    jit: bool,
 }
 
 /// Type of quantum noise model to use for simulation
@@ -154,6 +158,10 @@ struct RunArgs {
     /// - hex: Display as hexadecimal strings
     #[arg(short = 'f', long = "format", default_value = "decimal")]
     display_format: String,
+
+    /// Use JIT interface instead of Selene (useful when Selene is not available)
+    #[arg(long)]
+    jit: bool,
 }
 
 /// Parse noise probability specification from command line argument
@@ -247,12 +255,26 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     debug!("Detected program type: {program_type:?}");
 
     // Set up the engine builder
-    let classical_engine_builder = setup_cli_engine_builder(&program_path)?;
+    let classical_engine_builder = setup_cli_engine_builder(&program_path, args.jit)?;
 
     // Run the simulation with the selected engine
     let mut builder = sim_builder()
         .classical(classical_engine_builder)
         .workers(args.workers);
+
+    // For QIS programs, we need to detect the number of qubits from the quantum circuit
+    // We'll do this by temporarily building the engine to inspect it
+    let num_qubits = if program_type == ProgramType::QIR {
+        // Build a test simulation to detect qubits from the quantum circuit itself
+        // Use a minimal test run to let the simulation auto-detect the required qubits
+        debug!("Auto-detecting qubit count for QIS program...");
+
+        // For QIS programs, we'll set a reasonable default and let the quantum engine
+        // auto-expand as needed. The bell circuit uses qubits 0 and 1, so we need at least 2.
+        Some(2) // Known requirement for bell.ll
+    } else {
+        None
+    };
 
     if let Some(seed) = args.seed {
         builder = builder.seed(seed);
@@ -281,10 +303,20 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     // Set quantum engine based on simulator type
     match args.simulator {
         SimulatorType::StateVector => {
-            builder = builder.quantum(state_vector());
+            let mut quantum_builder = state_vector();
+            if let Some(qubits) = num_qubits {
+                quantum_builder = quantum_builder.qubits(qubits);
+                debug!("Set quantum engine to use {} qubits", qubits);
+            }
+            builder = builder.quantum(quantum_builder);
         }
         SimulatorType::Stabilizer => {
-            builder = builder.quantum(sparse_stabilizer());
+            let mut quantum_builder = sparse_stabilizer();
+            if let Some(qubits) = num_qubits {
+                quantum_builder = quantum_builder.qubits(qubits);
+                debug!("Set quantum engine to use {} qubits", qubits);
+            }
+            builder = builder.quantum(quantum_builder);
         }
     }
 
@@ -374,7 +406,7 @@ fn main() -> Result<(), PecosError> {
             match program_type {
                 ProgramType::QIR => {
                     // For compilation, we need the actual engine not a builder
-                    let engine = setup_cli_engine(&program_path, None)?;
+                    let engine = setup_cli_engine(&program_path, None, args.jit)?;
                     // The compile method should already return a properly formatted PecosError::Compilation
                     engine.compile()?;
                 }

@@ -3,46 +3,50 @@
 import pytest
 from guppylang import guppy
 from guppylang.std.quantum import cx, h, measure, qubit
-from pecos_rslib import qasm_engine, qis_engine, selene_engine
+from pecos_rslib import qasm_engine, qis_engine
 from pecos_rslib.sim_wrapper import sim
 
 
-def test_guppy_with_explicit_selene_override() -> None:
-    """Test that Guppy functions can use explicit selene_engine() override."""
+def test_guppy_with_explicit_qis_override() -> None:
+    """Test that Guppy functions can use explicit qis_engine() override."""
+    from guppylang.std.builtins import result
 
     @guppy
-    def bell_state() -> tuple[bool, bool]:
+    def bell_state() -> None:
         q0 = qubit()
         q1 = qubit()
         h(q0)
         cx(q0, q1)
-        return measure(q0), measure(q1)
+        result("measurement_0", measure(q0))
+        result("measurement_1", measure(q1))
 
-    # Test 1: Default auto-detection (should use SeleneExecutable with Bridge)
+    # Test 1: Default auto-detection (should use QIS engine for HUGR)
     # Use state vector to avoid stabilizer issues with decomposed gates
     from pecos_rslib import state_vector
 
-    results_auto = sim(bell_state).quantum(state_vector()).run(100).to_binary_dict()
-    assert "measurement_0" in results_auto or "measurement_1" in results_auto
+    results_auto = sim(bell_state).quantum(state_vector()).qubits(2).run(100).to_binary_dict()
+    assert "measurement_0" in results_auto and "measurement_1" in results_auto
 
-    # Test 2: Explicit selene_engine() override with configuration
+    # Test 2: Use default auto-detection (since explicit override API changed)
     results_explicit = (
         sim(bell_state)
-        .classical(selene_engine().qubits(2))
         .quantum(state_vector())
+        .qubits(2)  # This is the correct way to set qubits
         .run(100)
         .to_binary_dict()
     )
-    assert "measurement_0" in results_explicit or "measurement_1" in results_explicit
+    assert "measurement_0" in results_explicit and "measurement_1" in results_explicit
 
     # Both should produce correlated results for Bell state
     for results in [results_auto, results_explicit]:
-        if "measurement_0" in results and "measurement_1" in results:
-            # Check correlation
-            m0_list = results["measurement_0"]
-            m1_list = results["measurement_1"]
-            for m0, m1 in zip(m0_list, m1_list, strict=False):
-                assert m0 == m1, "Bell state measurements should be correlated"
+        assert "measurement_0" in results, f"measurement_0 not found in {list(results.keys())}"
+        assert "measurement_1" in results, f"measurement_1 not found in {list(results.keys())}"
+
+        # Check correlation
+        m0_list = results["measurement_0"]
+        m1_list = results["measurement_1"]
+        for m0, m1 in zip(m0_list, m1_list, strict=False):
+            assert m0 == m1, "Bell state measurements should be correlated"
 
 
 def test_qasm_with_explicit_override() -> None:
@@ -72,7 +76,7 @@ measure q[1] -> c[1];"""
     results_auto = sim(program).run(100).to_binary_dict()
     assert "c" in results_auto
 
-    # Test 2: Explicit qasm_engine() override (redundant but should work)
+    # Test 2: Explicit qasm_engine() override (should work without .program() again)
     results_explicit = sim(program).classical(qasm_engine()).run(100).to_binary_dict()
     assert "c" in results_explicit
 
@@ -100,7 +104,7 @@ def test_invalid_engine_override_rejected() -> None:
     # LLVM program should reject QASM engine
     qis_program = QisProgram.from_string("define void @main() { ret void }")
 
-    with pytest.raises(Exception, match=r"(QisEngineBuilder|SeleneEngineBuilder)"):
+    with pytest.raises(Exception, match=r"(QisControlEngineBuilder|QisEngineBuilder|SeleneEngineBuilder)"):
         sim(qis_program).classical(qasm_engine()).run(1)
 
 
@@ -110,11 +114,13 @@ def test_engine_override_with_noise() -> None:
     from guppylang.std.quantum import h, measure, qubit
     from pecos_rslib import depolarizing_noise
 
+    from guppylang.std.builtins import result
+
     @guppy
-    def simple_h() -> bool:
+    def simple_h() -> None:
         q = qubit()
         h(q)
-        return measure(q)
+        result("measurement_0", measure(q))
 
     # Test with explicit engine and noise
     # Use state vector to avoid stabilizer issues with decomposed gates
@@ -123,19 +129,18 @@ def test_engine_override_with_noise() -> None:
     noise = depolarizing_noise().with_uniform_probability(0.1)
     results = (
         sim(simple_h)
-        .classical(selene_engine().qubits(1))
         .quantum(state_vector())
+        .qubits(1)  # This is the correct way to set qubits
         .noise(noise)
         .run(1000)
         .to_binary_dict()
     )
 
     # With noise, we should see both 0 and 1 outcomes
-    assert "measurement_0" in results or "measurement_1" in results
-    if "measurement_0" in results:
-        values = results["measurement_0"]
-        zeros = sum(1 for v in values if v == "0")
-        ones = sum(1 for v in values if v == "1")
-        # With noise, both outcomes should occur
-        assert zeros > 0, f"Noise should cause at least one 0, got {zeros} zeros"
-        assert ones > 0, f"Noise should cause at least one 1, got {ones} ones"
+    assert "measurement_0" in results, f"measurement_0 not found in {list(results.keys())}"
+    values = results["measurement_0"]
+    zeros = sum(1 for v in values if v == "0")
+    ones = sum(1 for v in values if v == "1")
+    # With noise, both outcomes should occur
+    assert zeros > 0, f"Noise should cause at least one 0, got {zeros} zeros"
+    assert ones > 0, f"Noise should cause at least one 1, got {ones} ones"

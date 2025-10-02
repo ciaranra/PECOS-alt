@@ -86,6 +86,27 @@ impl StateVecEngine {
             simulator: StateVec::with_seed(num_qubits, seed),
         }
     }
+
+    /// Ensure the simulator has the correct number of qubits, recreating if necessary
+    ///
+    /// This method checks if the current simulator has the specified number of qubits.
+    /// If not, it recreates the simulator with the correct dimensions to prevent
+    /// memory corruption during quantum operations.
+    ///
+    /// # Arguments
+    /// * `required_qubits` - The number of qubits required for the simulation
+    pub fn ensure_qubit_count(&mut self, required_qubits: usize) {
+        if self.simulator.num_qubits() != required_qubits {
+            eprintln!(
+                "DEBUG StateVecEngine: Recreating simulator (was {} qubits, now {} qubits)",
+                self.simulator.num_qubits(),
+                required_qubits
+            );
+            // Preserve the RNG state if possible
+            let rng = self.simulator.rng().clone();
+            self.simulator = StateVec::with_rng(required_qubits, rng);
+        }
+    }
 }
 
 impl Engine for StateVecEngine {
@@ -96,6 +117,19 @@ impl Engine for StateVecEngine {
     fn process(&mut self, message: Self::Input) -> Result<Self::Output, PecosError> {
         // Parse commands from the message
         let batch = message.quantum_ops()?;
+
+        // Calculate required number of qubits from operations and ensure simulator has correct size
+        if !batch.is_empty() {
+            let max_qubit_index = batch
+                .iter()
+                .flat_map(|cmd| cmd.qubits.iter())
+                .map(|q| usize::from(*q))
+                .max()
+                .unwrap_or(0);
+            let required_qubits = max_qubit_index + 1;
+            self.ensure_qubit_count(required_qubits);
+        }
+
         let mut measurements = Vec::new();
 
         for cmd in &batch {
@@ -283,6 +317,7 @@ impl Engine for StateVecEngine {
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {
+        eprintln!("DEBUG StateVecEngine: reset() called");
         self.simulator.reset();
         Ok(())
     }

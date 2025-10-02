@@ -7,7 +7,7 @@
 use log::{debug, trace};
 use pecos_qis_interface::{Operation, QisInterface, QuantumOp};
 use pecos_qis_runtime_trait::{ClassicalState, QisRuntime, Result, RuntimeError};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Native Rust implementation of QisRuntime
 ///
@@ -136,7 +136,7 @@ impl QisRuntime for NativeRuntime {
         }
     }
 
-    fn provide_measurements(&mut self, measurements: HashMap<usize, bool>) -> Result<()> {
+    fn provide_measurements(&mut self, measurements: BTreeMap<usize, bool>) -> Result<()> {
         debug!("Received {} measurement results", measurements.len());
 
         // Store measurements in classical state
@@ -235,7 +235,7 @@ mod tests {
         let _ops = runtime.execute_until_quantum().unwrap();
 
         // Provide measurement result
-        let mut measurements = HashMap::new();
+        let mut measurements = BTreeMap::new();
         measurements.insert(r0, true);
         runtime.provide_measurements(measurements).unwrap();
 

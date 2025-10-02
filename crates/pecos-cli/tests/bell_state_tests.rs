@@ -32,6 +32,7 @@ fn run_pecos(
     noise_prob: &str,
     seed: u64,
     simulator: Option<&str>,
+    use_jit: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("pecos")?;
     cmd.env("RUST_LOG", "info")
@@ -54,6 +55,11 @@ fn run_pecos(
         cmd.arg("-S").arg(sim);
     }
 
+    // Add JIT flag if specified (for LLVM files when Selene is not available)
+    if use_jit {
+        cmd.arg("--jit");
+    }
+
     let output = cmd.output()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -62,18 +68,6 @@ fn run_pecos(
     // Special handling for QIR files which may segfault during cleanup
     let is_qir = file_path.extension().and_then(|s| s.to_str()) == Some("ll");
 
-    // Debug output for QIR
-    if is_qir {
-        eprintln!("QIR Debug - Exit status: {:?}", output.status);
-        eprintln!("QIR Debug - Stdout length: {}", stdout.len());
-        eprintln!("QIR Debug - Stderr length: {}", stderr.len());
-        if !stdout.is_empty() {
-            eprintln!("QIR Debug - Stdout: {stdout}");
-        }
-        if !stderr.is_empty() {
-            eprintln!("QIR Debug - Stderr: {stderr}");
-        }
-    }
 
     // For QIR files, check if we got valid output even if the process exited with error
     if is_qir && !output.status.success() {
@@ -81,7 +75,7 @@ fn run_pecos(
         // Check if we still got valid JSON output before the segfault
         if stdout.trim().starts_with('{') && stdout.trim().ends_with('}') {
             // We have valid JSON output despite the segfault
-            eprintln!("Note: QIR process segfaulted during cleanup but produced valid output");
+            log::debug!("Note: QIR process segfaulted during cleanup but produced valid output");
             return Ok(stdout.to_string());
         }
         // No valid output, this is a real failure
@@ -113,7 +107,9 @@ fn run_pecos(
 }
 
 /// Extract measurement results from JSON output
-/// Handles the new columnar format: {"c": [3, 0, ...]}
+/// Handles different output formats:
+/// - Combined format: {"c": [3, 0, ...]} or any single register
+/// - Individual indexed format: {"m0": [0, 1], "m1": [0, 1]} or any indexed registers
 /// Also handles output that may contain non-JSON text before the JSON
 fn get_values(json_output: &str) -> Vec<String> {
     let mut register_values: std::collections::HashMap<String, Vec<String>> =
@@ -129,14 +125,87 @@ fn get_values(json_output: &str) -> Vec<String> {
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_part)
         && let Some(obj) = json.as_object()
     {
-        // For each register, collect its values
+        // Group registers by their base name (without numeric suffix)
+        let mut register_groups: std::collections::HashMap<String, Vec<(String, usize, Vec<i64>)>> =
+            std::collections::HashMap::new();
+        let mut single_registers: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+
         for (reg_name, values) in obj {
             if let Some(arr) = values.as_array() {
-                let string_values: Vec<String> =
-                    arr.iter().map(|v| v.to_string().replace('"', "")).collect();
-                register_values.insert(reg_name.clone(), string_values);
+                // Try to parse as indexed register
+                let mut base_name = String::new();
+                let mut index = None;
+                let mut chars: Vec<char> = reg_name.chars().collect();
+                let mut i = chars.len();
+
+                // Find where digits end from the right
+                while i > 0 && chars[i - 1].is_ascii_digit() {
+                    i -= 1;
+                }
+
+                if i > 0 && i < chars.len() {
+                    // We have both base and digits
+                    base_name = chars[..i].iter().collect();
+                    let index_str: String = chars[i..].iter().collect();
+                    index = index_str.parse::<usize>().ok();
+                }
+
+                if let Some(idx) = index {
+                    // This is an indexed register
+                    let measurements: Vec<i64> = arr.iter()
+                        .map(|v| v.as_i64().unwrap_or(0))
+                        .collect();
+
+                    register_groups.entry(base_name.clone())
+                        .or_insert_with(Vec::new)
+                        .push((reg_name.clone(), idx, measurements));
+                } else {
+                    // Single register (no numeric suffix or couldn't parse)
+                    let string_values: Vec<String> =
+                        arr.iter().map(|v| v.to_string().replace('"', "")).collect();
+                    single_registers.insert(reg_name.clone(), string_values);
+                }
             }
         }
+
+        // Check if we should combine indexed registers
+        for (base_name, mut group) in register_groups {
+            if group.len() > 1 {
+                // Multiple registers with same base - combine them
+                group.sort_by_key(|&(_, idx, _)| idx);
+
+                // Get number of shots
+                let num_shots = group.first().map(|(_, _, m)| m.len()).unwrap_or(0);
+
+                // Combine into classical register values
+                let mut combined_values = Vec::new();
+                for shot_idx in 0..num_shots {
+                    let mut value = 0i64;
+                    for (bit_position, (_, _idx, measurements)) in group.iter().enumerate() {
+                        if shot_idx < measurements.len() {
+                            value |= measurements[shot_idx] << bit_position;
+                        }
+                    }
+                    combined_values.push(value.to_string());
+                }
+
+                // Use the base name for the combined register
+                register_values.insert(base_name, combined_values);
+            } else if let Some((orig_name, _, measurements)) = group.into_iter().next() {
+                // Single indexed register - keep as is
+                let string_values: Vec<String> = measurements.iter()
+                    .map(|v| v.to_string())
+                    .collect();
+                register_values.insert(orig_name, string_values);
+            }
+        }
+
+        // Add single registers
+        for (reg_name, values) in single_registers {
+            register_values.insert(reg_name, values);
+        }
+
     }
 
     // Convert to the format expected by tests: comma-separated values per register
@@ -161,7 +230,7 @@ fn test_perfect_bell_state_distribution() -> Result<(), Box<dyn std::error::Erro
     println!("---------------------------------------------------------------------------");
 
     // Run noiseless Bell state simulation with 100 shots
-    let output = run_pecos(&bell_json_path, 100, 1, "depolarizing", "0.0", 42, None)?;
+    let output = run_pecos(&bell_json_path, 100, 1, "depolarizing", "0.0", 42, None, false)?;
     println!("Bell state results: {}", output.trim());
 
     // Count occurrences of each measurement outcome
@@ -256,9 +325,9 @@ fn test_cross_implementation_validation() -> Result<(), Box<dyn std::error::Erro
     println!("------------------------------------------------------------------------");
 
     // Run all three implementations with the same seed
-    let phir_output = run_pecos(&bell_json_path, 100, 1, "depolarizing", "0.0", 42, None)?;
-    let qasm_output = run_pecos(&bell_qasm_path, 100, 1, "depolarizing", "0.0", 42, None)?;
-    let llvm_output = run_pecos(&bell_llvm_path, 100, 1, "depolarizing", "0.0", 42, None)?;
+    let phir_output = run_pecos(&bell_json_path, 100, 1, "depolarizing", "0.0", 42, None, false)?;
+    let qasm_output = run_pecos(&bell_qasm_path, 100, 1, "depolarizing", "0.0", 42, None, false)?;
+    let llvm_output = run_pecos(&bell_llvm_path, 100, 1, "depolarizing", "0.0", 42, None, true)?;
 
     // Extract the values and compare
     let phir_values = get_values(&phir_output);
@@ -445,7 +514,7 @@ fn test_bell_state_with_noise() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run with depolarizing noise model
     println!("\n1. Testing with depolarizing noise model (p=0.1):");
-    let noisy_dep_output = run_pecos(&bell_json_path, 200, 1, "depolarizing", "0.1", 42, None)?;
+    let noisy_dep_output = run_pecos(&bell_json_path, 200, 1, "depolarizing", "0.1", 42, None, false)?;
     analyze_noisy_bell_state(&noisy_dep_output, "Depolarizing")?;
 
     // Run with general noise model
@@ -458,6 +527,7 @@ fn test_bell_state_with_noise() -> Result<(), Box<dyn std::error::Error>> {
         "0.1,0.1,0.1,0.1,0.1",
         42,
         None,
+        false,
     )?;
     analyze_noisy_bell_state(&noisy_gen_output, "General")?;
 
@@ -482,8 +552,8 @@ fn test_seed_determinism() -> Result<(), Box<dyn std::error::Error>> {
     println!("------------------------------------------------------------------------------");
 
     // Test PHIR determinism
-    let phir_run1 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.0", 42, None)?;
-    let phir_run2 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+    let phir_run1 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.0", 42, None, false)?;
+    let phir_run2 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.0", 42, None, false)?;
 
     let phir_values1 = get_values(&phir_run1);
     let phir_values2 = get_values(&phir_run2);
@@ -495,8 +565,8 @@ fn test_seed_determinism() -> Result<(), Box<dyn std::error::Error>> {
     println!("PHIR implementation is deterministic with the same seed");
 
     // Test QASM determinism
-    let qasm_run1 = run_pecos(&bell_qasm_path, 50, 1, "depolarizing", "0.0", 42, None)?;
-    let qasm_run2 = run_pecos(&bell_qasm_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+    let qasm_run1 = run_pecos(&bell_qasm_path, 50, 1, "depolarizing", "0.0", 42, None, false)?;
+    let qasm_run2 = run_pecos(&bell_qasm_path, 50, 1, "depolarizing", "0.0", 42, None, false)?;
 
     let qasm_values1 = get_values(&qasm_run1);
     let qasm_values2 = get_values(&qasm_run2);
@@ -508,8 +578,8 @@ fn test_seed_determinism() -> Result<(), Box<dyn std::error::Error>> {
     println!("QASM implementation is deterministic with the same seed");
 
     // Test LLVM determinism
-    let llvm_run1 = run_pecos(&bell_llvm_path, 50, 1, "depolarizing", "0.0", 42, None)?;
-    let llvm_run2 = run_pecos(&bell_llvm_path, 50, 1, "depolarizing", "0.0", 42, None)?;
+    let llvm_run1 = run_pecos(&bell_llvm_path, 50, 1, "depolarizing", "0.0", 42, None, true)?;
+    let llvm_run2 = run_pecos(&bell_llvm_path, 50, 1, "depolarizing", "0.0", 42, None, true)?;
 
     let llvm_values1 = get_values(&llvm_run1);
     let llvm_values2 = get_values(&llvm_run2);
@@ -533,8 +603,8 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
     println!("------------------------------------------------------------------------");
 
     // Run depolarizing model twice with same seed
-    let dep_run1 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.1", 42, None)?;
-    let dep_run2 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.1", 42, None)?;
+    let dep_run1 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.1", 42, None, false)?;
+    let dep_run2 = run_pecos(&bell_json_path, 50, 1, "depolarizing", "0.1", 42, None, false)?;
 
     let dep_values1 = get_values(&dep_run1);
     let dep_values2 = get_values(&dep_run2);
@@ -554,6 +624,7 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
         "0.1,0.1,0.1,0.1,0.1",
         42,
         None,
+        false,
     )?;
     let gen_run2 = run_pecos(
         &bell_json_path,
@@ -563,6 +634,7 @@ fn test_noise_model_determinism() -> Result<(), Box<dyn std::error::Error>> {
         "0.1,0.1,0.1,0.1,0.1",
         42,
         None,
+        false,
     )?;
 
     let gen_values1 = get_values(&gen_run1);
@@ -591,7 +663,7 @@ fn test_qis_with_depolarizing_noise() -> Result<(), Box<dyn std::error::Error>> 
     println!("------------------------------------------------------------------");
 
     // Test with depolarizing noise - reduced shots to avoid segfault issues
-    let llvm_dep_output = run_pecos(&bell_llvm_path, 100, 1, "depolarizing", "0.1", 42, None)?;
+    let llvm_dep_output = run_pecos(&bell_llvm_path, 100, 1, "depolarizing", "0.1", 42, None, true)?;
 
     println!("Testing LLVM with depolarizing noise model (p=0.1):");
     analyze_noisy_bell_state(&llvm_dep_output, "LLVM Depolarizing")?;
@@ -621,6 +693,7 @@ fn test_qis_with_general_noise() -> Result<(), Box<dyn std::error::Error>> {
         "0.1,0.1,0.1,0.1,0.1",
         42,
         None,
+        true,
     )?;
 
     println!("Testing LLVM with general noise model (p=0.1 for all error types):");
@@ -653,6 +726,7 @@ fn test_simulator_engines() -> Result<(), Box<dyn std::error::Error>> {
         "0.0",
         42,
         Some("statevector"),
+        false,
     )?;
     println!(
         "State vector simulator results: {:.60}...",
@@ -668,6 +742,7 @@ fn test_simulator_engines() -> Result<(), Box<dyn std::error::Error>> {
         "0.0",
         42,
         Some("stabilizer"),
+        false,
     )?;
     println!(
         "Stabilizer simulator results: {:.60}...",

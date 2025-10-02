@@ -285,8 +285,9 @@ impl SimBuilder {
                 )
             })?;
 
-        // Build quantum engine (with default if not set)
+        // Build quantum engine (require explicit qubit specification)
         let quantum_engine = if let Some(mut builder) = self.quantum_builder {
+            // Set qubits on the quantum engine builder if explicitly specified
             builder.set_qubits_if_needed(num_qubits);
             builder.build_boxed()?
         } else {

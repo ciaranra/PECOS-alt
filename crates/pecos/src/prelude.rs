@@ -25,7 +25,7 @@
 //! * `pecos_engines`: Simulation engines for quantum and classical processing
 //! * `pecos_phir_json`: PECOS High-level Intermediate Representation
 //! * `pecos_qasm`: `OpenQASM` language support
-//! * `pecos_qis_runtime`: LLVM IR execution support
+//! * `pecos_qis_ccengine`: QIS control engine with multiple runtime support
 //! * `pecos_qsim`: Quantum simulation implementations
 //!
 //! It also includes key functionality from the top-level PECOS crate:
@@ -47,11 +47,9 @@ pub use pecos_core::prelude::*;
 pub use pecos_engines::prelude::*;
 pub use pecos_phir_json::prelude::*;
 pub use pecos_qasm::prelude::*;
-pub use pecos_qis_runtime::prelude::*;
-pub use pecos_qis_sim::prelude::*;
+pub use pecos_qis_ccengine::*;
+// pecos_qis_sim removed - using pecos_qis_ccengine instead
 pub use pecos_qsim::prelude::*;
-#[cfg(feature = "selene")]
-pub use pecos_selene_engine::prelude::*;
 
 // Re-export ShotVec directly from pecos_engines for easier access
 pub use pecos_engines::shot_results::ShotVec;
@@ -65,7 +63,6 @@ pub use crate::program::{
 pub use pecos_programs::{HugrProgram, Program, QasmProgram, QisProgram};
 
 // Re-export setup functions from format-specific crates
-pub use crate::setup_llvm_engine;
 pub use pecos_phir_json::setup_phir_json_engine;
 pub use pecos_qasm::setup_qasm_engine;
 

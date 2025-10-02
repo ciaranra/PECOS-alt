@@ -252,11 +252,11 @@ class TestSeleneBuildProcess:
             # Verify results
             assert isinstance(results, dict), "Results should be a dictionary"
 
-            # QIS returns results with key 'result'
+            # QIS returns results with key 'measurement_0'
             assert (
-                "result" in results
-            ), f"Results should contain 'result' key, got keys: {results.keys()}"
-            measurements = results["result"]
+                "measurement_0" in results
+            ), f"Results should contain 'measurement_0' key, got keys: {results.keys()}"
+            measurements = results["measurement_0"]
             assert len(measurements) == 100, "Should have 100 shots"
 
             # H gate should give roughly 50/50 distribution
@@ -342,8 +342,8 @@ class TestSeleneBuildProcess:
 
         # Verify results
         assert isinstance(results, dict), "Results should be a dictionary"
-        assert "result" in results, "Results should contain 'result' key"
-        measurements = results["result"]
+        assert "measurement_0" in results, "Results should contain 'result' key"
+        measurements = results["measurement_0"]
         assert len(measurements) == 100, "Should have 100 shots"
 
         # Since we're measuring |0⟩ directly, all results should be 0
@@ -399,9 +399,9 @@ class TestSeleneBuildProcess:
         program = QisProgram.from_string(llvm_ir_edge_cases)
         results = sim(program).qubits(1).quantum(state_vector()).seed(42).run(50)
 
-        assert "result" in results, "Should have results even with edge case formatting"
-        assert len(results["result"]) == 50, "Should complete all shots"
-        assert all(m == 0 for m in results["result"]), "Should measure |0⟩ as 0"
+        assert "measurement_0" in results, "Should have results even with edge case formatting"
+        assert len(results["measurement_0"]) == 50, "Should complete all shots"
+        assert all(m == 0 for m in results["measurement_0"]), "Should measure |0⟩ as 0"
 
     def test_qis_program_consistency(self) -> None:
         """Test that QisProgram produces consistent results for QIS format.
@@ -455,20 +455,20 @@ class TestSeleneBuildProcess:
         )
 
         # Both runs should produce identical results
-        assert "result" in qis_results_1, "QisProgram should produce results"
-        assert "result" in qis_results_2, "QisProgram should produce results"
+        assert "measurement_0" in qis_results_1, "QisProgram should produce results"
+        assert "measurement_0" in qis_results_2, "QisProgram should produce results"
 
         # With same seed, results should be identical
         assert (
-            qis_results_1["result"] == qis_results_2["result"]
+            qis_results_1["measurement_0"] == qis_results_2["measurement_0"]
         ), "QisProgram should produce identical results with same seed"
 
         # X gate should give |1⟩
         assert all(
-            m == 1 for m in qis_results_1["result"]
+            m == 1 for m in qis_results_1["measurement_0"]
         ), "X gate should always measure 1"
         assert all(
-            m == 1 for m in qis_results_2["result"]
+            m == 1 for m in qis_results_2["measurement_0"]
         ), "X gate should always measure 1"
 
     def test_selene_instance_api(self) -> None:

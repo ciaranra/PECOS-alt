@@ -7,8 +7,7 @@ use pecos_core::errors::PecosError;
 use pecos_engines::{ClassicalControlEngineBuilder, MonteCarloEngine, SimBuilder, sim_builder};
 use pecos_programs::Program;
 use pecos_qasm::qasm_engine;
-use pecos_qis_sim::qis_engine;
-use pecos_selene_engine::selene_executable_builder::selene_executable;
+use pecos_qis_ccengine::qis_control_engine;
 
 /// Extension trait for `SimBuilder` to add program-based methods
 pub trait SimBuilderExt {
@@ -16,8 +15,8 @@ pub trait SimBuilderExt {
     ///
     /// This method inspects the program type and selects:
     /// - QASM programs → QASM engine
-    /// - LLVM programs → LLVM engine
-    /// - HUGR programs → Selene engine
+    /// - QIS programs → QIS control engine (Selene Helios interface, fallback to JIT)
+    /// - HUGR programs → QIS control engine (Selene Helios interface, no fallback)
     /// - WASM/WAT programs → Error (not yet supported)
     /// - PHIR JSON programs → Error (not yet supported)
     ///
@@ -65,16 +64,26 @@ impl ProgrammedSimBuilder {
                     .classical(qasm_engine().program(qasm))
                     .build(),
                 Program::Qis(qis) => {
-                    // QIS is Selene QIS format LLVM IR
-                    // Use LLVM engine directly for QIS programs
-                    self.base_builder
-                        .classical(qis_engine().program(qis))
-                        .build()
+                    // Try Selene default first, fall back to JIT for unified API convenience
+                    let engine_builder = qis_control_engine().try_program(qis.clone())
+                        .or_else(|_| {
+                            log::info!("Default Selene interface failed, falling back to JIT for unified sim API");
+                            use pecos_qis_ccengine::qis_jit_interface;
+                            qis_control_engine().interface(qis_jit_interface()).try_program(qis)
+                        })
+                        .map_err(|e| PecosError::Generic(format!("Failed to load QIS program: {}", e)))?;
+
+                    self.base_builder.classical(engine_builder).build()
                 }
                 Program::Hugr(hugr) => {
-                    // Selene can handle HUGR via LLVM compilation
+                    // Try Selene default first (optimized for HUGR), fall back to error for HUGR
+                    // Note: HUGR really needs Selene, so we don't fall back to JIT
                     self.base_builder
-                        .classical(selene_executable().program(hugr))
+                        .classical(
+                            qis_control_engine()
+                                .try_program(hugr)
+                                .map_err(|e| PecosError::Generic(format!("Failed to load HUGR program (requires Selene): {}", e)))?
+                        )
                         .build()
                 }
                 Program::Wasm(_) => Err(PecosError::Input(
@@ -116,16 +125,26 @@ impl ProgrammedSimBuilder {
                     .classical(qasm_engine().program(qasm))
                     .run(shots),
                 Program::Qis(qis) => {
-                    // QIS is Selene QIS format LLVM IR
-                    // Use LLVM engine directly for QIS programs
-                    self.base_builder
-                        .classical(qis_engine().program(qis))
-                        .run(shots)
+                    // Try Selene default first, fall back to JIT for unified API convenience
+                    let engine_builder = qis_control_engine().try_program(qis.clone())
+                        .or_else(|_| {
+                            log::info!("Default Selene interface failed, falling back to JIT for unified sim API");
+                            use pecos_qis_ccengine::qis_jit_interface;
+                            qis_control_engine().interface(qis_jit_interface()).try_program(qis)
+                        })
+                        .map_err(|e| PecosError::Generic(format!("Failed to load QIS program: {}", e)))?;
+
+                    self.base_builder.classical(engine_builder).run(shots)
                 }
                 Program::Hugr(hugr) => {
-                    // Selene can handle HUGR via LLVM compilation
+                    // Try Selene default first (optimized for HUGR), fall back to error for HUGR
+                    // Note: HUGR really needs Selene, so we don't fall back to JIT
                     self.base_builder
-                        .classical(selene_executable().program(hugr))
+                        .classical(
+                            qis_control_engine()
+                                .try_program(hugr)
+                                .map_err(|e| PecosError::Generic(format!("Failed to load HUGR program (requires Selene): {}", e)))?
+                        )
                         .run(shots)
                 }
                 Program::Wasm(_) => Err(PecosError::Input(
@@ -226,8 +245,8 @@ impl ProgrammedSimBuilder {
 /// # Automatic Engine Selection
 ///
 /// - QASM programs → QASM engine
-/// - LLVM programs → LLVM engine
-/// - HUGR programs → Selene engine
+/// - QIS programs → QIS control engine (Selene Helios, fallback to JIT)
+/// - HUGR programs → QIS control engine (Selene Helios, no fallback)
 /// - Other formats → Error (not yet supported)
 ///
 /// # Examples
@@ -248,7 +267,7 @@ impl ProgrammedSimBuilder {
 /// // Override automatic engine selection if needed
 /// let qasm_prog = QasmProgram::from_string("OPENQASM 2.0; qreg q[1]; h q[0];");
 /// let results = sim(qasm_prog)
-///     .classical(pecos_qis_sim::qis_engine().program(pecos_programs::QisProgram::from_string("...")))
+///     .classical(pecos_qis_ccengine::qis_control_engine().runtime(pecos_qis_ccengine::native_runtime()))
 ///     .run(100)?;
 /// # Ok::<(), pecos_core::errors::PecosError>(())
 /// ```

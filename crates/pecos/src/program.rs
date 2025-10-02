@@ -1,9 +1,9 @@
-use crate::setup_llvm_engine;
 use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngine;
 use pecos_phir_json::setup_phir_json_engine;
 use pecos_qasm::setup_qasm_engine;
+use pecos_qis_ccengine::setup_qis_control_engine;
 use std::path::{Path, PathBuf};
 
 /// Represents the types of programs that PECOS can execute
@@ -157,7 +157,7 @@ pub fn setup_engine_for_program(
     );
 
     match program_type {
-        ProgramType::QIR => setup_llvm_engine(program_path, None),
+        ProgramType::QIR => setup_qis_control_engine(program_path),
         ProgramType::PHIR => setup_phir_json_engine(program_path),
         ProgramType::QASM => setup_qasm_engine(program_path, seed),
     }

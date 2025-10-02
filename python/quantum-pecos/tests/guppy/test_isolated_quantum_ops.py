@@ -64,7 +64,7 @@ class TestIsolatedOps:
             return measure(q)
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
-        assert len(results.get("measurements", results.get("measurement_1", []))) == 10
+        assert len(results.get("measurements", results.get("measurement_0", []))) == 10
 
     def test_single_x_gate(self) -> None:
         """Test just X gate."""
@@ -77,7 +77,7 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
-            r for r in results.get("measurements", results.get("measurement_1", []))
+            r for r in results.get("measurements", results.get("measurement_0", []))
         )
 
     def test_single_y_gate(self) -> None:
@@ -91,7 +91,7 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
-            r for r in results.get("measurements", results.get("measurement_1", []))
+            r for r in results.get("measurements", results.get("measurement_0", []))
         )
 
     def test_single_z_gate(self) -> None:
@@ -105,7 +105,7 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
-            not r for r in results.get("measurements", results.get("measurement_1", []))
+            not r for r in results.get("measurements", results.get("measurement_0", []))
         )
 
     def test_phase_gates_s_sdg(self) -> None:
@@ -121,7 +121,7 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
-            r for r in results.get("measurements", results.get("measurement_1", []))
+            r for r in results.get("measurements", results.get("measurement_0", []))
         )
 
     def test_phase_gates_t_tdg(self) -> None:
@@ -137,7 +137,7 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
-            r for r in results.get("measurements", results.get("measurement_1", []))
+            r for r in results.get("measurements", results.get("measurement_0", []))
         )
 
     def test_rotation_rx(self) -> None:
@@ -152,7 +152,7 @@ class TestIsolatedOps:
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
 
         assert all(
-            r for r in results.get("measurements", results.get("measurement_1", []))
+            r for r in results.get("measurements", results.get("measurement_0", []))
         )
 
     def test_rotation_ry(self) -> None:
@@ -166,7 +166,7 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
-            r for r in results.get("measurements", results.get("measurement_1", []))
+            r for r in results.get("measurements", results.get("measurement_0", []))
         )
 
     def test_rotation_rz(self) -> None:
@@ -180,7 +180,7 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
-            not r for r in results.get("measurements", results.get("measurement_1", []))
+            not r for r in results.get("measurements", results.get("measurement_0", []))
         )
 
     def test_two_qubit_cx(self) -> None:
@@ -196,10 +196,10 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # Should get (True, True) for both qubits
+        assert "measurement_0" in results
         assert "measurement_1" in results
-        assert "measurement_2" in results
         measurements = list(
-            zip(results["measurement_1"], results["measurement_2"], strict=False),
+            zip(results["measurement_0"], results["measurement_1"], strict=False),
         )
         assert all(r == (1, 1) for r in measurements)
 
@@ -216,10 +216,10 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # CY with control=1 should flip target
+        assert "measurement_0" in results
         assert "measurement_1" in results
-        assert "measurement_2" in results
         measurements = list(
-            zip(results["measurement_1"], results["measurement_2"], strict=False),
+            zip(results["measurement_0"], results["measurement_1"], strict=False),
         )
         assert all(r == (1, 1) for r in measurements)
 
@@ -237,10 +237,10 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # Both qubits should be |1⟩
+        assert "measurement_0" in results
         assert "measurement_1" in results
-        assert "measurement_2" in results
         measurements = list(
-            zip(results["measurement_1"], results["measurement_2"], strict=False),
+            zip(results["measurement_0"], results["measurement_1"], strict=False),
         )
         assert all(r == (1, 1) for r in measurements)
 
@@ -256,10 +256,10 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # CH with control=0 does nothing
+        assert "measurement_0" in results
         assert "measurement_1" in results
-        assert "measurement_2" in results
         measurements = list(
-            zip(results["measurement_1"], results["measurement_2"], strict=False),
+            zip(results["measurement_0"], results["measurement_1"], strict=False),
         )
         assert all(r == (0, 0) for r in measurements)
 
@@ -278,14 +278,14 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # Both controls at |1⟩, target flips to |1⟩
+        assert "measurement_0" in results
         assert "measurement_1" in results
         assert "measurement_2" in results
-        assert "measurement_3" in results
         measurements = list(
             zip(
+                results["measurement_0"],
                 results["measurement_1"],
                 results["measurement_2"],
-                results["measurement_3"],
                 strict=False,
             ),
         )
@@ -303,7 +303,7 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
-            not r for r in results.get("measurements", results.get("measurement_1", []))
+            not r for r in results.get("measurements", results.get("measurement_0", []))
         )
 
     def test_discard_operation(self) -> None:
@@ -320,7 +320,7 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         assert all(
-            r for r in results.get("measurements", results.get("measurement_1", []))
+            r for r in results.get("measurements", results.get("measurement_0", []))
         )
 
     def test_complex_sequence(self) -> None:

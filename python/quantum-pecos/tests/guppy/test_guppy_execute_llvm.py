@@ -102,7 +102,6 @@ class TestGuppyExecuteLLVM:
             selene_bytes = compiled.to_bytes()
             selene_ir = execute_llvm.compile_module_to_string(
                 selene_bytes,
-                compiler="selene",
             )
             assert (
                 "___qalloc" in selene_ir or "@qmain" in selene_ir
@@ -116,7 +115,7 @@ class TestGuppyExecuteLLVM:
         try:
             # Both compilers now expect the same binary envelope format
             rust_bytes = compiled.to_bytes()
-            rust_ir = execute_llvm.compile_module_to_string(rust_bytes, compiler="rust")
+            rust_ir = execute_llvm.compile_module_to_string(rust_bytes)
             # PECOS compiler now also produces Selene QIS patterns
             assert (
                 "___qalloc" in rust_ir or "@qmain" in rust_ir

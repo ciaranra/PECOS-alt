@@ -21,10 +21,25 @@ def test_integer_arithmetic() -> None:
 
         return measure(q)
 
-    results = sim(quantum_add).qubits(1).quantum(state_vector()).seed(42).run(10)
+    import logging
+    logging.basicConfig(level=logging.INFO)
 
-    assert "measurement_1" in results
-    measurements = results["measurement_1"]
+    sim_builder = sim(quantum_add).qubits(1).quantum(state_vector()).seed(42)
+    print(f"SimBuilder type: {type(sim_builder)}")
+
+    results = sim_builder.run(10)
+    print(f"Results: {results}")
+    print(f"Results type: {type(results)}")
+
+    if hasattr(results, 'to_binary_dict'):
+        binary_dict = results.to_binary_dict()
+        print(f"Binary dict: {binary_dict}")
+        results = binary_dict
+
+    print(f"Final results: {results}")
+
+    assert "measurement_0" in results
+    measurements = results["measurement_0"]
     assert len(measurements) == 10
     # H gate should give mix of 0s and 1s
     assert 0 in measurements
@@ -45,8 +60,8 @@ def test_boolean_operations() -> None:
 
     results = sim(quantum_bool_logic).qubits(2).quantum(state_vector()).seed(42).run(10)
 
-    assert "measurement_1" in results
-    assert len(results["measurement_1"]) == 10
+    assert "measurement_0" in results
+    assert len(results["measurement_0"]) == 10
 
 
 def test_integer_comparisons() -> None:
@@ -65,8 +80,8 @@ def test_integer_comparisons() -> None:
 
     results = sim(quantum_compare).qubits(1).quantum(state_vector()).seed(42).run(10)
 
-    assert "measurement_1" in results
-    measurements = results["measurement_1"]
+    assert "measurement_0" in results
+    measurements = results["measurement_0"]
     assert len(measurements) == 10
     assert 0 in measurements
     assert 1 in measurements
@@ -90,8 +105,8 @@ def test_arithmetic_in_loop() -> None:
 
     results = sim(quantum_loop).qubits(1).quantum(state_vector()).seed(42).run(10)
 
-    assert "measurement_1" in results
-    measurements = results["measurement_1"]
+    assert "measurement_0" in results
+    measurements = results["measurement_0"]
     assert len(measurements) == 10
     assert 0 in measurements
     assert 1 in measurements
@@ -114,8 +129,8 @@ def test_chained_comparisons() -> None:
 
     results = sim(quantum_chain).qubits(1).quantum(state_vector()).seed(42).run(10)
 
-    assert "measurement_1" in results
-    measurements = results["measurement_1"]
+    assert "measurement_0" in results
+    measurements = results["measurement_0"]
     assert len(measurements) == 10
     assert 0 in measurements
     assert 1 in measurements
@@ -145,7 +160,7 @@ def test_arithmetic_with_measurements() -> None:
         sim(quantum_measure_math).qubits(3).quantum(state_vector()).seed(42).run(20)
     )
 
-    assert "measurement_1" in results
-    measurements = results["measurement_1"]
+    assert "measurement_0" in results
+    measurements = results["measurement_0"]
     assert len(measurements) == 20
     # Should have mix unless both m1 and m2 are 0 (25% chance)

@@ -112,7 +112,7 @@ def compile_guppy_to_hugr(guppy_function: Callable) -> bytes:
 
 # Step 2: HUGR -> LLVM/QIR
 def _update_tket_wasm_version(hugr_bytes: bytes) -> bytes:
-    """Update tket.wasm version from 0.3.0 to 0.4.1 for Selene compatibility.
+    """Update tket.wasm version from 0.3.0 to 0.4.1 for compatibility.
 
     Args:
         hugr_bytes: HUGR package bytes
@@ -172,9 +172,6 @@ def compile_hugr_to_llvm(
 ) -> str:
     """Compile HUGR bytes to LLVM IR string.
 
-    This function now prioritizes Selene's HUGR to LLVM compiler which
-    correctly handles both quantum and non-quantum functions.
-
     Args:
         hugr_bytes: HUGR package as bytes
         debug_info: Whether to include debug information
@@ -186,28 +183,7 @@ def compile_hugr_to_llvm(
         ImportError: If no HUGR backend is available
         RuntimeError: If compilation fails
     """
-    # First, try to use Selene's compiler which handles non-quantum functions correctly
-    try:
-        from selene_helios_qis_plugin.build import compile_to_llvm_ir
-
-        # Update tket.wasm version for compatibility between guppylang 0.21.3 and Selene
-        hugr_bytes = _update_tket_wasm_version(hugr_bytes)
-
-        # Selene's compiler expects HUGR envelope bytes
-        # If we receive JSON bytes, they should work as-is
-        return compile_to_llvm_ir(hugr_bytes)
-    except ImportError:
-        pass  # Selene not available, try other backends
-    except (RuntimeError, ValueError, TypeError) as e:
-        # Log the error but try other backends
-        import warnings
-
-        warnings.warn(
-            f"Selene compiler failed: {e}, trying PECOS backend",
-            stacklevel=2,
-        )
-
-    # Fall back to PECOS's compiler (which has the bug of adding quantum ops to non-quantum functions)
+    # Try to use PECOS's HUGR to LLVM compiler
     try:
         from pecos_rslib import compile_hugr_to_llvm_rust
 
@@ -225,17 +201,6 @@ def compile_hugr_to_llvm(
             error_msg = str(e)
             if "Unknown type:" in error_msg:
                 raise HugrTypeError(error_msg) from e
-            # Check if it's a HUGR version incompatibility error
-            if "HUGR version incompatibility" in error_msg:
-                # Use our updated hugr_compiler that handles HUGR 0.13 compatibility
-                try:
-                    from pecos_rslib import compile_hugr_to_llvm
-
-                    # Try the updated compiler that uses pecos-selene-engine backend
-                    return compile_hugr_to_llvm(hugr_bytes)
-                except Exception as selene_error:
-                    msg = f"Both PECOS and updated HUGR compilers failed. PECOS: {e}, Updated: {selene_error}"
-                    raise RuntimeError(msg) from selene_error
             else:
                 msg = f"Failed to compile HUGR to LLVM: {e}"
                 raise RuntimeError(msg) from e

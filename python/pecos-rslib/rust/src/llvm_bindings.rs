@@ -13,10 +13,10 @@
 //! Python bindings for LLVM execution
 
 
-use pecos::setup_llvm_engine;
 use pecos_core::rng::RngManageable;
 use pecos_engines::NoiseModel;
 use pecos_engines::noise::DepolarizingNoiseModel;
+use pecos_qis_ccengine::setup_qis_control_engine;
 use pecos_engines::shot_results;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -139,12 +139,8 @@ fn execute_llvm_safe(
         pecos_qis_runtime::runtime::llvm_runtime_reset();
     }
 
-    // Set up LLVM engine with max_qubits if specified
-    let classical_engine = if max_qubits.is_some() {
-        pecos::setup_llvm_engine_with_config(llvm_path, None, max_qubits)?
-    } else {
-        setup_llvm_engine(llvm_path, None)?
-    };
+    // Set up QIS control engine for LLVM/QIR files
+    let classical_engine = setup_qis_control_engine(llvm_path)?;
 
     // Create noise model
     let noise_model: Box<dyn NoiseModel> = if let Some(prob) = noise_probability {

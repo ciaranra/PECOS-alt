@@ -49,7 +49,7 @@ class TestNoiseModels:
         )
 
         # Should always measure |1⟩
-        measurements = results.get("measurements", results.get("measurement_1", []))
+        measurements = results.get("measurements", results.get("measurement_0", []))
         assert all(r == 1 for r in measurements)
 
     def test_depolarizing_noise_effect(self) -> None:
@@ -80,7 +80,7 @@ class TestNoiseModels:
             .run(100)
         )
 
-        measurements = results.get("measurements", results.get("measurement_1", []))
+        measurements = results.get("measurements", results.get("measurement_0", []))
 
         # With 0.2 depolarizing on X gate, we should see some 0s
         zeros = sum(1 for r in measurements if r == 0)
@@ -117,7 +117,7 @@ class TestNoiseModels:
             .run(100)
         )
 
-        measurements = results.get("measurements", results.get("measurement_1", []))
+        measurements = results.get("measurements", results.get("measurement_0", []))
 
         # Should see some errors
         zeros = sum(1 for r in measurements if r == 0)
@@ -148,7 +148,7 @@ class TestNoiseModels:
             .run(100)
         )
 
-        measurements = results.get("measurements", results.get("measurement_1", []))
+        measurements = results.get("measurements", results.get("measurement_0", []))
 
         # Should see some errors but not too many
         sum(1 for r in measurements if r == 0)
@@ -191,10 +191,10 @@ class TestNoiseModels:
         )
 
         # Extract measurements
-        m1_clean = results_clean.get("measurement_1", [])
-        m2_clean = results_clean.get("measurement_2", [])
-        m1_noisy = results_noisy.get("measurement_1", [])
-        m2_noisy = results_noisy.get("measurement_2", [])
+        m1_clean = results_clean.get("measurement_0", [])
+        m2_clean = results_clean.get("measurement_1", [])
+        m1_noisy = results_noisy.get("measurement_0", [])
+        m2_noisy = results_noisy.get("measurement_1", [])
 
         # Check correlations
         clean_corr = sum(1 for i in range(100) if m1_clean[i] == m2_clean[i])
@@ -256,8 +256,8 @@ def test_noise_model_builder_pattern() -> None:
         .run(10)
     )
 
-    measurements1 = results1.get("measurements", results1.get("measurement_1", []))
-    measurements2 = results2.get("measurements", results2.get("measurement_1", []))
+    measurements1 = results1.get("measurements", results1.get("measurement_0", []))
+    measurements2 = results2.get("measurements", results2.get("measurement_0", []))
 
     # With different seeds in noise models, we might get different error patterns
     # But with only 10 shots, they might be the same. Just check they both run.
@@ -288,7 +288,7 @@ def test_noise_on_single_qubit_gates() -> None:
         .run(100)
     )
 
-    measurements = results.get("measurements", results.get("measurement_1", []))
+    measurements = results.get("measurements", results.get("measurement_0", []))
 
     # H followed by X should give |1⟩ without noise
     # With noise, we should see some 0s
@@ -318,7 +318,7 @@ def test_measurement_noise() -> None:
         .run(100)
     )
 
-    measurements = results.get("measurements", results.get("measurement_1", []))
+    measurements = results.get("measurements", results.get("measurement_0", []))
 
     # X gate gives |1⟩, but measurement errors should flip some
     zeros = sum(1 for r in measurements if r == 0)

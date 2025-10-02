@@ -31,13 +31,13 @@ def get_measurements(results: dict, expected_count: int = 1) -> list:  # noqa: A
     Returns:
         List of measurements (either single values or tuples)
     """
-    # Check for new format with measurement_1, measurement_2, etc.
-    if "measurement_1" in results:
+    # Check for new format with measurement_0, measurement_1, etc.
+    if "measurement_0" in results:
         measurement_keys = sorted([k for k in results if k.startswith("measurement_")])
 
         if len(measurement_keys) == 1:
             # Single measurement - return the list directly
-            return results["measurement_1"]
+            return results["measurement_0"]
         # Multiple measurements - zip them into tuples
         measurement_lists = [results[k] for k in measurement_keys]
         return list(zip(*measurement_lists, strict=False))

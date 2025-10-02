@@ -26,13 +26,13 @@ fn main() {
     // Compile the QIR program
     match linker.compile(&qir_path, Some("bell_state_lib")) {
         Ok(lib_path) => {
-            println!("✓ Successfully compiled to: {}", lib_path.display());
+            println!("SUCCESS: Successfully compiled to: {}", lib_path.display());
             println!("\nThe compiled library can be loaded and executed by:");
             println!("  1. A QisControlEngine with a QisRuntime");
             println!("  2. Direct FFI loading for testing");
         }
         Err(e) => {
-            eprintln!("✗ Compilation failed: {}", e);
+            eprintln!("FAILED: Compilation failed: {}", e);
             eprintln!("\nMake sure you have LLVM tools installed:");
             eprintln!("  - On macOS: brew install llvm");
             eprintln!("  - On Ubuntu: apt-get install llvm");

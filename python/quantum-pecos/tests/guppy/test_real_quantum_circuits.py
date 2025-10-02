@@ -39,8 +39,8 @@ def test_bell_state_preparation() -> None:
 
     # Results come as a dict with measurement keys
     if isinstance(results, dict):
-        m1_list = results.get("measurement_1", [])
-        m2_list = results.get("measurement_2", [])
+        m1_list = results.get("measurement_0", [])
+        m2_list = results.get("measurement_1", [])
 
         for m1, m2 in zip(m1_list, m2_list, strict=False):
             if m1 == 0 and m2 == 0:
@@ -99,9 +99,9 @@ def test_ghz_state() -> None:
     other = 0
 
     if isinstance(results, dict):
-        m1_list = results.get("measurement_1", [])
-        m2_list = results.get("measurement_2", [])
-        m3_list = results.get("measurement_3", [])
+        m1_list = results.get("measurement_0", [])
+        m2_list = results.get("measurement_1", [])
+        m3_list = results.get("measurement_2", [])
 
         for m1, m2, m3 in zip(m1_list, m2_list, m3_list, strict=False):
             if m1 == 0 and m2 == 0 and m3 == 0:
@@ -160,8 +160,8 @@ def test_quantum_phase_kickback() -> None:
     total = 0
 
     if isinstance(results, dict):
-        m1_list = results.get("measurement_1", [])
-        m2_list = results.get("measurement_2", [])
+        m1_list = results.get("measurement_0", [])
+        m2_list = results.get("measurement_1", [])
 
         for m1, m2 in zip(m1_list, m2_list, strict=False):
             total += 1
@@ -211,7 +211,7 @@ def test_quantum_interference() -> None:
     total = 0
 
     if isinstance(results, dict):
-        measurements = results.get("measurement_1", [])
+        measurements = results.get("measurement_0", [])
         for m in measurements:
             total += 1
             if m == 1:
@@ -252,7 +252,7 @@ def test_rotation_gates() -> None:
     one_count = 0
 
     if isinstance(results, dict):
-        measurements = results.get("measurement_1", [])
+        measurements = results.get("measurement_0", [])
         for m in measurements:
             if m == 0:
                 zero_count += 1

@@ -31,14 +31,14 @@ fn main() {
     // Compile the QIR program
     match linker.compile(&qir_path, Some("bell_state_linked")) {
         Ok(lib_path) => {
-            println!("✓ Successfully compiled to: {}", lib_path.display());
+            println!("SUCCESS: Successfully compiled to: {}", lib_path.display());
             println!("\nThis library now contains:");
             println!("  - Your QIR program (bell_state)");
             println!("  - QIS interface FFI functions");
             println!("  - Ready to be loaded and executed!");
         }
         Err(e) => {
-            eprintln!("✗ Compilation failed: {}", e);
+            eprintln!("FAILED: Compilation failed: {}", e);
             std::process::exit(1);
         }
     }

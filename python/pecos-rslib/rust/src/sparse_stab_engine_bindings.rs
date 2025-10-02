@@ -12,7 +12,7 @@
 
 use crate::byte_message_bindings::PyByteMessage;
 use crate::engine_bindings::{PyEngineCommon, PyEngineWrapper, PyQuantumEngineWrapper};
-use pecos::prelude::SparseStabEngine;
+use pecos_engines::quantum::SparseStabEngine;
 use pyo3::prelude::*;
 
 /// Python wrapper for Rust `SparseStabEngine` to execute `ByteMessage` circuits with Clifford gates

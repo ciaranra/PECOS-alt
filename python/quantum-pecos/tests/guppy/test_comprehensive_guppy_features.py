@@ -96,9 +96,9 @@ class GuppyPipelineTest:
                 measurements = []
                 if "measurements" in result_dict:
                     measurements = result_dict["measurements"]
-                elif "measurement_1" in result_dict:
+                elif "measurement_0" in result_dict:
                     # Handle multiple measurements
-                    num_shots = len(result_dict["measurement_1"])
+                    num_shots = len(result_dict["measurement_0"])
                     measurement_keys = sorted(
                         [k for k in result_dict if k.startswith("measurement_")],
                     )
@@ -173,7 +173,31 @@ class GuppyPipelineTest:
 @pytest.fixture
 def pipeline_tester() -> GuppyPipelineTest:
     """Fixture providing the pipeline testing helper."""
-    return GuppyPipelineTest()
+    import gc
+    import pecos_rslib
+
+    # Force cleanup before test
+    try:
+        pecos_rslib.clear_jit_cache()
+    except Exception:
+        pass
+
+    # Force garbage collection to clean up any lingering resources
+    gc.collect()
+
+    # Create fresh test instance
+    tester = GuppyPipelineTest()
+
+    yield tester
+
+    # Force cleanup after test
+    try:
+        pecos_rslib.clear_jit_cache()
+    except Exception:
+        pass
+
+    # Force garbage collection to clean up test resources
+    gc.collect()
 
 
 # ============================================================================

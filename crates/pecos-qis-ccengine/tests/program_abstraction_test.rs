@@ -26,14 +26,17 @@ fn test_qis_interface_program() {
 
 #[test]
 fn test_qis_program_conversion_success() {
-    // Test that QisProgram conversion now works
+    // Test that QisProgram conversion works with explicit interface
+    use pecos_qis_ccengine::qis_jit_interface;
     let qis_program = QisProgram::from_string("define void @main() { ret void }");
 
+    // Use explicit JIT interface for integration tests (no external dependencies)
     let result = qis_control_engine()
         .runtime(native_runtime())
+        .interface(qis_jit_interface())
         .try_program(qis_program);
 
-    assert!(result.is_ok(), "QisProgram conversion should now work");
+    assert!(result.is_ok(), "QisProgram conversion should work with explicit interface");
 
     // Test that we can build the engine with the converted program
     let engine = result.unwrap().build();

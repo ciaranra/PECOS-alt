@@ -6,7 +6,7 @@
 use log::{debug, trace};
 use pecos_qis_interface::{Operation, QisInterface, QuantumOp};
 use pecos_qis_runtime_trait::{ClassicalState, QisRuntime, Result, RuntimeError, Shot};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::ffi::c_void;
 use std::path::Path;
 use std::sync::Arc;
@@ -37,6 +37,9 @@ pub struct SeleneRuntime {
     /// Number of qubits
     num_qubits: usize,
 
+    /// Number of allocated result slots
+    num_results: usize,
+
     /// Loaded QIS interface
     interface: Option<QisInterface>,
 
@@ -59,6 +62,7 @@ impl SeleneRuntime {
             operations_buffer: Vec::new(),
             batch_size: 100,
             num_qubits: 0,
+            num_results: 0,
             interface: None,
             current_op_index: 0,
         }
@@ -70,7 +74,8 @@ impl SeleneRuntime {
             return Ok(());
         }
 
-        debug!("Loading Selene plugin from {}", self.plugin_path);
+        debug!("Loading Selene plugin from {} with {} qubits and {} results",
+               self.plugin_path, self.num_qubits, self.num_results);
 
         unsafe {
             let lib = Arc::new(
@@ -110,33 +115,40 @@ impl SeleneRuntime {
 
         self.operations_buffer.clear();
 
-        // Process operations until we have a batch
-        while self.current_op_index < interface.operations.len() &&
-              self.operations_buffer.len() < self.batch_size
-        {
+        // For quantum programs, process ALL quantum operations in a single batch
+        // to maintain quantum coherence and entanglement
+        while self.current_op_index < interface.operations.len() {
             let op = &interface.operations[self.current_op_index];
-            self.current_op_index += 1;
 
             match op {
                 Operation::Quantum(qop) => {
                     trace!("Processing quantum operation: {:?}", qop);
                     self.operations_buffer.push(qop.clone());
+                    self.current_op_index += 1;
                 }
                 Operation::AllocateQubit { id } => {
                     trace!("Allocating qubit {}", id);
                     self.num_qubits = self.num_qubits.max(*id + 1);
+                    self.current_op_index += 1;
                 }
                 Operation::AllocateResult { id } => {
                     trace!("Allocating result {}", id);
-                    let _ = id; // Just track it
+                    self.num_results = self.num_results.max(*id + 1);
+                    self.current_op_index += 1;
                 }
                 Operation::ReleaseQubit { id } => {
                     trace!("Releasing qubit {}", id);
                     let _ = id; // Just track it
+                    self.current_op_index += 1;
                 }
                 Operation::Barrier => {
                     trace!("Barrier encountered");
-                    // Barriers don't produce quantum ops
+                    // Barriers don't produce quantum ops but can break batches
+                    self.current_op_index += 1;
+                    if !self.operations_buffer.is_empty() {
+                        // End current batch at barrier
+                        break;
+                    }
                 }
             }
         }
@@ -144,6 +156,7 @@ impl SeleneRuntime {
         if self.operations_buffer.is_empty() {
             Ok(None)
         } else {
+            trace!("Returning batch of {} quantum operations", self.operations_buffer.len());
             Ok(Some(self.operations_buffer.clone()))
         }
     }
@@ -161,6 +174,7 @@ impl Clone for SeleneRuntime {
             operations_buffer: self.operations_buffer.clone(),
             batch_size: self.batch_size,
             num_qubits: self.num_qubits,
+            num_results: self.num_results,
             interface: self.interface.clone(),
             current_op_index: self.current_op_index,
         }
@@ -171,8 +185,11 @@ impl QisRuntime for SeleneRuntime {
     fn load_interface(&mut self, interface: QisInterface) -> Result<()> {
         debug!("Loading QIS interface with {} operations", interface.operations.len());
 
-        // Count qubits
+        // Count qubits and results
         self.num_qubits = interface.allocated_qubits.iter().max().map_or(0, |&q| q + 1);
+        self.num_results = interface.allocated_results.iter().max().map_or(0, |&r| r + 1);
+
+        debug!("Interface has {} qubits and {} result slots", self.num_qubits, self.num_results);
 
         self.interface = Some(interface);
         self.current_op_index = 0;
@@ -190,29 +207,47 @@ impl QisRuntime for SeleneRuntime {
         self.process_interface_ops()
     }
 
-    fn provide_measurements(&mut self, measurements: HashMap<usize, bool>) -> Result<()> {
-        debug!("Received {} measurement results", measurements.len());
+    fn provide_measurements(&mut self, measurements: BTreeMap<usize, bool>) -> Result<()> {
+        debug!("Received {} measurement results, num_results={}, allocated_results={:?}",
+               measurements.len(), self.num_results,
+               self.interface.as_ref().map(|i| &i.allocated_results));
 
         // Store measurements in classical state
         for (result_id, value) in measurements {
-            trace!("Measurement result {} = {}", result_id, value);
+            trace!("Measurement result {} = {} (num_results={})", result_id, value, self.num_results);
             self.state.measurements.insert(result_id, value);
 
-            // If we have the Selene runtime loaded, pass measurements to it
-            if let Some(lib) = &self.library {
-                if let Some(instance) = self.instance {
-                    // Try to set the result in the runtime
-                    unsafe {
-                        if let Ok(set_result_fn) = lib.get::<unsafe extern "C" fn(*mut c_void, u64, bool) -> i32>(b"selene_runtime_set_bool_result") {
-                            let _ = set_result_fn(instance, result_id as u64, value);
+            // For Selene runtime: Only pass measurements that were explicitly allocated
+            // The Selene runtime doesn't support dynamic result allocation, so we must
+            // check if this result was known at compile time
+            if let Some(interface) = &mut self.interface {
+                if interface.allocated_results.contains(&result_id) {
+                    // This result was explicitly allocated, try to pass to Selene runtime
+                    if let Some(lib) = &self.library {
+                        if let Some(instance) = self.instance {
+                            unsafe {
+                                if let Ok(set_result_fn) = lib.get::<unsafe extern "C" fn(*mut c_void, u64, bool) -> i32>(b"selene_runtime_set_bool_result") {
+                                    let errno = set_result_fn(instance, result_id as u64, value);
+                                    if errno != 0 {
+                                        // Unexpected error - log it at trace level since this is normal
+                                        // for programs that don't explicitly allocate all result slots
+                                        log::trace!("Selene runtime returned error {} for result {}", errno, result_id);
+                                    }
+                                }
+                            }
                         }
                     }
+                } else {
+                    // Result wasn't explicitly allocated - this is normal for LLVM programs
+                    // that use implicit result IDs in measurements
+                    log::trace!("Measurement result {} was not explicitly allocated, storing locally only", result_id);
                 }
-            }
 
-            // Also update the interface if it exists
-            if let Some(interface) = &mut self.interface {
+                // Update the interface with the measurement result
                 interface.store_result(result_id, value);
+            } else {
+                // No interface loaded - just store locally
+                log::trace!("No interface loaded, storing measurement {} locally", result_id);
             }
         }
 

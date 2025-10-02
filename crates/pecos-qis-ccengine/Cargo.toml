@@ -10,6 +10,7 @@ license.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+
 [dependencies]
 pecos-qis-interface = { path = "../pecos-qis-interface" }
 pecos-qis-runtime-trait = { path = "../pecos-qis-runtime-trait" }
@@ -22,6 +23,13 @@ dyn-clone = { workspace = true }
 libloading = "0.8"
 dirs = "5.0"
 regex = "1.0"
+tempfile = "3.0"
+# LLVM JIT execution
+inkwell = { version = "0.6", features = ["llvm14-0-force-dynamic"] }
+# Serialization for FFI
+bincode = "1.3"
+rand = { workspace = true }
+rand_chacha = "0.9"
 
 [dev-dependencies]
 env_logger = { workspace = true }

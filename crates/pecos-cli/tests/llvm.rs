@@ -38,6 +38,7 @@ fn test_pecos_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
         .env("RUST_LOG", "info")
         .env("PATH", path.clone())
         .arg("compile")
+        .arg("--jit")
         .arg(&test_file)
         .output()?;
 
@@ -49,15 +50,24 @@ fn test_pecos_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Verify compilation worked by checking logs
+    // With the new QIS control engine, we may see different log messages
     assert!(
-        stderr.contains("Starting compilation") || stderr.contains("Compilation successful"),
-        "Should show compilation activity. Got stderr: {stderr}"
+        stderr.contains("Starting compilation")
+            || stderr.contains("Compilation successful")
+            || stderr.contains("Loading interface")
+            || stderr.contains("Found built Selene runtime")
+            || stderr.contains("Using Selene simple runtime")
+            || stderr.contains("Building QisInterface from QisProgram using JIT compiler")
+            || stderr.contains("JIT interface created")
+            || stderr.contains("Creating QisControlEngine"),
+        "Should show compilation or loading activity. Got stderr: {stderr}"
     );
 
     // Test execution
     let output = Command::cargo_bin("pecos")?
         .env("RUST_LOG", "info")
         .arg("run")
+        .arg("--jit")
         .arg(&test_file)
         .arg("-s")
         .arg("1") // Run just 1 shot for the test

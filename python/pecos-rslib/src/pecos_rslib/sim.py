@@ -16,14 +16,11 @@ Examples:
 
     results = qis_engine().program(QisProgram.from_string(llvm_ir)).to_sim().run(1000)
 
-    # Selene simulation with Guppy
-    from pecos_rslib import selene_engine
+    # QIS engine simulation with HUGR
+    from pecos_rslib import qis_engine
+    from pecos_rslib.programs import HugrProgram
 
-    def my_quantum_func(q: Qubit) -> None:
-        H(q)
-        measure(q)
-
-    results = selene_engine().program(my_quantum_func).to_sim().run(1000)
+    results = qis_engine().program(HugrProgram.from_bytes(hugr_bytes)).to_sim().run(1000)
 """
 
 # Import the Rust bindings
@@ -52,19 +49,9 @@ from pecos_rslib._pecos_rslib import (
     state_vector,
 )
 
-# Import our Python wrapper for selene_engine with Guppy support
-from pecos_rslib.selene_engine import SeleneEngineBuilder, selene_engine
+# Note: selene_engine has been replaced with qis_engine for QIS/HUGR programs
 
-# Automatically set up Bridge plugin integration for Selene
-try:
-    from pecos_rslib.selene_auto_bridge import _auto_patched
-
-    if _auto_patched:
-        import logging
-
-        logging.getLogger(__name__).info("Bridge plugin auto-integration enabled")
-except ImportError:
-    pass  # Bridge plugin not available
+# QIS engine provides unified runtime support for QIS/HUGR programs
 
 # Re-export for convenience
 __all__ = [
@@ -88,7 +75,6 @@ __all__ = [
     "qis_engine",
     "phir_json_engine",
     "qasm_engine",
-    "selene_engine",
     "sim",
     "sparse_stab",
     "sparse_stabilizer",

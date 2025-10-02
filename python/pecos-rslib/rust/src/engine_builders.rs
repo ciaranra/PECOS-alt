@@ -14,14 +14,14 @@ use pecos_engines::quantum_engine_builder::{
 use pecos_phir_json::{
     PhirJsonEngineBuilder as RustPhirJsonEngineBuilder, phir_json_engine as rust_phir_json_engine,
 };
-use pecos_programs::{
-    HugrProgram, PhirJsonProgram, QasmProgram, QisProgram, SeleneInterfaceProgram,
-};
+use pecos_programs::{HugrProgram, PhirJsonProgram, QasmProgram, QisProgram};
 use pecos_qasm::{QasmEngineBuilder as RustQasmEngineBuilder, qasm_engine as rust_qasm_engine};
-use pecos_qis_sim::{QisEngineBuilder as RustQisEngineBuilder, qis_engine as rust_qis_engine};
-use pecos_selene_engine::{
-    SeleneExecutableEngineBuilder as RustSeleneEngineBuilder,
-    selene_executable as rust_selene_executable,
+// QIS engine functionality is now provided by qis_control_engine
+use pecos_qis_ccengine::{
+    QisEngineBuilder as RustQisControlEngineBuilder,
+    native_runtime as rust_native_runtime, qis_control_engine as rust_qis_control_engine,
+    qis_jit_interface as rust_qis_jit_interface,
+    qis_selene_helios_interface as rust_qis_selene_helios_interface,
 };
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -74,6 +74,11 @@ impl PyQasmEngineBuilder {
         self.inner.has_source()
     }
 
+    /// Get the QasmProgram from this builder (if any)
+    pub fn get_program(&self) -> Option<PyQasmProgram> {
+        self.inner.get_program().map(|prog| PyQasmProgram { inner: prog })
+    }
+
     /// Convert to simulation builder
     fn to_sim(&self) -> PyResult<PySimBuilder> {
         Ok(PySimBuilder {
@@ -89,11 +94,12 @@ impl PyQasmEngineBuilder {
     }
 }
 
-/// Python wrapper for LLVM engine builder
+/// Python wrapper for LLVM/QIS engine builder
+/// Now uses QIS Control Engine internally
 #[pyclass(name = "QisEngineBuilder")]
 #[derive(Clone)]
 pub struct PyQisEngineBuilder {
-    pub(crate) inner: RustQisEngineBuilder,
+    pub(crate) inner: RustQisControlEngineBuilder,
 }
 
 #[pymethods]
@@ -101,7 +107,7 @@ impl PyQisEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: rust_qis_engine(),
+            inner: rust_qis_control_engine(),
         }
     }
 
@@ -111,11 +117,15 @@ impl PyQisEngineBuilder {
     fn program(&mut self, program: Py<PyAny>, py: Python) -> PyResult<Self> {
         // Check if it's a QisProgram
         if let Ok(qis_prog) = program.extract::<PyQisProgram>(py) {
-            self.inner = self.inner.clone().program(qis_prog.inner);
+            self.inner = self.inner.clone()
+                .try_program(qis_prog.inner)
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to set QIS program: {}", e)))?;
         }
         // Check if it's a HugrProgram
         else if let Ok(hugr_prog) = program.extract::<PyHugrProgram>(py) {
-            self.inner = self.inner.clone().program(hugr_prog.inner);
+            self.inner = self.inner.clone()
+                .try_program(hugr_prog.inner)
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to set HUGR program: {}", e)))?;
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "program must be either a QisProgram or HugrProgram instance",
@@ -124,11 +134,11 @@ impl PyQisEngineBuilder {
         Ok(self.clone())
     }
 
-    /// Enable verbose output
-    fn verbose(&mut self, verbose: bool) -> PyResult<Self> {
-        self.inner = self.inner.clone().verbose(verbose);
-        Ok(self.clone())
-    }
+    // Note: .qubits() method should be called on the sim builder, not the engine builder
+    // This is consistent with the overall PECOS architecture where sim.qubits() sets
+    // the number of qubits for the simulation
+
+    // Note: verbose method not available on QisControlEngineBuilder
 
     /// Convert to simulation builder
     fn to_sim(&self) -> PyResult<PySimBuilder> {
@@ -145,19 +155,19 @@ impl PyQisEngineBuilder {
     }
 }
 
-/// Python wrapper for Selene engine builder
-#[pyclass(name = "SeleneEngineBuilder")]
+/// Python wrapper for QIS Control Engine builder (new unified QIS/HUGR engine)
+#[pyclass(name = "QisControlEngineBuilder")]
 #[derive(Clone)]
-pub struct PySeleneEngineBuilder {
-    pub(crate) inner: RustSeleneEngineBuilder,
+pub struct PyQisControlEngineBuilder {
+    pub(crate) inner: RustQisControlEngineBuilder,
 }
 
 #[pymethods]
-impl PySeleneEngineBuilder {
+impl PyQisControlEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: rust_selene_executable(),
+            inner: rust_qis_control_engine(),
         }
     }
 
@@ -167,11 +177,17 @@ impl PySeleneEngineBuilder {
     fn program(&mut self, program: Py<PyAny>, py: Python) -> PyResult<Self> {
         // Check if it's a QisProgram
         if let Ok(qis_prog) = program.extract::<PyQisProgram>(py) {
-            self.inner = self.inner.clone().program(qis_prog.inner);
+            self.inner = self.inner.clone().try_program(qis_prog.inner)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    format!("Failed to load QIS program: {}", e)
+                ))?;
         }
         // Check if it's a HugrProgram
         else if let Ok(hugr_prog) = program.extract::<PyHugrProgram>(py) {
-            self.inner = self.inner.clone().program(hugr_prog.inner);
+            self.inner = self.inner.clone().try_program(hugr_prog.inner)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    format!("Failed to load HUGR program: {}", e)
+                ))?;
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "program must be either a QisProgram or HugrProgram instance",
@@ -180,28 +196,33 @@ impl PySeleneEngineBuilder {
         Ok(self.clone())
     }
 
-    /// Set a plugin file for this engine
-    /// Note: `SeleneExecutableEngine` uses the built-in `PecosSeleneBridgeSimulator` by default,
-    /// but you can override it with a custom plugin path if needed.
-    #[pyo3(signature = (path))]
-    fn plugin(&mut self, path: &str) -> PyResult<Self> {
-        // While the bridge approach uses the built-in PecosSeleneBridgeSimulator by default,
-        // we allow specifying a custom plugin path for flexibility
-        self.inner = self.inner.clone().plugin(path);
+    /// Use native runtime (default if Selene is not available)
+    fn native_runtime(&mut self) -> PyResult<Self> {
+        self.inner = self.inner.clone().runtime(rust_native_runtime());
         Ok(self.clone())
     }
 
-    /// Set the number of qubits
-    #[pyo3(signature = (n))]
-    fn qubits(&mut self, n: usize) -> PyResult<Self> {
-        self.inner = self.inner.clone().qubits(n);
+    /// Set the interface builder (JIT or Helios)
+    #[pyo3(signature = (builder))]
+    fn interface(&mut self, builder: &PyQisInterfaceBuilder) -> PyResult<Self> {
+        // We need to clone the inner builder since Rust ownership rules
+        // Note: This requires the inner builders to implement Clone
+        // The Box<dyn Trait> can't be cloned directly, so we'll need a workaround
+        // For now, we'll create new builders based on the type
+        self.inner = self.inner.clone().interface(
+            if builder.inner.name() == "JIT" {
+                rust_qis_jit_interface()
+            } else {
+                rust_qis_selene_helios_interface()
+            }
+        );
         Ok(self.clone())
     }
 
     /// Convert to simulation builder
     fn to_sim(&self) -> PyResult<PySimBuilder> {
         Ok(PySimBuilder {
-            inner: SimBuilderInner::Selene(PySeleneSimBuilder {
+            inner: SimBuilderInner::QisControl(PyQisControlSimBuilder {
                 engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
                 seed: None,
                 workers: None,
@@ -212,6 +233,7 @@ impl PySeleneEngineBuilder {
         })
     }
 }
+
 
 /// Python wrapper for PHIR JSON engine builder
 #[pyclass(name = "PhirJsonEngineBuilder")]
@@ -320,9 +342,10 @@ impl PyPhirJsonSimulation {
     }
 }
 
-/// Internal LLVM simulation builder state
+/// Internal LLVM/QIS simulation builder state
+/// Now uses QIS Control Engine internally
 pub struct PyQisSimBuilder {
-    pub(crate) engine_builder: Arc<Mutex<Option<RustQisEngineBuilder>>>,
+    pub(crate) engine_builder: Arc<Mutex<Option<RustQisControlEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
     pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
@@ -330,15 +353,16 @@ pub struct PyQisSimBuilder {
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 
-/// Internal Selene simulation builder state
-pub struct PySeleneSimBuilder {
-    pub(crate) engine_builder: Arc<Mutex<Option<RustSeleneEngineBuilder>>>,
+/// Internal QIS Control Engine simulation builder state
+pub struct PyQisControlSimBuilder {
+    pub(crate) engine_builder: Arc<Mutex<Option<RustQisControlEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
     pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
     pub(crate) noise_builder: Option<Py<PyAny>>,
     pub(crate) explicit_num_qubits: Option<usize>,
 }
+
 
 /// Internal PHIR JSON simulation builder state
 pub struct PyPhirJsonSimBuilder {
@@ -350,30 +374,7 @@ pub struct PyPhirJsonSimBuilder {
     pub(crate) explicit_num_qubits: Option<usize>,
 }
 
-/// Builder for Selene executable engine with bridge approach
-pub struct PySeleneExecutableSimBuilder {
-    pub(crate) program: Option<Py<PyAny>>, // Guppy function or HUGR to compile to executable
-    pub(crate) engine_builder: Arc<
-        Mutex<
-            Option<pecos_selene_engine::selene_executable_builder::SeleneExecutableEngineBuilder>,
-        >,
-    >,
-    pub(crate) seed: Option<u64>,
-    pub(crate) workers: Option<usize>,
-    pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
-    pub(crate) noise_builder: Option<Py<PyAny>>,
-    pub(crate) explicit_num_qubits: Option<usize>,
-}
 
-/// Builder for Selene library engine (newest approach for HUGR/Guppy)
-pub struct PySeleneLibrarySimBuilder {
-    pub(crate) program: Option<Py<PyAny>>, // Store the Python program (Guppy or HUGR)
-    pub(crate) seed: Option<u64>,
-    pub(crate) workers: Option<usize>,
-    pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
-    pub(crate) noise_builder: Option<Py<PyAny>>,
-    pub(crate) explicit_num_qubits: Option<usize>,
-}
 
 /// Python wrapper for program types
 #[pyclass(name = "QasmProgram")]
@@ -417,6 +418,11 @@ impl PyQisProgram {
     fn source(&self) -> String {
         self.inner.source().to_string()
     }
+
+    #[staticmethod]
+    fn preprocess_ir(llvm_ir: String) -> String {
+        QisProgram::preprocess_ir(llvm_ir)
+    }
 }
 
 #[pyclass(name = "HugrProgram")]
@@ -458,51 +464,6 @@ impl PyPhirJsonProgram {
     }
 }
 
-#[pyclass(name = "SeleneInterfaceProgram")]
-#[derive(Clone)]
-pub struct PySeleneInterfaceProgram {
-    pub(crate) inner: SeleneInterfaceProgram,
-}
-
-#[pymethods]
-impl PySeleneInterfaceProgram {
-    #[staticmethod]
-    fn from_bytes(plugin_bytes: Vec<u8>) -> Self {
-        PySeleneInterfaceProgram {
-            inner: SeleneInterfaceProgram::from_bytes(plugin_bytes),
-        }
-    }
-
-    #[staticmethod]
-    fn from_executable(
-        executable_path: String,
-        artifacts_path: String,
-        plugin_bytes: Vec<u8>,
-    ) -> Self {
-        PySeleneInterfaceProgram {
-            inner: SeleneInterfaceProgram::from_executable(
-                executable_path,
-                artifacts_path,
-                plugin_bytes,
-            ),
-        }
-    }
-
-    /// Get the plugin bytes
-    fn bytes(&self) -> Vec<u8> {
-        self.inner.bytes().to_vec()
-    }
-
-    /// Get the executable path if available
-    fn executable_path(&self) -> Option<String> {
-        self.inner.executable_path.clone()
-    }
-
-    /// Get the artifacts path if available
-    fn artifacts_path(&self) -> Option<String> {
-        self.inner.artifacts_path.clone()
-    }
-}
 
 /// Create a QASM engine builder
 #[pyfunction]
@@ -516,18 +477,26 @@ pub fn qasm_engine() -> PyQasmEngineBuilder {
 #[pyfunction]
 pub fn qis_engine() -> PyQisEngineBuilder {
     PyQisEngineBuilder {
-        inner: rust_qis_engine(),
+        inner: rust_qis_control_engine(),
     }
 }
 
-/// Create a Selene executable engine builder
-/// Note: This uses the executable/bridge approach, not the simple runtime
+/// Create a QIS Control Engine builder (new unified QIS/HUGR engine)
 #[pyfunction]
-pub fn selene_engine() -> PySeleneEngineBuilder {
-    PySeleneEngineBuilder {
-        inner: rust_selene_executable(),
+pub fn qis_control_engine() -> PyQisControlEngineBuilder {
+    PyQisControlEngineBuilder {
+        inner: rust_qis_control_engine(),
     }
 }
+
+/// Create native runtime for QIS Control Engine
+#[pyfunction]
+pub fn native_runtime() -> PyQisControlEngineBuilder {
+    PyQisControlEngineBuilder {
+        inner: rust_qis_control_engine().runtime(rust_native_runtime()),
+    }
+}
+
 
 /// Create a PHIR JSON engine builder
 #[pyfunction]
@@ -1146,63 +1115,6 @@ pub fn sparse_stab() -> PySparseStabilizerEngineBuilder {
     sparse_stabilizer()
 }
 
-/// Configuration for `SeleneExecutableEngine`
-#[pyclass(name = "SeleneExecutableConfig")]
-#[derive(Clone)]
-pub struct PySeleneExecutableConfig {
-    pub executable_path: String,
-    pub runtime_plugin_path: String,
-    pub noise_model_plugin_path: String,
-    pub bridge_simulator_plugin_path: String,
-    pub working_dir: String,
-    pub num_qubits: usize,
-}
-
-#[pymethods]
-impl PySeleneExecutableConfig {
-    #[new]
-    fn new(
-        executable_path: String,
-        runtime_plugin_path: String,
-        noise_model_plugin_path: String,
-        bridge_simulator_plugin_path: String,
-        working_dir: String,
-        num_qubits: usize,
-    ) -> Self {
-        Self {
-            executable_path,
-            runtime_plugin_path,
-            noise_model_plugin_path,
-            bridge_simulator_plugin_path,
-            working_dir,
-            num_qubits,
-        }
-    }
-}
-
-/// Python wrapper for `SeleneExecutableEngine`
-#[pyclass(name = "SeleneExecutableEngine")]
-#[derive(Clone)]
-pub struct PySeleneExecutableEngine {
-    pub num_qubits: usize,
-    pub config: Option<PySeleneExecutableConfig>,
-}
-
-#[pymethods]
-impl PySeleneExecutableEngine {
-    #[staticmethod]
-    fn new(num_qubits: usize) -> Self {
-        Self {
-            num_qubits,
-            config: None,
-        }
-    }
-
-    fn with_config(&mut self, config: PySeleneExecutableConfig) -> Self {
-        self.config = Some(config);
-        self.clone()
-    }
-}
 
 /// Create a `SimBuilder` from scratch without a program
 #[pyfunction]
@@ -1212,17 +1124,38 @@ pub fn sim_builder() -> PySimBuilder {
     }
 }
 
+/// Python wrapper for QisInterfaceBuilder
+/// Since we can't directly expose trait objects to Python, we'll use an opaque wrapper
+#[pyclass(name = "QisInterfaceBuilder")]
+pub struct PyQisInterfaceBuilder {
+    // Store the actual Rust builder internally
+    inner: Box<dyn pecos_qis_ccengine::QisInterfaceBuilder>,
+}
+
+/// Helper function to create a JIT interface builder
+#[pyfunction]
+pub fn qis_jit_interface() -> PyQisInterfaceBuilder {
+    PyQisInterfaceBuilder {
+        inner: rust_qis_jit_interface(),
+    }
+}
+
+/// Helper function to create a Helios interface builder
+#[pyfunction]
+pub fn qis_selene_helios_interface() -> PyQisInterfaceBuilder {
+    PyQisInterfaceBuilder {
+        inner: rust_qis_selene_helios_interface(),
+    }
+}
+
 /// Register the engine builder module with `PyO3`
 pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Engine builders
     m.add_class::<PyQasmEngineBuilder>()?;
     m.add_class::<PyQisEngineBuilder>()?;
-    m.add_class::<PySeleneEngineBuilder>()?;
+    m.add_class::<PyQisControlEngineBuilder>()?;
     m.add_class::<PyPhirJsonEngineBuilder>()?;
 
-    // Selene Executable Engine
-    m.add_class::<PySeleneExecutableConfig>()?;
-    m.add_class::<PySeleneExecutableEngine>()?;
 
     // Simulation builders are now handled by the unified PySimBuilder in sim.rs
 
@@ -1244,11 +1177,19 @@ pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStateVectorEngineBuilder>()?;
     m.add_class::<PySparseStabilizerEngineBuilder>()?;
 
+    // Interface builder wrapper
+    m.add_class::<PyQisInterfaceBuilder>()?;
+
     // Engine functions
     m.add_function(wrap_pyfunction!(qasm_engine, m)?)?;
     m.add_function(wrap_pyfunction!(qis_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(selene_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(qis_control_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(native_runtime, m)?)?;
     m.add_function(wrap_pyfunction!(phir_json_engine, m)?)?;
+
+    // Interface builder functions
+    m.add_function(wrap_pyfunction!(qis_jit_interface, m)?)?;
+    m.add_function(wrap_pyfunction!(qis_selene_helios_interface, m)?)?;
 
     // SimBuilder function
     m.add_function(wrap_pyfunction!(sim_builder, m)?)?;

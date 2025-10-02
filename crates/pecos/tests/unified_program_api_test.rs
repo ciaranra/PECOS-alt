@@ -8,8 +8,7 @@ mod tests {
     use pecos_engines::sim;
     use pecos_programs::{HugrProgram, QasmProgram, QisProgram};
     use pecos_qasm::qasm_engine;
-    use pecos_qis_sim::qis_engine;
-    use pecos_selene_engine::selene_executable;
+    use pecos::qis_control_engine;
 
     #[test]
     fn test_qasm_engine_accepts_shared_program() {
@@ -23,25 +22,19 @@ mod tests {
 
     #[test]
     fn test_qis_engine_accepts_shared_programs() {
-        // Test with LlvmProgram
-        let llvm_program = QisProgram::from_string("define void @main() { ret void }");
-        let _ = qis_engine().program(llvm_program);
+        use pecos_qis_ccengine::qis_jit_interface;
 
-        // Test with HugrProgram
+        // Test with QisProgram - use JIT interface for tests (no external dependencies)
+        let llvm_program = QisProgram::from_string("define void @main() {\nentry:\n  ret void\n}");
+        let _ = qis_control_engine().interface(qis_jit_interface()).program(llvm_program);
+
+        // Test with HugrProgram - use try_program to handle invalid test data gracefully
         let hugr_program = HugrProgram::from_bytes(vec![1, 2, 3, 4]);
-        let _ = qis_engine().program(hugr_program);
+        let result = qis_control_engine().interface(qis_jit_interface()).try_program(hugr_program);
+        // We expect this to fail since the data is invalid
+        assert!(result.is_err());
     }
 
-    #[test]
-    fn test_selene_engine_accepts_shared_programs() {
-        // Test with LlvmProgram
-        let llvm_program = QisProgram::from_string("define void @main() { ret void }");
-        let _ = selene_executable().program(llvm_program).qubits(1);
-
-        // Test with HugrProgram
-        let hugr_program = HugrProgram::from_bytes(vec![1, 2, 3, 4]);
-        let _ = selene_executable().program(hugr_program).qubits(1);
-    }
 
     #[test]
     fn test_sim_function_with_program_api() {
@@ -59,13 +52,36 @@ mod tests {
         let builder: pecos_qasm::QasmEngineBuilder = qasm_program.into();
         let _ = builder;
 
-        let llvm_program = QisProgram::from_string("define void @main() {}");
-        let builder: pecos_qis_sim::QisEngineBuilder = llvm_program.into();
-        let _ = builder;
+        // Create a simpler LLVM program to debug the issue
+        let llvm_program = QisProgram::from_string("define void @main() {\nentry:\n  ret void\n}");
 
-        let hugr_program = HugrProgram::from_bytes(vec![1, 2, 3]);
-        let builder: pecos_qis_sim::QisEngineBuilder = hugr_program.into();
-        let _ = builder;
+        // Debug: Print what gets stored in the QisProgram
+        match &llvm_program.content {
+            pecos_programs::QisContent::Ir(ir) => {
+                println!("Stored IR in QisProgram:");
+                for (i, line) in ir.lines().enumerate() {
+                    println!("{}: {}", i + 1, line);
+                }
+            }
+            _ => println!("Not IR content"),
+        }
+
+
+        // Use JIT interface for tests (no external dependencies)
+        use pecos_qis_ccengine::qis_jit_interface;
+        let result = qis_control_engine().interface(qis_jit_interface()).try_program(llvm_program);
+        match result {
+            Ok(builder) => {
+                let _ = builder;
+            }
+            Err(e) => {
+                panic!("Failed to create QIS builder: {}", e);
+            }
+        }
+
+        // Note: We don't test HugrProgram::into() because it would require valid HUGR data
+        // The From trait is implemented generically for all IntoQisInterface types
+        // and is tested in the pecos-qis-ccengine crate with proper error handling
     }
 
     #[test]
@@ -93,8 +109,8 @@ mod tests {
         let qasm = QasmProgram::from_string("OPENQASM 2.0;");
         assert_eq!(format!("{qasm}"), "OPENQASM 2.0;");
 
-        let llvm = QisProgram::from_string("define void @main() {}");
-        assert_eq!(format!("{llvm}"), "define void @main() {}");
+        let llvm = QisProgram::from_string("define void @main() {\nentry:\n  ret void\n}");
+        assert_eq!(format!("{llvm}"), "define void @main() {\nentry:\n  ret void\n}");
 
         let hugr = HugrProgram::from_bytes(vec![1, 2, 3]);
         assert_eq!(format!("{hugr}"), "HugrProgram(3 bytes)");
@@ -108,7 +124,7 @@ mod tests {
         let program: Program = qasm.into();
         assert_eq!(program.program_type(), "QASM");
 
-        let qis = QisProgram::from_string("define void @main() {}");
+        let qis = QisProgram::from_string("define void @main() {\nentry:\n  ret void\n}");
         let program: Program = qis.into();
         assert_eq!(program.program_type(), "QIS");
 

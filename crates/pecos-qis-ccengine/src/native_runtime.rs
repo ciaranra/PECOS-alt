@@ -7,7 +7,7 @@
 use log::{debug, trace};
 use pecos_qis_interface::{Operation, QisInterface, QuantumOp};
 use pecos_qis_runtime_trait::{ClassicalState, QisRuntime, Result, RuntimeError};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Native Rust implementation of QisRuntime
 ///
@@ -44,6 +44,33 @@ impl NativeRuntime {
             batch_size: 100,
             current_op_index: 0,
             num_qubits: 0,
+        }
+    }
+
+    /// Extract all qubit IDs referenced by a quantum operation
+    fn extract_qubit_ids(&self, qop: &QuantumOp) -> Vec<usize> {
+        match qop {
+            // Single-qubit gates
+            QuantumOp::H(q) | QuantumOp::X(q) | QuantumOp::Y(q) | QuantumOp::Z(q) |
+            QuantumOp::S(q) | QuantumOp::Sdg(q) | QuantumOp::T(q) | QuantumOp::Tdg(q) |
+            QuantumOp::Reset(q) => vec![*q],
+
+            // Rotation gates
+            QuantumOp::RX(_, q) | QuantumOp::RY(_, q) | QuantumOp::RZ(_, q) |
+            QuantumOp::RXY(_, _, q) => vec![*q],
+
+            // Two-qubit gates
+            QuantumOp::CX(c, t) | QuantumOp::CY(c, t) | QuantumOp::CZ(c, t) |
+            QuantumOp::CH(c, t) | QuantumOp::ZZ(c, t) | QuantumOp::RZZ(_, c, t) => vec![*c, *t],
+
+            // Controlled rotations
+            QuantumOp::CRZ(_, c, t) => vec![*c, *t],
+
+            // Three-qubit gates
+            QuantumOp::CCX(c1, c2, t) => vec![*c1, *c2, *t],
+
+            // Measurement
+            QuantumOp::Measure(q, _) => vec![*q],
         }
     }
 
@@ -103,8 +130,40 @@ impl QisRuntime for NativeRuntime {
     fn load_interface(&mut self, interface: QisInterface) -> Result<()> {
         debug!("Loading QIS interface with {} operations", interface.operations.len());
 
-        // Count qubits from allocations
-        self.num_qubits = interface.allocated_qubits.iter().max().map_or(0, |&q| q + 1);
+        // Count qubits from both explicit allocations AND from operations that reference qubits
+        let max_qubit_from_allocations = interface.allocated_qubits.iter().max().cloned();
+        let mut max_qubit_from_operations: Option<usize> = None;
+
+        // Scan all operations to find the maximum qubit ID referenced
+        for operation in &interface.operations {
+            match operation {
+                Operation::Quantum(qop) => {
+                    let qubits = self.extract_qubit_ids(qop);
+                    if let Some(max_in_op) = qubits.into_iter().max() {
+                        max_qubit_from_operations = Some(max_qubit_from_operations.map_or(max_in_op, |current: usize| current.max(max_in_op)));
+                    }
+                }
+                Operation::AllocateQubit { id } => {
+                    max_qubit_from_operations = Some(max_qubit_from_operations.map_or(*id, |current: usize| current.max(*id)));
+                }
+                Operation::ReleaseQubit { id } => {
+                    max_qubit_from_operations = Some(max_qubit_from_operations.map_or(*id, |current: usize| current.max(*id)));
+                }
+                _ => {} // Other operations don't reference qubits
+            }
+        }
+
+        // Use the maximum qubit ID found from either source
+        let max_qubit = match (max_qubit_from_allocations, max_qubit_from_operations) {
+            (Some(a), Some(o)) => Some(a.max(o)),
+            (Some(a), None) => Some(a),
+            (None, Some(o)) => Some(o),
+            (None, None) => None,
+        };
+
+        self.num_qubits = max_qubit.map_or(0, |q| q + 1);
+        debug!("Determined {} qubits needed (from allocations: {:?}, from operations: {:?})",
+               self.num_qubits, max_qubit_from_allocations, max_qubit_from_operations);
 
         self.interface = Some(interface);
         self.current_op_index = 0;
@@ -136,7 +195,7 @@ impl QisRuntime for NativeRuntime {
         }
     }
 
-    fn provide_measurements(&mut self, measurements: HashMap<usize, bool>) -> Result<()> {
+    fn provide_measurements(&mut self, measurements: BTreeMap<usize, bool>) -> Result<()> {
         debug!("Received {} measurement results", measurements.len());
 
         // Store measurements in classical state
@@ -164,7 +223,7 @@ impl QisRuntime for NativeRuntime {
     fn is_complete(&self) -> bool {
         self.interface
             .as_ref()
-            .map_or(true, |i| self.current_op_index >= i.operations.len())
+            .map_or(false, |i| self.current_op_index >= i.operations.len())
     }
 
     fn num_qubits(&self) -> usize {
@@ -243,7 +302,7 @@ mod tests {
         let _ops = runtime.execute_until_quantum().unwrap();
 
         // Provide measurement result
-        let mut measurements = HashMap::new();
+        let mut measurements = BTreeMap::new();
         measurements.insert(r0, true);
         runtime.provide_measurements(measurements).unwrap();
 

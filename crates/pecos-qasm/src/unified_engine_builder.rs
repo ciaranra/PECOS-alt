@@ -162,6 +162,16 @@ impl QasmEngineBuilder {
         self.source.is_some()
     }
 
+    /// Get the QasmProgram from this builder (if any)
+    #[must_use]
+    pub fn get_program(&self) -> Option<pecos_programs::QasmProgram> {
+        match &self.source {
+            Some(QasmSource::String(content)) => Some(pecos_programs::QasmProgram::from_string(content.clone())),
+            Some(QasmSource::File(path)) => pecos_programs::QasmProgram::from_file(path).ok(),
+            None => None,
+        }
+    }
+
     /// Set the WebAssembly program for foreign function calls
     ///
     /// This method accepts:

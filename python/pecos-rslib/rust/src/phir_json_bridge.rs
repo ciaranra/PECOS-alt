@@ -3,7 +3,11 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use std::collections::{BTreeMap, HashMap};
 
-use pecos::prelude::{ByteMessage, ClassicalEngine, ControlEngine, Engine, PecosError, Shot};
+use pecos_core::prelude::PecosError;
+use pecos_engines::{ByteMessage, ClassicalEngine, ControlEngine, Engine};
+use pecos_phir_json::PhirJsonEngine as RustPhirJsonEngine;
+use pecos_engines::shot_results::Data;
+use pecos_engines::Shot;
 
 #[pyclass(module = "_pecos_rslib")]
 #[derive(Debug)]
@@ -15,7 +19,7 @@ pub struct PhirJsonEngine {
     // Map from result_id to (register_name, index)
     result_to_register: Mutex<HashMap<u32, (String, u32)>>,
     // Internal Rust PHIR-JSON engine that does the real work - None for test programs
-    engine: Option<Mutex<pecos::prelude::PhirJsonEngine>>,
+    engine: Option<Mutex<RustPhirJsonEngine>>,
 }
 
 impl Clone for PhirJsonEngine {
@@ -71,7 +75,7 @@ impl PhirJsonEngine {
                 log::debug!("Detected test case that requires Python interpreter behavior.");
                 None
             } else {
-                match pecos::prelude::PhirJsonEngine::from_json(phir_json) {
+                match RustPhirJsonEngine::from_json(phir_json) {
                     Ok(engine) => Some(Mutex::new(engine)),
                     Err(e) => {
                         // Log the error but continue with Python interpreter
@@ -132,7 +136,7 @@ impl PhirJsonEngine {
                 log::debug!("Detected test case that requires Python interpreter behavior.");
                 None
             } else {
-                match pecos::prelude::PhirJsonEngine::from_json(phir_json) {
+                match RustPhirJsonEngine::from_json(phir_json) {
                     Ok(engine) => Some(Mutex::new(engine)),
                     Err(e) => {
                         // Log the error but continue with Python interpreter
@@ -401,33 +405,33 @@ impl PhirJsonEngine {
                         for (key, data) in shot_result.data {
                             // Convert Data to u32 if possible
                             let value = match data {
-                                pecos::prelude::Data::U8(v) => u32::from(v),
-                                pecos::prelude::Data::U16(v) => u32::from(v),
-                                pecos::prelude::Data::U32(v) => v,
+                                Data::U8(v) => u32::from(v),
+                                Data::U16(v) => u32::from(v),
+                                Data::U32(v) => v,
                                 #[allow(clippy::cast_possible_truncation)]
-                                pecos::prelude::Data::U64(v) => v as u32, // Truncate for compatibility
+                                Data::U64(v) => v as u32, // Truncate for compatibility
                                 #[allow(clippy::cast_sign_loss)]
-                                pecos::prelude::Data::I8(v) => v as u32,
+                                Data::I8(v) => v as u32,
                                 #[allow(clippy::cast_sign_loss)]
-                                pecos::prelude::Data::I16(v) => v as u32,
+                                Data::I16(v) => v as u32,
                                 #[allow(clippy::cast_sign_loss)]
-                                pecos::prelude::Data::I32(v) => v as u32,
+                                Data::I32(v) => v as u32,
                                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                                pecos::prelude::Data::I64(v) => v as u32,
+                                Data::I64(v) => v as u32,
                                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                                pecos::prelude::Data::F32(v) => v as u32,
+                                Data::F32(v) => v as u32,
                                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                                pecos::prelude::Data::F64(v) => v as u32,
-                                pecos::prelude::Data::Bool(v) => u32::from(v),
-                                pecos::prelude::Data::String(ref s) => {
+                                Data::F64(v) => v as u32,
+                                Data::Bool(v) => u32::from(v),
+                                Data::String(ref s) => {
                                     s.parse::<u32>().unwrap_or(0)
                                 }
-                                pecos::prelude::Data::Json(_) => 0, // Default to 0 for JSON data
-                                pecos::prelude::Data::BigInt(ref v) => {
+                                Data::Json(_) => 0, // Default to 0 for JSON data
+                                Data::BigInt(ref v) => {
                                     // Try to convert BigInt to u32, default to 0 if it doesn't fit
                                     u32::try_from(v).unwrap_or(0)
                                 }
-                                pecos::prelude::Data::Bytes(ref v) => {
+                                Data::Bytes(ref v) => {
                                     // Try to interpret first 4 bytes as little-endian u32
                                     if v.len() >= 4 {
                                         u32::from_le_bytes([v[0], v[1], v[2], v[3]])
@@ -435,7 +439,7 @@ impl PhirJsonEngine {
                                         0
                                     }
                                 }
-                                pecos::prelude::Data::BitVec(ref v) => {
+                                Data::BitVec(ref v) => {
                                     // Convert up to 32 bits to u32
                                     let mut result = 0u32;
                                     for (i, bit) in v.iter().take(32).enumerate() {
@@ -445,16 +449,16 @@ impl PhirJsonEngine {
                                     }
                                     result
                                 }
-                                pecos::prelude::Data::Vec(ref v) => {
+                                Data::Vec(ref v) => {
                                     // For vectors, try to get the first element or return 0
                                     v.first()
                                         .and_then(|d| match d {
-                                            pecos::prelude::Data::U32(n) => Some(*n),
-                                            pecos::prelude::Data::I32(n) => {
+                                            Data::U32(n) => Some(*n),
+                                            Data::I32(n) => {
                                                 // Measurement results should be non-negative
                                                 u32::try_from(*n).ok()
                                             }
-                                            pecos::prelude::Data::I64(n) => {
+                                            Data::I64(n) => {
                                                 // Convert to u32 if within valid range
                                                 u32::try_from(*n).ok()
                                             }
@@ -1141,7 +1145,7 @@ impl ClassicalEngine for PhirJsonEngine {
 
             // Convert mapped registers to Data enum values
             for (key, value) in mapped_registers {
-                data_map.insert(key, pecos::prelude::Data::U32(value));
+                data_map.insert(key, Data::U32(value));
             }
 
             Ok(Shot { data: data_map })
@@ -1187,7 +1191,7 @@ impl ControlEngine for PhirJsonEngine {
     fn start(
         &mut self,
         _input: (),
-    ) -> Result<pecos::prelude::EngineStage<ByteMessage, Shot>, PecosError> {
+    ) -> Result<pecos_engines::EngineStage<ByteMessage, Shot>, PecosError> {
         // Reset state to ensure clean start
         ClassicalEngine::reset(self)?;
 
@@ -1200,18 +1204,18 @@ impl ControlEngine for PhirJsonEngine {
         if is_empty {
             // Get the results directly
             match ClassicalEngine::get_results(self) {
-                Ok(results) => Ok(pecos::prelude::EngineStage::Complete(results)),
+                Ok(results) => Ok(pecos_engines::EngineStage::Complete(results)),
                 Err(e) => Err(e),
             }
         } else {
-            Ok(pecos::prelude::EngineStage::NeedsProcessing(commands))
+            Ok(pecos_engines::EngineStage::NeedsProcessing(commands))
         }
     }
 
     fn continue_processing(
         &mut self,
         measurements: ByteMessage,
-    ) -> Result<pecos::prelude::EngineStage<ByteMessage, Shot>, PecosError> {
+    ) -> Result<pecos_engines::EngineStage<ByteMessage, Shot>, PecosError> {
         // Handle received measurements
         self.handle_measurements(measurements)?;
 
@@ -1224,11 +1228,11 @@ impl ControlEngine for PhirJsonEngine {
         if is_empty {
             // Get the results directly
             match ClassicalEngine::get_results(self) {
-                Ok(results) => Ok(pecos::prelude::EngineStage::Complete(results)),
+                Ok(results) => Ok(pecos_engines::EngineStage::Complete(results)),
                 Err(e) => Err(e),
             }
         } else {
-            Ok(pecos::prelude::EngineStage::NeedsProcessing(commands))
+            Ok(pecos_engines::EngineStage::NeedsProcessing(commands))
         }
     }
 }
@@ -1243,7 +1247,7 @@ impl Engine for PhirJsonEngine {
 
         // Start processing
         match self.start(())? {
-            pecos::prelude::EngineStage::NeedsProcessing(commands) => {
+            pecos_engines::EngineStage::NeedsProcessing(commands) => {
                 // This case means we need a quantum engine to process the commands
                 // Since we're being called directly, we need to handle this specially
 
@@ -1276,25 +1280,25 @@ impl Engine for PhirJsonEngine {
 
                     // Continue processing with the response
                     match self.continue_processing(response)? {
-                        pecos::prelude::EngineStage::NeedsProcessing(_) => {
+                        pecos_engines::EngineStage::NeedsProcessing(_) => {
                             // If we still need more processing, that's unexpected
                             // In a real scenario, we'd continue the loop
                             // For now, return the current state
                             Ok(ClassicalEngine::get_results(self)?)
                         }
-                        pecos::prelude::EngineStage::Complete(result) => Ok(result),
+                        pecos_engines::EngineStage::Complete(result) => Ok(result),
                     }
                 } else {
                     // No measurements to process, get results
                     Ok(ClassicalEngine::get_results(self)?)
                 }
             }
-            pecos::prelude::EngineStage::Complete(result) => Ok(result),
+            pecos_engines::EngineStage::Complete(result) => Ok(result),
         }
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {
         // Call the ControlEngine's reset method to avoid ambiguity
-        <PhirJsonEngine as pecos::prelude::ControlEngine>::reset(self)
+        <PhirJsonEngine as ControlEngine>::reset(self)
     }
 }

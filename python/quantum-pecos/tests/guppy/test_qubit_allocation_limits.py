@@ -47,11 +47,11 @@ class TestQubitAllocationLimits:
         results = sim(static_test).qubits(5).quantum(state_vector()).run(10)
 
         # Check we got results
-        if "measurement_1" in results:
+        if "measurement_0" in results:
             # New format with separate keys
+            assert len(results["measurement_0"]) == 10, "Should have 10 measurements"
             assert len(results["measurement_1"]) == 10, "Should have 10 measurements"
             assert len(results["measurement_2"]) == 10, "Should have 10 measurements"
-            assert len(results["measurement_3"]) == 10, "Should have 10 measurements"
         else:
             # Fallback format
             measurements = results.get("measurements", [])
@@ -77,7 +77,7 @@ class TestQubitAllocationLimits:
         )
 
         # Extract measurements
-        measurements = results.get("measurement_1", results.get("measurements", []))
+        measurements = results.get("measurement_0", results.get("measurements", []))
         assert len(measurements) == 100, "Should have 100 measurements"
 
         # Due to Guppy limitation, only returns 0 or 1 (last measurement)
@@ -138,7 +138,7 @@ class TestQubitAllocationLimits:
             # Check if we got any measurements
             # Results dict should have measurement keys
             has_measurements = (
-                "measurement_1" in results
+                "measurement_0" in results
                 or "measurements" in results
                 or "result" in results
             )
@@ -208,7 +208,7 @@ class TestQubitAllocationLimits:
             sim(nested_loop_test).qubits(10).quantum(state_vector()).seed(42).run(50)
         )
 
-        measurements = results.get("measurement_1", results.get("measurements", []))
+        measurements = results.get("measurement_0", results.get("measurements", []))
         assert len(measurements) == 50, "Should have 50 measurements"
 
         # Count should be 0-6 (depends on measurements)
@@ -238,7 +238,7 @@ class TestQubitAllocationLimits:
                 .run(50)
             )
 
-            measurements = results.get("measurement_1", results.get("measurements", []))
+            measurements = results.get("measurement_0", results.get("measurements", []))
             assert (
                 len(measurements) == 50
             ), f"Should have 50 measurements with max_qubits={max_qubits}"
@@ -274,7 +274,7 @@ class TestQubitAllocationLimits:
                 .run(10)
             )
 
-            measurements = results.get("measurement_1", results.get("measurements", []))
+            measurements = results.get("measurement_0", results.get("measurements", []))
             assert (
                 len(measurements) == 10
             ), f"Should have 10 measurements with max_qubits={max_q}"
@@ -326,16 +326,16 @@ class TestQubitAllocationLimits:
 
         # The result should be an array of 3 booleans for each shot
         # Results format depends on return type
-        if "measurement_1" in results:
+        if "measurement_0" in results:
             # If results are split by measurement index
             assert (
-                len(results["measurement_1"]) == 50
+                len(results["measurement_0"]) == 50
             ), "Should have 50 measurements for qubit 1"
             assert (
-                len(results["measurement_2"]) == 50
+                len(results["measurement_1"]) == 50
             ), "Should have 50 measurements for qubit 2"
             assert (
-                len(results["measurement_3"]) == 50
+                len(results["measurement_2"]) == 50
             ), "Should have 50 measurements for qubit 3"
 
             # Each qubit should have roughly 50/50 distribution due to H gate
@@ -386,9 +386,9 @@ class TestQubitAllocationLimits:
         # Test with exact number of qubits needed
         results = sim(parallel_ops).qubits(4).quantum(state_vector()).seed(42).run(100)
 
-        if "measurement_1" in results:
+        if "measurement_0" in results:
             # Check all 4 measurements are present
-            for i in range(1, 5):
+            for i in range(0, 4):
                 key = f"measurement_{i}"
                 assert key in results, f"Should have {key}"
                 assert (

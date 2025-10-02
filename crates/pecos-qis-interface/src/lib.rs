@@ -14,9 +14,17 @@ use std::collections::HashMap;
 pub mod ffi;
 pub mod linker;
 pub mod operations;
+pub mod runtime;
 
 pub use linker::{QisLinker, LinkerError};
 pub use operations::{Operation, QuantumOp};
+
+// Type alias to clarify the purpose
+/// Collection of quantum operations from program execution
+///
+/// Note: This will be renamed in a future version. The name QisInterface
+/// is being repurposed as a trait for interface implementations.
+pub type OperationList = QisInterface;
 
 thread_local! {
     /// Thread-local storage for the current QIS interface
@@ -24,7 +32,7 @@ thread_local! {
 }
 
 /// Interface for collecting quantum operations from a linked QIS program
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct QisInterface {
     /// Collected quantum operations in order
     pub operations: Vec<Operation>,

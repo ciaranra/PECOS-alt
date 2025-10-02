@@ -76,8 +76,14 @@ fn run_pecos(
     std::thread::sleep(Duration::from_millis(100));
     let mut cmd = Command::cargo_bin("pecos")?;
     cmd.env("RUST_LOG", "info")
-        .arg("run")
-        .arg(file_path)
+        .arg("run");
+
+    // Add --jit flag for LLVM files (when Selene is not available)
+    if file_path.extension().and_then(|s| s.to_str()) == Some("ll") {
+        cmd.arg("--jit");
+    }
+
+    cmd.arg(file_path)
         .arg("-s")
         .arg(shots.to_string())
         .arg("-w")
@@ -124,7 +130,9 @@ fn run_pecos(
 }
 
 /// Extract measurement results from JSON output
-/// Handles the new columnar format: {"c": [3, 0, ...]}
+/// Handles different output formats:
+/// - Combined format: {"c": [3, 0, ...]} or any single register
+/// - Individual indexed format: {"m0": [0, 1], "m1": [0, 1]} or any indexed registers
 fn get_values(json_output: &str) -> Vec<String> {
     let mut register_values: HashMap<String, Vec<String>> = HashMap::new();
 
@@ -132,14 +140,85 @@ fn get_values(json_output: &str) -> Vec<String> {
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output)
         && let Some(obj) = json.as_object()
     {
-        // For each register, collect its values
+        // Group registers by their base name (without numeric suffix)
+        let mut register_groups: HashMap<String, Vec<(String, usize, Vec<i64>)>> = HashMap::new();
+        let mut single_registers: HashMap<String, Vec<String>> = HashMap::new();
+
         for (reg_name, values) in obj {
             if let Some(arr) = values.as_array() {
-                let string_values: Vec<String> =
-                    arr.iter().map(|v| v.to_string().replace('"', "")).collect();
-                register_values.insert(reg_name.clone(), string_values);
+                // Try to parse as indexed register
+                let mut base_name = String::new();
+                let mut index = None;
+                let mut chars: Vec<char> = reg_name.chars().collect();
+                let mut i = chars.len();
+
+                // Find where digits end from the right
+                while i > 0 && chars[i - 1].is_ascii_digit() {
+                    i -= 1;
+                }
+
+                if i > 0 && i < chars.len() {
+                    // We have both base and digits
+                    base_name = chars[..i].iter().collect();
+                    let index_str: String = chars[i..].iter().collect();
+                    index = index_str.parse::<usize>().ok();
+                }
+
+                if let Some(idx) = index {
+                    // This is an indexed register
+                    let measurements: Vec<i64> = arr.iter()
+                        .map(|v| v.as_i64().unwrap_or(0))
+                        .collect();
+
+                    register_groups.entry(base_name.clone())
+                        .or_insert_with(Vec::new)
+                        .push((reg_name.clone(), idx, measurements));
+                } else {
+                    // Single register (no numeric suffix or couldn't parse)
+                    let string_values: Vec<String> =
+                        arr.iter().map(|v| v.to_string().replace('"', "")).collect();
+                    single_registers.insert(reg_name.clone(), string_values);
+                }
             }
         }
+
+        // Check if we should combine indexed registers
+        for (base_name, mut group) in register_groups {
+            if group.len() > 1 {
+                // Multiple registers with same base - combine them
+                group.sort_by_key(|&(_, idx, _)| idx);
+
+                // Get number of shots
+                let num_shots = group.first().map(|(_, _, m)| m.len()).unwrap_or(0);
+
+                // Combine into classical register values
+                let mut combined_values = Vec::new();
+                for shot_idx in 0..num_shots {
+                    let mut value = 0i64;
+                    for (bit_position, (_, _idx, measurements)) in group.iter().enumerate() {
+                        if shot_idx < measurements.len() {
+                            value |= measurements[shot_idx] << bit_position;
+                        }
+                    }
+                    combined_values.push(value.to_string());
+                }
+
+                // Use the base name for the combined register
+                register_values.insert(base_name, combined_values);
+            } else if let Some((orig_name, _, measurements)) = group.into_iter().next() {
+                // Single indexed register - keep as is
+                let string_values: Vec<String> = measurements.iter()
+                    .map(|v| v.to_string())
+                    .collect();
+                register_values.insert(orig_name, string_values);
+            }
+        }
+
+        // Add single registers
+        for (reg_name, values) in single_registers {
+            register_values.insert(reg_name, values);
+        }
+
     }
 
     // Convert to the format expected by tests: comma-separated values per register
@@ -304,10 +383,11 @@ fn test_qis_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
         let _ = std::fs::remove_dir_all(&build_dir);
     }
 
-    // First, test compilation
+    // First, test compilation using explicit JIT interface (since Selene may not be available in tests)
     let output = Command::cargo_bin("pecos")?
         .env("RUST_LOG", "info")
         .arg("compile")
+        .arg("--jit")
         .arg(&test_file)
         .output()?;
 
@@ -318,15 +398,25 @@ fn test_qis_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Verify compilation worked by checking logs
+    // With explicit JIT interface, we should see JIT-related messages
     assert!(
-        stderr.contains("Starting compilation") || stderr.contains("Compilation successful"),
+        stderr.contains("Starting compilation")
+            || stderr.contains("Compilation successful")
+            || stderr.contains("Loading interface")
+            || stderr.contains("Found built Selene runtime")
+            || stderr.contains("Using Selene simple runtime")
+            || stderr.contains("Building QisInterface from QisProgram using JIT compiler")
+            || stderr.contains("Using explicit JIT interface")
+            || stderr.contains("JIT interface created")
+            || stderr.contains("Creating QisControlEngine"),
         "Should show compilation activity"
     );
 
-    // Then, test execution
+    // Then, test execution using explicit JIT interface for consistency
     let output = Command::cargo_bin("pecos")?
         .env("RUST_LOG", "info")
         .arg("run")
+        .arg("--jit")
         .arg(&test_file)
         .arg("-s")
         .arg("1") // Run just 1 shot for the test

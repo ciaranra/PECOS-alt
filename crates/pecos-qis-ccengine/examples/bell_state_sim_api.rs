@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for shot in &results.shots {
         let mut bits = Vec::new();
         for i in 0..2 {
-            let key = format!("m{}", i);
+            let key = format!("measurement_{}", i);
             if let Some(data) = shot.data.get(&key) {
                 match data {
                     pecos_engines::shot_results::Data::U32(val) => bits.push(*val),
@@ -77,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("   Results: |00⟩: {}, |11⟩: {}", count_00, count_11);
-    println!("   Expected: ~50/50 Bell state distribution ✓\n");
+    println!("   Expected: ~50/50 Bell state distribution Success\n");
 
     // Example 2: Default runtime with state vector
     println!("2. sim().classical(qis_control_engine())  // defaults to native");
@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .seed(42)
         .run(10)?;
 
-    println!("   Results: {} shots with state vector quantum engine ✓\n", results.len());
+    println!("   Results: {} shots with state vector quantum engine Success\n", results.len());
 
     // Example 3: Try Selene runtime (if available)
     println!("3. sim().classical(qis_control_engine().runtime(selene_simple_runtime()))");
@@ -109,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .qubits(2)
                 .run(5) {
                 Ok(results) => {
-                    println!("   Results: {} shots with Selene runtime ✓", results.len());
+                    println!("   Results: {} shots with Selene runtime Success", results.len());
                 }
                 Err(e) => {
                     println!("   Selene runtime failed: {}", e);
@@ -123,7 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    println!("\n🎉 All examples completed successfully!");
+    println!("\nAll examples completed successfully!");
     println!("The QIS Control Engine works correctly with the sim() API.");
 
     Ok(())

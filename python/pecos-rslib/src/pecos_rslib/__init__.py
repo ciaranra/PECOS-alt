@@ -27,7 +27,6 @@ from pecos_rslib._pecos_rslib import (
     ByteMessageBuilder,
     QuestDensityMatrix,
     QuestStateVec,
-    SeleneLibraryEngine,
     ShotMap,
     ShotVec,
     SparseStabEngineRs,
@@ -266,12 +265,17 @@ try:
         QisEngineBuilder,
         PhirJsonEngineBuilder,
         QasmEngineBuilder,
-        SeleneEngineBuilder,
         SimBuilder,
-        qis_engine,
         phir_json_engine,
         qasm_engine,
-        selene_engine,
+    )
+    # Import QIS engine functions directly from Rust
+    from pecos_rslib._pecos_rslib import (
+        qis_engine,
+        qis_control_engine,
+        qis_jit_interface,
+        qis_selene_helios_interface,
+        QisInterfaceBuilder
     )
 except ImportError:
     # Provide stubs if not available
@@ -281,8 +285,18 @@ except ImportError:
     def qis_engine(*_args, **_kwargs) -> NoReturn:
         raise ImportError("qis_engine not available")
 
-    def selene_engine(*_args, **_kwargs) -> NoReturn:
-        raise ImportError("selene_engine not available")
+    def qis_control_engine(*_args, **_kwargs) -> NoReturn:
+        raise ImportError("qis_control_engine not available")
+
+    def qis_jit_interface(*_args, **_kwargs) -> NoReturn:
+        raise ImportError("qis_jit_interface not available")
+
+    def qis_selene_helios_interface(*_args, **_kwargs) -> NoReturn:
+        raise ImportError("qis_selene_helios_interface not available")
+
+    class QisInterfaceBuilder:
+        def __init__(self) -> None:
+            raise ImportError("QisInterfaceBuilder not available")
 
     def phir_json_engine(*_args, **_kwargs) -> NoReturn:
         raise ImportError("phir_json_engine not available")
@@ -296,9 +310,6 @@ except ImportError:
         def __init__(self) -> None:
             raise ImportError("QisEngineBuilder not available")
 
-    class SeleneEngineBuilder:
-        def __init__(self) -> None:
-            raise ImportError("SeleneEngineBuilder not available")
 
     class PhirJsonEngineBuilder:
         def __init__(self) -> None:
@@ -472,9 +483,8 @@ __all__ = [
     # QuEST simulators
     "QuestStateVec",
     "QuestDensityMatrix",
-    # Selene engine
-    "SeleneLibraryEngine",
-    "selene_engine",
+    # QIS engine (replaces Selene engine)
+    "qis_engine",
     # QASM simulation - DEPRECATED: Use sim() instead
     # "NoiseModel",  # Deprecated
     # "QuantumEngine",  # Deprecated
@@ -528,11 +538,13 @@ __all__ = [
     "sim",
     "qasm_engine",
     "qis_engine",
-    "selene_engine",
+    "qis_control_engine",
+    "qis_jit_interface",
+    "qis_selene_helios_interface",
+    "QisInterfaceBuilder",
     "phir_json_engine",
     "QasmEngineBuilder",
     "QisEngineBuilder",
-    "SeleneEngineBuilder",
     "PhirJsonEngineBuilder",
     "SimBuilder",
     # Quantum engine builders

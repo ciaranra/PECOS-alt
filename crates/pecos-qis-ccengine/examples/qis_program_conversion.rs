@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for shot in &results.shots {
         let mut bits = Vec::new();
         for i in 0..2 {
-            let key = format!("m{}", i);
+            let key = format!("measurement_{}", i);
             if let Some(data) = shot.data.get(&key) {
                 match data {
                     pecos_engines::shot_results::Data::U32(val) => bits.push(*val),
@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("   Results: |00⟩: {}, |11⟩: {}", count_00, count_11);
-    println!("   ✓ Perfect Bell state distribution (only |00⟩ and |11⟩)\n");
+    println!("   Success: Perfect Bell state distribution (only |00⟩ and |11⟩)\n");
 
     // Example 2: Single qubit operations
     let single_qubit_llvm = r#"
@@ -102,9 +102,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .qubits(1)
         .run(10)?;
 
-    println!("   ✓ Successfully executed {} shots with gate sequence H→Z→S", results2.len());
+    println!("   Success: Successfully executed {} shots with gate sequence H→Z→S", results2.len());
 
-    println!("\n🎉 QisProgram conversion working perfectly!");
+    println!("\nQisProgram conversion working perfectly!");
     println!("LLVM IR with QIS function calls can now be executed by QIS Control Engine.");
 
     Ok(())

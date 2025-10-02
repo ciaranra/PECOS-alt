@@ -45,8 +45,8 @@ def test_quantum_function() -> None:
         result = sim(quantum_coin).qubits(1).quantum(state_vector()).run(10)
 
         # Should have measurement results
-        assert "measurement_1" in result
-        values = result["measurement_1"]
+        assert "measurement_0" in result
+        values = result["measurement_0"]
         assert len(values) == 10
         # Hadamard should give mix of 0s and 1s
         assert 0 in values or 1 in values

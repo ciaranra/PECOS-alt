@@ -39,10 +39,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .quantum(state_vector())
                 .qubits(2)
                 .run(3)?;
-            println!("   ✓ Simple runtime: {} shots", results.len());
+            println!("   Success: Simple runtime: {} shots", results.len());
         }
         Err(e) => {
-            println!("   ✗ Simple runtime failed: {}", e);
+            println!("   Failed: Simple runtime failed: {}", e);
         }
     }
 
@@ -56,10 +56,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .quantum(state_vector())
                 .qubits(2)
                 .run(3)?;
-            println!("   ✓ Soft RZ runtime: {} shots", results.len());
+            println!("   Success: Soft RZ runtime: {} shots", results.len());
         }
         Err(e) => {
-            println!("   ✗ Soft RZ runtime failed: {}", e);
+            println!("   Failed: Soft RZ runtime failed: {}", e);
         }
     }
 
@@ -73,14 +73,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .quantum(state_vector())
                 .qubits(2)
                 .run(3)?;
-            println!("   ✓ Auto-loaded runtime: {} shots", results.len());
+            println!("   Success: Auto-loaded runtime: {} shots", results.len());
         }
         Err(e) => {
-            println!("   ✗ Auto runtime failed: {}", e);
+            println!("   Failed: Auto runtime failed: {}", e);
         }
     }
 
-    println!("\n🎯 All Selene runtimes loaded successfully!");
+    println!("\nAll Selene runtimes loaded successfully!");
     println!("The build script approach ensures we know exactly where the .so files are.");
     println!("No download fallback needed - if Selene is present, the runtimes are built.");
 

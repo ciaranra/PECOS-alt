@@ -64,15 +64,57 @@ pub struct QisProgram {
 
 impl QisProgram {
     /// Create a QIS program from IR text
+    ///
+    /// Create a QIS program from LLVM IR text
+    ///
+    /// Stores raw IR to let the JIT executor handle all preprocessing consistently.
+    /// This avoids double preprocessing issues while ensuring compatibility with
+    /// both raw QIS IR and HUGR-generated IR.
     pub fn from_string(s: impl Into<String>) -> Self {
+        let raw_ir = s.into();
         Self {
-            content: QisContent::Ir(s.into()),
+            content: QisContent::Ir(raw_ir),
         }
+    }
+
+    /// Preprocess LLVM IR to filter out problematic metadata
+    ///
+    /// Removes metadata lines that can cause parsing issues in QIS compilation,
+    /// such as HUGR-generated metadata that's not needed for execution.
+    fn preprocess_llvm_ir(llvm_ir: &str) -> String {
+        let mut filtered_lines = Vec::new();
+
+        for line in llvm_ir.lines() {
+            let line_trimmed = line.trim();
+            // Skip all metadata lines that aren't needed for QIS execution
+            // This includes both definitions (!0 = ...) and references (!name = ...)
+            if line_trimmed.starts_with('!') {
+                // Skip this metadata line
+                continue;
+            }
+            // Skip completely empty lines to prevent parsing issues
+            if line_trimmed.is_empty() {
+                continue;
+            }
+            filtered_lines.push(line.trim_end());
+        }
+
+        // Join with newlines and ensure proper termination
+        let mut result = filtered_lines.join("\n");
+        if !result.ends_with('\n') {
+            result.push('\n');
+        }
+        result
     }
 
     /// Create a QIS program from IR text (alias for `from_string`)
     pub fn from_ir(s: impl Into<String>) -> Self {
         Self::from_string(s)
+    }
+
+    /// Preprocess LLVM IR without creating a QisProgram (for debugging)
+    pub fn preprocess_ir(llvm_ir: impl Into<String>) -> String {
+        Self::preprocess_llvm_ir(&llvm_ir.into())
     }
 
     /// Create a QIS program from bitcode

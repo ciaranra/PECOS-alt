@@ -287,7 +287,7 @@ if __name__ == "__main__":
 
         print("Comparing compilers for test circuit...")
         equivalent, msg = compare_compilers(hugr_binary, hugr_json)
-        print(f"Result: {'✓ MATCH' if equivalent else '✗ DIFFER'}")
+        print(f"Result: {'MATCH' if equivalent else 'DIFFER'}")
         print(f"Details: {msg}")
 
         # Show actual outputs for debugging

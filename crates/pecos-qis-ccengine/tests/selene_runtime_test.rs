@@ -1,6 +1,6 @@
 //! Tests for SeleneRuntime integration
 
-use pecos_qis_ccengine::{SeleneRuntime, QisControlEngine, QisRuntime};
+use pecos_qis_ccengine::{SeleneRuntime, QisControlEngine, QisRuntime, QisJitInterface};
 use pecos_qis_interface::QisInterface;
 
 #[test]
@@ -18,15 +18,18 @@ fn test_selene_runtime_with_control_engine() {
     // Create a SeleneRuntime
     let runtime = Box::new(SeleneRuntime::new("/tmp/test_selene.so"));
 
-    // Create the control engine with the Selene runtime
-    let mut engine = QisControlEngine::new(runtime);
+    // Create a JIT interface for testing
+    let interface = Box::new(QisJitInterface::new());
 
-    // Create an empty interface
-    let interface = QisInterface::new();
+    // Create the control engine with both interface and runtime
+    let mut engine = QisControlEngine::new(interface, runtime);
 
-    // Should be able to load the interface
+    // Create another interface to set on the engine
+    let new_interface = Box::new(QisJitInterface::new());
+
+    // Should be able to set the interface
     // (actual plugin loading is deferred until needed)
-    engine.load_interface(interface).unwrap();
+    engine.set_interface(new_interface);
 }
 
 #[test]

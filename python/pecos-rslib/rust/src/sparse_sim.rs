@@ -12,7 +12,7 @@
 
 #![allow(clippy::useless_conversion)]
 
-use pecos::prelude::*;
+use pecos_core::prelude::*; use pecos_engines::prelude::*; use pecos_qsim::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 

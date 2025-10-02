@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Test with selene_simple_runtime()
     match selene_simple_runtime() {
         Ok(runtime) => {
-            println!("✓ Successfully loaded selene_simple_runtime()");
+            println!("SUCCESS: Successfully loaded selene_simple_runtime()");
 
             let results = sim_builder()
                 .classical(
@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .seed(42)
                 .run(10)?;
 
-            println!("✓ Simulation completed successfully!");
+            println!("SUCCESS: Simulation completed successfully!");
             println!("Got {} shots", results.len());
 
             // Count outcomes
@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  |11⟩: {} times", count_11);
 
             if count_00 > 0 && count_11 > 0 {
-                println!("\n✓ selene_simple_runtime() works correctly with sim() API!");
+                println!("\nSUCCESS: selene_simple_runtime() works correctly with sim() API!");
                 println!("The exact syntax works:");
                 println!("  sim_builder()");
                 println!("    .classical(");
@@ -82,11 +82,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("    .qubits(2)");
                 println!("    .run(10)");
             } else {
-                println!("\n✗ Bell state distribution incorrect");
+                println!("\nFAILED: Bell state distribution incorrect");
             }
         }
         Err(e) => {
-            println!("✗ Could not load selene_simple_runtime(): {}", e);
+            println!("FAILED: Could not load selene_simple_runtime(): {}", e);
             println!("This is expected if Selene repository is not available");
         }
     }

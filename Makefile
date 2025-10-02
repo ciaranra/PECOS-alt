@@ -142,11 +142,11 @@ lint-fix:  ## Fix all auto-fixable linting issues (Rust, Python, Julia)
 
 .PHONY: qir-staticlib
 qir-staticlib:  ## Build the QIR static library (needed for QIR compilation)
-	cargo rustc -p pecos-qis-runtime --lib --crate-type=staticlib
+	cargo rustc -p pecos-qis-ccengine --lib --crate-type=staticlib
 
 .PHONY: qir-staticlib-if-needed
 qir-staticlib-if-needed:  ## Build QIR static library only if it doesn't exist in persistent location
-	@if [ ! -f ~/.cargo/pecos-qis-runtime/libpecos_qis_runtime.a ] && [ ! -f ~/.cargo/pecos-qis-runtime/pecos_qis_runtime.lib ]; then \
+	@if [ ! -f ~/.cargo/pecos-qis-ccengine/libpecos_qis_ccengine.a ] && [ ! -f ~/.cargo/pecos-qis-ccengine/pecos_qis_ccengine.lib ]; then \
 		echo "Building QIR static library..."; \
 		$(MAKE) qir-staticlib; \
 	fi
@@ -157,11 +157,9 @@ rstest: qir-staticlib-if-needed  ## Run Rust tests
 	cargo test --workspace --release
 
 .PHONY: rstest-all
-rstest-all: qir-staticlib-if-needed  ## Run Rust tests with all features except GPU and selene-integration
-	cargo test --workspace --exclude pecos-quest --exclude pecos-selene-ccengine --exclude pecos-selene-engine --exclude pecos-decoders
+rstest-all: qir-staticlib-if-needed  ## Run Rust tests with all features except GPU
+	cargo test --workspace --exclude pecos-quest --exclude pecos-decoders
 	cargo test -p pecos-quest
-	cargo test -p pecos-selene-ccengine
-	cargo test -p pecos-selene-engine
 	cargo test -p pecos-decoders --all-features
 
 # Decoder-specific commands
@@ -381,10 +379,6 @@ clean-unix:
 	@find . -type d -name "junit" -exec rm -rf {} +
 	@find python -name "*.so" -delete
 	@find python -name "*.pyd" -delete
-	@# Clean shared libraries generated in pecos-selene-engine
-	@find crates/pecos-selene-engine -name "*.so" -delete
-	@find crates/pecos-selene-engine -name "*.dylib" -delete
-	@find crates/pecos-selene-engine -name "*.dll" -delete
 	@# Clean all target directories in crates (in case they were built independently)
 	@find crates -type d -name "target" -exec rm -rf {} +
 	@find python -type d -name "target" -exec rm -rf {} +
@@ -398,7 +392,7 @@ clean-unix:
 	@# Clean the root workspace target directory
 	@cargo clean
 	@# Clean the persistent QIR library directory
-	@rm -rf ~/.cargo/pecos-qis-runtime/
+	@rm -rf ~/.cargo/pecos-qis-ccengine/
 
 .PHONY: clean-windows-ps
 clean-windows-ps:
@@ -413,14 +407,12 @@ clean-windows-ps:
 	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter '.hypothesis' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter 'junit' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path python -Recurse -File -Include '*.so','*.pyd' | Remove-Item -Force -ErrorAction SilentlyContinue"
-	@# Clean shared libraries generated in pecos-selene-engine
-	@powershell -Command "Get-ChildItem -Path crates\pecos-selene-engine -Recurse -File -Include '*.so','*.dylib','*.dll' | Remove-Item -Force -ErrorAction SilentlyContinue"
 	@# Clean all target directories in crates
 	@powershell -Command "Get-ChildItem -Path crates -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path python -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@cargo clean
 	@# Clean the persistent QIR library directory
-	@powershell -Command "if (Test-Path '$env:USERPROFILE\.cargo\pecos-qis-runtime') { Remove-Item -Recurse -Force $env:USERPROFILE\.cargo\pecos-qis-runtime }"
+	@powershell -Command "if (Test-Path '$env:USERPROFILE\.cargo\pecos-qis-ccengine') { Remove-Item -Recurse -Force $env:USERPROFILE\.cargo\pecos-qis-ccengine }"
 
 .PHONY: clean-windows-cmd
 clean-windows-cmd:
@@ -435,14 +427,12 @@ clean-windows-cmd:
 	-@for /f "delims=" %%d in ('dir /s /b /ad .hypothesis 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%d in ('dir /s /b /ad junit 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%f in ('dir /s /b python\*.so python\*.pyd 2^>nul') do @del "%%f" 2>nul
-	-@REM Clean shared libraries generated in pecos-selene-engine
-	-@for /f "delims=" %%f in ('dir /s /b crates\pecos-selene-engine\*.so crates\pecos-selene-engine\*.dylib crates\pecos-selene-engine\*.dll 2^>nul') do @del "%%f" 2>nul
 	-@REM Clean all target directories in crates
 	-@for /f "delims=" %%d in ('dir /s /b /ad crates\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%d in ('dir /s /b /ad python\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@cargo clean
 	-@REM Clean the persistent QIR library directory
-	-@if exist %USERPROFILE%\.cargo\pecos-qis-runtime rd /s /q %USERPROFILE%\.cargo\pecos-qis-runtime
+	-@if exist %USERPROFILE%\.cargo\pecos-qis-ccengine rd /s /q %USERPROFILE%\.cargo\pecos-qis-ccengine
 
 .PHONY: pip-install-uv
 pip-install-uv:  ## Install uv using pip and create a venv. (Recommended to instead follow: https://docs.astral.sh/uv/getting-started/installation/

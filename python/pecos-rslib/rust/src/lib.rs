@@ -29,7 +29,6 @@ mod pecos_rng_bindings;
 mod phir_json_bridge;
 mod quest_bindings;
 mod qulacs_bindings;
-mod selene_library_bindings;
 mod shot_results_bindings;
 mod sim;
 mod sparse_sim;
@@ -38,26 +37,29 @@ mod sparse_stab_engine_bindings;
 mod state_vec_bindings;
 mod state_vec_engine_bindings;
 
-#[cfg(feature = "hugr-llvm-pipeline")]
-mod hugr_bindings;
+// Disabled - conflicts with pecos-qis-interface due to duplicate symbols
+// #[cfg(feature = "hugr-llvm-pipeline")]
+// mod hugr_bindings;
 
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use coin_toss_bindings::RsCoinToss;
 use cpp_sparse_sim_bindings::CppSparseSim;
-use engine_builders::{
-    PyHugrProgram, PyPhirJsonProgram, PyQasmProgram, PyQisProgram, PySeleneExecutableConfig,
-    PySeleneExecutableEngine, PySeleneInterfaceProgram,
-};
+use engine_builders::{PyHugrProgram, PyPhirJsonProgram, PyQasmProgram, PyQisProgram};
 use pauli_prop_bindings::PyPauliProp;
 use pecos_rng_bindings::RngPcg;
 use pyo3::prelude::*;
 use quest_bindings::{QuestDensityMatrix, QuestStateVec};
 use qulacs_bindings::RsQulacs;
-use selene_library_bindings::PySeleneLibraryEngine;
 use sparse_stab_bindings::SparseSim;
 use sparse_stab_engine_bindings::PySparseStabEngine;
 use state_vec_bindings::RsStateVec;
 use state_vec_engine_bindings::PyStateVecEngine;
+
+/// Clear the global JIT compilation cache (useful for testing)
+#[pyfunction]
+fn clear_jit_cache() {
+    pecos_qis_ccengine::JitExecutor::clear_global_cache();
+}
 
 /// A Python module implemented in Rust.
 #[pymodule]
@@ -81,7 +83,7 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<QuestDensityMatrix>()?;
 
     // Register the unified sim() function
-    sim::register_sim(m)?;
+    sim::register_sim_module(m)?;
 
     // Register engine builders (QasmEngineBuilder, etc.)
     engine_builders::register_engine_builders(m)?;
@@ -94,17 +96,12 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyQisProgram>()?;
     m.add_class::<PyHugrProgram>()?;
     m.add_class::<PyPhirJsonProgram>()?;
-    m.add_class::<PySeleneInterfaceProgram>()?;
-
-    // Register Selene Executable Engine types
-    m.add_class::<PySeleneExecutableConfig>()?;
-    m.add_class::<PySeleneExecutableEngine>()?;
-    m.add_class::<PySeleneLibraryEngine>()?;
 
     // Register engine builder functions
     m.add_function(wrap_pyfunction!(engine_builders::qasm_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::qis_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(engine_builders::selene_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::qis_control_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::native_runtime, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::phir_json_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sim_builder, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::general_noise, m)?)?;
@@ -116,6 +113,9 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(engine_builders::state_vector, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sparse_stabilizer, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sparse_stab, m)?)?;
+
+    // Utility functions
+    m.add_function(wrap_pyfunction!(clear_jit_cache, m)?)?;
 
     Ok(())
 }

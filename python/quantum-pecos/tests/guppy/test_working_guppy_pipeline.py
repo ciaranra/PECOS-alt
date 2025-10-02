@@ -256,8 +256,8 @@ class TestSimAPI:
             assert isinstance(results, dict), "Results should be a dictionary"
 
             # Check for measurements
-            if "measurement_1" in results:
-                measurements = results["measurement_1"]
+            if "measurement_0" in results:
+                measurements = results["measurement_0"]
                 assert len(measurements) == 10, "Should have 10 measurements"
                 assert all(
                     m in [0, 1, True, False] for m in measurements
@@ -293,9 +293,9 @@ class TestSimAPI:
             assert isinstance(results, dict), "Results should be a dictionary"
 
             # Check for Bell state correlation
-            if "measurement_1" in results and "measurement_2" in results:
-                m1 = results["measurement_1"]
-                m2 = results["measurement_2"]
+            if "measurement_0" in results and "measurement_1" in results:
+                m1 = results["measurement_0"]
+                m2 = results["measurement_1"]
 
                 assert len(m1) == 100, "Should have 100 measurements for qubit 1"
                 assert len(m2) == 100, "Should have 100 measurements for qubit 2"
@@ -345,8 +345,8 @@ class TestSimAPI:
 
             # With X gate and no noise, should always measure 1
             # With 10% depolarizing noise, should sometimes measure 0
-            if "measurement_1" in results:
-                measurements = results["measurement_1"]
+            if "measurement_0" in results:
+                measurements = results["measurement_0"]
                 ones = sum(measurements)
 
                 # Should be mostly 1s but not all due to noise
@@ -408,15 +408,15 @@ class TestCompletePipeline:
 
             # Verify we got measurements
             has_measurements = (
-                "measurement_1" in results
+                "measurement_0" in results
                 or "measurements" in results
                 or len(results) > 0
             )
             assert has_measurements, "Should have measurement results"
 
             # If we have individual measurements, check structure
-            if "measurement_1" in results:
-                for i in range(1, 4):
+            if "measurement_0" in results:
+                for i in range(0, 3):
                     key = f"measurement_{i}"
                     if key in results:
                         assert (

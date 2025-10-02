@@ -85,7 +85,7 @@ def test_pipeline_capabilities() -> None:
                 # Extract measurement result
                 if "measurements" in result_dict:
                     result_val = result_dict["measurements"][0]
-                elif "measurement_1" in result_dict:
+                elif "measurement_0" in result_dict:
                     # Handle tuple returns
                     result_val = tuple(
                         bool(result_dict[f"measurement_{i}"][0])
@@ -112,7 +112,7 @@ def test_pipeline_capabilities() -> None:
             # Extract measurement result
             if "measurements" in result_dict:
                 result_val = result_dict["measurements"][0]
-            elif "measurement_1" in result_dict:
+            elif "measurement_0" in result_dict:
                 # Handle tuple returns
                 result_val = tuple(
                     bool(result_dict[f"measurement_{i}"][0])

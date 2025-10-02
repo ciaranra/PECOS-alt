@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 /// Compile HUGR to LLVM IR
 ///
 /// This function takes HUGR bytes (envelope format) and compiles them to LLVM IR
-/// using the PECOS HUGR compiler that generates Selene QIS-compatible output.
+/// using the PECOS HUGR compiler that generates QIS-compatible output.
 ///
 /// Args:
 ///     `hugr_bytes`: HUGR program as envelope bytes

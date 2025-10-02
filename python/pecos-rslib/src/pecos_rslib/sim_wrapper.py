@@ -1,9 +1,12 @@
 """Python wrapper for sim() that handles Guppy programs.
 
-This module provides a Python-side sim() function that:
-1. Detects Guppy programs
-2. Uses Selene's native runner directly for proper result collection
-3. Passes other programs to the Rust sim() for normal processing
+This module provides a Python-side sim() function that acts as a thin wrapper:
+1. Detects Guppy programs and compiles them to QIS format
+2. Passes all programs to the Rust sim() which has robust fallback handling
+
+This follows the user's guidance: "the python side should be mostly a thin wrapper
+of the Rust code... except for things where we don't have a Rust equivalent like
+Guppy->HUGR and HUGR->QIS"
 """
 
 import logging
@@ -21,129 +24,23 @@ class GuppyFunction(Protocol):
     def compile(self) -> dict: ...
 
 
-def compile_guppy_to_hugr(guppy_func: GuppyFunction) -> dict:
-    """Compile a Guppy function to HUGR.
-
-    Args:
-        guppy_func: A Guppy-decorated function
-
-    Returns:
-        The HUGR package as a dict
-
-    Raises:
-        RuntimeError: If compilation fails
-    """
-    try:
-        # Compile Guppy to HUGR
-        hugr_package = guppy_func.compile()
-    except (AttributeError, RuntimeError, ValueError) as e:
-        raise RuntimeError(f"Failed to compile Guppy to HUGR: {e}") from e
-    else:
-        logger.info("Compiled Guppy function to HUGR package")
-        return hugr_package
-
-
-def create_selene_runner(hugr_package: dict, config: dict) -> object:
-    """Create a Selene runner from HUGR package.
-
-    Uses Selene's natural build process to create a runner that can
-    be executed with different simulators, including our PecosSeleneBridgeSimulator.
-
-    Args:
-        hugr_package: The HUGR package (dict)
-        config: Configuration dict with:
-            - num_qubits: Number of qubits (will be passed to run())
-            - working_dir: Working directory for the executable
-
-    Returns:
-        SeleneInstance runner that can be executed with simulators
-
-    Raises:
-        RuntimeError: If compilation fails
-    """
-    try:
-        import tempfile
-        from pathlib import Path
-
-        from selene_sim.build import build
-
-        # Create or use working directory
-        if "working_dir" in config:
-            working_dir = Path(config["working_dir"])
-            working_dir.mkdir(parents=True, exist_ok=True)
-        else:
-            working_dir = Path(tempfile.mkdtemp(prefix="pecos_selene_"))
-
-        build_dir = working_dir / "build"
-        build_dir.mkdir(exist_ok=True)
-
-        # Build the HUGR to a Selene runner using Selene's build process
-        logger.info("Building Selene runner from HUGR with PECOS Bridge plugin")
-
-        # Try to use the PECOS Bridge plugin if available
-        try:
-            from pecos.selene_plugins.simulators import PecosBridgePlugin
-
-            bridge_plugin = PecosBridgePlugin()
-            logger.info("Using PECOS Bridge plugin: %s", bridge_plugin.library_file)
-
-            # Build with Bridge plugin as default simulator
-            # This ensures the Selene executable uses our Bridge instead of Quest
-            runner = build(
-                hugr_package,
-                name="pecos_selene_program",
-                build_dir=build_dir,
-                verbose=False,
-                # Note: We'll modify this to use Bridge plugin configuration
-            )
-        except ImportError:
-            # Fall back to standard build if Bridge plugin not available
-            logger.warning(
-                "PECOS Bridge plugin not available, using standard Selene build",
-            )
-            runner = build(
-                hugr_package,
-                name="pecos_selene_program",
-                build_dir=build_dir,
-                verbose=False,
-            )
-
-    except (ImportError, RuntimeError, ValueError) as e:
-        raise RuntimeError(f"Failed to build Selene runner from HUGR: {e}") from e
-    else:
-        logger.info("Selene runner built successfully")
-        logger.info("  Executable: %s", runner.executable)
-        logger.info("  Artifacts: %s", runner.artifacts)
-
-        # Return the runner - it will be executed with our PecosSeleneBridgeSimulator
-        return runner
-
-
-class GuppyHugrProgram:
-    """Wrapper for Guppy HUGR programs to be handled by PECOS SimBuilder."""
-
-    def __init__(self, hugr_package: dict) -> None:
-        self.hugr_package = hugr_package
-
-
 ProgramType = Union[
     GuppyFunction, "QasmProgram", "QisProgram", "HugrProgram", bytes, str
 ]
 
 
 def sim(program: ProgramType) -> object:
-    """Enhanced sim() function that handles Guppy programs.
+    """Thin Python wrapper for sim() that handles Guppy programs.
 
-    This Python wrapper follows the Rust sim() pattern:
-    1. Detects program type (Guppy functions, QASM, LLVM, etc.)
-    2. For Guppy functions: Compiles to HUGR and creates SeleneInterfaceProgram
-    3. For other programs: Passes to the Rust sim() for normal processing
+    This wrapper:
+    1. Detects Guppy functions and compiles them to QIS format
+    2. Passes all programs to the Rust sim() which has robust fallback handling
 
     Args:
         program: The program to simulate (Guppy function, QasmProgram, etc.)
 
     Returns:
-        SimBuilder instance that follows PECOS architecture
+        SimBuilder instance
     """
     from . import _pecos_rslib
 
@@ -157,13 +54,49 @@ def sim(program: ProgramType) -> object:
         )
 
     if is_guppy_function(program):
-        logger.info(
-            "Detected Guppy function, passing to Rust sim() for SeleneLibrary handling",
-        )
-        # Pass directly to Rust sim() which will detect it's a Guppy function
-        # and use PySeleneLibrarySimBuilder to handle the compilation on Python side
-        return _pecos_rslib.sim(program)
+        logger.info("Detected Guppy function, compiling to QIS format")
 
-    # Pass through to Rust sim() for non-Guppy programs
+        # Compile Guppy → HUGR → QIS
+        hugr_package = program.compile()
+        logger.info("Compiled Guppy function to HUGR package")
+
+        # Convert HUGR to bytes for QIS compilation
+        if hasattr(hugr_package, "to_bytes"):
+            hugr_bytes = hugr_package.to_bytes()
+        else:
+            hugr_str = hugr_package.to_str()
+            hugr_bytes = hugr_str.encode("utf-8")
+
+        # Compile HUGR to QIS using Selene's hugr-qis compiler
+        from selene_hugr_qis_compiler import compile_to_llvm_ir
+        qis_ir = compile_to_llvm_ir(hugr_bytes)
+        logger.info("Compiled HUGR to QIS LLVM IR successfully")
+
+        # Create QIS program - Rust sim() handles all fallback logic
+        qis_program = _pecos_rslib.QisProgram.from_string(qis_ir)
+        logger.info("Created QisProgram, passing to Rust sim() with fallback handling")
+
+        # Debug support
+        import os
+        if os.getenv("DEBUG_QIS_CRASH"):
+            with open("/tmp/qis_before_sim.ll", "w") as f:
+                f.write(qis_ir)
+            logger.info("Saved QIS IR to /tmp/qis_before_sim.ll for debugging")
+
+        program = qis_program
+
+    # Pass to Rust sim() which handles all fallback logic
     logger.info("Using Rust sim() for program type: %s", type(program))
-    return _pecos_rslib.sim(program)
+    result = _pecos_rslib.sim(program)
+
+    # Force comprehensive cleanup after each simulation to prevent state pollution between tests
+    try:
+        _pecos_rslib.clear_jit_cache()
+    except Exception:
+        pass
+
+    # Force garbage collection to clean up any lingering engine resources
+    import gc
+    gc.collect()
+
+    return result

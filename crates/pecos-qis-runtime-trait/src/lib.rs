@@ -12,7 +12,7 @@
 
 use log::trace;
 use pecos_qis_interface::{QisInterface, QuantumOp};
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 
 /// Result type for runtime operations
 pub type Result<T> = std::result::Result<T, RuntimeError>;
@@ -63,14 +63,14 @@ pub struct ClassicalState {
     /// Call stack for function calls
     pub call_stack: Vec<CallFrame>,
 
-    /// Classical registers (name -> bits)
-    pub registers: HashMap<String, Vec<bool>>,
+    /// Classical registers (name -> bits) - BTreeMap for deterministic ordering
+    pub registers: BTreeMap<String, Vec<bool>>,
 
-    /// Measurement results received
-    pub measurements: HashMap<usize, bool>,
+    /// Measurement results received - BTreeMap for deterministic ordering
+    pub measurements: BTreeMap<usize, bool>,
 
-    /// Local variables (name -> value)
-    pub variables: HashMap<String, Value>,
+    /// Local variables (name -> value) - BTreeMap for deterministic ordering
+    pub variables: BTreeMap<String, Value>,
 
     /// Shot ID for current execution
     pub shot_id: Option<u64>,
@@ -85,8 +85,8 @@ pub struct CallFrame {
     /// Function name
     pub function_name: String,
 
-    /// Local variables for this frame
-    pub locals: HashMap<String, Value>,
+    /// Local variables for this frame - BTreeMap for deterministic ordering
+    pub locals: BTreeMap<String, Value>,
 }
 
 // Enable cloning of trait objects
@@ -104,13 +104,13 @@ pub enum Value {
 /// Shot result after execution completes
 #[derive(Debug, Clone, Default)]
 pub struct Shot {
-    /// Measurement results by result ID
-    pub measurements: HashMap<usize, bool>,
+    /// Measurement results by result ID - BTreeMap for deterministic ordering
+    pub measurements: BTreeMap<usize, bool>,
 
-    /// Classical register values
-    pub registers: HashMap<String, Vec<bool>>,
+    /// Classical register values - BTreeMap for deterministic ordering
+    pub registers: BTreeMap<String, Vec<bool>>,
 
-    /// Additional metadata
+    /// Additional metadata - HashMap is OK here since it's just metadata
     pub metadata: HashMap<String, String>,
 }
 
@@ -135,7 +135,7 @@ pub trait QisRuntime: Send + Sync + dyn_clone::DynClone {
     /// Provide measurement results back to the runtime
     ///
     /// The runtime uses these results for classical control flow decisions.
-    fn provide_measurements(&mut self, measurements: HashMap<usize, bool>) -> Result<()>;
+    fn provide_measurements(&mut self, measurements: BTreeMap<usize, bool>) -> Result<()>;
 
     /// Get the current classical state (for debugging/inspection)
     fn get_classical_state(&self) -> &ClassicalState;

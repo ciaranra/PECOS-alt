@@ -34,7 +34,7 @@ def test_single_measurement_return():
                     and "lazy_measure" in lines[j]
                 ):
                     print(
-                        f"✓ Correctly returning truncated measurement: {lines[j].strip()}"
+                        f"Correctly returning truncated measurement: {lines[j].strip()}"
                     )
                     return True
 
@@ -43,4 +43,4 @@ def test_single_measurement_return():
 
 if __name__ == "__main__":
     test_single_measurement_return()
-    print("✓ Test passed: Single measurement is returned correctly")
+    print("Test passed: Single measurement is returned correctly")

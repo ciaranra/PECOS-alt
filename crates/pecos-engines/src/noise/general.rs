@@ -1095,9 +1095,21 @@ impl GeneralNoiseModel {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```rust
+    /// use pecos_engines::noise::GeneralNoiseModel;
+    ///
+    /// // Create a noise model for testing leakage
     /// let mut noise_model = GeneralNoiseModel::default();
-    /// noise_model.mark_as_leaked(0); // Mark qubit 0 as leaked
+    ///
+    /// // Mark qubit 0 as leaked - useful for testing leakage-aware algorithms
+    /// noise_model.mark_as_leaked(0);
+    ///
+    /// // Mark multiple qubits as leaked for batch testing
+    /// noise_model.mark_as_leaked(1);
+    /// noise_model.mark_as_leaked(3);
+    ///
+    /// // The noise model now tracks these qubits as leaked
+    /// // This affects how noise operations are applied during simulation
     /// ```
     pub fn mark_as_leaked(&mut self, qubit: usize) {
         // TODO: see if some of the mark_as_leaked needs to move to self.leak()
