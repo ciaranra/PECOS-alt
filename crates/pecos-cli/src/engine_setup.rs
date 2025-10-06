@@ -32,23 +32,37 @@ pub fn setup_cli_engine(
     match program_type {
         ProgramType::QIR => {
             debug!("Setting up QIR engine");
-            use pecos::{qis_control_engine, qis_jit_interface, native_runtime, QisProgram};
+            use pecos::{qis_control_engine, native_runtime, QisProgram};
 
             if use_jit {
                 // Explicit JIT interface requested
                 debug!("Using explicit JIT interface for QIR engine");
-                let qis_program = QisProgram::from_file(program_path)?;
-                let interface_builder = qis_jit_interface();
-                let interface = interface_builder.build_from_qis_program(qis_program)?;
+                #[cfg(feature = "jit")]
+                {
+                    let qis_program = QisProgram::from_file(program_path)?;
 
-                let engine_builder = qis_control_engine()
-                    .runtime(native_runtime())
-                    .program(interface);
+                    let engine = qis_control_engine()
+                        .runtime(native_runtime())
+                        .interface(jit_interface_builder())
+                        .try_program(qis_program)?
+                        .build()?;
 
-                Ok(Box::new(engine_builder.build()?) as Box<dyn ClassicalControlEngine>)
+                    Ok(Box::new(engine) as Box<dyn ClassicalControlEngine>)
+                }
+                #[cfg(not(feature = "jit"))]
+                {
+                    Err(PecosError::Processing("JIT interface not available. Please enable the 'jit' feature.".to_string()))
+                }
             } else {
-                // Use Selene interface (default) - fail with helpful message if not available
-                setup_qis_control_engine(program_path)
+                // Use default Selene interface and runtime
+                // This will use the Helios interface with Selene simple runtime
+                // Users can override by using --jit flag
+                Err(PecosError::Processing(
+                    "Default QIS execution requires Selene runtime.\n\
+                    \n\
+                    To use JIT interface instead, run with --jit flag:\n\
+                    pecos run --jit program.ll".to_string()
+                ))
             }
         }
         ProgramType::PHIR => {
@@ -84,12 +98,17 @@ pub fn setup_cli_engine_builder(program_path: &Path, use_jit: bool) -> Result<Dy
                 let engine_builder = if use_jit {
                     // Explicit JIT interface requested
                     debug!("Using explicit JIT interface for QIR engine builder");
-                    let interface_builder = qis_jit_interface();
-                    let interface = interface_builder.build_from_qis_program(qis_program)?;
-
-                    qis_control_engine()
-                        .runtime(native_runtime())
-                        .program(interface)
+                    #[cfg(feature = "jit")]
+                    {
+                        qis_control_engine()
+                            .runtime(native_runtime())
+                            .interface(jit_interface_builder())
+                            .try_program(qis_program.clone())?
+                    }
+                    #[cfg(not(feature = "jit"))]
+                    {
+                        return Err(PecosError::Processing("JIT interface not available. Please enable the 'jit' feature.".to_string()));
+                    }
                 } else {
                     // Use Selene interface (default) - fail with helpful message if not available
                     qis_control_engine().try_program(qis_program)?

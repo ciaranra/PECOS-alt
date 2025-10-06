@@ -58,7 +58,14 @@ use state_vec_engine_bindings::PyStateVecEngine;
 /// Clear the global JIT compilation cache (useful for testing)
 #[pyfunction]
 fn clear_jit_cache() {
-    pecos_qis_ccengine::JitExecutor::clear_global_cache();
+    #[cfg(feature = "jit")]
+    {
+        pecos_qis_jit::JitExecutor::clear_global_cache();
+    }
+    #[cfg(not(feature = "jit"))]
+    {
+        log::warn!("JIT cache clear requested but JIT feature not enabled");
+    }
 }
 
 /// A Python module implemented in Rust.

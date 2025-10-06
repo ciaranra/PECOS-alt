@@ -21,18 +21,12 @@ mod tests {
     }
 
     #[test]
-    fn test_qis_engine_accepts_shared_programs() {
-        use pecos_qis_ccengine::qis_jit_interface;
+    fn test_qis_engine_builder_creation() {
+        // Test that builder can be created (doesn't require interface/runtime)
+        let _ = qis_control_engine();
 
-        // Test with QisProgram - use JIT interface for tests (no external dependencies)
-        let llvm_program = QisProgram::from_string("define void @main() {\nentry:\n  ret void\n}");
-        let _ = qis_control_engine().interface(qis_jit_interface()).program(llvm_program);
-
-        // Test with HugrProgram - use try_program to handle invalid test data gracefully
-        let hugr_program = HugrProgram::from_bytes(vec![1, 2, 3, 4]);
-        let result = qis_control_engine().interface(qis_jit_interface()).try_program(hugr_program);
-        // We expect this to fail since the data is invalid
-        assert!(result.is_err());
+        // Note: Testing .program() requires an interface implementation (JIT or Selene)
+        // which are in separate crates. Those are tested in their respective integration tests.
     }
 
 
@@ -47,40 +41,14 @@ mod tests {
 
     #[test]
     fn test_from_trait_implementations() {
-        // Test From<Program> implementations
+        // Test From<Program> implementations for QASM
         let qasm_program = QasmProgram::from_string("OPENQASM 2.0;");
         let builder: pecos_qasm::QasmEngineBuilder = qasm_program.into();
         let _ = builder;
 
-        // Create a simpler LLVM program to debug the issue
-        let llvm_program = QisProgram::from_string("define void @main() {\nentry:\n  ret void\n}");
-
-        // Debug: Print what gets stored in the QisProgram
-        match &llvm_program.content {
-            pecos_programs::QisContent::Ir(ir) => {
-                println!("Stored IR in QisProgram:");
-                for (i, line) in ir.lines().enumerate() {
-                    println!("{}: {}", i + 1, line);
-                }
-            }
-            _ => println!("Not IR content"),
-        }
-
-
-        // Use JIT interface for tests (no external dependencies)
-        use pecos_qis_ccengine::qis_jit_interface;
-        let result = qis_control_engine().interface(qis_jit_interface()).try_program(llvm_program);
-        match result {
-            Ok(builder) => {
-                let _ = builder;
-            }
-            Err(e) => {
-                panic!("Failed to create QIS builder: {}", e);
-            }
-        }
-
-        // Note: We don't test HugrProgram::into() because it would require valid HUGR data
-        // The From trait is implemented generically for all IntoQisInterface types
+        // Note: QisProgram From implementation requires an interface (JIT or Selene)
+        // which are in separate crates. Those conversions are tested in their respective
+        // integration tests (pecos-qis-jit, pecos-qis-selene).
         // and is tested in the pecos-qis-ccengine crate with proper error handling
     }
 

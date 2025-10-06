@@ -79,7 +79,6 @@ tempfile = "3"
 assert_cmd = "2"
 wasmtime = "37"
 wat = "1"
-serial_test = "3"
 cc = "1"
 ron = "0.11"
 tket = "0.15"
@@ -94,11 +93,10 @@ flate2 = "1"
 bzip2 = "0.6"
 sha2 = "0.10"
 dirs = "6"
-once_cell = "1"
-chrono = "0.4"
-backtrace = "0.3"
 approx = "0.5"
 itertools = "0.14"
+inkwell = "0.6"
+bincode = "1.3"
 
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-programs = { version = "0.1.1", path = "crates/pecos-programs" }
@@ -111,9 +109,11 @@ pecos-qec = { version = "0.1.1", path = "crates/pecos-qec" }
 pecos-rng = { version = "0.1.0", path = "crates/pecos-rng" }
 pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
-pecos-qis-interface = { version = "0.1.1", path = "crates/pecos-qis-interface" }
-pecos-qis-runtime-trait = { version = "0.1.1", path = "crates/pecos-qis-runtime-trait" }
-pecos-qis-ccengine = { version = "0.1.1", path = "crates/pecos-qis-ccengine" }
+pecos-qis-ffi = { version = "0.1.1", path = "crates/pecos-qis-ffi" }
+pecos-qis-jit = { version = "0.1.1", path = "crates/pecos-qis-jit" }
+pecos-qis-selene = { version = "0.1.1", path = "crates/pecos-qis-selene" }
+pecos-qis-native = { version = "0.1.1", path = "crates/pecos-qis-native" }
+pecos-qis-core = { version = "0.1.1", path = "crates/pecos-qis-core" }
 pecos-hugr-qis = { version = "0.1.1", path = "crates/pecos-hugr-qis" }
 pecos-rslib = { version = "0.1.1", path = "python/pecos-rslib/rust" }
 pecos-build-utils = { version = "0.1.1", path = "crates/pecos-build-utils" }

@@ -50,7 +50,17 @@ spec_example_phir = json.load(Path.open(this_dir / "phir/spec_example.phir.json"
 
 
 def is_wasmer_supported() -> bool:
-    """A check on whether Wasmer is known to support OS/Python versions."""
+    """A check on whether Wasmer is known to support OS/Python versions.
+
+    Note: wasmer-python currently only supports Python 3.7-3.10.
+    See: https://github.com/wasmerio/wasmer-python/issues/778 (Python 3.12)
+         https://github.com/wasmerio/wasmer-python/issues/696 (Python 3.11)
+
+    Future considerations:
+    - Consider dropping wasmer-python in favor of Wasmtime (which is actively maintained)
+    - Alternative: Implement Wasmer support through Rust bindings for cross-platform/version compatibility
+    - These tests are currently redundant with Wasmtime tests
+    """
     return WASMER_ERR_MSG != "Wasmer is not available on this system"
 
 
@@ -134,7 +144,9 @@ def test_example1_noisy_wasmtime() -> None:
 
 @pytest.mark.skipif(
     not is_wasmer_supported(),
-    reason="Wasmer is not support on some OS/Python version combinations.",
+    reason="Wasmer is not supported on some OS/Python version combinations. "
+           "wasmer-python only supports Python 3.7-3.10 (current Python 3.11+). "
+           "Wasmtime tests provide equivalent coverage.",
 )
 @pytest.mark.wasmer
 @pytest.mark.optional_dependency
@@ -150,7 +162,9 @@ def test_example1_wasmer() -> None:
 
 @pytest.mark.skipif(
     not is_wasmer_supported(),
-    reason="Wasmer is not support on some OS/Python version combinations.",
+    reason="Wasmer is not supported on some OS/Python version combinations. "
+           "wasmer-python only supports Python 3.7-3.10 (current Python 3.11+). "
+           "Wasmtime tests provide equivalent coverage.",
 )
 @pytest.mark.wasmer
 @pytest.mark.optional_dependency

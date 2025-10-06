@@ -72,75 +72,6 @@ def test_guppy_to_selene_pipeline() -> None:
         raise
 
 
-def test_selene_interface_program_creation() -> None:
-    """Test that SeleneInterfaceProgram can be created and used."""
-    # Try to import SeleneInterfaceProgram
-    try:
-        from pecos_rslib._pecos_rslib import SeleneInterfaceProgram
-    except ImportError:
-        pytest.skip("SeleneInterfaceProgram not available")
-
-    # Create a dummy plugin (this would normally be compiled from HUGR)
-    dummy_plugin_bytes = b"dummy_plugin_data"
-
-    # Create SeleneInterfaceProgram
-    try:
-        program = SeleneInterfaceProgram.from_bytes(dummy_plugin_bytes)
-    except AttributeError:
-        # Try constructor directly
-        program = SeleneInterfaceProgram(dummy_plugin_bytes)
-
-    # Verify it was created
-    assert program is not None
-
-    # Test that it can be passed to sim()
-    # (though execution will fail without a real plugin)
-    try:
-        from pecos_rslib import sim
-
-        result = sim(program).run(1)
-        # If this succeeds, we have a working plugin
-        assert result is not None
-    except ImportError:
-        pytest.skip("sim() not available")
-    except (RuntimeError, OSError, TypeError) as e:
-        # Expected - dummy plugin can't actually be loaded
-        # But we've verified the program type is recognized
-        assert (
-            "runtime" in str(e).lower()
-            or "library" in str(e).lower()
-            or "convert" in str(e).lower()
-            or "no program" in str(e).lower()
-            or "invalid" in str(e).lower()
-        )
-
-
-def test_selene_simple_runtime_builder() -> None:
-    """Test that SeleneSimpleRuntimeEngine can be built."""
-    try:
-        from pecos_rslib import selene_engine
-    except ImportError:
-        pytest.skip("selene_engine not available")
-
-    # Create builder
-    builder = selene_engine()
-
-    # Configure it
-    builder = builder.qubits(2)
-
-    # Try to convert to sim (may fail if no program specified)
-    try:
-        sim_builder = builder.to_sim()
-        assert sim_builder is not None
-    except (RuntimeError, TypeError) as e:
-        # Expected if no program specified or runtime library not found
-        assert (
-            "runtime" in str(e).lower()
-            or "library" in str(e).lower()
-            or "program" in str(e).lower()
-        )
-
-
 def test_guppy_hadamard_compilation() -> None:
     """Test that Hadamard gate is compiled correctly."""
     try:
@@ -159,7 +90,7 @@ def test_guppy_hadamard_compilation() -> None:
 
     try:
         # Try to compile and run
-        result = sim(hadamard_test).quantum(state_vector()).run(100)
+        result = sim(hadamard_test).quantum(state_vector()).qubits(1).run(100)
 
         # If successful, verify result structure
         assert result is not None
@@ -196,7 +127,7 @@ def test_guppy_cnot_compilation() -> None:
 
     try:
         # Try to compile and run
-        result = sim(cnot_test).quantum(state_vector()).run(100)
+        result = sim(cnot_test).quantum(state_vector()).qubits(2).run(100)
 
         # If successful, verify result structure
         assert result is not None

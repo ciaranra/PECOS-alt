@@ -1,0 +1,32 @@
+[package]
+name = "pecos-qis-core"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+
+[dependencies]
+pecos-qis-ffi.workspace = true
+pecos-core.workspace = true
+pecos-engines.workspace = true
+pecos-programs.workspace = true
+log.workspace = true
+dyn-clone.workspace = true
+tempfile.workspace = true
+# LLVM JIT execution
+inkwell = { workspace = true, features = ["llvm14-0-force-dynamic"] }
+# Serialization for FFI
+rand.workspace = true
+rand_chacha.workspace = true
+
+[dev-dependencies]
+pecos-qis-native.workspace = true
+
+[lints]
+workspace = true

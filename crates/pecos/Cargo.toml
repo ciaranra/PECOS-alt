@@ -22,9 +22,12 @@ pecos-engines.workspace = true
 pecos-programs.workspace = true
 pecos-qasm.workspace = true
 pecos-phir-json.workspace = true
-# pecos-qis-sim removed - using pecos-qis-ccengine instead
-pecos-qis-interface.workspace = true
-pecos-qis-ccengine.workspace = true
+# pecos-qis-sim removed - using pecos-qis-core instead
+pecos-qis-ffi.workspace = true
+pecos-qis-native.workspace = true
+pecos-qis-core.workspace = true
+pecos-qis-jit = { workspace = true, optional = true }
+pecos-qis-selene = { workspace = true, optional = true }
 pecos-hugr-qis.workspace = true
 pecos-phir = { workspace = true, features = ["hugr"] }
 pecos-rng.workspace = true
@@ -33,10 +36,12 @@ tempfile.workspace = true
 serde_json.workspace = true
 
 [features]
-default = []
+default = ["jit"]
 qasm = []
 llvm = []
 phir = []
+jit = ["pecos-qis-jit"]
+selene = ["pecos-qis-selene"]
 
 [dev-dependencies]
 tempfile.workspace = true

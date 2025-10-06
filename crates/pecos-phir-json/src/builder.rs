@@ -17,7 +17,7 @@ use crate::v0_1::engine::PhirJsonEngine;
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngineBuilder;
 use pecos_programs::PhirJsonProgram;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Engine-specific PHIR program that stores the validated JSON and version
 #[derive(Debug, Clone)]
@@ -71,17 +71,123 @@ impl From<PhirJsonProgram> for PhirJsonEngineProgram {
     }
 }
 
+/// WebAssembly program for PHIR foreign function calls
+#[cfg(feature = "wasm")]
+#[derive(Debug, Clone)]
+pub struct PhirJsonEngineWasmProgram {
+    /// The WASM binary data
+    pub wasm_bytes: Vec<u8>,
+    /// Optional source path for debugging
+    pub source_path: Option<String>,
+}
+
+#[cfg(feature = "wasm")]
+impl PhirJsonEngineWasmProgram {
+    /// Create from WASM bytes
+    #[must_use]
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        Self {
+            wasm_bytes: bytes,
+            source_path: None,
+        }
+    }
+
+    /// Create from a file path (WAT or WASM)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if file cannot be read or compiled
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, PecosError> {
+        let path_ref = path.as_ref();
+        let bytes = std::fs::read(path_ref).map_err(PecosError::IO)?;
+
+        // If it's a .wat file, compile it to WASM using wat crate
+        let wasm_bytes = if path_ref.extension().and_then(|s| s.to_str()) == Some("wat") {
+            wat::parse_bytes(&bytes)
+                .map_err(|e| PecosError::Input(format!("Failed to parse WAT file: {e}")))?
+                .to_vec()
+        } else {
+            bytes
+        };
+
+        Ok(Self {
+            wasm_bytes,
+            source_path: Some(path_ref.display().to_string()),
+        })
+    }
+}
+
+/// Trait for types that can be converted to a WASM program for PHIR
+#[cfg(feature = "wasm")]
+pub trait IntoWasmProgram {
+    /// Convert to a `PhirJsonEngineWasmProgram`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if conversion fails
+    fn into_wasm_program(self) -> Result<PhirJsonEngineWasmProgram, PecosError>;
+}
+
+#[cfg(feature = "wasm")]
+impl IntoWasmProgram for PhirJsonEngineWasmProgram {
+    fn into_wasm_program(self) -> Result<PhirJsonEngineWasmProgram, PecosError> {
+        Ok(self)
+    }
+}
+
+#[cfg(feature = "wasm")]
+impl IntoWasmProgram for &str {
+    fn into_wasm_program(self) -> Result<PhirJsonEngineWasmProgram, PecosError> {
+        PhirJsonEngineWasmProgram::from_file(self)
+    }
+}
+
+#[cfg(feature = "wasm")]
+impl IntoWasmProgram for String {
+    fn into_wasm_program(self) -> Result<PhirJsonEngineWasmProgram, PecosError> {
+        PhirJsonEngineWasmProgram::from_file(self)
+    }
+}
+
+#[cfg(feature = "wasm")]
+impl IntoWasmProgram for &String {
+    fn into_wasm_program(self) -> Result<PhirJsonEngineWasmProgram, PecosError> {
+        PhirJsonEngineWasmProgram::from_file(self)
+    }
+}
+
+#[cfg(feature = "wasm")]
+impl IntoWasmProgram for PathBuf {
+    fn into_wasm_program(self) -> Result<PhirJsonEngineWasmProgram, PecosError> {
+        PhirJsonEngineWasmProgram::from_file(self)
+    }
+}
+
+#[cfg(feature = "wasm")]
+impl IntoWasmProgram for &Path {
+    fn into_wasm_program(self) -> Result<PhirJsonEngineWasmProgram, PecosError> {
+        PhirJsonEngineWasmProgram::from_file(self)
+    }
+}
+
 /// Builder for PHIR JSON engines
 #[derive(Clone)]
 pub struct PhirJsonEngineBuilder {
     program: Option<PhirJsonEngineProgram>,
+    /// WebAssembly program for foreign function calls
+    #[cfg(feature = "wasm")]
+    wasm_program: Option<PhirJsonEngineWasmProgram>,
 }
 
 impl PhirJsonEngineBuilder {
     /// Create a new builder
     #[must_use]
     pub fn new() -> Self {
-        Self { program: None }
+        Self {
+            program: None,
+            #[cfg(feature = "wasm")]
+            wasm_program: None,
+        }
     }
 
     /// Set the program for this engine (accepts either `PhirJsonProgram` or `PhirJsonEngineProgram`)
@@ -110,6 +216,27 @@ impl PhirJsonEngineBuilder {
         let content = std::fs::read_to_string(path).map_err(PecosError::IO)?;
         self.json(&content)
     }
+
+    /// Set the WebAssembly program for foreign function calls
+    ///
+    /// This method accepts:
+    /// - `PhirJsonEngineWasmProgram` - pre-loaded WASM binary
+    /// - `&str` or `String` - path to a .wasm or .wat file
+    /// - `PathBuf` or `&Path` - path to a .wasm or .wat file
+    #[cfg(feature = "wasm")]
+    #[must_use]
+    pub fn wasm(mut self, wasm: impl IntoWasmProgram) -> Self {
+        match wasm.into_wasm_program() {
+            Ok(program) => {
+                self.wasm_program = Some(program);
+            }
+            Err(e) => {
+                // Store error for later reporting during build
+                log::warn!("Failed to load WASM program: {e}");
+            }
+        }
+        self
+    }
 }
 
 impl Default for PhirJsonEngineBuilder {
@@ -126,10 +253,23 @@ impl ClassicalControlEngineBuilder for PhirJsonEngineBuilder {
             .program
             .ok_or_else(|| PecosError::Input("No program set for PHIR engine".to_string()))?;
 
-        // For now, only support v0.1
-        match program.version {
-            PhirJsonVersion::V0_1 => PhirJsonEngine::from_json(program.json()),
+        // Create engine from program
+        let mut engine = match program.version {
+            PhirJsonVersion::V0_1 => PhirJsonEngine::from_json(program.json())?,
+        };
+
+        // Set WASM foreign object if provided
+        #[cfg(feature = "wasm")]
+        if let Some(wasm_program) = self.wasm_program {
+            use crate::v0_1::foreign_objects::ForeignObject;
+            use crate::v0_1::wasm_foreign_object::WasmtimeForeignObject;
+
+            let mut foreign_object = WasmtimeForeignObject::from_bytes(&wasm_program.wasm_bytes)?;
+            foreign_object.init()?;
+            engine.set_foreign_object(Box::new(foreign_object));
         }
+
+        Ok(engine)
     }
 }
 

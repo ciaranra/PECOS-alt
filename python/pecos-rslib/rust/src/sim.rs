@@ -11,6 +11,8 @@ use std::sync::{Arc, Mutex};
 
 use pecos_phir_json::phir_json_engine as rust_phir_json_engine;
 use pecos_qasm::qasm_engine as rust_qasm_engine;
+use pecos_qis_selene::selene_simple_runtime;
+use pecos_qis_jit::jit_interface_builder;
 
 use crate::engine_builders::{
     PyHugrProgram, PyPhirJsonEngineBuilder, PyPhirJsonProgram, PyPhirJsonSimBuilder,
@@ -63,7 +65,7 @@ fn is_guppy_function(py: Python, obj: &Py<PyAny>) -> PyResult<bool> {
 #[pyfunction]
 #[allow(clippy::needless_pass_by_value)] // Py<PyAny> must be passed by value for PyO3
 pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
-    use pecos_qis_ccengine::qis_control_engine as rust_qis_control_engine;
+    use pecos_qis_core::qis_control_engine as rust_qis_control_engine;
 
     log::debug!("Rust sim() function called");
 
@@ -92,42 +94,29 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
             }),
         })
     } else if let Ok(qis_prog) = program.extract::<PyQisProgram>(py) {
-        // Use the QIS control engine with Selene interface (default)
+        // Use the QIS control engine with Selene simple runtime (default)
 
-        // Try Selene interface first, fall back to JIT if Selene is unavailable
-        let engine_builder = rust_qis_control_engine().try_program(qis_prog.inner.clone())
-            .or_else(|selene_error| {
-                log::info!("Selene interface failed, attempting JIT fallback: {}", selene_error);
+        // Get Selene simple runtime
+        let selene_runtime = selene_simple_runtime()
+            .map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                    "Selene simple runtime not available: {}\n\
+                    \n\
+                    The default runtime for QIS programs is Selene simple.\n\
+                    Please ensure Selene is built:\n\
+                    cd ../selene && cargo build --release", e
+                ))
+            })?;
 
-                // Try JIT interface as fallback
-                use pecos_qis_ccengine::qis_jit_interface as rust_qis_jit_interface;
-                rust_qis_control_engine()
-                    .interface(rust_qis_jit_interface())
-                    .try_program(qis_prog.inner.clone())
-                    .map_err(|jit_error| {
-                        // Both interfaces failed - provide comprehensive error message
-                        pecos_core::errors::PecosError::Resource(format!(
-                            "Failed to load QIS program with both Selene and JIT interfaces:\n\
-                            \n\
-                            Selene Error: {}\n\
-                            JIT Error: {}\n\
-                            \n\
-                            This suggests the QIS program may use features not supported by either interface.\n\
-                            \n\
-                            To fix this:\n\
-                            1. For Selene interface: Ensure Selene is properly installed and configured\n\
-                            2. For JIT interface: Check that the program only uses supported quantum operations\n\
-                            3. Or explicitly create an interface:\n\
-                            \n\
-                            from pecos_rslib import qis_jit_interface, qis_control_engine, native_runtime\n\
-                            interface = qis_jit_interface(your_qis_program)\n\
-                            engine = qis_control_engine().runtime(native_runtime()).program(interface).build()",
-                            selene_error, jit_error
-                        ))
-                    })
-            })
+        let jit_builder = jit_interface_builder();
+        let engine_builder = rust_qis_control_engine()
+            .runtime(selene_runtime)
+            .interface(jit_builder)
+            .try_program(qis_prog.inner.clone())
             .map_err(|e: pecos_core::errors::PecosError| {
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e))
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                    "[FROM SIM.RS] Failed to load QIS program with Selene runtime and JIT interface: {}", e
+                ))
             })?;
         Ok(PySimBuilder {
             inner: SimBuilderInner::QisControl(PyQisControlSimBuilder {
@@ -140,32 +129,67 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
             }),
         })
     } else if let Ok(hugr_prog) = program.extract::<PyHugrProgram>(py) {
-        // Use Selene interface for HUGR programs (default)
-        log::debug!("HUGR program detected, using QIS control engine");
+        // Compile HUGR to LLVM first
+        log::debug!("HUGR program detected, compiling to LLVM");
 
-        let engine_builder = rust_qis_control_engine().try_program(hugr_prog.inner.clone())
-            .map_err(|e| {
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                    format!(
-                        "Failed to load HUGR program with Selene interface: {}\n\n\
-                        The Selene interface is the default for HUGR programs. For HUGR programs, \
-                        explicit JIT interface usage is not yet supported.\n\
-                        \n\
-                        To fix this issue, ensure Selene runtime is properly installed and configured.",
-                        e
+        #[cfg(feature = "hugr-llvm-pipeline")]
+        {
+            use pecos_hugr_qis::compile_hugr_bytes_to_string;
+            use pecos_programs::QisProgram;
+
+            // Compile HUGR to LLVM IR
+            let llvm_ir = compile_hugr_bytes_to_string(&hugr_prog.inner.hugr)
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                        format!("HUGR compilation failed: {}", e)
                     )
-                )
-            })?;
-        Ok(PySimBuilder {
-            inner: SimBuilderInner::QisControl(PyQisControlSimBuilder {
-                engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
-                seed: None,
-                workers: None,
-                quantum_engine_builder: None,
-                noise_builder: None,
-                explicit_num_qubits: None,
-            }),
-        })
+                })?;
+
+            // Create QIS program from the compiled LLVM IR
+            let qis_prog = QisProgram::from_string(llvm_ir);
+
+            // Get Selene simple runtime
+            let selene_runtime = selene_simple_runtime()
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                        "Selene simple runtime not available: {}\n\
+                        \n\
+                        The default runtime for HUGR programs is Selene simple.\n\
+                        Please ensure Selene is built:\n\
+                        cd ../selene && cargo build --release", e
+                    ))
+                })?;
+
+            // Use QIS control engine with JIT interface
+            let engine_builder = rust_qis_control_engine()
+                .runtime(selene_runtime)
+                .interface(jit_interface_builder())
+                .try_program(qis_prog)
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                        format!("Failed to load compiled HUGR program: {}", e)
+                    )
+                })?;
+
+            Ok(PySimBuilder {
+                inner: SimBuilderInner::QisControl(PyQisControlSimBuilder {
+                    engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
+                    seed: None,
+                    workers: None,
+                    quantum_engine_builder: None,
+                    noise_builder: None,
+                    explicit_num_qubits: None,
+                }),
+            })
+        }
+
+        #[cfg(not(feature = "hugr-llvm-pipeline"))]
+        {
+            Err(PyErr::new::<pyo3::exceptions::PyImportError, _>(
+                "HUGR program support requires pecos-rslib to be compiled with hugr-llvm-pipeline feature.\n\
+                Please rebuild with: cargo build --features hugr-llvm-pipeline"
+            ))
+        }
     } else if let Ok(phir_prog) = program.extract::<PyPhirJsonProgram>(py) {
         // Create PHIR JSON engine builder with program
         let engine_builder = rust_phir_json_engine().program(phir_prog.inner);

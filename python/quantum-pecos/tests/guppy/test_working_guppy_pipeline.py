@@ -28,12 +28,6 @@ try:
 except ImportError:
     HUGR_LLVM_AVAILABLE = False
 
-try:
-    from pecos.frontends.guppy_selene_compiler import GuppySeleneCompiler
-
-    SELENE_COMPILER_AVAILABLE = True
-except ImportError:
-    SELENE_COMPILER_AVAILABLE = False
 
 
 def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
@@ -185,52 +179,6 @@ class TestHUGRToLLVMCompilation:
             if "not supported" in str(e).lower():
                 pytest.skip(f"Bell state HUGR to LLVM not supported: {e}")
             pytest.fail(f"Bell state compilation failed: {e}")
-
-
-@pytest.mark.skipif(
-    not SELENE_COMPILER_AVAILABLE,
-    reason="GuppySeleneCompiler not available",
-)
-class TestGuppySeleneCompiler:
-    """Test GuppySeleneCompiler integration."""
-
-    def test_compiler_creation(self) -> None:
-        """Test creating GuppySeleneCompiler instance."""
-        compiler = GuppySeleneCompiler()
-        assert compiler is not None, "Should create compiler"
-
-        # Check compiler methods
-        compiler_methods = [m for m in dir(compiler) if not m.startswith("_")]
-        assert len(compiler_methods) > 0, "Compiler should have public methods"
-
-    def test_compiler_availability_check(self) -> None:
-        """Test checking compiler availability."""
-        compiler = GuppySeleneCompiler()
-
-        # Check if compiler has availability check
-        if hasattr(compiler, "is_available"):
-            available = compiler.is_available()
-            assert isinstance(available, bool), "Availability should be boolean"
-
-    @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")
-    def test_compiler_with_quantum_circuit(self) -> None:
-        """Test compiler with quantum circuit."""
-
-        @guppy
-        def quantum_circuit() -> int:
-            count = 0
-            for _i in range(3):
-                q = qubit()
-                h(q)
-                if measure(q):
-                    count += 1
-            return count
-
-        GuppySeleneCompiler()
-
-        # Try to compile the circuit
-        compiled = quantum_circuit.compile()
-        assert compiled is not None, "Should compile quantum circuit"
 
 
 @pytest.mark.skipif(not PECOS_API_AVAILABLE, reason="PECOS API not available")

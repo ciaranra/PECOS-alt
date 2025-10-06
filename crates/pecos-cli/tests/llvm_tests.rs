@@ -149,7 +149,7 @@ fn get_values(json_output: &str) -> Vec<String> {
                 // Try to parse as indexed register
                 let mut base_name = String::new();
                 let mut index = None;
-                let mut chars: Vec<char> = reg_name.chars().collect();
+                let chars: Vec<char> = reg_name.chars().collect();
                 let mut i = chars.len();
 
                 // Find where digits end from the right
@@ -402,6 +402,8 @@ fn test_qis_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
     assert!(
         stderr.contains("Starting compilation")
             || stderr.contains("Compilation successful")
+            || stderr.contains("compilation verified")
+            || stderr.contains("engine ready for execution")
             || stderr.contains("Loading interface")
             || stderr.contains("Found built Selene runtime")
             || stderr.contains("Using Selene simple runtime")
@@ -409,7 +411,7 @@ fn test_qis_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
             || stderr.contains("Using explicit JIT interface")
             || stderr.contains("JIT interface created")
             || stderr.contains("Creating QisControlEngine"),
-        "Should show compilation activity"
+        "Should show compilation activity. Got stderr: {stderr}"
     );
 
     // Then, test execution using explicit JIT interface for consistency

@@ -339,7 +339,7 @@ class TestQubitAllocationLimits:
             ), "Should have 50 measurements for qubit 3"
 
             # Each qubit should have roughly 50/50 distribution due to H gate
-            for i in range(1, 4):
+            for i in range(3):
                 key = f"measurement_{i}"
                 ones = sum(results[key])
                 assert (

@@ -7,7 +7,7 @@ use pecos_core::errors::PecosError;
 use pecos_engines::{ClassicalControlEngineBuilder, MonteCarloEngine, SimBuilder, sim_builder};
 use pecos_programs::Program;
 use pecos_qasm::qasm_engine;
-use pecos_qis_ccengine::qis_control_engine;
+use pecos_qis_core::qis_control_engine;
 
 /// Extension trait for `SimBuilder` to add program-based methods
 pub trait SimBuilderExt {
@@ -68,8 +68,15 @@ impl ProgrammedSimBuilder {
                     let engine_builder = qis_control_engine().try_program(qis.clone())
                         .or_else(|_| {
                             log::info!("Default Selene interface failed, falling back to JIT for unified sim API");
-                            use pecos_qis_ccengine::qis_jit_interface;
-                            qis_control_engine().interface(qis_jit_interface()).try_program(qis)
+                            #[cfg(feature = "jit")]
+                            {
+                                use pecos_qis_jit::jit_interface_builder;
+                                qis_control_engine().interface(jit_interface_builder()).try_program(qis)
+                            }
+                            #[cfg(not(feature = "jit"))]
+                            {
+                                Err(PecosError::Processing("JIT interface not available. Please enable the 'jit' feature or provide a Selene interface.".to_string()))
+                            }
                         })
                         .map_err(|e| PecosError::Generic(format!("Failed to load QIS program: {}", e)))?;
 
@@ -129,8 +136,15 @@ impl ProgrammedSimBuilder {
                     let engine_builder = qis_control_engine().try_program(qis.clone())
                         .or_else(|_| {
                             log::info!("Default Selene interface failed, falling back to JIT for unified sim API");
-                            use pecos_qis_ccengine::qis_jit_interface;
-                            qis_control_engine().interface(qis_jit_interface()).try_program(qis)
+                            #[cfg(feature = "jit")]
+                            {
+                                use pecos_qis_jit::jit_interface_builder;
+                                qis_control_engine().interface(jit_interface_builder()).try_program(qis)
+                            }
+                            #[cfg(not(feature = "jit"))]
+                            {
+                                Err(PecosError::Processing("JIT interface not available. Please enable the 'jit' feature or provide a Selene interface.".to_string()))
+                            }
                         })
                         .map_err(|e| PecosError::Generic(format!("Failed to load QIS program: {}", e)))?;
 
@@ -267,7 +281,7 @@ impl ProgrammedSimBuilder {
 /// // Override automatic engine selection if needed
 /// let qasm_prog = QasmProgram::from_string("OPENQASM 2.0; qreg q[1]; h q[0];");
 /// let results = sim(qasm_prog)
-///     .classical(pecos_qis_ccengine::qis_control_engine().runtime(pecos_qis_ccengine::native_runtime()))
+///     .classical(pecos_qis_core::qis_control_engine().runtime(pecos_qis_native::NativeRuntime::new()))
 ///     .run(100)?;
 /// # Ok::<(), pecos_core::errors::PecosError>(())
 /// ```

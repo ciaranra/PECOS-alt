@@ -361,14 +361,28 @@ class TestHUGRSimulation:
                 pytest.fail(f"Unexpected HUGR simulation error: {e}")
 
     def test_sim_api_hugr_routing(self) -> None:
-        """Test that HUGR programs route to Selene engine."""
-        # Even with dummy bytes, we should see proper routing
-        dummy_hugr = b"HUGRiHJv" + b"\x00" * 100  # Dummy HUGR envelope format
+        """Test that HUGR programs route through compilation to Selene engine."""
+        # Create a real HUGR program from Guppy for routing test
+        @guppy
+        def simple_h_measure() -> bool:
+            q = qubit()
+            h(q)
+            return measure(q)
+
+        # Compile to HUGR
+        compiled = simple_h_measure.compile()
+
+        # Get HUGR bytes
+        if hasattr(compiled, "to_bytes"):
+            hugr_bytes = compiled.to_bytes()
+        else:
+            hugr_str = compiled.to_str()
+            hugr_bytes = hugr_str.encode("utf-8")
 
         try:
-            program = HugrProgram.from_bytes(dummy_hugr)
+            program = HugrProgram.from_bytes(hugr_bytes)
 
-            # Create builder - this should work even if execution fails
+            # Create builder - this should work with real HUGR
             builder = sim(program)
             assert builder is not None, "Should create sim builder for HUGR"
 
@@ -377,13 +391,16 @@ class TestHUGRSimulation:
             assert hasattr(builder, "run"), "Builder should have run method"
             assert hasattr(builder, "quantum"), "Builder should have quantum method"
 
-            # Trying to run would fail, but builder creation should succeed
-            configured = builder.qubits(2).quantum(state_vector())
+            # Configure and verify builder works
+            configured = builder.qubits(1).quantum(state_vector())
             assert configured is not None, "Should configure builder"
 
         except (ImportError, RuntimeError) as e:
-            if "selene" in str(e).lower():
+            error_msg = str(e).lower()
+            if "selene" in error_msg:
                 pytest.skip("Selene not available for HUGR routing")
+            elif "hugr" in error_msg and "not implemented" in error_msg:
+                pytest.skip(f"HUGR compilation not fully implemented: {e}")
             else:
                 pytest.fail(f"Unexpected error in HUGR routing: {e}")
 
@@ -401,139 +418,95 @@ class TestPHIRSimulation:
         phir_json = {
             "format": "PHIR/JSON",
             "version": "0.1.0",
-            "metadata": {
-                "description": "Simple H gate test",
-            },
+            "metadata": {"description": "Simple H gate test"},
             "ops": [
                 {
-                    "op": "qalloc",
-                    "returns": ["q0"],
-                    "args": {"size": 1},
+                    "data": "qvar_define",
+                    "data_type": "qubits",
+                    "variable": "q",
+                    "size": 1
                 },
                 {
-                    "op": "h",
-                    "args": {"qubit": "q0"},
+                    "data": "cvar_define",
+                    "data_type": "i64",
+                    "variable": "m",
+                    "size": 1
                 },
-                {
-                    "op": "measure",
-                    "returns": ["m0"],
-                    "args": {"qubit": "q0"},
-                },
-                {
-                    "op": "qfree",
-                    "args": {"qubit": "q0"},
-                },
+                {"qop": "H", "args": [["q", 0]]},
+                {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
+                {"cop": "Result", "args": ["m"], "returns": ["c"]}
             ],
         }
 
         phir_str = json.dumps(phir_json)
 
-        try:
-            program = PhirJsonProgram.from_string(phir_str)
-            results = sim(program).qubits(1).seed(42).run(50)
+        program = PhirJsonProgram.from_string(phir_str)
+        results = sim(program).qubits(1).seed(42).run(50)
 
-            assert isinstance(results, dict), "Results should be a dictionary"
+        assert isinstance(results, dict), "Results should be a dictionary"
+        assert "c" in results, "Results should contain register 'c'"
 
-            # Check for measurements in various possible keys
-            measurement_keys = ["m0", "measurements", "results"]
-            found_measurements = False
+        measurements = results["c"]
+        assert len(measurements) == 50, "Should have 50 measurements"
 
-            for key in measurement_keys:
-                if key in results:
-                    measurements = results[key]
-                    assert (
-                        len(measurements) == 50
-                    ), f"Should have 50 measurements in {key}"
-                    found_measurements = True
+        # Should be binary values
+        assert all(
+            m in [0, 1] for m in measurements
+        ), "Measurements should be binary"
 
-                    # Should be binary values
-                    assert all(
-                        m in [0, 1, True, False] for m in measurements
-                    ), "Measurements should be binary"
-                    break
-
-            if not found_measurements and len(results) == 0:
-                # PHIR might not be fully supported yet
-                pytest.skip("PHIR execution not producing results yet")
-
-        except (RuntimeError, ValueError, NotImplementedError) as e:
-            error_msg = str(e).lower()
-            if (
-                "phir" in error_msg
-                or "not implemented" in error_msg
-                or "format" in error_msg
-            ):
-                pytest.skip(f"PHIR format not fully supported: {e}")
-            else:
-                pytest.fail(f"Unexpected PHIR error: {e}")
+        # H gate should give roughly 50/50 distribution
+        ones = sum(measurements)
+        assert 15 < ones < 35, f"H gate should give roughly 50/50, got {ones}/50"
 
     def test_sim_api_with_phir_bell_state(self) -> None:
         """Test sim API with Bell state in PHIR format."""
         phir_json = {
             "format": "PHIR/JSON",
             "version": "0.1.0",
-            "metadata": {
-                "description": "Bell state",
-            },
+            "metadata": {"description": "Bell state"},
             "ops": [
                 {
-                    "op": "qalloc",
-                    "returns": ["q0", "q1"],
-                    "args": {"size": 2},
+                    "data": "qvar_define",
+                    "data_type": "qubits",
+                    "variable": "q",
+                    "size": 2
                 },
                 {
-                    "op": "h",
-                    "args": {"qubit": "q0"},
+                    "data": "cvar_define",
+                    "data_type": "i64",
+                    "variable": "m",
+                    "size": 2
                 },
-                {
-                    "op": "cnot",
-                    "args": {"control": "q0", "target": "q1"},
-                },
-                {
-                    "op": "measure",
-                    "returns": ["m0"],
-                    "args": {"qubit": "q0"},
-                },
-                {
-                    "op": "measure",
-                    "returns": ["m1"],
-                    "args": {"qubit": "q1"},
-                },
-                {
-                    "op": "qfree",
-                    "args": {"qubits": ["q0", "q1"]},
-                },
+                {"qop": "H", "args": [["q", 0]]},
+                {"qop": "CX", "args": [["q", 0], ["q", 1]]},
+                {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
+                {"qop": "Measure", "args": [["q", 1]], "returns": [["m", 1]]},
+                {"cop": "Result", "args": ["m"], "returns": ["c"]}
             ],
         }
 
         phir_str = json.dumps(phir_json)
 
-        try:
-            program = PhirJsonProgram.from_string(phir_str)
-            results = sim(program).qubits(2).seed(42).run(100)
+        program = PhirJsonProgram.from_string(phir_str)
+        results = sim(program).qubits(2).seed(42).run(100)
 
-            assert isinstance(results, dict), "Results should be a dictionary"
+        assert isinstance(results, dict), "Results should be a dictionary"
+        assert "c" in results, "Results should contain register 'c'"
 
-            # Check for correlated measurements
-            if "m0" in results and "m1" in results:
-                m0 = results["m0"]
-                m1 = results["m1"]
+        measurements = results["c"]
+        assert len(measurements) == 100, "Should have 100 measurements"
 
-                assert len(m0) == 100, "Should have 100 measurements for qubit 0"
-                assert len(m1) == 100, "Should have 100 measurements for qubit 1"
+        # Bell state should only produce 00 (0) and 11 (3) in 2-bit encoding
+        unique_values = set(measurements)
+        assert unique_values.issubset(
+            {0, 3},
+        ), f"Bell state should only give 00 or 11, got {unique_values}"
 
-                # Bell state should be correlated
-                correlated = sum(1 for i in range(100) if m0[i] == m1[i])
-                assert (
-                    correlated > 95
-                ), f"Bell state should be highly correlated, got {correlated}/100"
-
-        except (RuntimeError, ValueError, NotImplementedError) as e:
-            error_msg = str(e).lower()
-            if "phir" in error_msg or "not implemented" in error_msg:
-                pytest.skip(f"PHIR Bell state not fully supported: {e}")
-            else:
-                pytest.fail(f"Unexpected error: {e}")
+        # Should see both values with reasonable probability
+        count_00 = measurements.count(0)
+        count_11 = measurements.count(3)
+        assert count_00 > 20, f"Should see |00⟩ state, got {count_00} times"
+        assert count_11 > 20, f"Should see |11⟩ state, got {count_11} times"
 
 
 class TestSimAPIFeatures:

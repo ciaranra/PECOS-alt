@@ -216,40 +216,6 @@ class TestSeleneHUGRCompilation:
 class TestLLVMGeneration:
     """Test LLVM IR generation from quantum circuits."""
 
-    def test_bell_state_llvm_ir_generation(self) -> None:
-        """Test direct LLVM IR generation for Bell state."""
-        # Try to import direct LLVM generation if available
-        try:
-            from pecos_rslib._pecos_rslib import generate_bell_state_llvm
-        except ImportError:
-            pytest.skip("Direct LLVM generation not exposed to Python")
-
-        # Generate Bell state LLVM IR
-        try:
-            bell_llvm = generate_bell_state_llvm()
-
-            # Verify LLVM IR structure
-            assert isinstance(bell_llvm, str), "LLVM IR should be a string"
-            assert len(bell_llvm) > 0, "LLVM IR should not be empty"
-
-            # Check for expected LLVM IR elements
-            expected_patterns = [
-                "%Qubit = type opaque",  # Qubit type definition
-                "@__quantum__qis__h__body",  # Hadamard gate
-                "@__quantum__qis__cnot__body",  # CNOT gate (if proper Bell state)
-                "@bell_state",  # Function name
-                "define",  # Function definition
-                "call",  # Function calls
-            ]
-
-            found_patterns = [p for p in expected_patterns if p in bell_llvm]
-            assert (
-                len(found_patterns) >= 3
-            ), f"LLVM IR should contain quantum operations, found: {found_patterns}"
-
-        except Exception as e:
-            pytest.fail(f"LLVM generation failed: {e}")
-
     def test_llvm_ir_from_hugr(self) -> None:
         """Test generating LLVM IR from HUGR."""
         if not all([GUPPY_AVAILABLE, COMPILATION_AVAILABLE]):

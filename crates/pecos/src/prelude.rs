@@ -25,7 +25,7 @@
 //! * `pecos_engines`: Simulation engines for quantum and classical processing
 //! * `pecos_phir_json`: PECOS High-level Intermediate Representation
 //! * `pecos_qasm`: `OpenQASM` language support
-//! * `pecos_qis_ccengine`: QIS control engine with multiple runtime support
+//! * `pecos_qis_core`: QIS control engine with multiple runtime support
 //! * `pecos_qsim`: Quantum simulation implementations
 //!
 //! It also includes key functionality from the top-level PECOS crate:
@@ -47,9 +47,28 @@ pub use pecos_core::prelude::*;
 pub use pecos_engines::prelude::*;
 pub use pecos_phir_json::prelude::*;
 pub use pecos_qasm::prelude::*;
-pub use pecos_qis_ccengine::*;
-// pecos_qis_sim removed - using pecos_qis_ccengine instead
+// Re-export pecos_qis_core selectively to avoid conflicts with pecos_engines
+// The main Shot type users should use is from pecos_engines (more feature-rich)
+// The QIS Shot is an internal implementation detail
+pub use pecos_qis_core::{
+    qis_control_engine, QisControlEngine, QisEngineBuilder,
+    QisInterface, QisInterfaceBuilder, QisRuntime,
+    ProgramFormat, InterfaceError, RuntimeError,
+    ClassicalState,
+    // Note: Shot and Value from pecos_qis_core are NOT exported to avoid ambiguity
+    // Use pecos_engines::Shot and pecos_qis_core::runtime::Value if needed
+};
+// pecos_qis_sim removed - using pecos_qis_core instead
 pub use pecos_qsim::prelude::*;
+
+// Re-export QIS interface implementations when features are enabled
+#[cfg(feature = "jit")]
+pub use pecos_qis_jit::{JitInterfaceBuilder, QisJitInterface, jit_interface_builder};
+#[cfg(feature = "selene")]
+pub use pecos_qis_selene::{HeliosInterfaceBuilder, QisHeliosInterface, helios_interface_builder};
+
+// Re-export native runtime
+pub use pecos_qis_native::native_runtime;
 
 // Re-export ShotVec directly from pecos_engines for easier access
 pub use pecos_engines::shot_results::ShotVec;

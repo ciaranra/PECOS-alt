@@ -16,7 +16,8 @@
 use pecos_core::rng::RngManageable;
 use pecos_engines::NoiseModel;
 use pecos_engines::noise::DepolarizingNoiseModel;
-use pecos_qis_ccengine::setup_qis_control_engine;
+use pecos_qis_core::setup_qis_control_engine_with_runtime;
+use pecos_qis_selene::selene_simple_runtime;
 use pecos_engines::shot_results;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -139,8 +140,20 @@ fn execute_llvm_safe(
         pecos_qis_runtime::runtime::llvm_runtime_reset();
     }
 
-    // Set up QIS control engine for LLVM/QIR files
-    let classical_engine = setup_qis_control_engine(llvm_path)?;
+    // Set up QIS control engine for LLVM/QIR files with Selene simple runtime (default)
+    let selene_runtime = selene_simple_runtime()
+        .map_err(|e| pecos_core::errors::PecosError::Resource(format!(
+            "Selene simple runtime not available: {}\n\
+            \n\
+            The default runtime for QIS programs is Selene simple.\n\
+            Please ensure Selene is built:\n\
+            cd ../selene && cargo build --release\n\
+            \n\
+            Or explicitly specify a different runtime in your code.", e
+        )))?;
+
+    log::info!("Using Selene simple runtime for QIS program");
+    let classical_engine = setup_qis_control_engine_with_runtime(llvm_path, selene_runtime)?;
 
     // Create noise model
     let noise_model: Box<dyn NoiseModel> = if let Some(prob) = noise_probability {

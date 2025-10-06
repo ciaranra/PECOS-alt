@@ -351,9 +351,9 @@ class TestIsolatedOps:
 
         results = sim(test).qubits(10).quantum(state_vector()).seed(42).run(10)
         # Check tuple values directly
-        assert all(f"measurement_{i}" in results for i in range(1, 5))
+        assert all(f"measurement_{i}" in results for i in range(4))
         measurements = list(
-            zip(*[results[f"measurement_{i}"] for i in range(1, 5)], strict=False),
+            zip(*[results[f"measurement_{i}"] for i in range(4)], strict=False),
         )
 
         for r in measurements:

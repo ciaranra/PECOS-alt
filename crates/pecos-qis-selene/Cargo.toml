@@ -1,0 +1,37 @@
+[package]
+name = "pecos-qis-selene"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["hugr"]
+hugr = ["pecos-hugr-qis"]
+
+[dependencies]
+pecos-core.workspace = true
+pecos-programs.workspace = true
+pecos-qis-ffi.workspace = true
+pecos-qis-core.workspace = true
+pecos-hugr-qis = { workspace = true, optional = true }
+log.workspace = true
+libloading.workspace = true
+tempfile.workspace = true
+bincode.workspace = true
+
+[dev-dependencies]
+pecos-engines.workspace = true
+
+[build-dependencies]
+
+[lints]
+workspace = true

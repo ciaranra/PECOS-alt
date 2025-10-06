@@ -21,7 +21,11 @@ test = false
 
 [features]
 default = ["wasm", "hugr-llvm-pipeline"]
-wasm = ["pecos-qasm/wasm"]
+wasm = ["pecos-qasm/wasm", "pecos-phir-json/wasm"]
+
+# JIT feature for LLVM JIT functionality
+# Currently always available since pecos-qis-jit is a direct dependency
+jit = []
 
 # LLVM JIT execution: QIR file execution via LLVM JIT compilation
 # REMOVED - pecos-qis-runtime removed due to symbol conflicts
@@ -45,9 +49,12 @@ pecos-qsim.workspace = true
 pecos-cppsparsesim = { path = "../../../crates/pecos-cppsparsesim" }
 pecos-quest = { path = "../../../crates/pecos-quest", features = ["cpu"] }
 pecos-qulacs = { path = "../../../crates/pecos-qulacs" }
-# pecos-qis-runtime.workspace = true  # Removed - conflicts with pecos-qis-interface
+# pecos-qis-runtime.workspace = true  # Removed - conflicts with pecos-qis-ffi
 # pecos-qis-sim.workspace = true  # Removed - brings in pecos-qis-runtime which conflicts
-pecos-qis-ccengine.workspace = true
+pecos-qis-core.workspace = true
+pecos-qis-native.workspace = true
+pecos-qis-jit.workspace = true
+pecos-qis-selene = { path = "../../../crates/pecos-qis-selene" }
 pecos-phir = { path = "../../../crates/pecos-phir", features = ["hugr"] }
 pecos-phir-json = { path = "../../../crates/pecos-phir-json" }
 pecos-hugr-qis = { path = "../../../crates/pecos-hugr-qis", optional = true }

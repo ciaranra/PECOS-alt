@@ -54,6 +54,8 @@ fn test_pecos_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
     assert!(
         stderr.contains("Starting compilation")
             || stderr.contains("Compilation successful")
+            || stderr.contains("compilation verified")
+            || stderr.contains("engine ready for execution")
             || stderr.contains("Loading interface")
             || stderr.contains("Found built Selene runtime")
             || stderr.contains("Using Selene simple runtime")

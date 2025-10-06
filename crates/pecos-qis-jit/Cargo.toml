@@ -1,0 +1,34 @@
+[package]
+name = "pecos-qis-jit"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["hugr"]
+hugr = ["pecos-hugr-qis"]
+
+[dependencies]
+pecos-programs.workspace = true
+pecos-qis-ffi.workspace = true
+pecos-qis-core.workspace = true
+pecos-core.workspace = true
+pecos-hugr-qis = { workspace = true, optional = true }
+log.workspace = true
+
+# LLVM JIT execution
+inkwell = { workspace = true, features = ["llvm14-0-force-dynamic"] }
+rand.workspace = true
+regex.workspace = true
+
+[dev-dependencies]
+env_logger.workspace = true
+
+[lints]
+workspace = true

@@ -140,24 +140,12 @@ lint-fix:  ## Fix all auto-fixable linting issues (Rust, Python, Julia)
 # Testing
 # -------
 
-.PHONY: qir-staticlib
-qir-staticlib:  ## Build the QIR static library (needed for QIR compilation)
-	cargo rustc -p pecos-qis-ccengine --lib --crate-type=staticlib
-
-.PHONY: qir-staticlib-if-needed
-qir-staticlib-if-needed:  ## Build QIR static library only if it doesn't exist in persistent location
-	@if [ ! -f ~/.cargo/pecos-qis-ccengine/libpecos_qis_ccengine.a ] && [ ! -f ~/.cargo/pecos-qis-ccengine/pecos_qis_ccengine.lib ]; then \
-		echo "Building QIR static library..."; \
-		$(MAKE) qir-staticlib; \
-	fi
-
 .PHONY: rstest
-rstest: qir-staticlib-if-needed  ## Run Rust tests
-	# Run tests in release mode to avoid QIR timing issues in debug mode
+rstest:  ## Run Rust tests
 	cargo test --workspace --release
 
 .PHONY: rstest-all
-rstest-all: qir-staticlib-if-needed  ## Run Rust tests with all features except GPU
+rstest-all:  ## Run Rust tests with all features except GPU
 	cargo test --workspace --exclude pecos-quest --exclude pecos-decoders
 	cargo test -p pecos-quest
 	cargo test -p pecos-decoders --all-features
@@ -391,8 +379,6 @@ clean-unix:
 	@find julia -name "*.jl.mem" -delete
 	@# Clean the root workspace target directory
 	@cargo clean
-	@# Clean the persistent QIR library directory
-	@rm -rf ~/.cargo/pecos-qis-ccengine/
 
 .PHONY: clean-windows-ps
 clean-windows-ps:
@@ -411,8 +397,6 @@ clean-windows-ps:
 	@powershell -Command "Get-ChildItem -Path crates -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path python -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@cargo clean
-	@# Clean the persistent QIR library directory
-	@powershell -Command "if (Test-Path '$env:USERPROFILE\.cargo\pecos-qis-ccengine') { Remove-Item -Recurse -Force $env:USERPROFILE\.cargo\pecos-qis-ccengine }"
 
 .PHONY: clean-windows-cmd
 clean-windows-cmd:
@@ -431,8 +415,6 @@ clean-windows-cmd:
 	-@for /f "delims=" %%d in ('dir /s /b /ad crates\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%d in ('dir /s /b /ad python\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@cargo clean
-	-@REM Clean the persistent QIR library directory
-	-@if exist %USERPROFILE%\.cargo\pecos-qis-ccengine rd /s /q %USERPROFILE%\.cargo\pecos-qis-ccengine
 
 .PHONY: pip-install-uv
 pip-install-uv:  ## Install uv using pip and create a venv. (Recommended to instead follow: https://docs.astral.sh/uv/getting-started/installation/

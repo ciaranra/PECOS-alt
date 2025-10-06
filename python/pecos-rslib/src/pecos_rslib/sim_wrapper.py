@@ -53,7 +53,44 @@ def sim(program: ProgramType) -> object:
             or str(type(obj)).find("GuppyFunctionDefinition") != -1
         )
 
-    if is_guppy_function(program):
+    # Check if this is a HugrProgram that needs compilation
+    if type(program).__name__ == "HugrProgram":
+        logger.info("Detected HugrProgram, attempting to compile to QIS format")
+
+        try:
+            # Get HUGR bytes from the HugrProgram
+            if hasattr(program, "to_bytes"):
+                hugr_bytes = program.to_bytes()
+            elif hasattr(program, "hugr_bytes"):
+                hugr_bytes = program.hugr_bytes
+            else:
+                # Try to get the raw bytes
+                hugr_bytes = bytes(program)
+
+            # Compile HUGR to QIS using Selene's hugr-qis compiler
+            from selene_hugr_qis_compiler import compile_to_llvm_ir
+            qis_ir = compile_to_llvm_ir(hugr_bytes)
+            logger.info("Compiled HUGR to QIS LLVM IR successfully")
+
+            # Create QIS program
+            qis_program = _pecos_rslib.QisProgram.from_string(qis_ir)
+            logger.info("Created QisProgram from HUGR, passing to Rust sim()")
+
+            # Debug support
+            import os
+            if os.getenv("DEBUG_QIS_CRASH"):
+                with open("/tmp/qis_before_sim.ll", "w") as f:
+                    f.write(qis_ir)
+                logger.info("Saved QIS IR to /tmp/qis_before_sim.ll for debugging")
+
+            program = qis_program
+        except Exception as e:
+            # If HUGR compilation fails, pass the HugrProgram to Rust
+            # This allows Rust to provide appropriate error messages
+            logger.warning(f"HUGR compilation failed: {e}. Passing HugrProgram to Rust for error handling.")
+            # Keep program as HugrProgram - Rust will handle it
+
+    elif is_guppy_function(program):
         logger.info("Detected Guppy function, compiling to QIS format")
 
         # Compile Guppy → HUGR → QIS

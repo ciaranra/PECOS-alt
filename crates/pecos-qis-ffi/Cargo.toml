@@ -1,0 +1,31 @@
+[package]
+name = "pecos-qis-ffi"
+version.workspace = true
+edition.workspace = true
+readme.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+# Generate both rlib (for Rust) and staticlib (for linking with LLVM IR)
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+# Minimal dependencies for fast compilation
+log.workspace = true
+# Serialization for FFI data exchange
+serde = { workspace = true, features = ["derive"] }
+# For heap allocation (malloc/free)
+libc.workspace = true
+
+[features]
+default = []
+# Feature for generating the static library
+static-lib = []
+
+[lints]
+workspace = true

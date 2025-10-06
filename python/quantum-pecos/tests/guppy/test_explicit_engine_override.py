@@ -139,8 +139,9 @@ def test_engine_override_with_noise() -> None:
     # With noise, we should see both 0 and 1 outcomes
     assert "measurement_0" in results, f"measurement_0 not found in {list(results.keys())}"
     values = results["measurement_0"]
-    zeros = sum(1 for v in values if v == "0")
-    ones = sum(1 for v in values if v == "1")
+    # Values are integers (0 or 1), not strings
+    zeros = sum(1 for v in values if v == 0)
+    ones = sum(1 for v in values if v == 1)
     # With noise, both outcomes should occur
     assert zeros > 0, f"Noise should cause at least one 0, got {zeros} zeros"
     assert ones > 0, f"Noise should cause at least one 1, got {ones} ones"

@@ -136,7 +136,7 @@ fn get_values(json_output: &str) -> Vec<String> {
                 // Try to parse as indexed register
                 let mut base_name = String::new();
                 let mut index = None;
-                let mut chars: Vec<char> = reg_name.chars().collect();
+                let chars: Vec<char> = reg_name.chars().collect();
                 let mut i = chars.len();
 
                 // Find where digits end from the right

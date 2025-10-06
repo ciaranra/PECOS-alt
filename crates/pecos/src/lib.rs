@@ -67,10 +67,11 @@ pub use pecos_programs::{HugrProgram, Program, QasmProgram, QisProgram};
 #[cfg(feature = "qasm")]
 pub use pecos_qasm::qasm_engine;
 
-// QIS/LLVM engine functionality now provided by pecos_qis_ccengine
+// QIS/LLVM engine functionality now provided by pecos_qis_core
 
 #[cfg(feature = "phir")]
 pub use pecos_phir_json::phir_json_engine;
 
 // Re-export qis_control_engine and related functions
-pub use pecos_qis_ccengine::{qis_control_engine, qis_jit_interface, native_runtime, selene_simple_runtime};
+pub use pecos_qis_core::qis_control_engine;
+pub use pecos_qis_native::{native_runtime, NativeRuntime};
