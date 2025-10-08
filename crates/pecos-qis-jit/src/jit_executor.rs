@@ -3,21 +3,22 @@
 //! This module provides JIT compilation and execution of LLVM IR programs
 //! using inkwell, replacing the text parsing approach with direct execution.
 
+use inkwell::OptimizationLevel;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
-use inkwell::module::Module;
 use inkwell::memory_buffer::MemoryBuffer;
-use inkwell::OptimizationLevel;
-use inkwell::targets::{Target, InitializationConfig};
+use inkwell::module::Module;
+use inkwell::targets::{InitializationConfig, Target};
+use log::debug;
 
 use pecos_qis_ffi::{OperationCollector, reset_interface};
-use std::sync::Mutex;
 use std::cell::RefCell;
+use std::sync::Mutex;
 
 /// Type alias for the main function signature: i64 qmain(i64)
 type QMainFunc = unsafe extern "C" fn(i64) -> i64;
 
-/// Type alias for the main function signature (no args): void main()
+/// Type alias for the main function signature (no args): void `main()`
 type MainFunc = unsafe extern "C" fn();
 
 // Note: We now create fresh contexts for each compilation to avoid state pollution
@@ -45,16 +46,14 @@ fn ensure_llvm_initialized() {
         Target::initialize_all(&InitializationConfig::default());
 
         // Also try to initialize native target explicitly
-        if let Err(_e) = Target::initialize_native(&InitializationConfig::default()) {
-        } else {
-        }
+        if let Err(_e) = Target::initialize_native(&InitializationConfig::default()) {}
     });
 }
 
 // Thread-local LLVM context to ensure proper isolation between threads
 // while reusing the same context within a thread to avoid LLVM global state issues
 thread_local! {
-    static THREAD_LOCAL_CONTEXT: RefCell<Option<Context>> = RefCell::new(None);
+    static THREAD_LOCAL_CONTEXT: RefCell<Option<Context>> = const { RefCell::new(None) };
 }
 
 /// Execute a closure with access to the thread-local LLVM context
@@ -68,7 +67,10 @@ where
     THREAD_LOCAL_CONTEXT.with(|ctx_cell| {
         let mut ctx_opt = ctx_cell.borrow_mut();
         if ctx_opt.is_none() {
-            log::debug!("Creating new LLVM context for thread {:?}", std::thread::current().id());
+            log::debug!(
+                "Creating new LLVM context for thread {:?}",
+                std::thread::current().id()
+            );
             *ctx_opt = Some(Context::create());
         }
 
@@ -92,8 +94,8 @@ where
 
 /// JIT executor for LLVM IR programs
 ///
-/// Designed for use with the MonteCarloEngine template pattern:
-/// - Create a template JitExecutor
+/// Designed for use with the `MonteCarloEngine` template pattern:
+/// - Create a template `JitExecutor`
 /// - Clone it for each worker/thread
 /// - Each clone lazily creates its own LLVM Context on first use
 /// - Reuse the executor for multiple shots by resetting state as needed
@@ -111,6 +113,7 @@ pub struct JitExecutor {
 
 impl JitExecutor {
     /// Create a new JIT executor
+    #[must_use]
     pub fn new() -> Self {
         Self {
             compilation_count: 0,
@@ -119,10 +122,13 @@ impl JitExecutor {
     }
 
     /// Execute LLVM IR and collect operations using proper JIT with symbol resolution
+    ///
+    /// # Errors
+    /// Returns an error if LLVM IR parsing, compilation, or execution fails.
     pub fn execute_llvm_ir(&mut self, llvm_ir: &str) -> Result<OperationCollector, String> {
         // Check if the IR contains conditional operations
-        let has_conditionals = llvm_ir.contains("___read_future_bool") ||
-                              llvm_ir.contains("___lazy_measure");
+        let has_conditionals =
+            llvm_ir.contains("___read_future_bool") || llvm_ir.contains("___lazy_measure");
 
         if has_conditionals {
             // Use two-phase execution for programs with conditionals
@@ -135,15 +141,17 @@ impl JitExecutor {
 
     /// Standard single-pass execution for programs without conditionals
     fn execute_llvm_ir_standard(&mut self, llvm_ir: &str) -> Result<OperationCollector, String> {
-
         // Find entry point BEFORE preprocessing (which may strip attributes)
-        let entry_point = self.find_entry_point_function(llvm_ir);
-        eprintln!("DEBUG: Entry point (standard): {:?}", entry_point);
+        let entry_point = Self::find_entry_point_function(llvm_ir);
+        debug!(" Entry point (standard): {entry_point:?}");
 
         // Preprocess LLVM IR to fix common issues
         let processed_llvm_ir = self.preprocess_llvm_ir(llvm_ir)?;
 
-        log::trace!("Preprocessed LLVM IR lines: {}", processed_llvm_ir.lines().count());
+        log::trace!(
+            "Preprocessed LLVM IR lines: {}",
+            processed_llvm_ir.lines().count()
+        );
         if log::log_enabled!(log::Level::Debug) {
             log::debug!("=== Preprocessed LLVM IR ===");
             for (i, line) in processed_llvm_ir.lines().enumerate() {
@@ -151,10 +159,6 @@ impl JitExecutor {
             }
             log::debug!("=== End of Preprocessed LLVM IR ===");
         }
-
-
-
-
 
         // DISABLED: JIT cache to prevent state pollution during testing
         // Cache reconstruction causes segfaults due to contaminated FFI state
@@ -198,136 +202,152 @@ impl JitExecutor {
         // Lock LLVM operations to prevent concurrent Context usage issues
         // This is necessary because LLVM has global state that can cause
         // crashes when multiple contexts are used concurrently
-        let _llvm_lock = LLVM_CONTEXT_MUTEX.lock()
+        let _llvm_lock = LLVM_CONTEXT_MUTEX
+            .lock()
             .map_err(|_| "Failed to acquire LLVM mutex".to_string())?;
 
         // Create memory buffer from processed LLVM IR text
         if std::env::var("DEBUG_LLVM_IR").is_ok() {
-            log::debug!("Creating memory buffer with {} bytes", processed_llvm_ir.len());
-            log::debug!("Last 10 bytes: {:?}", &processed_llvm_ir.as_bytes()[processed_llvm_ir.len().saturating_sub(10)..]);
+            log::debug!(
+                "Creating memory buffer with {} bytes",
+                processed_llvm_ir.len()
+            );
+            log::debug!(
+                "Last 10 bytes: {:?}",
+                &processed_llvm_ir.as_bytes()[processed_llvm_ir.len().saturating_sub(10)..]
+            );
         }
         // Use copy version to ensure the data remains valid throughout parsing
-        let memory_buffer = MemoryBuffer::create_from_memory_range_copy(processed_llvm_ir.as_bytes(), "qis_ir");
+        let memory_buffer =
+            MemoryBuffer::create_from_memory_range_copy(processed_llvm_ir.as_bytes(), "qis_ir");
 
         // Use thread-local context to avoid LLVM global state accumulation issues
         // Each thread gets its own persistent context that's reused across executions
         with_thread_local_context(|context| {
-
-        // Parse LLVM IR into a module using the fresh context
-        let module = context.create_module_from_ir(memory_buffer)
-            .map_err(|e| {
-                self.create_detailed_parse_error(&e.to_string(), &processed_llvm_ir)
+            // Parse LLVM IR into a module using the fresh context
+            let module = context.create_module_from_ir(memory_buffer).map_err(|e| {
+                Self::create_detailed_parse_error(&e.to_string(), &processed_llvm_ir)
             })?;
 
-        // Prepare function values that we need to register for symbol resolution BEFORE module is consumed
-        let function_mappings = self.collect_function_mappings(&module);
+            // Prepare function values that we need to register for symbol resolution BEFORE module is consumed
+            let function_mappings = Self::collect_function_mappings(&module);
 
-        // Create execution engine (this consumes the module)
-        let execution_engine = module.create_jit_execution_engine(OptimizationLevel::None)
-            .map_err(|e| {
-                self.create_detailed_engine_error(&e.to_string())
-            })?;
+            // Create execution engine (this consumes the module)
+            let execution_engine = module
+                .create_jit_execution_engine(OptimizationLevel::None)
+                .map_err(|e| Self::create_detailed_engine_error(&e.to_string()))?;
 
-        // CRITICAL: Apply symbol mappings immediately after execution engine creation
-        // Use the execution engine's API to resolve external functions
-        self.apply_function_mappings(&execution_engine, &function_mappings)?;
+            // CRITICAL: Apply symbol mappings immediately after execution engine creation
+            // Use the execution engine's API to resolve external functions
+            Self::apply_function_mappings(&execution_engine, &function_mappings);
 
-        // Create a direct interface instance instead of using thread-local storage
-        let mut jit_interface = OperationCollector::new();
+            // Create a direct interface instance instead of using thread-local storage
+            let mut jit_interface = OperationCollector::new();
 
-        // Use RAII guard to ensure interface pointer is ALWAYS cleaned up properly
-        // This handles all error paths, panics, and early returns
-        struct JitInterfaceGuard<'a> {
-            _interface: &'a mut OperationCollector,
-            execution_engine: Option<inkwell::execution_engine::ExecutionEngine<'a>>,
-            entry_point: Option<String>,
-        }
+            // Use RAII guard to ensure interface pointer is ALWAYS cleaned up properly
+            // This handles all error paths, panics, and early returns
+            #[allow(clippy::items_after_statements)] // RAII guard type intentionally scoped to this function
+            struct JitInterfaceGuard<'a> {
+                _interface: &'a mut OperationCollector,
+                execution_engine: Option<inkwell::execution_engine::ExecutionEngine<'a>>,
+                entry_point: Option<String>,
+            }
 
-        impl<'a> JitInterfaceGuard<'a> {
-            fn new(interface: &'a mut OperationCollector, execution_engine: inkwell::execution_engine::ExecutionEngine<'a>, entry_point: Option<String>) -> Self {
-                // Critical: Reset ALL thread-local state before execution
-                pecos_qis_ffi::reset_interface();
-                crate::measurement_manager::reset_measurement_manager();
+            #[allow(clippy::items_after_statements)] // RAII guard impl intentionally scoped to this function
+            impl<'a> JitInterfaceGuard<'a> {
+                fn new(
+                    interface: &'a mut OperationCollector,
+                    execution_engine: inkwell::execution_engine::ExecutionEngine<'a>,
+                    entry_point: Option<String>,
+                ) -> Self {
+                    // Critical: Reset ALL thread-local state before execution
+                    pecos_qis_ffi::reset_interface();
+                    crate::measurement_manager::reset_measurement_manager();
 
-                unsafe {
-                    crate::jit_ffi::__pecos_set_jit_interface(interface as *mut _);
+                    unsafe {
+                        crate::jit_ffi::__pecos_set_jit_interface(std::ptr::from_mut(interface));
+                    }
+                    Self {
+                        _interface: interface,
+                        execution_engine: Some(execution_engine),
+                        entry_point,
+                    }
                 }
-                Self {
-                    _interface: interface,
-                    execution_engine: Some(execution_engine),
-                    entry_point,
+
+                fn execute_main(&mut self) -> Result<(), String> {
+                    if let Some(ref engine) = self.execution_engine {
+                        JitExecutor::try_execute_main_function(engine, self.entry_point.clone())
+                    } else {
+                        Err("Execution engine not available".to_string())
+                    }
                 }
             }
 
-            fn execute_main(&mut self, executor: &mut JitExecutor) -> Result<(), String> {
-                if let Some(ref engine) = self.execution_engine {
-                    executor.try_execute_main_function(engine, self.entry_point.clone())
-                } else {
-                    Err("Execution engine not available".to_string())
+            #[allow(clippy::items_after_statements)] // RAII guard Drop impl intentionally scoped to this function
+            impl Drop for JitInterfaceGuard<'_> {
+                fn drop(&mut self) {
+                    // Drop execution engine first to ensure any cleanup can access interface
+                    self.execution_engine.take();
+
+                    // Clear the interface pointer
+                    unsafe {
+                        crate::jit_ffi::__pecos_set_jit_interface(std::ptr::null_mut());
+                    }
+
+                    // Critical: Reset ALL thread-local state after execution to prevent accumulation
+                    pecos_qis_ffi::reset_interface();
+                    crate::measurement_manager::reset_measurement_manager();
                 }
             }
-        }
 
-        impl<'a> Drop for JitInterfaceGuard<'a> {
-            fn drop(&mut self) {
-                // Drop execution engine first to ensure any cleanup can access interface
-                self.execution_engine.take();
-
-                // Clear the interface pointer
-                unsafe {
-                    crate::jit_ffi::__pecos_set_jit_interface(std::ptr::null_mut());
-                }
-
-                // Critical: Reset ALL thread-local state after execution to prevent accumulation
-                pecos_qis_ffi::reset_interface();
-                crate::measurement_manager::reset_measurement_manager();
+            // Execute with comprehensive cleanup
+            {
+                let mut guard =
+                    JitInterfaceGuard::new(&mut jit_interface, execution_engine, entry_point);
+                // Execute the main function - guard ensures cleanup on ALL paths
+                guard.execute_main()?;
+                // Guard is dropped here, ensuring proper cleanup
             }
-        }
 
-        // Execute with comprehensive cleanup
-        {
-            let mut guard = JitInterfaceGuard::new(&mut jit_interface, execution_engine, entry_point);
-            // Execute the main function - guard ensures cleanup on ALL paths
-            guard.execute_main(self)?;
-            // Guard is dropped here, ensuring proper cleanup
-        }
+            // Return the direct interface (now safe since guard is dropped)
+            let interface = jit_interface;
 
-        // Return the direct interface (now safe since guard is dropped)
-        let interface = jit_interface;
+            log::debug!("Collected {} operations", interface.operations.len());
+            log::trace!("Operations: {:?}", interface.operations);
 
-        log::debug!("Collected {} operations", interface.operations.len());
-        log::trace!("Operations: {:?}", interface.operations);
+            // DISABLED: Cache storage to prevent state pollution
+            /*
+            // Cache the successful result for future use
+            let cached_result = CachedExecutionResult {
+                operations: interface.operations.clone(),
+                qubit_count: interface.allocated_qubits.len(),
+                result_count: interface.allocated_results.len(),
+                timestamp: std::time::Instant::now(),
+            };
 
-        // DISABLED: Cache storage to prevent state pollution
-        /*
-        // Cache the successful result for future use
-        let cached_result = CachedExecutionResult {
-            operations: interface.operations.clone(),
-            qubit_count: interface.allocated_qubits.len(),
-            result_count: interface.allocated_results.len(),
-            timestamp: std::time::Instant::now(),
-        };
+            if let Ok(mut cache_guard) = cache.lock() {
+                cache_guard.insert(ir_hash, cached_result);
+            } else {
+            }
+            */
 
-        if let Ok(mut cache_guard) = cache.lock() {
-            cache_guard.insert(ir_hash, cached_result);
-        } else {
-        }
-        */
-
-        Ok(interface)
+            Ok(interface)
         }) // end of with_thread_local_context closure
     }
 
     /// Get cache statistics for monitoring and debugging
     /// Note: Caching is currently disabled for thread safety
+    #[must_use]
     pub fn get_cache_stats(&self) -> (usize, f64) {
         // Return empty stats since caching is disabled
         (0, 0.0)
     }
 
     /// Get execution statistics
+    #[must_use]
     pub fn get_execution_stats(&self) -> (usize, usize, f64) {
         let total_executions = self.compilation_count + self.cache_hits;
+        #[allow(clippy::cast_precision_loss)] // Precision loss acceptable for statistics
         let cache_hit_rate = if total_executions > 0 {
             self.cache_hits as f64 / total_executions as f64
         } else {
@@ -355,83 +375,204 @@ impl JitExecutor {
     }
 
     /// Collect function values and their addresses before module is consumed
-    fn collect_function_mappings<'a>(&self, module: &Module<'a>) -> Vec<(inkwell::values::FunctionValue<'a>, usize)> {
-
+    #[allow(clippy::too_many_lines)] // Symbol mapping table is inherently a long list of function pointers
+    fn collect_function_mappings<'a>(
+        module: &Module<'a>,
+    ) -> Vec<(inkwell::values::FunctionValue<'a>, usize)> {
         let symbol_mappings = [
             // Core interface functions - using JIT-safe versions that avoid thread-local storage
-            ("___reset", crate::jit_ffi::__pecos_jit_reset as *const () as usize),
-            ("___rxy", crate::jit_ffi::__pecos_jit_rxy as *const () as usize),
-            ("___rz", crate::jit_ffi::__pecos_jit_rz as *const () as usize),
-            ("___rzz", crate::jit_ffi::__pecos_jit_rzz as *const () as usize),
-            ("___lazy_measure", crate::jit_ffi::__pecos_jit_lazy_measure as *const () as usize),
-            ("___qalloc", crate::jit_ffi::__pecos_jit_qalloc as *const () as usize),
-            ("___qfree", crate::jit_ffi::__pecos_jit_qfree as *const () as usize),
+            (
+                "___reset",
+                crate::jit_ffi::__pecos_jit_reset as *const () as usize,
+            ),
+            (
+                "___rxy",
+                crate::jit_ffi::__pecos_jit_rxy as *const () as usize,
+            ),
+            (
+                "___rz",
+                crate::jit_ffi::__pecos_jit_rz as *const () as usize,
+            ),
+            (
+                "___rzz",
+                crate::jit_ffi::__pecos_jit_rzz as *const () as usize,
+            ),
+            (
+                "___lazy_measure",
+                crate::jit_ffi::__pecos_jit_lazy_measure as *const () as usize,
+            ),
+            (
+                "___qalloc",
+                crate::jit_ffi::__pecos_jit_qalloc as *const () as usize,
+            ),
+            (
+                "___qfree",
+                crate::jit_ffi::__pecos_jit_qfree as *const () as usize,
+            ),
             ("___h", crate::jit_ffi::__pecos_jit_h as *const () as usize),
-            ("___cx", crate::jit_ffi::__pecos_jit_cx as *const () as usize),
+            (
+                "___cx",
+                crate::jit_ffi::__pecos_jit_cx as *const () as usize,
+            ),
             ("setup", pecos_qis_ffi::ffi::setup as *const () as usize),
-            ("teardown", pecos_qis_ffi::ffi::teardown as *const () as usize),
+            (
+                "teardown",
+                pecos_qis_ffi::ffi::teardown as *const () as usize,
+            ),
             ("panic", pecos_qis_ffi::ffi::panic as *const () as usize),
-
             // Future functions for measurement results - using JIT-safe versions
-            ("___read_future_bool", crate::jit_ffi::__pecos_jit_read_future_bool as *const () as usize),
-            ("___inc_future_refcount", crate::jit_ffi::___inc_future_refcount as *const () as usize),
-            ("___dec_future_refcount", crate::jit_ffi::__pecos_jit_dec_future_refcount as *const () as usize),
-
+            (
+                "___read_future_bool",
+                crate::jit_ffi::__pecos_jit_read_future_bool as *const () as usize,
+            ),
+            (
+                "___inc_future_refcount",
+                crate::jit_ffi::___inc_future_refcount as *const () as usize,
+            ),
+            (
+                "___dec_future_refcount",
+                crate::jit_ffi::__pecos_jit_dec_future_refcount as *const () as usize,
+            ),
             // Result printing functions
-            ("print_bool", pecos_qis_ffi::ffi::print_bool as *const () as usize),
-
+            (
+                "print_bool",
+                pecos_qis_ffi::ffi::print_bool as *const () as usize,
+            ),
             // QIR Runtime functions
-            ("__quantum__rt__qubit_allocate", pecos_qis_ffi::ffi::__quantum__rt__qubit_allocate as *const () as usize),
-            ("__quantum__rt__qubit_release", pecos_qis_ffi::ffi::__quantum__rt__qubit_release as *const () as usize),
-            ("__quantum__rt__result_record_output", pecos_qis_ffi::ffi::__quantum__rt__result_record_output as *const () as usize),
-
+            (
+                "__quantum__rt__qubit_allocate",
+                pecos_qis_ffi::ffi::__quantum__rt__qubit_allocate as *const () as usize,
+            ),
+            (
+                "__quantum__rt__qubit_release",
+                pecos_qis_ffi::ffi::__quantum__rt__qubit_release as *const () as usize,
+            ),
+            (
+                "__quantum__rt__result_record_output",
+                pecos_qis_ffi::ffi::__quantum__rt__result_record_output as *const () as usize,
+            ),
             // QIS gate functions - using JIT-safe versions
-            ("__quantum__qis__h__body", crate::jit_ffi::__pecos_jit_h as *const () as usize),
-            ("__quantum__qis__x__body", crate::jit_ffi::__pecos_jit_x as *const () as usize),
-            ("__quantum__qis__y__body", crate::jit_ffi::__pecos_jit_y as *const () as usize),
-            ("__quantum__qis__z__body", crate::jit_ffi::__pecos_jit_z as *const () as usize),
-            ("__quantum__qis__s__body", crate::jit_ffi::__pecos_jit_s as *const () as usize),
-            ("__quantum__qis__sdg__body", crate::jit_ffi::__pecos_jit_sdg as *const () as usize),
-            ("__quantum__qis__t__body", crate::jit_ffi::__pecos_jit_t as *const () as usize),
-            ("__quantum__qis__tdg__body", crate::jit_ffi::__pecos_jit_tdg as *const () as usize),
-
+            (
+                "__quantum__qis__h__body",
+                crate::jit_ffi::__pecos_jit_h as *const () as usize,
+            ),
+            (
+                "__quantum__qis__x__body",
+                crate::jit_ffi::__pecos_jit_x as *const () as usize,
+            ),
+            (
+                "__quantum__qis__y__body",
+                crate::jit_ffi::__pecos_jit_y as *const () as usize,
+            ),
+            (
+                "__quantum__qis__z__body",
+                crate::jit_ffi::__pecos_jit_z as *const () as usize,
+            ),
+            (
+                "__quantum__qis__s__body",
+                crate::jit_ffi::__pecos_jit_s as *const () as usize,
+            ),
+            (
+                "__quantum__qis__sdg__body",
+                crate::jit_ffi::__pecos_jit_sdg as *const () as usize,
+            ),
+            (
+                "__quantum__qis__t__body",
+                crate::jit_ffi::__pecos_jit_t as *const () as usize,
+            ),
+            (
+                "__quantum__qis__tdg__body",
+                crate::jit_ffi::__pecos_jit_tdg as *const () as usize,
+            ),
             // Two-qubit gates
-            ("__quantum__qis__cx__body", crate::jit_ffi::__pecos_jit_cx as *const () as usize),
-            ("__quantum__qis__cnot__body", crate::jit_ffi::__pecos_jit_cnot as *const () as usize),
-            ("__quantum__qis__cy__body", crate::jit_ffi::__pecos_jit_cy as *const () as usize),
-            ("__quantum__qis__cz__body", crate::jit_ffi::__pecos_jit_cz as *const () as usize),
-            ("__quantum__qis__ch__body", crate::jit_ffi::__pecos_jit_ch as *const () as usize),
-
+            (
+                "__quantum__qis__cx__body",
+                crate::jit_ffi::__pecos_jit_cx as *const () as usize,
+            ),
+            (
+                "__quantum__qis__cnot__body",
+                crate::jit_ffi::__pecos_jit_cnot as *const () as usize,
+            ),
+            (
+                "__quantum__qis__cy__body",
+                crate::jit_ffi::__pecos_jit_cy as *const () as usize,
+            ),
+            (
+                "__quantum__qis__cz__body",
+                crate::jit_ffi::__pecos_jit_cz as *const () as usize,
+            ),
+            (
+                "__quantum__qis__ch__body",
+                crate::jit_ffi::__pecos_jit_ch as *const () as usize,
+            ),
             // Rotation gates
-            ("__quantum__qis__rx__body", crate::jit_ffi::__pecos_jit_rx as *const () as usize),
-            ("__quantum__qis__ry__body", crate::jit_ffi::__pecos_jit_ry as *const () as usize),
-            ("__quantum__qis__rz__body", crate::jit_ffi::__pecos_jit_rz as *const () as usize),
-            ("__quantum__qis__r1xy__body", crate::jit_ffi::__pecos_jit_r1xy as *const () as usize),
-
+            (
+                "__quantum__qis__rx__body",
+                crate::jit_ffi::__pecos_jit_rx as *const () as usize,
+            ),
+            (
+                "__quantum__qis__ry__body",
+                crate::jit_ffi::__pecos_jit_ry as *const () as usize,
+            ),
+            (
+                "__quantum__qis__rz__body",
+                crate::jit_ffi::__pecos_jit_rz as *const () as usize,
+            ),
+            (
+                "__quantum__qis__r1xy__body",
+                crate::jit_ffi::__pecos_jit_r1xy as *const () as usize,
+            ),
             // Controlled gates
-            ("__quantum__qis__crz__body", crate::jit_ffi::__pecos_jit_crz as *const () as usize),
-            ("__quantum__qis__ccx__body", crate::jit_ffi::__pecos_jit_ccx as *const () as usize),
-
+            (
+                "__quantum__qis__crz__body",
+                crate::jit_ffi::__pecos_jit_crz as *const () as usize,
+            ),
+            (
+                "__quantum__qis__ccx__body",
+                crate::jit_ffi::__pecos_jit_ccx as *const () as usize,
+            ),
             // ZZ interaction
-            ("__quantum__qis__zz__body", crate::jit_ffi::__pecos_jit_zz as *const () as usize),
-
+            (
+                "__quantum__qis__zz__body",
+                crate::jit_ffi::__pecos_jit_zz as *const () as usize,
+            ),
             // Measurements
-            ("__quantum__qis__m__body", crate::jit_ffi::__pecos_jit_m as *const () as usize),
-            ("__quantum__qis__mz__body", pecos_qis_ffi::ffi::__quantum__qis__mz__body as *const () as usize),
-
+            (
+                "__quantum__qis__m__body",
+                crate::jit_ffi::__pecos_jit_m as *const () as usize,
+            ),
+            (
+                "__quantum__qis__mz__body",
+                pecos_qis_ffi::ffi::__quantum__qis__mz__body as *const () as usize,
+            ),
             // Reset
-            ("__quantum__qis__reset__body", crate::jit_ffi::__pecos_jit_reset as *const () as usize),
-
+            (
+                "__quantum__qis__reset__body",
+                crate::jit_ffi::__pecos_jit_reset as *const () as usize,
+            ),
             // QIR Runtime functions
-            ("__quantum__rt__result_record_output", pecos_qis_ffi::ffi::__quantum__rt__result_record_output as *const () as usize),
-
+            (
+                "__quantum__rt__result_record_output",
+                pecos_qis_ffi::ffi::__quantum__rt__result_record_output as *const () as usize,
+            ),
             // Future measurement result functions
-            ("___read_future_bool", crate::jit_ffi::__pecos_jit_read_future_bool as *const () as usize),
-            ("___dec_future_refcount", crate::jit_ffi::__pecos_jit_dec_future_refcount as *const () as usize),
-
+            (
+                "___read_future_bool",
+                crate::jit_ffi::__pecos_jit_read_future_bool as *const () as usize,
+            ),
+            (
+                "___dec_future_refcount",
+                crate::jit_ffi::__pecos_jit_dec_future_refcount as *const () as usize,
+            ),
             // Heap management functions (for array support)
-            ("heap_alloc", pecos_qis_ffi::ffi::heap_alloc as *const () as usize),
-            ("heap_free", pecos_qis_ffi::ffi::heap_free as *const () as usize),
+            (
+                "heap_alloc",
+                pecos_qis_ffi::ffi::heap_alloc as *const () as usize,
+            ),
+            (
+                "heap_free",
+                pecos_qis_ffi::ffi::heap_free as *const () as usize,
+            ),
         ];
 
         let mut function_mappings = Vec::new();
@@ -446,19 +587,20 @@ impl JitExecutor {
         function_mappings
     }
 
-    /// Apply function mappings to execution engine using add_global_mapping
-    fn apply_function_mappings(&self, engine: &ExecutionEngine, function_mappings: &[(inkwell::values::FunctionValue<'_>, usize)]) -> Result<(), String> {
-
+    /// Apply function mappings to execution engine using `add_global_mapping`
+    fn apply_function_mappings(
+        engine: &ExecutionEngine,
+        function_mappings: &[(inkwell::values::FunctionValue<'_>, usize)],
+    ) {
         for (function_value, symbol_addr) in function_mappings {
             engine.add_global_mapping(function_value, *symbol_addr);
         }
-
-        Ok(())
     }
 
     /// Create detailed error message for LLVM IR parsing failures
     /// Transform opaque pointer-based QIR to integer-based QIR
-    fn transform_opaque_qir_to_integer(&self, llvm_ir: &str) -> String {
+    #[allow(clippy::too_many_lines)] // LLVM IR transformation requires comprehensive pattern matching
+    fn transform_opaque_qir_to_integer(llvm_ir: &str) -> String {
         // If the IR doesn't use opaque types, return as-is
         if !llvm_ir.contains("%Qubit = type opaque") && !llvm_ir.contains("%Result = type opaque") {
             return llvm_ir.to_string();
@@ -468,7 +610,8 @@ impl JitExecutor {
         let mut in_function = false;
         let mut qubit_counter = 0;
         let mut result_counter = 0;
-        let mut var_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut var_map: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
 
         for line in llvm_ir.lines() {
             let trimmed = line.trim();
@@ -555,140 +698,175 @@ impl JitExecutor {
 
                     // Handle array allocation
                     if new_line.contains("call %Qubit* @__quantum__rt__qubit_allocate_array") {
-                        eprintln!("DEBUG: Entering array allocation branch for line: {}", new_line);
+                        debug!(" Entering array allocation branch for line: {new_line}");
                         // Extract variable name and array size
-                        if let Some(var_name) = new_line.split('=').next().map(|s| s.trim()) {
-                            if !var_name.is_empty() {
-                                // Extract array size from call
-                                if let Some(start) = new_line.find("(i64 ") {
-                                    if let Some(end) = new_line[start+5..].find(')') {
-                                        let size_str = &new_line[start+5..start+5+end];
-                                        // Store base qubit ID for this array
-                                        let base_id = qubit_counter;
-                                        eprintln!("DEBUG: Array allocation: var_name='{}', base_id={}", var_name, base_id);
-                                        var_map.insert(var_name.to_string(), base_id.to_string());
-                                        if let Ok(size) = size_str.parse::<usize>() {
-                                            qubit_counter += size;
-                                        }
-                                        // Transform to return base qubit ID
-                                        new_line = format!("    {} = add i64 0, {}", var_name, base_id);
-                                        eprintln!("DEBUG: Transformed to: {}", new_line);
-                                    }
+                        if let Some(var_name) = new_line.split('=').next().map(str::trim)
+                            && !var_name.is_empty()
+                        {
+                            // Extract array size from call
+                            if let Some(start) = new_line.find("(i64 ")
+                                && let Some(end) = new_line[start + 5..].find(')')
+                            {
+                                let size_str = &new_line[start + 5..start + 5 + end];
+                                // Store base qubit ID for this array
+                                let base_id = qubit_counter;
+                                debug!(
+                                    "Array allocation: var_name='{var_name}', base_id={base_id}"
+                                );
+                                var_map.insert(var_name.to_string(), base_id.to_string());
+                                if let Ok(size) = size_str.parse::<usize>() {
+                                    qubit_counter += size;
                                 }
+                                // Transform to return base qubit ID
+                                new_line = format!("    {var_name} = add i64 0, {base_id}");
+                                debug!(" Transformed to: {new_line}");
                             }
                         }
                     }
                     // Handle getelementptr for qubit arrays
                     else if new_line.contains("getelementptr %Qubit") {
-                        eprintln!("DEBUG: Entering getelementptr branch for line: {}", new_line);
+                        debug!(" Entering getelementptr branch for line: {new_line}");
                         // Parse: %q0 = getelementptr %Qubit, %Qubit* %qubits, i64 0
-                        if let Some(var_name) = new_line.split('=').next().map(|s| s.trim().to_string()) {
-                            eprintln!("DEBUG: var_name='{}'", var_name);
+                        if let Some(var_name) =
+                            new_line.split('=').next().map(|s| s.trim().to_string())
+                        {
+                            debug!(" var_name='{var_name}'");
                             if let Some(base_start) = new_line.find("%Qubit* ") {
-                                eprintln!("DEBUG: Found %Qubit* at position {}", base_start);
-                                let rest = &new_line[base_start+8..];
-                                eprintln!("DEBUG: rest='{}'", rest);
+                                debug!(" Found %Qubit* at position {base_start}");
+                                let rest = &new_line[base_start + 8..];
+                                debug!(" rest='{rest}'");
                                 if let Some(comma) = rest.find(',') {
-                                    eprintln!("DEBUG: Found comma at position {}", comma);
+                                    debug!(" Found comma at position {comma}");
                                     let base_var = rest[..comma].trim().to_string();
-                                    eprintln!("DEBUG: base_var='{}', var_map={:?}", base_var, var_map);
+                                    debug!(" base_var='{base_var}', var_map={var_map:?}");
                                     // Extract offset
                                     if let Some(offset_start) = rest.find("i64 ") {
-                                        eprintln!("DEBUG: Found i64 at position {}", offset_start);
-                                        let offset_part = &rest[offset_start+4..];
-                                        eprintln!("DEBUG: offset_part='{}'", offset_part);
-                                        let offset_end = offset_part.find(|c: char| !c.is_numeric() && c != '-').unwrap_or(offset_part.len());
-                                        let offset_str = offset_part[..offset_end].trim().to_string();
-                                        eprintln!("DEBUG: offset_str='{}'", offset_str);
+                                        debug!(" Found i64 at position {offset_start}");
+                                        let offset_part = &rest[offset_start + 4..];
+                                        debug!(" offset_part='{offset_part}'");
+                                        let offset_end = offset_part
+                                            .find(|c: char| !c.is_numeric() && c != '-')
+                                            .unwrap_or(offset_part.len());
+                                        let offset_str =
+                                            offset_part[..offset_end].trim().to_string();
+                                        debug!(" offset_str='{offset_str}'");
                                         // Calculate result ID = base_id + offset
                                         if let Some(base_id) = var_map.get(&base_var) {
                                             let base_id_owned = base_id.clone();
-                                            eprintln!("DEBUG: Found base_id={} for base_var='{}', offset_str='{}'", base_id_owned, base_var, offset_str);
-                                            new_line = format!("    {} = add i64 {}, {}", var_name, base_id_owned, offset_str);
-                                            eprintln!("DEBUG: Transformed to: {}", new_line);
+                                            debug!(
+                                                "Found base_id={base_id_owned} for base_var='{base_var}', offset_str='{offset_str}'"
+                                            );
+                                            new_line = format!(
+                                                "    {var_name} = add i64 {base_id_owned}, {offset_str}"
+                                            );
+                                            debug!(" Transformed to: {new_line}");
                                             // Store the result
-                                            if let Ok(offset_val) = offset_str.parse::<i64>() {
-                                                if let Ok(base_val) = base_id_owned.parse::<i64>() {
-                                                    let result_val = base_val + offset_val;
-                                                    var_map.insert(var_name.to_string(), result_val.to_string());
-                                                }
+                                            if let Ok(offset_val) = offset_str.parse::<i64>()
+                                                && let Ok(base_val) = base_id_owned.parse::<i64>()
+                                            {
+                                                let result_val = base_val + offset_val;
+                                                var_map.insert(
+                                                    var_name.to_string(),
+                                                    result_val.to_string(),
+                                                );
                                             }
                                         } else {
-                                            eprintln!("DEBUG: base_var '{}' not found in var_map", base_var);
+                                            debug!("base_var '{base_var}' not found in var_map");
                                         }
                                     } else {
-                                        eprintln!("DEBUG: Could not find i64");
+                                        debug!(" Could not find i64");
                                     }
                                 } else {
-                                    eprintln!("DEBUG: Could not find comma");
+                                    debug!(" Could not find comma");
                                 }
                             } else {
-                                eprintln!("DEBUG: Could not find %Qubit*");
+                                debug!(" Could not find %Qubit*");
                             }
                         } else {
-                            eprintln!("DEBUG: Could not extract var_name");
+                            debug!(" Could not extract var_name");
                         }
                     }
                     // Handle alloca for Result types
                     else if new_line.contains("alloca %Result") {
                         // %r0 = alloca %Result -> skip or convert to a dummy operation
-                        if let Some(var_name) = new_line.split('=').next().map(|s| s.trim().to_string()) {
+                        if let Some(var_name) =
+                            new_line.split('=').next().map(|s| s.trim().to_string())
+                        {
                             let result_id = result_counter;
                             result_counter += 1;
                             var_map.insert(var_name.to_string(), result_id.to_string());
                             // Create a no-op that assigns the result ID
-                            new_line = format!("    {} = add i64 0, {}", var_name, result_id);
+                            new_line = format!("    {var_name} = add i64 0, {result_id}");
                         }
                     }
                     // Handle CNOT/two-qubit gates
-                    else if new_line.contains("@__quantum__qis__cnot__body") || new_line.contains("@__quantum__qis__cx__body") {
+                    else if new_line.contains("@__quantum__qis__cnot__body")
+                        || new_line.contains("@__quantum__qis__cx__body")
+                    {
                         // Parse: call void @__quantum__qis__cnot__body(%Qubit* %q0, %Qubit* %q1)
                         if let Some(start) = new_line.find("(%Qubit* ") {
-                            let rest = &new_line[start+9..];
+                            let rest = &new_line[start + 9..];
                             if let Some(comma) = rest.find(',') {
                                 let control_var = rest[..comma].trim();
-                                let rest2 = &rest[comma+1..];
-                                if let Some(target_start) = rest2.find("%Qubit* ") {
-                                    if let Some(target_end) = rest2[target_start+8..].find(')') {
-                                        let target_var = rest2[target_start+8..target_start+8+target_end].trim();
-                                        // Get IDs from var_map or use vars directly
-                                        let control_id = var_map.get(control_var).map(|s| s.as_str()).unwrap_or(control_var);
-                                        let target_id = var_map.get(target_var).map(|s| s.as_str()).unwrap_or(target_var);
-                                        new_line = format!("    call void @__quantum__qis__cnot__body(i64 {}, i64 {})", control_id, target_id);
-                                    }
+                                let rest2 = &rest[comma + 1..];
+                                if let Some(target_start) = rest2.find("%Qubit* ")
+                                    && let Some(target_end) = rest2[target_start + 8..].find(')')
+                                {
+                                    let target_var = rest2
+                                        [target_start + 8..target_start + 8 + target_end]
+                                        .trim();
+                                    // Get IDs from var_map or use vars directly
+                                    let control_id = var_map
+                                        .get(control_var)
+                                        .map_or(control_var, std::string::String::as_str);
+                                    let target_id = var_map
+                                        .get(target_var)
+                                        .map_or(target_var, std::string::String::as_str);
+                                    new_line = format!(
+                                        "    call void @__quantum__qis__cnot__body(i64 {control_id}, i64 {target_id})"
+                                    );
                                 }
                             }
                         }
                     }
                     // Handle single qubit allocation
                     else if new_line.contains("call %Qubit* @__quantum__rt__qubit_allocate()") {
-                        if let Some(var_name) = new_line.split('=').next().map(|s| s.trim()) {
-                            if !var_name.is_empty() {
-                                let qubit_id = qubit_counter;
-                                qubit_counter += 1;
-                                var_map.insert(var_name.to_string(), qubit_id.to_string());
-                                new_line = format!("    {} = add i64 0, {}", var_name, qubit_id);
-                            }
+                        if let Some(var_name) = new_line.split('=').next().map(str::trim)
+                            && !var_name.is_empty()
+                        {
+                            let qubit_id = qubit_counter;
+                            qubit_counter += 1;
+                            var_map.insert(var_name.to_string(), qubit_id.to_string());
+                            new_line = format!("    {var_name} = add i64 0, {qubit_id}");
                         }
                     }
                     // Handle single-qubit gate calls (H, X, Y, Z, etc.)
-                    else if new_line.contains("@__quantum__qis__h__body") ||
-                             new_line.contains("@__quantum__qis__x__body") ||
-                             new_line.contains("@__quantum__qis__y__body") ||
-                             new_line.contains("@__quantum__qis__z__body") {
+                    else if new_line.contains("@__quantum__qis__h__body")
+                        || new_line.contains("@__quantum__qis__x__body")
+                        || new_line.contains("@__quantum__qis__y__body")
+                        || new_line.contains("@__quantum__qis__z__body")
+                    {
                         // Extract gate name
-                        let gate_name = if new_line.contains("__h__") { "h" }
-                                       else if new_line.contains("__x__") { "x" }
-                                       else if new_line.contains("__y__") { "y" }
-                                       else { "z" };
+                        let gate_name = if new_line.contains("__h__") {
+                            "h"
+                        } else if new_line.contains("__x__") {
+                            "x"
+                        } else if new_line.contains("__y__") {
+                            "y"
+                        } else {
+                            "z"
+                        };
 
                         // Extract the qubit variable
-                        if let Some(start) = new_line.find("(%Qubit* ") {
-                            if let Some(end) = new_line[start+9..].find(')') {
-                                let var = &new_line[start+9..start+9+end];
-                                let qubit_id = var_map.get(var).map(|s| s.as_str()).unwrap_or(var);
-                                new_line = format!("    call void @__quantum__qis__{}__body(i64 {})", gate_name, qubit_id);
-                            }
+                        if let Some(start) = new_line.find("(%Qubit* ")
+                            && let Some(end) = new_line[start + 9..].find(')')
+                        {
+                            let var = &new_line[start + 9..start + 9 + end];
+                            let qubit_id =
+                                var_map.get(var).map_or(var, std::string::String::as_str);
+                            new_line = format!(
+                                "    call void @__quantum__qis__{gate_name}__body(i64 {qubit_id})"
+                            );
                         }
                     }
                     // Handle measurement
@@ -696,39 +874,50 @@ impl JitExecutor {
                         // Check for return-style mz: %result = call %Result* @__quantum__qis__mz__body(%Qubit* %qubit)
                         if new_line.contains("call %Result*") {
                             // Parse: %result = call %Result* @__quantum__qis__mz__body(%Qubit* %qubit)
-                            if let Some(var_name) = new_line.split('=').next().map(|s| s.trim().to_string()) {
-                                if let Some(start) = new_line.find("(%Qubit* ") {
-                                    if let Some(end) = new_line[start+9..].find(')') {
-                                        let qubit_var = new_line[start+9..start+9+end].trim();
-                                        // Allocate a result ID
-                                        let result_id = result_counter;
-                                        result_counter += 1;
-                                        // Map the result variable to this ID
-                                        var_map.insert(var_name.clone(), result_id.to_string());
-                                        // Get qubit ID from var_map
-                                        let qubit_id = var_map.get(qubit_var).map(|s| s.as_str()).unwrap_or(qubit_var);
-                                        // Transform to: %result = call i64 @__quantum__qis__m__body(i64 qubit_id, i64 result_id)
-                                        // But our m function returns void, so we need to just assign the result_id
-                                        new_line = format!("    call void @__quantum__qis__m__body(i64 {}, i64 {})\n    {} = add i64 0, {}",
-                                            qubit_id, result_id, var_name, result_id);
-                                    }
-                                }
+                            if let Some(var_name) =
+                                new_line.split('=').next().map(|s| s.trim().to_string())
+                                && let Some(start) = new_line.find("(%Qubit* ")
+                                && let Some(end) = new_line[start + 9..].find(')')
+                            {
+                                let qubit_var = new_line[start + 9..start + 9 + end].trim();
+                                // Allocate a result ID
+                                let result_id = result_counter;
+                                result_counter += 1;
+                                // Map the result variable to this ID
+                                var_map.insert(var_name.clone(), result_id.to_string());
+                                // Get qubit ID from var_map
+                                let qubit_id = var_map
+                                    .get(qubit_var)
+                                    .map_or(qubit_var, std::string::String::as_str);
+                                // Transform to: %result = call i64 @__quantum__qis__m__body(i64 qubit_id, i64 result_id)
+                                // But our m function returns void, so we need to just assign the result_id
+                                new_line = format!(
+                                    "    call void @__quantum__qis__m__body(i64 {qubit_id}, i64 {result_id})\n    {var_name} = add i64 0, {result_id}"
+                                );
                             }
                         }
                         // Parse two-parameter form: call void @__quantum__qis__mz__body(%Qubit* %q0, %Result* %r0)
                         else if let Some(start) = new_line.find("(%Qubit* ") {
-                            let rest = &new_line[start+9..];
+                            let rest = &new_line[start + 9..];
                             if let Some(comma) = rest.find(',') {
                                 let qubit_var = rest[..comma].trim();
-                                let rest2 = &rest[comma+1..];
-                                if let Some(result_start) = rest2.find("%Result* ") {
-                                    if let Some(result_end) = rest2[result_start+9..].find(')') {
-                                        let result_var = rest2[result_start+9..result_start+9+result_end].trim();
-                                        // Get IDs from var_map
-                                        let qubit_id = var_map.get(qubit_var).map(|s| s.as_str()).unwrap_or(qubit_var);
-                                        let result_id = var_map.get(result_var).map(|s| s.as_str()).unwrap_or(result_var);
-                                        new_line = format!("    call void @__quantum__qis__m__body(i64 {}, i64 {})", qubit_id, result_id);
-                                    }
+                                let rest2 = &rest[comma + 1..];
+                                if let Some(result_start) = rest2.find("%Result* ")
+                                    && let Some(result_end) = rest2[result_start + 9..].find(')')
+                                {
+                                    let result_var = rest2
+                                        [result_start + 9..result_start + 9 + result_end]
+                                        .trim();
+                                    // Get IDs from var_map
+                                    let qubit_id = var_map
+                                        .get(qubit_var)
+                                        .map_or(qubit_var, std::string::String::as_str);
+                                    let result_id = var_map
+                                        .get(result_var)
+                                        .map_or(result_var, std::string::String::as_str);
+                                    new_line = format!(
+                                        "    call void @__quantum__qis__m__body(i64 {qubit_id}, i64 {result_id})"
+                                    );
                                 }
                             }
                         }
@@ -740,18 +929,18 @@ impl JitExecutor {
                         if new_line.trim().ends_with(',') {
                             // Skip this line and we'll skip the continuation in the next iteration
                             continue;
-                        } else {
-                            // Single line call - skip it
-                            continue;
                         }
+                        // Single line call - skip it
+                        continue;
                     }
                     // Skip continuation lines (lines that start with spaces and don't have an instruction)
-                    else if !new_line.trim().is_empty() &&
-                            !new_line.trim().starts_with('%') &&
-                            !new_line.trim().starts_with("call ") &&
-                            !new_line.trim().starts_with("ret ") &&
-                            !new_line.trim().starts_with("br ") &&
-                            new_line.contains("getelementptr") {
+                    else if !new_line.trim().is_empty()
+                        && !new_line.trim().starts_with('%')
+                        && !new_line.trim().starts_with("call ")
+                        && !new_line.trim().starts_with("ret ")
+                        && !new_line.trim().starts_with("br ")
+                        && new_line.contains("getelementptr")
+                    {
                         // This is likely a continuation of a skipped call
                         continue;
                     }
@@ -774,22 +963,23 @@ impl JitExecutor {
         transformed
     }
 
-    fn create_detailed_parse_error(&self, error: &str, llvm_ir: &str) -> String {
-        let mut error_msg = format!("LLVM IR parsing failed: {}", error);
+    fn create_detailed_parse_error(error: &str, llvm_ir: &str) -> String {
+        let mut error_msg = format!("LLVM IR parsing failed: {error}");
 
         // Extract line number from error if possible
-        if let Some(line_num) = self.extract_line_number(error) {
+        if let Some(line_num) = Self::extract_line_number(error) {
             let lines: Vec<&str> = llvm_ir.lines().collect();
             if line_num > 0 && line_num <= lines.len() {
-                error_msg.push_str(&format!("\n\nProblematic line {}:", line_num));
-                error_msg.push_str(&format!("\n  {}", lines[line_num - 1]));
+                use std::fmt::Write;
+                let _ = write!(error_msg, "\n\nProblematic line {line_num}:");
+                let _ = write!(error_msg, "\n  {}", lines[line_num - 1]);
 
                 // Show context around the problematic line
                 if line_num > 1 {
-                    error_msg.push_str(&format!("\n  Previous line: {}", lines[line_num - 2]));
+                    let _ = write!(error_msg, "\n  Previous line: {}", lines[line_num - 2]);
                 }
                 if line_num < lines.len() {
-                    error_msg.push_str(&format!("\n  Next line: {}", lines[line_num]));
+                    let _ = write!(error_msg, "\n  Next line: {}", lines[line_num]);
                 }
             }
         }
@@ -804,13 +994,15 @@ impl JitExecutor {
     }
 
     /// Create detailed error message for execution engine failures
-    fn create_detailed_engine_error(&self, error: &str) -> String {
-        let mut error_msg = format!("JIT execution engine creation failed: {}", error);
+    fn create_detailed_engine_error(error: &str) -> String {
+        let mut error_msg = format!("JIT execution engine creation failed: {error}");
 
         if error.contains("JIT has not been linked in") {
             error_msg.push_str("\n\nThis indicates LLVM JIT components are not properly linked.");
             error_msg.push_str("\nSolution: Ensure inkwell is compiled with dynamic LLVM linking:");
-            error_msg.push_str("\n  inkwell = { version = \"0.6\", features = [\"llvm14-0-force-dynamic\"] }");
+            error_msg.push_str(
+                "\n  inkwell = { version = \"0.6\", features = [\"llvm14-0-force-dynamic\"] }",
+            );
         } else if error.contains("target") {
             error_msg.push_str("\n\nThis may be a target architecture issue.");
             error_msg.push_str("\nSolution: Ensure LLVM targets are properly initialized and your target triple is supported.");
@@ -820,7 +1012,7 @@ impl JitExecutor {
     }
 
     /// Extract line number from LLVM error message
-    fn extract_line_number(&self, error: &str) -> Option<usize> {
+    fn extract_line_number(error: &str) -> Option<usize> {
         // Look for patterns like "line 42:" or ":42:"
         let re = regex::Regex::new(r":(\d+):").ok()?;
         re.captures(error)
@@ -829,18 +1021,30 @@ impl JitExecutor {
     }
 
     /// Preprocess LLVM IR to fix common issues
+    ///
+    /// # Errors
+    /// Returns an error if LLVM IR validation or transformation fails.
+    ///
+    /// # Panics
+    /// Panics if regex compilation fails (should never happen with hardcoded patterns).
+    #[allow(clippy::too_many_lines)] // LLVM IR preprocessing requires extensive pattern matching and transformation
     pub fn preprocess_llvm_ir(&self, llvm_ir: &str) -> Result<String, String> {
         if std::env::var("DEBUG_LLVM_IR").is_ok() {
-            log::debug!("Input IR length: {}, ends with newline: {}", llvm_ir.len(), llvm_ir.ends_with('\n'));
+            log::debug!(
+                "Input IR length: {}, ends with newline: {}",
+                llvm_ir.len(),
+                llvm_ir.ends_with('\n')
+            );
             std::fs::write("/tmp/debug_input.ll", llvm_ir).ok();
         }
         // Quick check: if the LLVM IR already has all required headers and looks well-formed,
         // skip most preprocessing to avoid corrupting valid IR
-        if llvm_ir.contains("ModuleID") &&
-           llvm_ir.contains("source_filename") &&
-           llvm_ir.contains("target datalayout") &&
-           llvm_ir.contains("target triple") &&
-           llvm_ir.contains("define") {
+        if llvm_ir.contains("ModuleID")
+            && llvm_ir.contains("source_filename")
+            && llvm_ir.contains("target datalayout")
+            && llvm_ir.contains("target triple")
+            && llvm_ir.contains("define")
+        {
             // This looks like complete, well-formed LLVM IR
             // Just do minimal processing: remove attributes and ensure trailing newline
             let mut processed = llvm_ir.to_string();
@@ -886,7 +1090,6 @@ impl JitExecutor {
                 processed.push('\n');
             }
 
-
             return Ok(processed);
         }
 
@@ -895,7 +1098,6 @@ impl JitExecutor {
 
         // Handle function name conversion first (most important for compatibility)
         if processed.contains("@main(") && !processed.contains("@qmain(") {
-
             // Replace function definition and handle return type conversion
             if processed.contains("define void @main()") {
                 processed = processed.replace("define void @main()", "define i64 @qmain(i64 %0)");
@@ -904,8 +1106,10 @@ impl JitExecutor {
 
                 // Handle malformed functions missing basic blocks
                 if processed.contains("define i64 @qmain(i64 %0) {}") {
-                    processed = processed.replace("define i64 @qmain(i64 %0) {}",
-                        "define i64 @qmain(i64 %0) {\nentry:\n  ret i64 0\n}");
+                    processed = processed.replace(
+                        "define i64 @qmain(i64 %0) {}",
+                        "define i64 @qmain(i64 %0) {\nentry:\n  ret i64 0\n}",
+                    );
                 }
             } else {
                 // Handle other main function signatures
@@ -913,20 +1117,22 @@ impl JitExecutor {
 
                 // Handle malformed functions missing basic blocks
                 if processed.contains("define i64 @qmain(i64 %0) {}") {
-                    processed = processed.replace("define i64 @qmain(i64 %0) {}",
-                        "define i64 @qmain(i64 %0) {\nentry:\n  ret i64 0\n}");
+                    processed = processed.replace(
+                        "define i64 @qmain(i64 %0) {}",
+                        "define i64 @qmain(i64 %0) {\nentry:\n  ret i64 0\n}",
+                    );
                 }
             }
         }
 
         // Transform opaque pointer QIR to integer-based QIR if needed
-        if processed.contains("%Qubit = type opaque") || processed.contains("%Result = type opaque") {
-            processed = self.transform_opaque_qir_to_integer(&processed);
+        if processed.contains("%Qubit = type opaque") || processed.contains("%Result = type opaque")
+        {
+            processed = Self::transform_opaque_qir_to_integer(&processed);
         }
 
         // Only add missing headers if we don't already have them
         if !processed.contains("target datalayout") || !processed.contains("target triple") {
-
             // Find the correct insertion point: after any leading comments but before any module-level constructs
             let insertion_point = Self::find_header_insertion_point(&processed);
 
@@ -955,7 +1161,9 @@ impl JitExecutor {
             // Insert headers at the correct position
             if !headers.is_empty() {
                 // Add a blank line between headers and content for proper LLVM IR format
-                if insertion_point < processed.len() && !processed[insertion_point..].starts_with('\n') {
+                if insertion_point < processed.len()
+                    && !processed[insertion_point..].starts_with('\n')
+                {
                     headers.push('\n');
                 }
                 processed.insert_str(insertion_point, &headers);
@@ -1060,7 +1268,7 @@ impl JitExecutor {
         if log::log_enabled!(log::Level::Debug) {
             let line_count = processed.lines().count();
             let newline_count = processed.matches('\n').count();
-            log::debug!("Preprocessed LLVM IR has {} lines, {} newlines", line_count, newline_count);
+            log::debug!("Preprocessed LLVM IR has {line_count} lines, {newline_count} newlines");
             log::debug!("Ends with newline: {}", processed.ends_with('\n'));
         }
 
@@ -1104,14 +1312,16 @@ impl JitExecutor {
         byte_pos
     }
 
-
     /// Execute LLVM IR with support for conditional operations using two-phase execution
-    fn execute_llvm_ir_with_conditionals(&mut self, llvm_ir: &str) -> Result<OperationCollector, String> {
+    fn execute_llvm_ir_with_conditionals(
+        &mut self,
+        llvm_ir: &str,
+    ) -> Result<OperationCollector, String> {
         use crate::measurement_manager::reset_measurement_manager;
 
         // Find entry point BEFORE preprocessing (which may strip attributes)
-        let entry_point = self.find_entry_point_function(llvm_ir);
-        eprintln!("DEBUG: Entry point before preprocessing: {:?}", entry_point);
+        let entry_point = Self::find_entry_point_function(llvm_ir);
+        debug!(" Entry point before preprocessing: {entry_point:?}");
 
         // Preprocess LLVM IR
         let processed_llvm_ir = self.preprocess_llvm_ir(llvm_ir)?;
@@ -1128,8 +1338,12 @@ impl JitExecutor {
         log::debug!("LLVM context mutex acquired");
 
         // Create memory buffer from processed LLVM IR text
-        log::debug!("Creating memory buffer from {} bytes of LLVM IR...", processed_llvm_ir.len());
-        let memory_buffer = MemoryBuffer::create_from_memory_range_copy(processed_llvm_ir.as_bytes(), "qis_ir");
+        log::debug!(
+            "Creating memory buffer from {} bytes of LLVM IR...",
+            processed_llvm_ir.len()
+        );
+        let memory_buffer =
+            MemoryBuffer::create_from_memory_range_copy(processed_llvm_ir.as_bytes(), "qis_ir");
         log::debug!("Memory buffer created successfully");
 
         // Create fresh context to avoid state pollution between compilations
@@ -1137,75 +1351,84 @@ impl JitExecutor {
         with_thread_local_context(|context| {
             log::debug!("Thread-local LLVM context accessed successfully");
 
-        // Parse LLVM IR into a module using the fresh context
-        log::debug!("Parsing LLVM IR into module...");
-        let module = context.create_module_from_ir(memory_buffer)
-            .map_err(|e| {
-                log::error!("Failed to parse LLVM IR: {}", e);
-                self.create_detailed_parse_error(&e.to_string(), &processed_llvm_ir)
+            // Parse LLVM IR into a module using the fresh context
+            log::debug!("Parsing LLVM IR into module...");
+            let module = context.create_module_from_ir(memory_buffer).map_err(|e| {
+                log::error!("Failed to parse LLVM IR: {e}");
+                Self::create_detailed_parse_error(&e.to_string(), &processed_llvm_ir)
             })?;
-        log::debug!("LLVM module created successfully");
+            log::debug!("LLVM module created successfully");
 
-        // Prepare function values that we need to register for symbol resolution BEFORE module is consumed
-        log::debug!("Collecting function mappings from module...");
-        let function_mappings = self.collect_function_mappings(&module);
-        log::debug!("Function mappings collected: {} mappings", function_mappings.len());
+            // Prepare function values that we need to register for symbol resolution BEFORE module is consumed
+            log::debug!("Collecting function mappings from module...");
+            let function_mappings = Self::collect_function_mappings(&module);
+            log::debug!(
+                "Function mappings collected: {} mappings",
+                function_mappings.len()
+            );
 
-        // Create execution engine (this consumes the module)
-        log::debug!("Creating JIT execution engine...");
-        let execution_engine = module.create_jit_execution_engine(OptimizationLevel::None)
-            .map_err(|e| {
-                log::error!("Failed to create JIT execution engine: {}", e);
-                self.create_detailed_engine_error(&e.to_string())
-            })?;
-        log::debug!("JIT execution engine created successfully");
+            // Create execution engine (this consumes the module)
+            log::debug!("Creating JIT execution engine...");
+            let execution_engine = module
+                .create_jit_execution_engine(OptimizationLevel::None)
+                .map_err(|e| {
+                    log::error!("Failed to create JIT execution engine: {e}");
+                    Self::create_detailed_engine_error(&e.to_string())
+                })?;
+            log::debug!("JIT execution engine created successfully");
 
-        // Apply symbol mappings with the execution engine
-        log::debug!("Applying {} function mappings to execution engine...", function_mappings.len());
-        self.apply_function_mappings(&execution_engine, &function_mappings)?;
-        log::debug!("Function mappings applied successfully");
+            // Apply symbol mappings with the execution engine
+            log::debug!(
+                "Applying {} function mappings to execution engine...",
+                function_mappings.len()
+            );
+            Self::apply_function_mappings(&execution_engine, &function_mappings);
+            log::debug!("Function mappings applied successfully");
 
-        // Set up interface for collection
-        log::debug!("Setting up QisInterface for collection mode...");
-        let mut collection_interface = OperationCollector::new();
-        log::debug!("QisInterface created successfully");
+            // Set up interface for collection
+            log::debug!("Setting up QisInterface for collection mode...");
+            let mut collection_interface = OperationCollector::new();
+            log::debug!("QisInterface created successfully");
 
-        log::debug!("Setting JIT interface pointer...");
-        unsafe {
-            crate::jit_ffi::__pecos_set_jit_interface(&mut collection_interface as *mut _);
-        }
-        log::debug!("JIT interface pointer set successfully");
+            log::debug!("Setting JIT interface pointer...");
+            unsafe {
+                crate::jit_ffi::__pecos_set_jit_interface(&raw mut collection_interface);
+            }
+            log::debug!("JIT interface pointer set successfully");
 
-        // Execute in collection mode (runtime returns false for all measurements)
-        log::debug!("Executing main function in collection mode...");
-        self.try_execute_main_function(&execution_engine, entry_point.clone())?;
-        log::debug!("Main function execution completed successfully");
+            // Execute in collection mode (runtime returns false for all measurements)
+            log::debug!("Executing main function in collection mode...");
+            Self::try_execute_main_function(&execution_engine, entry_point.clone())?;
+            log::debug!("Main function execution completed successfully");
 
-        // Clear interface pointer
-        unsafe {
-            crate::jit_ffi::__pecos_set_jit_interface(std::ptr::null_mut());
-        }
+            // Clear interface pointer
+            unsafe {
+                crate::jit_ffi::__pecos_set_jit_interface(std::ptr::null_mut());
+            }
 
-        // Now we have all operations collected, but conditional branches may not be complete
-        // For a full implementation, we would:
-        // 1. Simulate the quantum operations to get measurement results
-        // 2. Set measurement results in the runtime
-        // 3. Re-execute in simulation mode with actual measurement results
+            // Now we have all operations collected, but conditional branches may not be complete
+            // For a full implementation, we would:
+            // 1. Simulate the quantum operations to get measurement results
+            // 2. Set measurement results in the runtime
+            // 3. Re-execute in simulation mode with actual measurement results
 
-        // For now, return the collection results
-        // This at least allows the rest of the quantum circuit to execute
-        log::debug!("Phase 1 complete: Collected {} operations", collection_interface.operations.len());
+            // For now, return the collection results
+            // This at least allows the rest of the quantum circuit to execute
+            log::debug!(
+                "Phase 1 complete: Collected {} operations",
+                collection_interface.operations.len()
+            );
 
-        // TODO: Implement Phase 2 with actual simulation integration
-        // This would require integration with PECOS's quantum simulators
+            // TODO: Implement Phase 2 with actual simulation integration
+            // This would require integration with PECOS's quantum simulators
 
-        Ok(collection_interface)
+            Ok(collection_interface)
         }) // end of with_thread_local_context closure
     }
 
     /// Find entry point function name from LLVM IR (before preprocessing)
     /// Must be called with the ORIGINAL LLVM IR before transformation
-    fn find_entry_point_function(&self, llvm_ir: &str) -> Option<String> {
+    fn find_entry_point_function(llvm_ir: &str) -> Option<String> {
         // Look for functions with EntryPoint attribute
         // Pattern: define ... @function_name(...) #N
         // attributes #N = { "EntryPoint" ... }
@@ -1216,41 +1439,43 @@ impl JitExecutor {
         for line in llvm_ir.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("attributes #") {
-                eprintln!("DEBUG: Found attributes line: {}", trimmed);
+                debug!(" Found attributes line: {trimmed}");
                 // Extract "#N" from "attributes #N = ..."
-                if let Some(hash_pos) = trimmed.find('#') {
-                    if let Some(equals_pos) = trimmed.find('=') {
-                        let attr_num = trimmed[hash_pos+1..equals_pos].trim();
-                        eprintln!("DEBUG: Attribute number: {}", attr_num);
-                        if trimmed.contains("\"EntryPoint\"") {
-                            eprintln!("DEBUG: This attribute has EntryPoint!");
-                            function_attrs.insert(attr_num.to_string(), true);
-                        }
+                if let Some(hash_pos) = trimmed.find('#')
+                    && let Some(equals_pos) = trimmed.find('=')
+                {
+                    let attr_num = trimmed[hash_pos + 1..equals_pos].trim();
+                    debug!(" Attribute number: {attr_num}");
+                    if trimmed.contains("\"EntryPoint\"") {
+                        debug!(" This attribute has EntryPoint!");
+                        function_attrs.insert(attr_num.to_string(), true);
                     }
                 }
             }
         }
-        eprintln!("DEBUG: Found {} attributes with EntryPoint", function_attrs.len());
+        debug!("Found {} attributes with EntryPoint", function_attrs.len());
 
         // Second pass: find function definitions with EntryPoint attribute
         for line in llvm_ir.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("define") && trimmed.contains('@') {
-                eprintln!("DEBUG: Found define line: {}", trimmed);
+                debug!(" Found define line: {trimmed}");
                 // Extract function name and attribute number
                 if let Some(at_sign) = trimmed.find('@') {
-                    let after_at = &trimmed[at_sign+1..];
+                    let after_at = &trimmed[at_sign + 1..];
                     if let Some(paren) = after_at.find('(') {
                         let func_name = &after_at[..paren];
-                        eprintln!("DEBUG: Function name: {}", func_name);
+                        debug!(" Function name: {func_name}");
                         // Check if this function has an attribute number
                         if let Some(attr_marker) = trimmed.find(" #") {
-                            let after_marker = &trimmed[attr_marker+2..];
-                            if let Some(space_or_brace) = after_marker.find(|c: char| c.is_whitespace() || c == '{') {
+                            let after_marker = &trimmed[attr_marker + 2..];
+                            if let Some(space_or_brace) =
+                                after_marker.find(|c: char| c.is_whitespace() || c == '{')
+                            {
                                 let attr_num = after_marker[..space_or_brace].trim();
-                                eprintln!("DEBUG: Function {} has attribute {}", func_name, attr_num);
-                                if function_attrs.get(attr_num).is_some() {
-                                    eprintln!("DEBUG: Returning entry point function: {}", func_name);
+                                debug!(" Function {func_name} has attribute {attr_num}");
+                                if function_attrs.contains_key(attr_num) {
+                                    debug!(" Returning entry point function: {func_name}");
                                     return Some(func_name.to_string());
                                 }
                             }
@@ -1263,18 +1488,21 @@ impl JitExecutor {
         None
     }
 
-    /// Try to execute main function, supporting both qmain(i64) and main() signatures
-    fn try_execute_main_function(&self, execution_engine: &ExecutionEngine, entry_point: Option<String>) -> Result<(), String> {
+    /// Try to execute main function, supporting both qmain(i64) and `main()` signatures
+    fn try_execute_main_function(
+        execution_engine: &ExecutionEngine,
+        entry_point: Option<String>,
+    ) -> Result<(), String> {
         // First try the entry point if we found one
         if let Some(entry_func_name) = entry_point {
-            eprintln!("DEBUG: Trying EntryPoint function: {}", entry_func_name);
+            debug!(" Trying EntryPoint function: {entry_func_name}");
             match unsafe { execution_engine.get_function::<MainFunc>(&entry_func_name) } {
                 Ok(entry_func) => {
                     unsafe { entry_func.call() };
                     return Ok(());
                 }
                 Err(e) => {
-                    eprintln!("DEBUG: Failed to call EntryPoint function {}: {}", entry_func_name, e);
+                    debug!(" Failed to call EntryPoint function {entry_func_name}: {e}");
                 }
             }
         }
@@ -1292,11 +1520,9 @@ impl JitExecutor {
                         unsafe { main_func.call() };
                         Ok(())
                     }
-                    Err(e) => {
-                        Err(format!(
-                            "No main function found. Tried both 'qmain(i64)' and 'main()' signatures. Last error: {}", e
-                        ))
-                    }
+                    Err(e) => Err(format!(
+                        "No main function found. Tried both 'qmain(i64)' and 'main()' signatures. Last error: {e}"
+                    )),
                 }
             }
         }
@@ -1312,8 +1538,8 @@ impl Default for JitExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pecos_qis_ffi::{Operation, QuantumOp};
     use log::info;
+    use pecos_qis_ffi::{Operation, QuantumOp};
 
     // Removed test_isolated_llvm_context as it was testing direct Context creation
     // which is an anti-pattern. Our architecture now properly encapsulates Context
@@ -1346,19 +1572,25 @@ entry:
         // Both should be able to execute without conflict
         match executor1.execute_llvm_ir(test_ir) {
             Ok(interface) => {
-                info!("Executor 1 succeeded: {} operations", interface.operations.len());
+                info!(
+                    "Executor 1 succeeded: {} operations",
+                    interface.operations.len()
+                );
             }
             Err(e) => {
-                panic!("Executor 1 failed: {}", e);
+                panic!("Executor 1 failed: {e}");
             }
         }
 
         match executor2.execute_llvm_ir(test_ir) {
             Ok(interface) => {
-                info!("Executor 2 succeeded: {} operations", interface.operations.len());
+                info!(
+                    "Executor 2 succeeded: {} operations",
+                    interface.operations.len()
+                );
             }
             Err(e) => {
-                panic!("Executor 2 failed: {}", e);
+                panic!("Executor 2 failed: {e}");
             }
         }
 
@@ -1374,7 +1606,7 @@ entry:
         info!("Debugging complex QIS LLVM IR parsing issue");
 
         // This is the exact IR from the failing test (with cleaned formatting)
-        let complex_qis = r#"define void @main() {
+        let complex_qis = r"define void @main() {
     ; Three qubit GHZ state
     call void @__quantum__qis__h__body(i64 0)
     call void @__quantum__qis__cx__body(i64 0, i64 1)
@@ -1397,17 +1629,20 @@ declare void @__quantum__qis__cx__body(i64, i64)
 declare void @__quantum__qis__s__body(i64)
 declare void @__quantum__qis__t__body(i64)
 declare void @__quantum__qis__z__body(i64)
-declare i32 @__quantum__qis__m__body(i64, i64)"#;
+declare i32 @__quantum__qis__m__body(i64, i64)";
 
         let mut executor = JitExecutor::new();
         match executor.execute_llvm_ir(complex_qis) {
             Ok(interface) => {
-                info!("Complex QIS executed successfully with {} operations", interface.operations.len());
-                assert!(interface.operations.len() > 0, "Should have operations");
+                info!(
+                    "Complex QIS executed successfully with {} operations",
+                    interface.operations.len()
+                );
+                assert!(!interface.operations.is_empty(), "Should have operations");
             }
             Err(e) => {
-                info!("Complex QIS execution failed: {}", e);
-                panic!("Complex QIS should work: {}", e);
+                info!("Complex QIS execution failed: {e}");
+                panic!("Complex QIS should work: {e}");
             }
         }
     }
@@ -1433,24 +1668,41 @@ declare i32 @__quantum__qis__m__body(i64, i64)"#;
 
         // Just verify that preprocessing doesn't fail - the actual execution
         // might fail due to missing runtime context, but the parsing should work
-        let processed = executor.preprocess_llvm_ir(ir_with_attrs).expect("Preprocessing should succeed");
+        let processed = executor
+            .preprocess_llvm_ir(ir_with_attrs)
+            .expect("Preprocessing should succeed");
 
         // Verify the processed IR looks reasonable
-        assert!(processed.contains("qmain"), "Should have converted main to qmain");
-        assert!(!processed.contains("attributes"), "Should have stripped attributes");
+        assert!(
+            processed.contains("qmain"),
+            "Should have converted main to qmain"
+        );
+        assert!(
+            !processed.contains("attributes"),
+            "Should have stripped attributes"
+        );
         // EOF comment only added when ending with declare, not closing brace
-        assert!(!processed.contains("; EOF") || processed.lines().last().map(|l| l.trim().starts_with("declare")).unwrap_or(false),
-                "EOF comment should only be added for declare endings");
+        assert!(
+            !processed.contains("; EOF")
+                || processed
+                    .lines()
+                    .last()
+                    .is_some_and(|l| l.trim().starts_with("declare")),
+            "EOF comment should only be added for declare endings"
+        );
 
         info!("Successfully preprocessed IR with attributes");
     }
 
     #[test]
     fn test_integration_path() {
+        use crate::QisJitInterface;
+        use pecos_qis_core::{ProgramFormat, QisInterface};
+
         env_logger::try_init().ok();
 
         // Test the exact IR from the failing integration test via QisJitInterface
-        let complex_qis = r#"define void @main() {
+        let complex_qis = r"define void @main() {
     ; Three qubit GHZ state
     call void @__quantum__qis__h__body(i64 0)
     call void @__quantum__qis__cx__body(i64 0, i64 1)
@@ -1473,25 +1725,29 @@ declare void @__quantum__qis__cx__body(i64, i64)
 declare void @__quantum__qis__s__body(i64)
 declare void @__quantum__qis__t__body(i64)
 declare void @__quantum__qis__z__body(i64)
-declare i32 @__quantum__qis__m__body(i64, i64)"#;
-
-        use crate::QisJitInterface;
-        use pecos_qis_core::{QisInterface, ProgramFormat};
+declare i32 @__quantum__qis__m__body(i64, i64)";
 
         info!("Original IR length: {}", complex_qis.len());
-        info!("Original IR ends with newline: {}", complex_qis.ends_with('\n'));
+        info!(
+            "Original IR ends with newline: {}",
+            complex_qis.ends_with('\n')
+        );
 
         let mut interface = QisJitInterface::new();
-        interface.load_program(complex_qis.as_bytes(), ProgramFormat::LlvmIrText)
+        interface
+            .load_program(complex_qis.as_bytes(), ProgramFormat::LlvmIrText)
             .expect("Failed to load program");
 
         match interface.collect_operations() {
             Ok(operations) => {
-                info!("Integration test path succeeded: {} operations", operations.operations.len());
-                assert!(operations.operations.len() > 0, "Should have operations");
+                info!(
+                    "Integration test path succeeded: {} operations",
+                    operations.operations.len()
+                );
+                assert!(!operations.operations.is_empty(), "Should have operations");
             }
             Err(e) => {
-                panic!("Integration test path failed: {}", e);
+                panic!("Integration test path failed: {e}");
             }
         }
     }
@@ -1501,7 +1757,7 @@ declare i32 @__quantum__qis__m__body(i64, i64)"#;
         env_logger::try_init().ok();
 
         // Add comments and more operations to match the failing test exactly
-        let simple_ir = r#"define void @main() {
+        let simple_ir = r"define void @main() {
     ; Three qubit GHZ state
     call void @__quantum__qis__h__body(i64 0)
     call void @__quantum__qis__cx__body(i64 0, i64 1)
@@ -1524,15 +1780,18 @@ declare void @__quantum__qis__cx__body(i64, i64)
 declare void @__quantum__qis__s__body(i64)
 declare void @__quantum__qis__t__body(i64)
 declare void @__quantum__qis__z__body(i64)
-declare i32 @__quantum__qis__m__body(i64, i64)"#;
+declare i32 @__quantum__qis__m__body(i64, i64)";
 
         let mut executor = JitExecutor::new();
         match executor.execute_llvm_ir(simple_ir) {
             Ok(interface) => {
-                info!("Simple multi-declare succeeded: {} operations", interface.operations.len());
+                info!(
+                    "Simple multi-declare succeeded: {} operations",
+                    interface.operations.len()
+                );
             }
             Err(e) => {
-                panic!("Simple multi-declare failed: {}", e);
+                panic!("Simple multi-declare failed: {e}");
             }
         }
     }
@@ -1564,12 +1823,15 @@ entry:
 
         match executor.execute_llvm_ir(test_llvm_ir) {
             Ok(interface) => {
-                println!("Executor succeeded with {} operations", interface.operations.len());
+                println!(
+                    "Executor succeeded with {} operations",
+                    interface.operations.len()
+                );
                 assert_eq!(interface.operations.len(), 0);
             }
             Err(e) => {
-                println!("FAILED: Executor failed: {}", e);
-                panic!("Executor failed: {}", e);
+                println!("FAILED: Executor failed: {e}");
+                panic!("Executor failed: {e}");
             }
         }
     }
@@ -1591,30 +1853,34 @@ entry:
 "#;
 
         // Debug the exact string being parsed
-        info!("LLVM IR content:\n{}", test_llvm_ir);
+        info!("LLVM IR content:\n{test_llvm_ir}");
         info!("LLVM IR length: {} bytes", test_llvm_ir.len());
 
         // Check for invisible characters
         for (i, byte) in test_llvm_ir.bytes().enumerate() {
-            if byte < 32 && byte != 9 && byte != 10 && byte != 13 { // non-printable except tab, LF, CR
-                info!("Non-printable byte at position {}: {}", i, byte);
+            if byte < 32 && byte != 9 && byte != 10 && byte != 13 {
+                // non-printable except tab, LF, CR
+                info!("Non-printable byte at position {i}: {byte}");
             }
         }
 
         let mut executor = JitExecutor::new();
         match executor.execute_llvm_ir(test_llvm_ir) {
             Ok(interface) => {
-                info!("LLVM IR parsed successfully, {} operations", interface.operations.len());
+                info!(
+                    "LLVM IR parsed successfully, {} operations",
+                    interface.operations.len()
+                );
             }
             Err(e) => {
-                info!("LLVM IR parsing failed: {}", e);
+                info!("LLVM IR parsing failed: {e}");
                 // Let's also try to examine the preprocessed IR
                 match executor.preprocess_llvm_ir(test_llvm_ir) {
                     Ok(preprocessed) => {
-                        info!("Preprocessed LLVM IR:\n{}", preprocessed);
+                        info!("Preprocessed LLVM IR:\n{preprocessed}");
                     }
                     Err(preprocess_err) => {
-                        info!("Preprocessing also failed: {}", preprocess_err);
+                        info!("Preprocessing also failed: {preprocess_err}");
                     }
                 }
             }
@@ -1664,29 +1930,35 @@ entry:
 
         // Test that multiple threads can execute JIT code independently with cloned executors
         // This mimics how MonteCarloEngine distributes work across workers
-        let handles: Vec<_> = (0..3).map(|thread_id| {
-            let mut worker_executor = template_executor.clone(); // Each worker gets a clone
-            let llvm_ir = test_llvm_ir.to_string();
-            std::thread::spawn(move || {
-                match worker_executor.execute_llvm_ir(&llvm_ir) {
-                    Ok(interface) => {
-                        info!("Thread {} completed with {} operations", thread_id, interface.operations.len());
-                        Some((thread_id, interface.operations.len()))
+        let handles: Vec<_> = (0..3)
+            .map(|thread_id| {
+                let mut worker_executor = template_executor.clone(); // Each worker gets a clone
+                let llvm_ir = test_llvm_ir.to_string();
+                std::thread::spawn(move || {
+                    match worker_executor.execute_llvm_ir(&llvm_ir) {
+                        Ok(interface) => {
+                            info!(
+                                "Thread {} completed with {} operations",
+                                thread_id,
+                                interface.operations.len()
+                            );
+                            Some((thread_id, interface.operations.len()))
+                        }
+                        Err(e) => {
+                            // LLVM context initialization can have race conditions during parallel tests
+                            // This is a known limitation when multiple contexts parse the same IR simultaneously
+                            info!("Thread {thread_id} encountered LLVM context conflict: {e}");
+                            None
+                        }
                     }
-                    Err(e) => {
-                        // LLVM context initialization can have race conditions during parallel tests
-                        // This is a known limitation when multiple contexts parse the same IR simultaneously
-                        info!("Thread {} encountered LLVM context conflict: {}", thread_id, e);
-                        None
-                    }
-                }
+                })
             })
-        }).collect();
+            .collect();
 
         // Wait for all threads to complete and collect successful results
-        let results: Vec<_> = handles.into_iter()
-            .map(|h| h.join().unwrap())
-            .filter_map(|r| r)
+        let results: Vec<_> = handles
+            .into_iter()
+            .filter_map(|h| h.join().unwrap())
             .collect();
 
         // Verify that at least one thread succeeded
@@ -1696,12 +1968,18 @@ entry:
 
         // Each successful thread should have completed correctly
         for (thread_id, op_count) in &results {
-            info!("Thread {} result: {} operations", thread_id, op_count);
+            info!("Thread {thread_id} result: {op_count} operations");
             // Simple LLVM IR with no FFI calls should produce 0 operations
-            assert_eq!(*op_count, 0, "Thread {} should have 0 operations (no FFI calls)", thread_id);
+            assert_eq!(
+                *op_count, 0,
+                "Thread {thread_id} should have 0 operations (no FFI calls)"
+            );
         }
 
-        info!("{} threads executed with cloned executors (template pattern works)", results.len());
+        info!(
+            "{} threads executed with cloned executors (template pattern works)",
+            results.len()
+        );
     }
 
     #[test]
@@ -1733,26 +2011,26 @@ entry:
         let mut executor = JitExecutor::new();
 
         // Test should not crash - if it does, we know FFI is the issue
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Ok(result) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             executor.execute_llvm_ir(test_llvm_ir)
         })) {
-            Ok(result) => {
-                match result {
-                    Ok(interface) => {
-                        info!("FFI test passed! Operations: {}", interface.operations.len());
-                        // Should have: allocate, H, measure operations
-                        assert!(interface.operations.len() >= 3);
-                    }
-                    Err(e) => {
-                        info!("FFI test failed with error: {}", e);
-                        // This is still useful info - shows it's not a segfault but a logic error
-                    }
+            match result {
+                Ok(interface) => {
+                    info!(
+                        "FFI test passed! Operations: {}",
+                        interface.operations.len()
+                    );
+                    // Should have: allocate, H, measure operations
+                    assert!(interface.operations.len() >= 3);
+                }
+                Err(e) => {
+                    info!("FFI test failed with error: {e}");
+                    // This is still useful info - shows it's not a segfault but a logic error
                 }
             }
-            Err(_) => {
-                info!("FFI test crashed with panic/segfault!");
-                panic!("FFI interaction causes crashes");
-            }
+        } else {
+            info!("FFI test crashed with panic/segfault!");
+            panic!("FFI interaction causes crashes");
         }
     }
 
@@ -1780,7 +2058,7 @@ entry:
                 info!("Minimal JIT execution successful!");
             }
             Err(e) => {
-                info!("Minimal JIT execution failed: {}", e);
+                info!("Minimal JIT execution failed: {e}");
             }
         }
     }
@@ -1819,13 +2097,22 @@ entry:
 
                 // Verify we have the expected operations
                 let ops = &interface.operations;
-                let has_alloc = ops.iter().any(|op| matches!(op, Operation::AllocateQubit { .. }));
-                let has_reset = ops.iter().any(|op| matches!(op, Operation::Quantum(QuantumOp::Reset(_))));
-                let has_measure = ops.iter().any(|op| matches!(op, Operation::Quantum(QuantumOp::Measure(_, _))));
-                let has_release = ops.iter().any(|op| matches!(op, Operation::ReleaseQubit { .. }));
+                let has_alloc = ops
+                    .iter()
+                    .any(|op| matches!(op, Operation::AllocateQubit { .. }));
+                let has_reset = ops
+                    .iter()
+                    .any(|op| matches!(op, Operation::Quantum(QuantumOp::Reset(_))));
+                let has_measure = ops
+                    .iter()
+                    .any(|op| matches!(op, Operation::Quantum(QuantumOp::Measure(_, _))));
+                let has_release = ops
+                    .iter()
+                    .any(|op| matches!(op, Operation::ReleaseQubit { .. }));
 
-                info!("Found allocate: {}, reset: {}, measure: {}, release: {}",
-                      has_alloc, has_reset, has_measure, has_release);
+                info!(
+                    "Found allocate: {has_alloc}, reset: {has_reset}, measure: {has_measure}, release: {has_release}"
+                );
 
                 // All operations should be present
                 assert!(has_alloc, "Should have allocate operation");
@@ -1834,7 +2121,7 @@ entry:
                 assert!(has_release, "Should have release operation");
             }
             Err(e) => {
-                info!("Complex JIT execution failed: {}", e);
+                info!("Complex JIT execution failed: {e}");
                 info!("This may indicate external function resolution issues");
             }
         }
@@ -1851,7 +2138,7 @@ entry:
             ir
         } else {
             info!("File not found, skipping test");
-            return;  // Skip test if we can't get real LLVM IR
+            return; // Skip test if we can't get real LLVM IR
         };
 
         let mut executor = JitExecutor::new();
@@ -1863,37 +2150,44 @@ entry:
 
                 // Check that we have the expected operations
                 let ops = &interface.operations;
-                if ops.len() > 0 {
+                if ops.is_empty() {
+                    info!("No operations collected - this may be expected for some test cases");
+                } else {
                     info!("Operations found:");
                     for (i, op) in ops.iter().enumerate() {
-                        info!("  {}: {:?}", i, op);
+                        info!("  {i}: {op:?}");
                     }
 
                     // Look for specific operations
-                    let has_alloc = ops.iter().any(|op| matches!(op, Operation::AllocateQubit { .. }));
-                    let has_reset = ops.iter().any(|op| {
-                        matches!(op, Operation::Quantum(QuantumOp::Reset(_)))
-                    });
-                    let has_measure = ops.iter().any(|op| {
-                        matches!(op, Operation::Quantum(QuantumOp::Measure(_, _)))
-                    });
-                    let has_release = ops.iter().any(|op| matches!(op, Operation::ReleaseQubit { .. }));
+                    let has_alloc = ops
+                        .iter()
+                        .any(|op| matches!(op, Operation::AllocateQubit { .. }));
+                    let has_reset = ops
+                        .iter()
+                        .any(|op| matches!(op, Operation::Quantum(QuantumOp::Reset(_))));
+                    let has_measure = ops
+                        .iter()
+                        .any(|op| matches!(op, Operation::Quantum(QuantumOp::Measure(_, _))));
+                    let has_release = ops
+                        .iter()
+                        .any(|op| matches!(op, Operation::ReleaseQubit { .. }));
 
-                    info!("Found allocate: {}, reset: {}, measure: {}, release: {}",
-                          has_alloc, has_reset, has_measure, has_release);
+                    info!(
+                        "Found allocate: {has_alloc}, reset: {has_reset}, measure: {has_measure}, release: {has_release}"
+                    );
 
                     // At minimum we should have reset and measure operations for the test case
                     if has_reset && has_measure {
                         info!("Reset operations working correctly with JIT execution!");
                     } else {
-                        info!("Note: Expected reset and measure operations, but may depend on test case");
+                        info!(
+                            "Note: Expected reset and measure operations, but may depend on test case"
+                        );
                     }
-                } else {
-                    info!("No operations collected - this may be expected for some test cases");
                 }
             }
             Err(e) => {
-                info!("Real LLVM IR JIT execution failed: {}", e);
+                info!("Real LLVM IR JIT execution failed: {e}");
                 info!("This indicates the issue still exists or the LLVM IR format has changed");
             }
         }
@@ -1931,21 +2225,28 @@ entry:
         // - At least 2 compilations (one for each execution)
         // - Zero cache hits
         // - Zero hit rate
-        assert!(total_compilations >= 2,
-               "Expected at least 2 compilations, got {}", total_compilations);
-        assert_eq!(cache_hits, 0,
-               "Expected no cache hits with caching disabled, got {}", cache_hits);
-        assert_eq!(hit_rate, 0.0,
-               "Expected 0% cache hit rate with caching disabled, got {}", hit_rate);
+        assert!(
+            total_compilations >= 2,
+            "Expected at least 2 compilations, got {total_compilations}"
+        );
+        assert_eq!(
+            cache_hits, 0,
+            "Expected no cache hits with caching disabled, got {cache_hits}"
+        );
+        assert!(
+            (hit_rate - 0.0).abs() < f64::EPSILON,
+            "Expected 0% cache hit rate with caching disabled, got {hit_rate}"
+        );
 
         // Results should be equivalent
         let interface1 = result1.unwrap();
         let interface2 = result2.unwrap();
         assert_eq!(interface1.operations.len(), interface2.operations.len());
-        assert_eq!(interface1.allocated_qubits.len(), interface2.allocated_qubits.len());
+        assert_eq!(
+            interface1.allocated_qubits.len(),
+            interface2.allocated_qubits.len()
+        );
 
         info!("JIT caching test passed!");
     }
-
-
 }

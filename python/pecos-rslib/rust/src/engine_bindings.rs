@@ -16,7 +16,7 @@
 //! It defines traits that both concrete engines should implement.
 
 use crate::byte_message_bindings::PyByteMessage;
-use pecos_engines::{Engine, QuantumEngine};
+use pecos::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
@@ -27,8 +27,7 @@ use pyo3::types::PyList;
 /// It provides a way to access the inner engine.
 pub trait PyEngineWrapper {
     /// The type of the inner engine
-    type EngineType: Engine<Input = pecos_engines::ByteMessage, Output = pecos_engines::ByteMessage>
-        + 'static;
+    type EngineType: Engine<Input = ByteMessage, Output = ByteMessage> + 'static;
 
     /// Get a reference to the inner engine
     ///

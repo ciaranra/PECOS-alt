@@ -33,8 +33,7 @@ fn run_pecos(
     seed: u64,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut cmd = Command::cargo_bin("pecos")?;
-    cmd.env("RUST_LOG", "info")
-        .arg("run");
+    cmd.env("RUST_LOG", "info").arg("run");
 
     // Add --jit flag for LLVM files (when Selene is not available)
     if file_path.extension().and_then(|s| s.to_str()) == Some("ll") {

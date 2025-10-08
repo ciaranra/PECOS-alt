@@ -1,13 +1,12 @@
 use parking_lot::Mutex;
+use pecos::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use std::collections::{BTreeMap, HashMap};
 
-use pecos_core::prelude::PecosError;
-use pecos_engines::{ByteMessage, ClassicalEngine, ControlEngine, Engine};
-use pecos_phir_json::PhirJsonEngine as RustPhirJsonEngine;
-use pecos_engines::shot_results::Data;
-use pecos_engines::Shot;
+// Import the Rust PhirJsonEngine with a renamed alias to distinguish from Python wrapper
+// Re-exported by pecos::prelude when the phir feature is enabled
+use pecos::prelude::PhirJsonEngine as RustPhirJsonEngine;
 
 #[pyclass(module = "_pecos_rslib")]
 #[derive(Debug)]
@@ -423,9 +422,7 @@ impl PhirJsonEngine {
                                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                                 Data::F64(v) => v as u32,
                                 Data::Bool(v) => u32::from(v),
-                                Data::String(ref s) => {
-                                    s.parse::<u32>().unwrap_or(0)
-                                }
+                                Data::String(ref s) => s.parse::<u32>().unwrap_or(0),
                                 Data::Json(_) => 0, // Default to 0 for JSON data
                                 Data::BigInt(ref v) => {
                                     // Try to convert BigInt to u32, default to 0 if it doesn't fit
@@ -1188,10 +1185,7 @@ impl ControlEngine for PhirJsonEngine {
         ClassicalEngine::reset(self)
     }
 
-    fn start(
-        &mut self,
-        _input: (),
-    ) -> Result<pecos_engines::EngineStage<ByteMessage, Shot>, PecosError> {
+    fn start(&mut self, _input: ()) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         // Reset state to ensure clean start
         ClassicalEngine::reset(self)?;
 
@@ -1204,18 +1198,18 @@ impl ControlEngine for PhirJsonEngine {
         if is_empty {
             // Get the results directly
             match ClassicalEngine::get_results(self) {
-                Ok(results) => Ok(pecos_engines::EngineStage::Complete(results)),
+                Ok(results) => Ok(EngineStage::Complete(results)),
                 Err(e) => Err(e),
             }
         } else {
-            Ok(pecos_engines::EngineStage::NeedsProcessing(commands))
+            Ok(EngineStage::NeedsProcessing(commands))
         }
     }
 
     fn continue_processing(
         &mut self,
         measurements: ByteMessage,
-    ) -> Result<pecos_engines::EngineStage<ByteMessage, Shot>, PecosError> {
+    ) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         // Handle received measurements
         self.handle_measurements(measurements)?;
 
@@ -1228,11 +1222,11 @@ impl ControlEngine for PhirJsonEngine {
         if is_empty {
             // Get the results directly
             match ClassicalEngine::get_results(self) {
-                Ok(results) => Ok(pecos_engines::EngineStage::Complete(results)),
+                Ok(results) => Ok(EngineStage::Complete(results)),
                 Err(e) => Err(e),
             }
         } else {
-            Ok(pecos_engines::EngineStage::NeedsProcessing(commands))
+            Ok(EngineStage::NeedsProcessing(commands))
         }
     }
 }
@@ -1247,7 +1241,7 @@ impl Engine for PhirJsonEngine {
 
         // Start processing
         match self.start(())? {
-            pecos_engines::EngineStage::NeedsProcessing(commands) => {
+            EngineStage::NeedsProcessing(commands) => {
                 // This case means we need a quantum engine to process the commands
                 // Since we're being called directly, we need to handle this specially
 
@@ -1280,20 +1274,20 @@ impl Engine for PhirJsonEngine {
 
                     // Continue processing with the response
                     match self.continue_processing(response)? {
-                        pecos_engines::EngineStage::NeedsProcessing(_) => {
+                        EngineStage::NeedsProcessing(_) => {
                             // If we still need more processing, that's unexpected
                             // In a real scenario, we'd continue the loop
                             // For now, return the current state
                             Ok(ClassicalEngine::get_results(self)?)
                         }
-                        pecos_engines::EngineStage::Complete(result) => Ok(result),
+                        EngineStage::Complete(result) => Ok(result),
                     }
                 } else {
                     // No measurements to process, get results
                     Ok(ClassicalEngine::get_results(self)?)
                 }
             }
-            pecos_engines::EngineStage::Complete(result) => Ok(result),
+            EngineStage::Complete(result) => Ok(result),
         }
     }
 

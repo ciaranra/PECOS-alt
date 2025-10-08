@@ -1,7 +1,7 @@
 //! QIS Runtime Trait
 //!
 //! This module defines the trait for classical interpreters that process QIS programs.
-//! A QisRuntime is responsible for:
+//! A `QisRuntime` is responsible for:
 //! - Managing control flow (loops, conditionals, function calls)
 //! - Maintaining classical state (registers, variables)
 //! - Emitting quantum operations for external execution
@@ -12,7 +12,7 @@
 
 use log::trace;
 use pecos_qis_ffi::{OperationCollector, QuantumOp};
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 
 /// Result type for runtime operations
 pub type Result<T> = std::result::Result<T, RuntimeError>;
@@ -43,11 +43,11 @@ impl std::fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NoProgramLoaded => write!(f, "No program has been loaded"),
-            Self::InvalidQubit(id) => write!(f, "Invalid qubit ID: {}", id),
-            Self::InvalidResult(id) => write!(f, "Invalid result ID: {}", id),
-            Self::ControlFlowError(msg) => write!(f, "Control flow error: {}", msg),
-            Self::ExecutionError(msg) => write!(f, "Execution error: {}", msg),
-            Self::FfiError(msg) => write!(f, "FFI error: {}", msg),
+            Self::InvalidQubit(id) => write!(f, "Invalid qubit ID: {id}"),
+            Self::InvalidResult(id) => write!(f, "Invalid result ID: {id}"),
+            Self::ControlFlowError(msg) => write!(f, "Control flow error: {msg}"),
+            Self::ExecutionError(msg) => write!(f, "Execution error: {msg}"),
+            Self::FfiError(msg) => write!(f, "FFI error: {msg}"),
         }
     }
 }
@@ -63,13 +63,13 @@ pub struct ClassicalState {
     /// Call stack for function calls
     pub call_stack: Vec<CallFrame>,
 
-    /// Classical registers (name -> bits) - BTreeMap for deterministic ordering
+    /// Classical registers (name -> bits) - `BTreeMap` for deterministic ordering
     pub registers: BTreeMap<String, Vec<bool>>,
 
-    /// Measurement results received - BTreeMap for deterministic ordering
+    /// Measurement results received - `BTreeMap` for deterministic ordering
     pub measurements: BTreeMap<usize, bool>,
 
-    /// Local variables (name -> value) - BTreeMap for deterministic ordering
+    /// Local variables (name -> value) - `BTreeMap` for deterministic ordering
     pub variables: BTreeMap<String, Value>,
 
     /// Shot ID for current execution
@@ -85,7 +85,7 @@ pub struct CallFrame {
     /// Function name
     pub function_name: String,
 
-    /// Local variables for this frame - BTreeMap for deterministic ordering
+    /// Local variables for this frame - `BTreeMap` for deterministic ordering
     pub locals: BTreeMap<String, Value>,
 }
 
@@ -104,19 +104,19 @@ pub enum Value {
 /// Shot result after execution completes
 #[derive(Debug, Clone, Default)]
 pub struct Shot {
-    /// Measurement results by result ID - BTreeMap for deterministic ordering
+    /// Measurement results by result ID - `BTreeMap` for deterministic ordering
     pub measurements: BTreeMap<usize, bool>,
 
-    /// Classical register values - BTreeMap for deterministic ordering
+    /// Classical register values - `BTreeMap` for deterministic ordering
     pub registers: BTreeMap<String, Vec<bool>>,
 
-    /// Additional metadata - HashMap is OK here since it's just metadata
+    /// Additional metadata - `HashMap` is OK here since it's just metadata
     pub metadata: HashMap<String, String>,
 }
 
 /// Trait for classical interpreters that process QIS programs
 ///
-/// This trait is inspired by Selene's RuntimeInterface but adapted for PECOS.
+/// This trait is inspired by Selene's `RuntimeInterface` but adapted for PECOS.
 /// Implementations can wrap external runtimes (like Selene .so) via FFI or
 /// provide native Rust interpretation.
 pub trait QisRuntime: Send + Sync + dyn_clone::DynClone {
@@ -124,17 +124,26 @@ pub trait QisRuntime: Send + Sync + dyn_clone::DynClone {
     ///
     /// This takes the linked QIS interface (program + Rust functions)
     /// and prepares it for execution.
+    ///
+    /// # Errors
+    /// Returns an error if the interface cannot be loaded.
     fn load_interface(&mut self, interface: OperationCollector) -> Result<()>;
 
     /// Start or continue program execution until quantum operations are needed
     ///
     /// This is analogous to Selene's `get_next_operations()`.
     /// Returns quantum operations to be executed or None if program is complete.
+    ///
+    /// # Errors
+    /// Returns an error if program execution fails.
     fn execute_until_quantum(&mut self) -> Result<Option<Vec<QuantumOp>>>;
 
     /// Provide measurement results back to the runtime
     ///
     /// The runtime uses these results for classical control flow decisions.
+    ///
+    /// # Errors
+    /// Returns an error if the measurements cannot be provided.
     fn provide_measurements(&mut self, measurements: BTreeMap<usize, bool>) -> Result<()>;
 
     /// Get the current classical state (for debugging/inspection)
@@ -147,8 +156,11 @@ pub trait QisRuntime: Send + Sync + dyn_clone::DynClone {
     ///
     /// This resets the runtime state for a new execution of the program.
     /// Inspired by Selene's `shot_start()`.
+    ///
+    /// # Errors
+    /// Returns an error if the shot cannot be started.
     fn shot_start(&mut self, shot_id: u64, seed: Option<u64>) -> Result<()> {
-        trace!("Starting shot {} with seed {:?}", shot_id, seed);
+        trace!("Starting shot {shot_id} with seed {seed:?}");
         let state = self.get_classical_state_mut();
         state.pc = 0;
         state.call_stack.clear();
@@ -162,6 +174,9 @@ pub trait QisRuntime: Send + Sync + dyn_clone::DynClone {
     ///
     /// This finalizes the shot and returns the collected results.
     /// Inspired by Selene's `shot_end()`.
+    ///
+    /// # Errors
+    /// Returns an error if the shot cannot be finalized.
     fn shot_end(&mut self) -> Result<Shot> {
         trace!("Ending shot");
         let state = self.get_classical_state();
@@ -176,6 +191,9 @@ pub trait QisRuntime: Send + Sync + dyn_clone::DynClone {
     fn is_complete(&self) -> bool;
 
     /// Reset the runtime for a new execution
+    ///
+    /// # Errors
+    /// Returns an error if the runtime cannot be reset.
     fn reset(&mut self) -> Result<()> {
         self.shot_start(0, None)
     }

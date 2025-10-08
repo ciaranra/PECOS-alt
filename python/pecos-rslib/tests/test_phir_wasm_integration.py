@@ -8,7 +8,6 @@ import json
 import os
 import tempfile
 
-import pytest
 
 from pecos_rslib import phir_json_engine
 from pecos_rslib._pecos_rslib import PhirJsonProgram
@@ -46,26 +45,42 @@ def test_phir_wasm_basic_ffcall() -> None:
             "version": "0.1.0",
             "metadata": {
                 "num_qubits": 0,
-                "source_program_type": ["Test", ["PECOS", "0.7.0"]]
+                "source_program_type": ["Test", ["PECOS", "0.7.0"]],
             },
             "ops": [
                 # Define classical variables
-                {"data": "cvar_define", "data_type": "i32", "variable": "a", "size": 32},
-                {"data": "cvar_define", "data_type": "i32", "variable": "b", "size": 32},
-                {"data": "cvar_define", "data_type": "i32", "variable": "result", "size": 32},
-
+                {
+                    "data": "cvar_define",
+                    "data_type": "i32",
+                    "variable": "a",
+                    "size": 32,
+                },
+                {
+                    "data": "cvar_define",
+                    "data_type": "i32",
+                    "variable": "b",
+                    "size": 32,
+                },
+                {
+                    "data": "cvar_define",
+                    "data_type": "i32",
+                    "variable": "result",
+                    "size": 32,
+                },
                 # Set a = 10
                 {"cop": "=", "args": [10], "returns": ["a"]},
-
                 # Set b = 7
                 {"cop": "=", "args": [7], "returns": ["b"]},
-
                 # result = add(a, b)  -- should be 17
-                {"cop": "ffcall", "function": "add", "args": ["a", "b"], "returns": ["result"]},
-
+                {
+                    "cop": "ffcall",
+                    "function": "add",
+                    "args": ["a", "b"],
+                    "returns": ["result"],
+                },
                 # Export result
-                {"cop": "Result", "args": ["result"], "returns": ["output"]}
-            ]
+                {"cop": "Result", "args": ["result"], "returns": ["output"]},
+            ],
         }
 
         # Create PHIR program
@@ -115,39 +130,54 @@ def test_phir_wasm_conditional_ffcall() -> None:
             "version": "0.1.0",
             "metadata": {
                 "num_qubits": 0,
-                "source_program_type": ["Test", ["PECOS", "0.7.0"]]
+                "source_program_type": ["Test", ["PECOS", "0.7.0"]],
             },
             "ops": [
-                {"data": "cvar_define", "data_type": "i32", "variable": "x", "size": 32},
-                {"data": "cvar_define", "data_type": "i32", "variable": "result", "size": 32},
-                {"data": "cvar_define", "data_type": "i32", "variable": "condition", "size": 32},
-
+                {
+                    "data": "cvar_define",
+                    "data_type": "i32",
+                    "variable": "x",
+                    "size": 32,
+                },
+                {
+                    "data": "cvar_define",
+                    "data_type": "i32",
+                    "variable": "result",
+                    "size": 32,
+                },
+                {
+                    "data": "cvar_define",
+                    "data_type": "i32",
+                    "variable": "condition",
+                    "size": 32,
+                },
                 # Set x = 5
                 {"cop": "=", "args": [5], "returns": ["x"]},
-
                 # Set condition = 1
                 {"cop": "=", "args": [1], "returns": ["condition"]},
-
                 # if (condition == 1) result = double(x)
                 {
                     "block": "if",
                     "condition": {"cop": "==", "args": ["condition", 1]},
-                    "true_branch": [{
-                        "cop": "ffcall",
-                        "function": "double",
-                        "args": ["x"],
-                        "returns": ["result"]
-                    }],
-                    "false_branch": [{
-                        "cop": "ffcall",
-                        "function": "triple",
-                        "args": ["x"],
-                        "returns": ["result"]
-                    }]
+                    "true_branch": [
+                        {
+                            "cop": "ffcall",
+                            "function": "double",
+                            "args": ["x"],
+                            "returns": ["result"],
+                        }
+                    ],
+                    "false_branch": [
+                        {
+                            "cop": "ffcall",
+                            "function": "triple",
+                            "args": ["x"],
+                            "returns": ["result"],
+                        }
+                    ],
                 },
-
-                {"cop": "Result", "args": ["result"], "returns": ["output"]}
-            ]
+                {"cop": "Result", "args": ["result"], "returns": ["output"]},
+            ],
         }
 
         prog = PhirJsonProgram.from_json(json.dumps(phir_json))
@@ -187,23 +217,35 @@ def test_phir_wasm_with_quantum_ops() -> None:
             "version": "0.1.0",
             "metadata": {
                 "num_qubits": 1,
-                "source_program_type": ["Test", ["PECOS", "0.7.0"]]
+                "source_program_type": ["Test", ["PECOS", "0.7.0"]],
             },
             "ops": [
                 # Define qubit and classical variables
-                {"data": "qvar_define", "data_type": "qubits", "variable": "q", "size": 1},
+                {
+                    "data": "qvar_define",
+                    "data_type": "qubits",
+                    "variable": "q",
+                    "size": 1,
+                },
                 {"data": "cvar_define", "data_type": "i32", "variable": "m", "size": 1},
-                {"data": "cvar_define", "data_type": "i32", "variable": "check", "size": 32},
-
+                {
+                    "data": "cvar_define",
+                    "data_type": "i32",
+                    "variable": "check",
+                    "size": 32,
+                },
                 # Measure qubit (initially |0>)
                 {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
-
                 # check = is_zero(m)  -- should be 1 since m=0
-                {"cop": "ffcall", "function": "is_zero", "args": ["m"], "returns": ["check"]},
-
+                {
+                    "cop": "ffcall",
+                    "function": "is_zero",
+                    "args": ["m"],
+                    "returns": ["check"],
+                },
                 # Export check
-                {"cop": "Result", "args": ["check"], "returns": ["output"]}
-            ]
+                {"cop": "Result", "args": ["check"], "returns": ["output"]},
+            ],
         }
 
         prog = PhirJsonProgram.from_json(json.dumps(phir_json))
@@ -211,6 +253,7 @@ def test_phir_wasm_with_quantum_ops() -> None:
 
         # Need to specify quantum engine for quantum operations
         from pecos_rslib import state_vector
+
         results = sim(prog).classical(engine).quantum(state_vector()).run(10).to_dict()
 
         # check should be 1 (is_zero(0) = 1)

@@ -26,6 +26,7 @@ impl Dialect for QisDialect {
         "Quantum Instruction Set (QIS) operations for hardware-native quantum execution"
     }
 
+    #[allow(clippy::too_many_lines)] // Dialect initialization is inherently a long list of operation registrations
     fn initialize(&self, registry: &mut DialectRegistry) -> Result<()> {
         // Core QIS operations (hardware-native gates)
 
@@ -185,6 +186,9 @@ impl Dialect for QisDialect {
 }
 
 /// Register the QIS dialect
+///
+/// # Errors
+/// Returns an error if the dialect cannot be registered with the registry.
 pub fn register_dialect(registry: &mut DialectRegistry) -> Result<()> {
     let dialect = QisDialect;
     registry.register_dialect(dialect)

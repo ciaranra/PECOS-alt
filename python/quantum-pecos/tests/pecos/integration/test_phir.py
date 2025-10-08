@@ -145,8 +145,8 @@ def test_example1_noisy_wasmtime() -> None:
 @pytest.mark.skipif(
     not is_wasmer_supported(),
     reason="Wasmer is not supported on some OS/Python version combinations. "
-           "wasmer-python only supports Python 3.7-3.10 (current Python 3.11+). "
-           "Wasmtime tests provide equivalent coverage.",
+    "wasmer-python only supports Python 3.7-3.10 (current Python 3.11+). "
+    "Wasmtime tests provide equivalent coverage.",
 )
 @pytest.mark.wasmer
 @pytest.mark.optional_dependency
@@ -163,8 +163,8 @@ def test_example1_wasmer() -> None:
 @pytest.mark.skipif(
     not is_wasmer_supported(),
     reason="Wasmer is not supported on some OS/Python version combinations. "
-           "wasmer-python only supports Python 3.7-3.10 (current Python 3.11+). "
-           "Wasmtime tests provide equivalent coverage.",
+    "wasmer-python only supports Python 3.7-3.10 (current Python 3.11+). "
+    "Wasmtime tests provide equivalent coverage.",
 )
 @pytest.mark.wasmer
 @pytest.mark.optional_dependency

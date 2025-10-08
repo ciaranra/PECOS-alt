@@ -19,46 +19,9 @@ doctest = false
 # Skip unit tests as well - all testing should be done through Python
 test = false
 
-[features]
-default = ["wasm", "hugr-llvm-pipeline"]
-wasm = ["pecos-qasm/wasm", "pecos-phir-json/wasm"]
-
-# JIT feature for LLVM JIT functionality
-# Currently always available since pecos-qis-jit is a direct dependency
-jit = []
-
-# LLVM JIT execution: QIR file execution via LLVM JIT compilation
-# REMOVED - pecos-qis-runtime removed due to symbol conflicts
-# llvm-jit = ["pecos-qis-runtime/llvm-jit"]
-
-# HUGR-LLVM pipeline: HUGR → LLVM IR (via pecos-hugr-qis)
-hugr-llvm-pipeline = ["pecos-hugr-qis"]
-
-# Legacy feature for backward compatibility
-hugr = ["hugr-llvm-pipeline"]
-
 [dependencies]
-# pecos.workspace = true  # Removed - brings in pecos-qis-runtime which conflicts
-# Instead, import specific crates directly
-
-pecos-core.workspace = true
-pecos-programs.workspace = true
-pecos-qasm = { workspace = true, features = ["wasm"] }
-pecos-engines.workspace = true
-pecos-qsim.workspace = true
-pecos-cppsparsesim = { path = "../../../crates/pecos-cppsparsesim" }
-pecos-quest = { path = "../../../crates/pecos-quest", features = ["cpu"] }
-pecos-qulacs = { path = "../../../crates/pecos-qulacs" }
-# pecos-qis-runtime.workspace = true  # Removed - conflicts with pecos-qis-ffi
-# pecos-qis-sim.workspace = true  # Removed - brings in pecos-qis-runtime which conflicts
-pecos-qis-core.workspace = true
-pecos-qis-native.workspace = true
-pecos-qis-jit.workspace = true
-pecos-qis-selene = { path = "../../../crates/pecos-qis-selene" }
-pecos-phir = { path = "../../../crates/pecos-phir", features = ["hugr"] }
-pecos-phir-json = { path = "../../../crates/pecos-phir-json" }
-pecos-hugr-qis = { path = "../../../crates/pecos-hugr-qis", optional = true }
-pecos-rng.workspace = true
+# Use the pecos metacrate with all simulators and runtimes needed for Python bindings
+pecos = { workspace = true, features = ["all-simulators", "jit", "selene", "qasm", "phir"] }
 
 pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
 parking_lot.workspace = true

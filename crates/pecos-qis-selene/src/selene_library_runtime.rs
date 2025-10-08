@@ -3,24 +3,24 @@
 //! This module provides flexible wrappers for Selene runtime shared libraries,
 //! supporting both auto-built runtimes and user-provided .so file paths.
 
+use libloading::{Library, Symbol};
+use log::{debug, info};
+use pecos_qis_core::runtime::{ClassicalState, QisRuntime, Result, RuntimeError, Shot};
 use pecos_qis_ffi::OperationCollector;
-use pecos_qis_core::runtime::{QisRuntime, RuntimeError, ClassicalState, Shot, Result};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use libloading::{Library, Symbol};
-use log::{debug, info};
 
 /// Configuration for Selene runtime libraries
 #[derive(Debug, Clone)]
 pub struct SeleneRuntimeConfig {
     /// Path to the runtime .so file (if None, auto-build is attempted)
     pub library_path: Option<PathBuf>,
-    /// Runtime type identifier (e.g., "simple", "soft_rz", "custom")
+    /// Runtime type identifier (e.g., "simple", "`soft_rz`", "custom")
     pub runtime_type: String,
     /// Additional runtime-specific configuration
     pub runtime_options: BTreeMap<String, String>,
-    /// Whether to auto-build if library_path is not provided
+    /// Whether to auto-build if `library_path` is not provided
     pub auto_build: bool,
     /// Base directory for auto-built runtimes
     pub build_dir: Option<PathBuf>,
@@ -52,7 +52,9 @@ impl Clone for SeleneRuntimeHandle {
     fn clone(&self) -> Self {
         // Note: This creates a copy of the pointer, not the underlying runtime
         // For true cloning, we'd need to call the runtime's clone function
-        Self { handle: self.handle }
+        Self {
+            handle: self.handle,
+        }
     }
 }
 
@@ -77,7 +79,7 @@ pub struct QisSeleneLibraryRuntime {
 /// Specific implementation for Selene Simple Runtime
 ///
 /// This is a convenience wrapper that automatically builds or locates
-/// the selene_simple_runtime.so file.
+/// the `selene_simple_runtime.so` file.
 #[derive(Debug, Clone)]
 pub struct QisSeleneSimpleRuntime {
     inner: QisSeleneLibraryRuntime,
@@ -94,6 +96,9 @@ type ShotEndFn = unsafe extern "C" fn(*mut std::ffi::c_void, *mut u8, *mut usize
 
 impl QisSeleneLibraryRuntime {
     /// Create a new Selene library runtime with configuration
+    ///
+    /// # Errors
+    /// Returns an error if the library cannot be found or loaded, or if auto-build fails.
     pub fn new(config: SeleneRuntimeConfig) -> Result<Self> {
         let library_path = match &config.library_path {
             Some(path) => path.clone(),
@@ -103,7 +108,7 @@ impl QisSeleneLibraryRuntime {
             }
             None => {
                 return Err(RuntimeError::FfiError(
-                    "No library path provided and auto_build is disabled".to_string()
+                    "No library path provided and auto_build is disabled".to_string(),
                 ));
             }
         };
@@ -113,7 +118,7 @@ impl QisSeleneLibraryRuntime {
         // Load the shared library
         let library = unsafe {
             Library::new(&library_path)
-                .map_err(|e| RuntimeError::FfiError(format!("Failed to load library: {}", e)))?
+                .map_err(|e| RuntimeError::FfiError(format!("Failed to load library: {e}")))?
         };
 
         // Verify required symbols exist
@@ -132,6 +137,9 @@ impl QisSeleneLibraryRuntime {
     }
 
     /// Create a new runtime from a specific .so file path
+    ///
+    /// # Errors
+    /// Returns an error if the library at the specified path cannot be loaded.
     pub fn from_library_path<P: AsRef<Path>>(path: P, runtime_type: &str) -> Result<Self> {
         let config = SeleneRuntimeConfig {
             library_path: Some(path.as_ref().to_path_buf()),
@@ -147,15 +155,14 @@ impl QisSeleneLibraryRuntime {
     fn auto_build_runtime(config: &SeleneRuntimeConfig) -> Result<PathBuf> {
         info!("Auto-building Selene runtime: {}", config.runtime_type);
 
-        let build_dir = config.build_dir
+        let build_dir = config
+            .build_dir
             .clone()
-            .unwrap_or_else(|| {
-                std::env::temp_dir().join("pecos_selene_runtimes")
-            });
+            .unwrap_or_else(|| std::env::temp_dir().join("pecos_selene_runtimes"));
 
         // Create build directory
         std::fs::create_dir_all(&build_dir)
-            .map_err(|e| RuntimeError::FfiError(format!("Failed to create build dir: {}", e)))?;
+            .map_err(|e| RuntimeError::FfiError(format!("Failed to create build dir: {e}")))?;
 
         let so_path = build_dir.join(format!("selene_{}_runtime.so", config.runtime_type));
 
@@ -184,16 +191,16 @@ cp selene_{runtime_type}_runtime.so "{so_path}"
             .arg("-c")
             .arg(&build_script)
             .output()
-            .map_err(|e| RuntimeError::FfiError(format!("Build command failed: {}", e)))?;
+            .map_err(|e| RuntimeError::FfiError(format!("Build command failed: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(RuntimeError::FfiError(format!("Build failed: {}", stderr)));
+            return Err(RuntimeError::FfiError(format!("Build failed: {stderr}")));
         }
 
         if !so_path.exists() {
             return Err(RuntimeError::FfiError(
-                "Build completed but .so file not found".to_string()
+                "Build completed but .so file not found".to_string(),
             ));
         }
 
@@ -215,10 +222,13 @@ cp selene_{runtime_type}_runtime.so "{so_path}"
 
         for symbol_name in &required_symbols {
             unsafe {
-                library.get::<*mut std::ffi::c_void>(symbol_name.as_bytes())
-                    .map_err(|_| RuntimeError::FfiError(
-                        format!("Required symbol '{}' not found in library", symbol_name)
-                    ))?;
+                library
+                    .get::<*mut std::ffi::c_void>(symbol_name.as_bytes())
+                    .map_err(|_| {
+                        RuntimeError::FfiError(format!(
+                            "Required symbol '{symbol_name}' not found in library"
+                        ))
+                    })?;
             }
         }
 
@@ -233,13 +243,16 @@ cp selene_{runtime_type}_runtime.so "{so_path}"
         }
 
         let create_fn: Symbol<CreateRuntimeFn> = unsafe {
-            self.library.get(b"selene_runtime_create")
-                .map_err(|e| RuntimeError::FfiError(format!("Failed to get create function: {}", e)))?
+            self.library.get(b"selene_runtime_create").map_err(|e| {
+                RuntimeError::FfiError(format!("Failed to get create function: {e}"))
+            })?
         };
 
         let handle = unsafe { create_fn() };
         if handle.is_null() {
-            return Err(RuntimeError::FfiError("Failed to create runtime handle".to_string()));
+            return Err(RuntimeError::FfiError(
+                "Failed to create runtime handle".to_string(),
+            ));
         }
 
         self.runtime_handle = Some(SeleneRuntimeHandle { handle });
@@ -248,11 +261,13 @@ cp selene_{runtime_type}_runtime.so "{so_path}"
     }
 
     /// Get the runtime type identifier
+    #[must_use]
     pub fn runtime_type(&self) -> &str {
         &self.config.runtime_type
     }
 
     /// Get the library path
+    #[must_use]
     pub fn library_path(&self) -> Option<&Path> {
         self.config.library_path.as_deref()
     }
@@ -262,26 +277,28 @@ impl QisRuntime for QisSeleneLibraryRuntime {
     fn load_interface(&mut self, interface: OperationCollector) -> Result<()> {
         self.initialize_runtime()?;
 
-        let handle = self.runtime_handle
+        let handle = self
+            .runtime_handle
             .as_ref()
             .ok_or_else(|| RuntimeError::FfiError("Runtime not initialized".to_string()))?
             .handle;
 
         // Serialize interface using bincode for efficient FFI transfer
         let interface_bytes = bincode::serialize(&interface)
-            .map_err(|e| RuntimeError::FfiError(format!("Failed to serialize interface: {}", e)))?;
+            .map_err(|e| RuntimeError::FfiError(format!("Failed to serialize interface: {e}")))?;
 
         let load_fn: Symbol<LoadInterfaceFn> = unsafe {
-            self.library.get(b"selene_runtime_load_interface")
-                .map_err(|e| RuntimeError::FfiError(format!("Failed to get load function: {}", e)))?
+            self.library
+                .get(b"selene_runtime_load_interface")
+                .map_err(|e| RuntimeError::FfiError(format!("Failed to get load function: {e}")))?
         };
 
-        let result = unsafe {
-            load_fn(handle, interface_bytes.as_ptr(), interface_bytes.len())
-        };
+        let result = unsafe { load_fn(handle, interface_bytes.as_ptr(), interface_bytes.len()) };
 
         if result != 0 {
-            return Err(RuntimeError::FfiError(format!("Load interface failed with code: {}", result)));
+            return Err(RuntimeError::FfiError(format!(
+                "Load interface failed with code: {result}"
+            )));
         }
 
         self.interface = Some(interface);
@@ -290,14 +307,18 @@ impl QisRuntime for QisSeleneLibraryRuntime {
     }
 
     fn execute_until_quantum(&mut self) -> Result<Option<Vec<pecos_qis_ffi::QuantumOp>>> {
-        let handle = self.runtime_handle
+        let handle = self
+            .runtime_handle
             .as_ref()
             .ok_or_else(|| RuntimeError::FfiError("Runtime not initialized".to_string()))?
             .handle;
 
         let execute_fn: Symbol<ExecuteUntilQuantumFn> = unsafe {
-            self.library.get(b"selene_runtime_execute_until_quantum")
-                .map_err(|e| RuntimeError::FfiError(format!("Failed to get execute function: {}", e)))?
+            self.library
+                .get(b"selene_runtime_execute_until_quantum")
+                .map_err(|e| {
+                    RuntimeError::FfiError(format!("Failed to get execute function: {e}"))
+                })?
         };
 
         let result = unsafe { execute_fn(handle) };
@@ -309,31 +330,44 @@ impl QisRuntime for QisSeleneLibraryRuntime {
                 // This would require additional FFI to retrieve the operations
                 Ok(Some(Vec::new()))
             }
-            _ => Err(RuntimeError::ExecutionError(format!("Execute failed with code: {}", result)))
+            _ => Err(RuntimeError::ExecutionError(format!(
+                "Execute failed with code: {result}"
+            ))),
         }
     }
 
     fn provide_measurements(&mut self, measurements: BTreeMap<usize, bool>) -> Result<()> {
-        let handle = self.runtime_handle
+        let handle = self
+            .runtime_handle
             .as_ref()
             .ok_or_else(|| RuntimeError::FfiError("Runtime not initialized".to_string()))?
             .handle;
 
         // Serialize measurements using bincode for efficient FFI transfer
-        let measurements_bytes = bincode::serialize(&measurements)
-            .map_err(|e| RuntimeError::FfiError(format!("Failed to serialize measurements: {}", e)))?;
+        let measurements_bytes = bincode::serialize(&measurements).map_err(|e| {
+            RuntimeError::FfiError(format!("Failed to serialize measurements: {e}"))
+        })?;
 
         let provide_fn: Symbol<ProvideResultsFn> = unsafe {
-            self.library.get(b"selene_runtime_provide_results")
-                .map_err(|e| RuntimeError::FfiError(format!("Failed to get provide function: {}", e)))?
+            self.library
+                .get(b"selene_runtime_provide_results")
+                .map_err(|e| {
+                    RuntimeError::FfiError(format!("Failed to get provide function: {e}"))
+                })?
         };
 
         let result = unsafe {
-            provide_fn(handle, measurements_bytes.as_ptr(), measurements_bytes.len())
+            provide_fn(
+                handle,
+                measurements_bytes.as_ptr(),
+                measurements_bytes.len(),
+            )
         };
 
         if result != 0 {
-            return Err(RuntimeError::FfiError(format!("Provide measurements failed with code: {}", result)));
+            return Err(RuntimeError::FfiError(format!(
+                "Provide measurements failed with code: {result}"
+            )));
         }
 
         // Update local state
@@ -350,22 +384,26 @@ impl QisRuntime for QisSeleneLibraryRuntime {
     }
 
     fn shot_start(&mut self, shot_id: u64, seed: Option<u64>) -> Result<()> {
-        let handle = self.runtime_handle
+        let handle = self
+            .runtime_handle
             .as_ref()
             .ok_or_else(|| RuntimeError::FfiError("Runtime not initialized".to_string()))?
             .handle;
 
         let shot_start_fn: Symbol<ShotStartFn> = unsafe {
-            self.library.get(b"selene_runtime_shot_start")
-                .map_err(|e| RuntimeError::FfiError(format!("Failed to get shot_start function: {}", e)))?
+            self.library
+                .get(b"selene_runtime_shot_start")
+                .map_err(|e| {
+                    RuntimeError::FfiError(format!("Failed to get shot_start function: {e}"))
+                })?
         };
 
-        let result = unsafe {
-            shot_start_fn(handle, shot_id, seed.unwrap_or(0))
-        };
+        let result = unsafe { shot_start_fn(handle, shot_id, seed.unwrap_or(0)) };
 
         if result != 0 {
-            return Err(RuntimeError::FfiError(format!("Shot start failed with code: {}", result)));
+            return Err(RuntimeError::FfiError(format!(
+                "Shot start failed with code: {result}"
+            )));
         }
 
         // Update local state
@@ -379,26 +417,28 @@ impl QisRuntime for QisSeleneLibraryRuntime {
     }
 
     fn shot_end(&mut self) -> Result<Shot> {
-        let handle = self.runtime_handle
+        let handle = self
+            .runtime_handle
             .as_ref()
             .ok_or_else(|| RuntimeError::FfiError("Runtime not initialized".to_string()))?
             .handle;
 
         let shot_end_fn: Symbol<ShotEndFn> = unsafe {
-            self.library.get(b"selene_runtime_shot_end")
-                .map_err(|e| RuntimeError::FfiError(format!("Failed to get shot_end function: {}", e)))?
+            self.library.get(b"selene_runtime_shot_end").map_err(|e| {
+                RuntimeError::FfiError(format!("Failed to get shot_end function: {e}"))
+            })?
         };
 
         // TODO: Implement proper result retrieval from runtime
         let mut buffer = vec![0u8; 1024];
         let mut size = buffer.len();
 
-        let result = unsafe {
-            shot_end_fn(handle, buffer.as_mut_ptr(), &mut size)
-        };
+        let result = unsafe { shot_end_fn(handle, buffer.as_mut_ptr(), &raw mut size) };
 
         if result != 0 {
-            return Err(RuntimeError::FfiError(format!("Shot end failed with code: {}", result)));
+            return Err(RuntimeError::FfiError(format!(
+                "Shot end failed with code: {result}"
+            )));
         }
 
         Ok(Shot {
@@ -416,20 +456,20 @@ impl QisRuntime for QisSeleneLibraryRuntime {
     fn num_qubits(&self) -> usize {
         self.interface
             .as_ref()
-            .map(|i| i.allocated_qubits.len())
-            .unwrap_or(0)
+            .map_or(0, |i| i.allocated_qubits.len())
     }
 }
 
 impl Drop for QisSeleneLibraryRuntime {
     fn drop(&mut self) {
-        if let Some(runtime_handle) = self.runtime_handle.take() {
-            if let Ok(destroy_fn) = unsafe {
-                self.library.get::<Symbol<DestroyRuntimeFn>>(b"selene_runtime_destroy")
-            } {
-                unsafe { destroy_fn(runtime_handle.handle) };
-                debug!("Selene runtime handle destroyed");
+        if let Some(runtime_handle) = self.runtime_handle.take()
+            && let Ok(destroy_fn) = unsafe {
+                self.library
+                    .get::<Symbol<DestroyRuntimeFn>>(b"selene_runtime_destroy")
             }
+        {
+            unsafe { destroy_fn(runtime_handle.handle) };
+            debug!("Selene runtime handle destroyed");
         }
     }
 }
@@ -437,6 +477,9 @@ impl Drop for QisSeleneLibraryRuntime {
 // Convenience implementation for Selene Simple Runtime
 impl QisSeleneSimpleRuntime {
     /// Create a new Selene Simple Runtime with auto-build
+    ///
+    /// # Errors
+    /// Returns an error if the Selene simple runtime library cannot be built or loaded.
     pub fn new() -> Result<Self> {
         let config = SeleneRuntimeConfig {
             runtime_type: "simple".to_string(),
@@ -449,6 +492,9 @@ impl QisSeleneSimpleRuntime {
     }
 
     /// Create a new Selene Simple Runtime from a specific .so path
+    ///
+    /// # Errors
+    /// Returns an error if the library at the specified path cannot be loaded.
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let inner = QisSeleneLibraryRuntime::from_library_path(path, "simple")?;
         Ok(Self { inner })
@@ -494,17 +540,29 @@ impl QisRuntime for QisSeleneSimpleRuntime {
 }
 
 /// Convenience function to create a Selene Simple Runtime with auto-build
+///
+/// # Errors
+/// Returns an error if the Selene simple runtime library cannot be built or loaded.
 pub fn selene_simple_runtime() -> Result<QisSeleneSimpleRuntime> {
     QisSeleneSimpleRuntime::new()
 }
 
 /// Convenience function to create a Selene Simple Runtime from a path
+///
+/// # Errors
+/// Returns an error if the library at the specified path cannot be loaded.
 pub fn selene_simple_runtime_from_path<P: AsRef<Path>>(path: P) -> Result<QisSeleneSimpleRuntime> {
     QisSeleneSimpleRuntime::from_path(path)
 }
 
 /// Create a generic Selene runtime wrapper for any compatible .so file
-pub fn selene_library_runtime<P: AsRef<Path>>(path: P, runtime_type: &str) -> Result<QisSeleneLibraryRuntime> {
+///
+/// # Errors
+/// Returns an error if the library at the specified path cannot be loaded.
+pub fn selene_library_runtime<P: AsRef<Path>>(
+    path: P,
+    runtime_type: &str,
+) -> Result<QisSeleneLibraryRuntime> {
     QisSeleneLibraryRuntime::from_library_path(path, runtime_type)
 }
 
@@ -528,7 +586,9 @@ mod tests {
                 println!("Selene simple runtime created successfully");
             }
             Err(e) => {
-                println!("WARNING: Selene simple runtime creation failed (expected if Selene not available): {}", e);
+                println!(
+                    "WARNING: Selene simple runtime creation failed (expected if Selene not available): {e}"
+                );
             }
         }
     }

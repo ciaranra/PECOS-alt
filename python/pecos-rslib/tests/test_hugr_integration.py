@@ -178,8 +178,8 @@ def test_convenience_functions() -> None:
 
             # Compile to HUGR
             package = simple_circuit.compile()
-            hugr_json = package.to_json()
-            valid_hugr = hugr_json.encode("utf-8")
+            # Use binary envelope format (modern approach)
+            valid_hugr = package.to_bytes()
 
             # Should successfully compile valid HUGR
             result = compile_hugr_to_llvm_rust(valid_hugr)

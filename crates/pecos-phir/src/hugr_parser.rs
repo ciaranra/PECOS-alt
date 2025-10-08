@@ -1,4 +1,3 @@
-#![cfg(feature = "hugr")]
 /*!
 HUGR Parser - Direct to PHIR
 
@@ -477,7 +476,9 @@ fn parse_simplified_hugr_json(json: &str) -> Result<ModuleOp> {
                     }
                     "Measure" => {
                         let qubit = SSAValue::new(0);
-                        let result = SSAValue::new(i as u32 + 100);
+                        let result_id =
+                            u32::try_from(i).expect("Operation index too large for u32") + 100;
+                        let result = SSAValue::new(result_id);
                         Instruction::new(
                             Operation::Quantum(QuantumOp::Measure),
                             vec![qubit],

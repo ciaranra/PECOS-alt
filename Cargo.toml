@@ -131,6 +131,9 @@ pecos-quest = { version = "0.1.1", path = "crates/pecos-quest" }
 # Qulacs simulator wrapper (https://github.com/qulacs/qulacs)
 pecos-qulacs = { version = "0.1.1", path = "crates/pecos-qulacs" }
 
+# CppSparseSim simulator wrapper
+pecos-cppsparsesim = { version = "0.1.1", path = "crates/pecos-cppsparsesim" }
+
 # Optimize build times
 [profile.dev]
 opt-level = 0          # No optimization for faster compilation

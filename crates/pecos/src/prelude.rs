@@ -12,85 +12,117 @@
 
 //! A prelude for PECOS users.
 //!
-//! This prelude re-exports the most commonly used types, traits, and functions
-//! from all PECOS component crates. By importing this prelude with
-//! `use pecos::prelude::*;`, you get access to the complete PECOS API without
-//! having to manually import from each component crate.
+//! This prelude re-exports the preludes from all PECOS component crates,
+//! plus pecos-specific functionality like the unified simulation API.
 //!
-//! ## Contents
+//! ## Recommended Usage
 //!
-//! This prelude includes re-exports from:
-//!
-//! * `pecos_core`: Core types, traits, and error handling
-//! * `pecos_engines`: Simulation engines for quantum and classical processing
-//! * `pecos_phir_json`: PECOS High-level Intermediate Representation
-//! * `pecos_qasm`: `OpenQASM` language support
-//! * `pecos_qis_core`: QIS control engine with multiple runtime support
-//! * `pecos_qsim`: Quantum simulation implementations
-//!
-//! It also includes key functionality from the top-level PECOS crate:
-//!
-//! * Simulation functions (`sim`, `sim_builder`)
-//! * Engine setup functions (`setup_qasm_engine`, `setup_llvm_engine`)
-//! * Program type detection and handling
-//!
-//! ## Usage
-//!
-//! ```rust
+//! ```rust,no_run
 //! use pecos::prelude::*;
 //!
-//! // Now you can use all common PECOS types and functions without additional imports
+//! let qasm_code = r#"
+//!     OPENQASM 2.0;
+//!     include "qelib1.inc";
+//!     qreg q[2];
+//!     h q[0];
+//!     cx q[0], q[1];
+//! "#;
+//! let program = QasmProgram::from_string(qasm_code);
+//!
+//! let results = sim(program)
+//!     .quantum(sparse_stabilizer())
+//!     .seed(42)
+//!     .run(1000)?;
+//! # Ok::<(), pecos_core::errors::PecosError>(())
 //! ```
+//!
+//! ## What's Included
+//!
+//! This prelude includes everything from:
+//!
+//! - `pecos_core::prelude` - Core types, traits, and error handling
+//! - `pecos_engines::prelude` - Simulation engines and builders
+//! - `pecos_qasm::prelude` - `OpenQASM` language support
+//! - `pecos_qsim::prelude` - Quantum simulation implementations
+//! - `pecos_qis_core::prelude` - QIS control engine
+//! - `pecos_qis_native::prelude` - Native Rust QIS runtime
+//! - `pecos_programs::prelude` - Program type definitions
+//! - `pecos_rng::prelude` - Random number generation
+//! - `pecos_hugr_qis::prelude` - HUGR to QIS compilation
+//! - `pecos_phir_json::prelude` - PHIR-JSON format support
+//!
+//! Plus pecos-specific items:
+//!
+//! - Unified simulation API: `sim()`, `SimBuilderExt`
+//! - Program utilities: `detect_program_type()`, etc.
+//! - Feature-gated quantum backends: `CppSparseStab`, `QuestStateVec`, etc.
+//!
+//! For organized access to specific functionality, use the namespace modules:
+//!
+//! - [`crate::engines`] - Classical control engines
+//! - [`crate::quantum`] - Quantum simulation backends
+//! - [`crate::noise`] - Noise models
+//! - [`crate::runtime`] - QIS runtimes
 
+// ============================================================================
 // Re-export preludes from component crates
+// ============================================================================
+
 pub use pecos_core::prelude::*;
 pub use pecos_engines::prelude::*;
-pub use pecos_phir_json::prelude::*;
 pub use pecos_qasm::prelude::*;
-// Re-export pecos_qis_core selectively to avoid conflicts with pecos_engines
-// The main Shot type users should use is from pecos_engines (more feature-rich)
-// The QIS Shot is an internal implementation detail
-pub use pecos_qis_core::{
-    qis_control_engine, QisControlEngine, QisEngineBuilder,
-    QisInterface, QisInterfaceBuilder, QisRuntime,
-    ProgramFormat, InterfaceError, RuntimeError,
-    ClassicalState,
-    // Note: Shot and Value from pecos_qis_core are NOT exported to avoid ambiguity
-    // Use pecos_engines::Shot and pecos_qis_core::runtime::Value if needed
-};
-// pecos_qis_sim removed - using pecos_qis_core instead
 pub use pecos_qsim::prelude::*;
+
+// Re-export pecos_qis_core prelude
+// Note: Shot and Value from pecos_qis_core are not included (removed from its prelude)
+// to avoid conflicts with pecos_engines (which provides the main Shot type users should use)
+pub use pecos_qis_core::prelude::*;
 
 // Re-export QIS interface implementations when features are enabled
 #[cfg(feature = "jit")]
-pub use pecos_qis_jit::{JitInterfaceBuilder, QisJitInterface, jit_interface_builder};
+pub use pecos_qis_jit::prelude::*;
 #[cfg(feature = "selene")]
-pub use pecos_qis_selene::{HeliosInterfaceBuilder, QisHeliosInterface, helios_interface_builder};
+pub use pecos_qis_selene::prelude::*;
 
-// Re-export native runtime
-pub use pecos_qis_native::native_runtime;
+// Re-export native runtime prelude
+pub use pecos_qis_native::prelude::*;
 
-// Re-export ShotVec directly from pecos_engines for easier access
-pub use pecos_engines::shot_results::ShotVec;
+// Re-export program types prelude
+pub use pecos_programs::prelude::*;
 
-// Re-export crate-specific utilities
+// Re-export RNG prelude
+pub use pecos_rng::prelude::*;
+
+// Re-export HUGR compiler prelude
+pub use pecos_hugr_qis::prelude::*;
+
+// Re-export PHIR-JSON prelude
+pub use pecos_phir_json::prelude::*;
+
+// Re-export PHIR configuration (not commonly used, but available)
+pub use pecos_phir::PhirConfig;
+
+// ============================================================================
+// Pecos-specific items (unified API and utilities)
+// ============================================================================
+
+// Re-export crate-specific utilities from pecos crate itself
 pub use crate::program::{
     ProgramType, detect_program_type, get_program_path, setup_engine_for_program,
 };
 
-// Re-export program types from pecos-programs
-pub use pecos_programs::{HugrProgram, Program, QasmProgram, QisProgram};
+// Re-export unified simulation API from pecos crate
+pub use crate::unified_sim::{ProgrammedSimBuilder, SimBuilderExt, sim};
 
-// Re-export setup functions from format-specific crates
-pub use pecos_phir_json::setup_phir_json_engine;
-pub use pecos_qasm::setup_qasm_engine;
+// ============================================================================
+// Feature-gated quantum simulator backends
+// ============================================================================
 
-// Re-export ClassicalControlEngine
-pub use pecos_engines::ClassicalControlEngine;
+#[cfg(feature = "cppsparsesim")]
+pub use pecos_cppsparsesim::CppSparseStab;
 
-// Re-export unified simulation API
-pub use crate::unified_sim::{SimBuilderExt, sim};
-pub use pecos_engines::sim_builder;
+#[cfg(feature = "quest")]
+pub use pecos_quest::{QuestDensityMatrix, QuestStateVec};
 
-// Re-export PCG RNG functions
-pub use pecos_rng::rng_pcg;
+#[cfg(feature = "qulacs")]
+pub use pecos_qulacs::QulacsStateVec;

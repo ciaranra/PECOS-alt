@@ -41,7 +41,7 @@ pub enum QuantumOp {
     RZ(f64, usize),
 
     // Hardware-native gates (for Selene compatibility)
-    RXY(f64, f64, usize),  // theta, phi, qubit
+    RXY(f64, f64, usize), // theta, phi, qubit
 
     // Two-qubit gates
     CX(usize, usize),
@@ -60,7 +60,7 @@ pub enum QuantumOp {
     RZZ(f64, usize, usize),
 
     // Measurement
-    Measure(usize, usize),  // qubit, result_id
+    Measure(usize, usize), // qubit, result_id
 
     // Reset
     Reset(usize),

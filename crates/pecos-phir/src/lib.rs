@@ -158,25 +158,27 @@ pub mod prelude {
 /// Helper function to compile a PHIR module to LLVM IR or MLIR text
 #[cfg(feature = "hugr")]
 fn compile_module_to_output(module: &Module, config: &PhirConfig) -> Result<String> {
+    use log::debug;
+
     // Debug: print PHIR structure if debug mode is enabled
     if config.debug {
-        eprintln!("PHIR Module: {}", module.name);
+        debug!("PHIR Module: {}", module.name);
         if let Some(block) = module.body.blocks.first() {
             for instr in &block.operations {
                 if let crate::ops::Operation::Builtin(crate::builtin_ops::BuiltinOp::Func(func)) =
                     &instr.operation
                 {
-                    eprintln!("  Function: {}", func.name);
+                    debug!("  Function: {}", func.name);
                     if let Some(region) = func.body.first()
                         && let Some(block) = region.blocks.first()
                     {
                         for (j, op) in block.operations.iter().enumerate() {
-                            eprintln!("    Instruction {}: {:?}", j, op.operation);
-                            eprintln!("      Operands: {:?}", op.operands);
-                            eprintln!("      Results: {:?}", op.results);
+                            debug!("    Instruction {}: {:?}", j, op.operation);
+                            debug!("      Operands: {:?}", op.operands);
+                            debug!("      Results: {:?}", op.results);
                         }
                         if let Some(term) = &block.terminator {
-                            eprintln!("    Terminator: {term:?}");
+                            debug!("    Terminator: {term:?}");
                         }
                     }
                 }
@@ -189,7 +191,7 @@ fn compile_module_to_output(module: &Module, config: &PhirConfig) -> Result<Stri
 
     // Debug: print MLIR if debug mode is enabled
     if config.debug {
-        eprintln!("\nGenerated MLIR:\n{mlir_text}");
+        debug!("\nGenerated MLIR:\n{mlir_text}");
     }
 
     // If we're generating MLIR for quantum operations, convert to LLVM IR
@@ -205,7 +207,7 @@ fn compile_module_to_output(module: &Module, config: &PhirConfig) -> Result<Stri
 
         // Debug: print LLVM IR if debug mode is enabled
         if config.debug {
-            eprintln!("\nGenerated LLVM IR:\n{llvm_ir}");
+            debug!("\nGenerated LLVM IR:\n{llvm_ir}");
         }
 
         Ok(llvm_ir)

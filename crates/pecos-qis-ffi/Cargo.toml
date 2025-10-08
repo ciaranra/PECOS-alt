@@ -2,6 +2,7 @@
 name = "pecos-qis-ffi"
 version.workspace = true
 edition.workspace = true
+description = "FFI layer for quantum instruction set operations"
 readme.workspace = true
 authors.workspace = true
 homepage.workspace = true

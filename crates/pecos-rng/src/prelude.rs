@@ -1,4 +1,4 @@
-// Copyright 2024 The PECOS Developers
+// Copyright 2025 The PECOS Developers
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.You may obtain a copy of the License at
@@ -10,15 +10,12 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-pub use pecos_core::{IndexableElement, VecSet};
+//! A prelude for users of the `pecos-rng` crate.
+//!
+//! This prelude re-exports the PCG random number generator module.
 
-pub use crate::{
-    arbitrary_rotation_gateable::ArbitraryRotationGateable,
-    clifford_gateable::CliffordGateable,
-    coin_toss::CoinToss,
-    pauli_prop::{PauliProp, StdPauliProp},
-    quantum_simulator::QuantumSimulator,
-    sparse_stab::{SparseStab, StdSparseStab},
-    stabilizer_tableau::StabilizerTableauSimulator,
-    state_vec::StateVec,
-};
+// Re-export RNG module
+pub use crate::rng_pcg;
+
+// Re-export PCG random type from the module
+pub use crate::rng_pcg::PCGRandom;

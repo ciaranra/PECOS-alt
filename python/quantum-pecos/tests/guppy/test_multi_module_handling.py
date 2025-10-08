@@ -5,6 +5,7 @@ similar to the PECOS compiler behavior we observed.
 """
 
 import json
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -58,16 +59,15 @@ def count_modules_in_hugr(hugr_str: str) -> tuple[int, list[str]]:
         data = json.loads(hugr_str)
         modules = data.get("modules", [])
 
-        function_names = []
-        for module in modules:
-            nodes = module.get("nodes", [])
-            for node in nodes:
-                if (
-                    node.get("op") == "FuncDefn"
-                    and "name" in node
-                    and node["name"] != "__main__"
-                ):  # Skip main module
-                    function_names.append(node["name"])
+        # Extract function names from all modules
+        function_names = [
+            node["name"]
+            for module in modules
+            for node in module.get("nodes", [])
+            if node.get("op") == "FuncDefn"
+            and "name" in node
+            and node["name"] != "__main__"
+        ]
 
         return len(modules), function_names
     except (json.JSONDecodeError, KeyError, TypeError) as e:
@@ -92,8 +92,8 @@ def extract_function_calls_from_llvm(llvm_ir: str) -> set[str]:
     ]
 
     function_calls = set()
-    for line in llvm_ir.split("\n"):
-        line = line.strip()
+    for raw_line in llvm_ir.split("\n"):
+        line = raw_line.strip()
         if "call" in line or "define" in line or "___" in line:
             for pattern in patterns:
                 matches = re.findall(pattern, line)
@@ -247,23 +247,18 @@ def test_compiler_comparison_simple() -> None:
     print(f"Rust-only functions: {sorted(rust_only)}")
 
     # Save debug output
-    debug_dir = Path("/tmp/compiler_comparison_debug")
+    debug_dir = Path(tempfile.gettempdir()) / "compiler_comparison_debug"
     debug_dir.mkdir(exist_ok=True)
 
-    with open(debug_dir / "hugr.txt", "w") as f:
-        f.write(hugr_str)
+    (debug_dir / "hugr.txt").write_text(hugr_str)
 
     if hugr_str.startswith("HUGRi"):
         json_start = hugr_str.find('{"modules"')
         if json_start != -1:
-            with open(debug_dir / "hugr.json", "w") as f:
-                f.write(hugr_str[json_start:])
+            (debug_dir / "hugr.json").write_text(hugr_str[json_start:])
 
-    with open(debug_dir / "selene.ll", "w") as f:
-        f.write(selene_llvm)
-
-    with open(debug_dir / "rust.ll", "w") as f:
-        f.write(rust_llvm)
+    (debug_dir / "selene.ll").write_text(selene_llvm)
+    (debug_dir / "rust.ll").write_text(rust_llvm)
 
     print(f"Debug files saved to: {debug_dir}")
 
@@ -327,9 +322,8 @@ def test_hugr_structure_analysis() -> None:
                         print(f"    - Function: {func_name}")
 
         # Save the full structure for manual inspection
-        debug_file = Path("/tmp/hugr_structure.json")
-        with open(debug_file, "w") as f:
-            json.dump(data, f, indent=2)
+        debug_file = Path(tempfile.gettempdir()) / "hugr_structure.json"
+        debug_file.write_text(json.dumps(data, indent=2))
         print(f"Full HUGR structure saved to: {debug_file}")
 
     except json.JSONDecodeError as e:

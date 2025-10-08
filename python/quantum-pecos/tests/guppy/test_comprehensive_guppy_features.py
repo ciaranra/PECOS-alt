@@ -5,6 +5,7 @@ the full spectrum of Guppy language capabilities, from basic quantum operations
 to advanced classical-quantum hybrid programs.
 """
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -174,13 +175,12 @@ class GuppyPipelineTest:
 def pipeline_tester() -> GuppyPipelineTest:
     """Fixture providing the pipeline testing helper."""
     import gc
+
     import pecos_rslib
 
     # Force cleanup before test
-    try:
+    with contextlib.suppress(Exception):
         pecos_rslib.clear_jit_cache()
-    except Exception:
-        pass
 
     # Force garbage collection to clean up any lingering resources
     gc.collect()
@@ -191,10 +191,8 @@ def pipeline_tester() -> GuppyPipelineTest:
     yield tester
 
     # Force cleanup after test
-    try:
+    with contextlib.suppress(Exception):
         pecos_rslib.clear_jit_cache()
-    except Exception:
-        pass
 
     # Force garbage collection to clean up test resources
     gc.collect()

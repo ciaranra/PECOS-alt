@@ -25,7 +25,7 @@ except ImportError as e:
     sys.exit(1)
 
 
-def generate_bell_state_hugr():
+def generate_bell_state_hugr() -> str:
     """Generate HUGR for Bell state circuit."""
 
     @guppy
@@ -52,7 +52,7 @@ def generate_bell_state_hugr():
     return compiled.to_str()
 
 
-def generate_single_hadamard_hugr():
+def generate_single_hadamard_hugr() -> str:
     """Generate HUGR for single Hadamard gate."""
 
     @guppy
@@ -69,7 +69,7 @@ def generate_single_hadamard_hugr():
     return compiled.to_str()
 
 
-def generate_ghz_state_hugr():
+def generate_ghz_state_hugr() -> str:
     """Generate HUGR for 3-qubit GHZ state."""
 
     @guppy
@@ -132,7 +132,8 @@ def main() -> int:
             print("  Valid HUGR format")
         else:
             print(f"  Warning: Unexpected format (starts with: {hugr_str[:20]}...)")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+        # Broad exception catch is intentional - we want to handle any compilation/serialization error
         print(f"  Error generating Bell state: {e}")
         return 1
 
@@ -149,7 +150,8 @@ def main() -> int:
             print("  Valid HUGR format")
         else:
             print(f"  Warning: Unexpected format (starts with: {hugr_str[:20]}...)")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+        # Broad exception catch is intentional - we want to handle any compilation/serialization error
         print(f"  Error generating single Hadamard: {e}")
         return 1
 
@@ -166,7 +168,8 @@ def main() -> int:
             print("  Valid HUGR format")
         else:
             print(f"  Warning: Unexpected format (starts with: {hugr_str[:20]}...)")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
+        # Broad exception catch is intentional - we want to handle any compilation/serialization error
         print(f"  Error generating GHZ state: {e}")
         return 1
 

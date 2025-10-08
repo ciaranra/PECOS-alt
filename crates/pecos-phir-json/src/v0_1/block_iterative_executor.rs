@@ -96,7 +96,7 @@ impl<'a> BlockIterativeExecutor<'a> {
     /// Process a single operation, handling blocks and buffering
     #[allow(clippy::too_many_lines)]
     fn process_operation(&mut self, op: &'a Operation) -> Result<(), PecosError> {
-        println!("Processing operation: {op:?}");
+        debug!("Processing operation: {op:?}");
         match op {
             Operation::Block {
                 block,
@@ -259,11 +259,11 @@ impl<'a> BlockIterativeExecutor<'a> {
                 }
 
                 // Process this classical operation
-                println!("Processing classical operation");
+                debug!("Processing classical operation");
                 let result = self.executor.process_operation(op);
 
                 // Debug: check the environment after processing
-                println!(
+                debug!(
                     "After processing classical op - Environment: {:?}",
                     self.executor.get_environment()
                 );

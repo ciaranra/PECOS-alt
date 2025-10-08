@@ -1,29 +1,28 @@
 //! QIS Control Engine - with trait-based interfaces
 //!
-//! This module implements a QisControlEngine that works with both
+//! This module implements a `QisEngine` that works with both
 //! trait-based interfaces and runtimes, mediating between them.
 
 use crate::qis_interface::{BoxedInterface, ProgramFormat};
 use crate::runtime::QisRuntime;
-use pecos_qis_ffi::{OperationCollector as OperationList, QuantumOp};
-use pecos_engines::{
-    ClassicalEngine, ControlEngine, Engine, EngineStage,
-    ByteMessage, ByteMessageBuilder,
-};
-use pecos_engines::noise::utils::NoiseUtils;
-use pecos_core::prelude::PecosError;
-use pecos_engines::shot_results::{Shot, Data};
-use std::collections::{HashMap, BTreeMap};
 use log::debug;
+use pecos_core::prelude::PecosError;
+use pecos_engines::noise::utils::NoiseUtils;
+use pecos_engines::shot_results::{Data, Shot};
+use pecos_engines::{
+    ByteMessage, ByteMessageBuilder, ClassicalEngine, ControlEngine, Engine, EngineStage,
+};
+use pecos_qis_ffi::{OperationCollector as OperationList, QuantumOp};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+use std::collections::{BTreeMap, HashMap};
 
 /// QIS Control Engine that mediates between interface and runtime
 ///
 /// This engine contains:
-/// - A QisInterface implementation (JIT, Helios, etc.) for executing programs
-/// - A QisRuntime implementation (Native, Selene, etc.) for managing control flow
-pub struct QisControlEngine {
+/// - A `QisInterface` implementation (JIT, Helios, etc.) for executing programs
+/// - A `QisRuntime` implementation (Native, Selene, etc.) for managing control flow
+pub struct QisEngine {
     /// The QIS interface (program executor)
     interface: Option<BoxedInterface>,
 
@@ -42,7 +41,7 @@ pub struct QisControlEngine {
     /// Tracking measurement result IDs for the current batch
     measurement_mapping: Vec<usize>,
 
-    /// Stored measurement results for get_results()
+    /// Stored measurement results for `get_results()`
     measurement_results: HashMap<usize, bool>,
 
     /// RNG for generating per-shot seeds
@@ -52,8 +51,9 @@ pub struct QisControlEngine {
     current_shot_seed: Option<u64>,
 }
 
-impl QisControlEngine {
+impl QisEngine {
     /// Create a new engine with the given interface and runtime
+    #[must_use]
     pub fn new(interface: BoxedInterface, runtime: Box<dyn QisRuntime>) -> Self {
         Self {
             interface: Some(interface),
@@ -69,7 +69,8 @@ impl QisControlEngine {
     }
 
     /// Get the current shot seed for quantum engine seeding
-    /// This should be called after start() to get the seed generated for the current shot
+    /// This should be called after `start()` to get the seed generated for the current shot
+    #[must_use]
     pub fn current_shot_seed(&self) -> Option<u64> {
         self.current_shot_seed
     }
@@ -77,17 +78,29 @@ impl QisControlEngine {
     /// Initialize the engine by collecting operations from the interface
     ///
     /// This should be called for pre-built interfaces to load operations into the runtime
+    ///
+    /// # Errors
+    /// Returns an error if no interface is available, or if operation collection or runtime loading fails.
     pub fn initialize_from_interface(&mut self) -> Result<(), PecosError> {
         if let Some(ref mut interface) = self.interface {
             debug!("Collecting operations from interface");
-            let operations = interface.collect_operations()
+            let operations = interface
+                .collect_operations()
                 .map_err(crate::interface_impl::interface_error_to_pecos)?;
-            debug!("Collected {} operations, {} allocated qubits", operations.operations.len(), operations.allocated_qubits.len());
+            debug!(
+                "Collected {} operations, {} allocated qubits",
+                operations.operations.len(),
+                operations.allocated_qubits.len()
+            );
 
             // Load operations into runtime
-            self.runtime.load_interface(operations)
-                .map_err(|e| PecosError::Generic(format!("Failed to load operations into runtime: {}", e)))?;
-            debug!("Runtime loaded, reporting {} qubits", self.runtime.num_qubits());
+            self.runtime.load_interface(operations).map_err(|e| {
+                PecosError::Generic(format!("Failed to load operations into runtime: {e}"))
+            })?;
+            debug!(
+                "Runtime loaded, reporting {} qubits",
+                self.runtime.num_qubits()
+            );
             Ok(())
         } else {
             Err(PecosError::Generic("No interface available".to_string()))
@@ -95,6 +108,7 @@ impl QisControlEngine {
     }
 
     /// Create with just a runtime (interface will be set later)
+    #[must_use]
     pub fn with_runtime(runtime: Box<dyn QisRuntime>) -> Self {
         Self {
             interface: None,
@@ -115,8 +129,15 @@ impl QisControlEngine {
     }
 
     /// Load a program into both interface and runtime
-    pub fn load_program(&mut self, program_bytes: &[u8], format: ProgramFormat) -> Result<(), PecosError> {
-        debug!("Loading program into QisControlEngine");
+    ///
+    /// # Errors
+    /// Returns an error if no interface is set, or if program loading, operation collection, or runtime loading fails.
+    pub fn load_program(
+        &mut self,
+        program_bytes: &[u8],
+        format: ProgramFormat,
+    ) -> Result<(), PecosError> {
+        debug!("Loading program into QisEngine");
 
         // Load into the interface
         if let Some(ref mut interface) = self.interface {
@@ -129,22 +150,28 @@ impl QisControlEngine {
                 // Users of JIT interface should call pecos_qis_jit::reset_measurement_manager() directly
             }
 
-            interface.load_program(program_bytes, format)
+            interface
+                .load_program(program_bytes, format)
                 .map_err(crate::interface_impl::interface_error_to_pecos)?;
 
             // Collect initial operations to set up the runtime
-            let operations = interface.collect_operations()
+            let operations = interface
+                .collect_operations()
                 .map_err(crate::interface_impl::interface_error_to_pecos)?;
 
             // Load the operations into the runtime first
-            self.runtime.load_interface(operations.clone())
-                .map_err(|e| PecosError::Generic(format!("Failed to load into runtime: {}", e)))?;
+            self.runtime
+                .load_interface(operations.clone())
+                .map_err(|e| PecosError::Generic(format!("Failed to load into runtime: {e}")))?;
 
             // Get qubit count from runtime (it should analyze the operations)
             self.num_qubits = self.runtime.num_qubits();
             debug!("Runtime reports {} qubits", self.num_qubits);
-            debug!("Interface had {} allocated qubits: {:?}",
-                     operations.allocated_qubits.len(), operations.allocated_qubits);
+            debug!(
+                "Interface had {} allocated qubits: {:?}",
+                operations.allocated_qubits.len(),
+                operations.allocated_qubits
+            );
 
             self.current_operations = Some(operations);
         } else {
@@ -154,8 +181,11 @@ impl QisControlEngine {
         Ok(())
     }
 
-    /// Convert quantum operations to ByteMessage for the quantum engine
-    fn operations_to_bytemessage(&mut self, ops: Vec<QuantumOp>) -> Result<ByteMessage, PecosError> {
+    /// Convert quantum operations to `ByteMessage` for the quantum engine
+    fn operations_to_bytemessage(
+        &mut self,
+        ops: Vec<QuantumOp>,
+    ) -> Result<ByteMessage, PecosError> {
         let mut builder = ByteMessageBuilder::new();
         self.measurement_mapping.clear();
 
@@ -217,20 +247,21 @@ impl QisControlEngine {
                 _ => {
                     // For other operations, we'd need to add more builder methods
                     // or convert to a generic gate representation
-                    return Err(PecosError::Generic(format!("Unsupported operation: {:?}", op)));
+                    return Err(PecosError::Generic(format!(
+                        "Unsupported operation: {op:?}"
+                    )));
                 }
             }
         }
 
         Ok(builder.build())
     }
-
 }
 
-impl Clone for QisControlEngine {
+impl Clone for QisEngine {
     fn clone(&self) -> Self {
         Self {
-            interface: None,  // Can't easily clone boxed trait objects
+            interface: None, // Can't easily clone boxed trait objects
             runtime: dyn_clone::clone_box(&*self.runtime),
             current_operations: self.current_operations.clone(),
             num_qubits: self.num_qubits,
@@ -243,12 +274,12 @@ impl Clone for QisControlEngine {
     }
 }
 
-impl Engine for QisControlEngine {
+impl Engine for QisEngine {
     type Input = ();
     type Output = Shot;
 
     fn process(&mut self, _input: Self::Input) -> Result<Self::Output, PecosError> {
-        debug!("QisControlEngine::process called");
+        debug!("QisEngine::process called");
 
         // Use the ControlEngine implementation for processing
         let mut stage = self.start(())?;
@@ -269,11 +300,13 @@ impl Engine for QisControlEngine {
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {
-        eprintln!("DEBUG QisControlEngine: reset() called");
-        self.runtime.reset()
-            .map_err(|e| PecosError::Generic(format!("Failed to reset runtime: {}", e)))?;
+        debug!("QisEngine: reset() called");
+        self.runtime
+            .reset()
+            .map_err(|e| PecosError::Generic(format!("Failed to reset runtime: {e}")))?;
         if let Some(ref mut interface) = self.interface {
-            interface.reset()
+            interface
+                .reset()
                 .map_err(crate::interface_impl::interface_error_to_pecos)?;
         }
         self.current_operations = None;
@@ -281,68 +314,73 @@ impl Engine for QisControlEngine {
         self.measurement_mapping.clear();
         self.measurement_results.clear();
         self.current_shot_seed = None;
-        eprintln!("DEBUG QisControlEngine: reset() completed, cleared measurement_results");
+        debug!("QisEngine: reset() completed, cleared measurement_results");
         Ok(())
     }
 }
 
-impl ClassicalEngine for QisControlEngine {
+impl ClassicalEngine for QisEngine {
     fn num_qubits(&self) -> usize {
         let num_qubits = self.runtime.num_qubits();
-        eprintln!("DEBUG QisControlEngine: num_qubits() returning {}", num_qubits);
+        debug!("QisEngine: num_qubits() returning {num_qubits}");
         num_qubits
     }
 
     fn set_seed(&mut self, seed: u64) -> Result<(), PecosError> {
         // Seed the RNG for generating per-shot seeds
         self.rng = ChaCha8Rng::seed_from_u64(seed);
-        eprintln!("DEBUG QisControlEngine: Set master seed to {} !!!", seed);
+        debug!("QisEngine: Set master seed to {seed}");
         Ok(())
     }
 
     fn generate_commands(&mut self) -> Result<ByteMessage, PecosError> {
-        debug!("QisControlEngine::generate_commands called");
-        eprintln!("DEBUG QisControlEngine: generate_commands() called");
+        debug!("QisEngine::generate_commands called");
 
         // Get next batch of quantum operations from runtime
         match self.runtime.execute_until_quantum() {
             Ok(Some(ops)) => {
-                eprintln!("DEBUG QisControlEngine: Runtime returned {} operations", ops.len());
+                debug!("QisEngine: Runtime returned {} operations", ops.len());
                 for op in &ops {
-                    eprintln!("DEBUG QisControlEngine: Operation: {:?}", op);
+                    debug!("QisEngine: Operation: {op:?}");
                 }
                 let quantum_ops: Vec<QuantumOp> = ops;
                 let msg = self.operations_to_bytemessage(quantum_ops)?;
-                eprintln!("DEBUG QisControlEngine: Generated ByteMessage with {} measurement mappings", self.measurement_mapping.len());
+                debug!(
+                    "QisEngine: Generated ByteMessage with {} measurement mappings",
+                    self.measurement_mapping.len()
+                );
 
                 // Debug: Print the actual ByteMessage content
-                eprintln!("DEBUG QisControlEngine: Generated ByteMessage:");
+                debug!("QisEngine: Generated ByteMessage:");
                 if let Ok(quantum_ops) = msg.quantum_ops() {
-                    eprintln!("  Quantum ops: {} total", quantum_ops.len());
+                    debug!("  Quantum ops: {} total", quantum_ops.len());
                     for (i, gate) in quantum_ops.iter().enumerate() {
-                        eprintln!("    Gate {}: {:?}", i, gate);
+                        debug!("    Gate {i}: {gate:?}");
                     }
                 }
                 if let Ok(empty) = msg.is_empty() {
-                    eprintln!("  Is empty: {}", empty);
+                    debug!("  Is empty: {empty}");
                 }
 
                 Ok(msg)
             }
             Ok(None) => {
-                eprintln!("DEBUG QisControlEngine: Runtime complete, no more operations");
+                debug!("QisEngine: Runtime complete, no more operations");
                 Ok(ByteMessage::builder().build())
             }
             Err(e) => {
-                eprintln!("DEBUG QisControlEngine: Runtime error: {}", e);
-                Err(PecosError::Generic(format!("Runtime error: {}", e)))
+                debug!("QisEngine: Runtime error: {e}");
+                Err(PecosError::Generic(format!("Runtime error: {e}")))
             }
         }
     }
 
     fn get_results(&self) -> Result<Shot, PecosError> {
-        debug!("QisControlEngine::get_results called");
-        eprintln!("DEBUG QisControlEngine: get_results() called, stored results: {:?}", self.measurement_results);
+        debug!("QisEngine::get_results called");
+        debug!(
+            "QisEngine: get_results() called, stored results: {:?}",
+            self.measurement_results
+        );
 
         // Convert stored measurement results to PECOS shot format
         let mut shot = Shot::default();
@@ -350,26 +388,42 @@ impl ClassicalEngine for QisControlEngine {
         // Add measurements from stored results
         for (result_id, value) in &self.measurement_results {
             shot.data.insert(
-                format!("measurement_{}", result_id),
-                Data::U32(if *value { 1 } else { 0 }),
+                format!("measurement_{result_id}"),
+                Data::U32(u32::from(*value)),
             );
-            eprintln!("DEBUG QisControlEngine: Added to shot: measurement_{} = {}", result_id, if *value { 1 } else { 0 });
+            debug!(
+                "QisEngine: Added to shot: measurement_{} = {}",
+                result_id,
+                i32::from(*value)
+            );
         }
 
-        eprintln!("DEBUG QisControlEngine: Final shot data: {:?}", shot.data);
-        debug!("Returning shot with {} measurement results", self.measurement_results.len());
+        debug!("QisEngine: Final shot data: {:?}", shot.data);
+        debug!(
+            "Returning shot with {} measurement results",
+            self.measurement_results.len()
+        );
         Ok(shot)
     }
 
     fn handle_measurements(&mut self, message: ByteMessage) -> Result<(), PecosError> {
-        debug!("QisControlEngine::handle_measurements called");
+        debug!("QisEngine::handle_measurements called");
 
         // Extract measurements from ByteMessage
-        let measurements = message.outcomes()
-            .map_err(|e| PecosError::Generic(format!("Failed to parse measurements: {}", e)))?;
+        let measurements = message
+            .outcomes()
+            .map_err(|e| PecosError::Generic(format!("Failed to parse measurements: {e}")))?;
 
-        eprintln!("DEBUG QisControlEngine: Received {} measurements: {:?}", measurements.len(), measurements);
-        eprintln!("DEBUG QisControlEngine: Mapping size: {}, mapping: {:?}", self.measurement_mapping.len(), self.measurement_mapping);
+        debug!(
+            "QisEngine: Received {} measurements: {:?}",
+            measurements.len(),
+            measurements
+        );
+        debug!(
+            "QisEngine: Mapping size: {}, mapping: {:?}",
+            self.measurement_mapping.len(),
+            self.measurement_mapping
+        );
 
         // Convert to BTreeMap for the runtime and store for get_results()
         let mut measurement_map = BTreeMap::new();
@@ -381,14 +435,18 @@ impl ClassicalEngine for QisControlEngine {
 
                 // Store for get_results()
                 self.measurement_results.insert(result_id, bool_value);
-                eprintln!("DEBUG QisControlEngine: Stored measurement result_id={}, value={}", result_id, bool_value);
+                debug!("QisEngine: Stored measurement result_id={result_id}, value={bool_value}");
             }
         }
 
-        eprintln!("DEBUG QisControlEngine: Final measurement_results: {:?}", self.measurement_results);
+        debug!(
+            "QisEngine: Final measurement_results: {:?}",
+            self.measurement_results
+        );
 
-        self.runtime.provide_measurements(measurement_map)
-            .map_err(|e| PecosError::Generic(format!("Failed to provide measurements: {}", e)))
+        self.runtime
+            .provide_measurements(measurement_map)
+            .map_err(|e| PecosError::Generic(format!("Failed to provide measurements: {e}")))
     }
 
     fn compile(&self) -> Result<(), PecosError> {
@@ -407,7 +465,7 @@ impl ClassicalEngine for QisControlEngine {
     }
 }
 
-impl ControlEngine for QisControlEngine {
+impl ControlEngine for QisEngine {
     type Input = ();
     type Output = Shot;
     type EngineInput = ByteMessage;
@@ -417,16 +475,16 @@ impl ControlEngine for QisControlEngine {
         &mut self,
         _input: Self::Input,
     ) -> Result<EngineStage<Self::EngineInput, Self::Output>, PecosError> {
-        debug!("QisControlEngine::start called");
+        debug!("QisEngine::start called");
 
         // Clear previous shot's measurement state
         self.measurement_results.clear();
         self.measurement_mapping.clear();
-        eprintln!("DEBUG QisControlEngine: Cleared previous measurement results for new shot");
+        debug!("QisEngine: Cleared previous measurement results for new shot");
 
         // Generate a per-shot seed from our RNG
         let shot_seed = self.rng.next_u64();
-        eprintln!("DEBUG QisControlEngine: Generated shot seed {}", shot_seed);
+        debug!("QisEngine: Generated shot seed {shot_seed}");
 
         // Store the shot seed for quantum engine access
         self.current_shot_seed = Some(shot_seed);
@@ -434,12 +492,12 @@ impl ControlEngine for QisControlEngine {
         // Reset the runtime to ensure clean state for new shot
         self.runtime
             .reset()
-            .map_err(|e| PecosError::Generic(format!("Failed to reset runtime: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Failed to reset runtime: {e}")))?;
 
         // Start a new shot with the generated seed
         self.runtime
             .shot_start(0, Some(shot_seed))
-            .map_err(|e| PecosError::Generic(format!("Failed to start shot: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Failed to start shot: {e}")))?;
 
         self.started = true;
 
@@ -455,8 +513,11 @@ impl ControlEngine for QisControlEngine {
         }
     }
 
-    fn continue_processing(&mut self, input: Self::EngineOutput) -> Result<EngineStage<Self::EngineInput, Self::Output>, PecosError> {
-        debug!("QisControlEngine::continue_processing called");
+    fn continue_processing(
+        &mut self,
+        input: Self::EngineOutput,
+    ) -> Result<EngineStage<Self::EngineInput, Self::Output>, PecosError> {
+        debug!("QisEngine::continue_processing called");
 
         // Process the response from quantum engine
         if NoiseUtils::has_measurements(&input) {
@@ -480,5 +541,5 @@ impl ControlEngine for QisControlEngine {
     }
 }
 
-// Tests for QisControlEngine are in the implementation crates (pecos-qis-jit, pecos-qis-native, etc.)
+// Tests for QisEngine are in the implementation crates (pecos-qis-jit, pecos-qis-native, etc.)
 // since they require actual interface and runtime implementations.

@@ -12,7 +12,7 @@ categories.workspace = true
 description = "QASM parser and engine for PECOS quantum simulator"
 
 [features]
-default = []
+default = ["wasm"]
 wasm = ["wasmtime", "wat"]
 
 [dependencies]

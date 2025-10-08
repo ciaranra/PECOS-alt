@@ -13,12 +13,13 @@ try:
 except ImportError:
     HAVE_ADVANCED_GATES = False
 
-    # Define dummy functions for testing
-    def toffoli(q0, q1, q2) -> None:
-        pass
+    # Define dummy functions for testing (never actually called - tests are skipped)
+    # Type annotations match the actual guppylang function signatures
+    def toffoli(q0: "qubit", q1: "qubit", q2: "qubit") -> None:  # type: ignore[name-defined]
+        """Dummy toffoli gate for when advanced gates are not available."""
 
-    def crz(q0, q1, angle) -> None:
-        pass
+    def crz(q0: "qubit", q1: "qubit", angle: float) -> None:  # type: ignore[name-defined]
+        """Dummy CRz gate for when advanced gates are not available."""
 
 
 class TestThreeQubitGates:
@@ -152,18 +153,22 @@ class TestCompilerFeatures:
 # Test fallback for when advanced gates are not available
 def test_advanced_gates_availability() -> None:
     """Check if advanced gates are available in guppylang."""
-    try:
-        from guppylang.std.quantum import toffoli
+    import importlib.util
 
-        assert True, "Toffoli gate is available"
-    except ImportError:
-        # It's okay if not available, we handle it
-        pass
+    # Check for Toffoli gate
+    if importlib.util.find_spec("guppylang.std.quantum") is not None:
+        try:
+            from guppylang.std.quantum import toffoli  # noqa: F401
 
-    try:
-        from guppylang.std.quantum import crz
+            assert True, "Toffoli gate is available"
+        except (ImportError, AttributeError):
+            pass  # Gate not available in this version
 
-        assert True, "CRz gate is available"
-    except ImportError:
-        # It's okay if not available, we handle it
-        pass
+    # Check for CRz gate
+    if importlib.util.find_spec("guppylang.std.quantum") is not None:
+        try:
+            from guppylang.std.quantum import crz  # noqa: F401
+
+            assert True, "CRz gate is available"
+        except (ImportError, AttributeError):
+            pass  # Gate not available in this version

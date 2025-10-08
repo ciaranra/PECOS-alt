@@ -3,7 +3,7 @@
 //! This module provides the C shim library that implements selene_* functions
 //! and forwards them to PECOS's thread-local interface.
 //!
-//! The shim is compiled as a shared library (libpecos_selene_shim.so) that
+//! The shim is compiled as a shared library (`libpecos_selene_shim.so`) that
 //! provides the selene_* symbols expected by libhelios.a.
 
 // The actual shim is implemented in C (src/c/selene_shim.c)

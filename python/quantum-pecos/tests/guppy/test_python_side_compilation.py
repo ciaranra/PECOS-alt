@@ -1,8 +1,5 @@
 """Test Python-side Guppy to Selene compilation."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
 
 

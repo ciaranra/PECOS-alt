@@ -1,4 +1,5 @@
 // Copyright 2025 The PECOS Developers
+use pecos::prelude::*;
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.You may obtain a copy of the License at
@@ -10,10 +11,10 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+use pecos::prelude::*;
 //! Python bindings for PHIR (PECOS High-level IR) compilation pipeline
 
 
-use pecos_phir::{self as phir, PhirConfig};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 

@@ -10,12 +10,15 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator};
-use pecos_quest::{
-    QuestDensityMatrix as RustQuestDensityMatrix, QuestStateVec as RustQuestStateVec,
-};
+use pecos::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
+
+// Import the Rust types with renamed aliases to distinguish from Python wrapper types
+// These are re-exported by pecos::prelude when the quest feature is enabled
+use pecos::prelude::{
+    QuestDensityMatrix as RustQuestDensityMatrix, QuestStateVec as RustQuestStateVec,
+};
 
 /// The struct represents the `QuEST` state-vector simulator exposed to Python
 #[pyclass]

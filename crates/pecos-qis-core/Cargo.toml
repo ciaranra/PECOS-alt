@@ -2,6 +2,7 @@
 name = "pecos-qis-core"
 version.workspace = true
 edition.workspace = true
+description = "Core quantum instruction set (QIS) infrastructure for PECOS"
 readme.workspace = true
 authors.workspace = true
 homepage.workspace = true

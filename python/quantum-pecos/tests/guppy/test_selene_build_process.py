@@ -399,7 +399,9 @@ class TestSeleneBuildProcess:
         program = QisProgram.from_string(llvm_ir_edge_cases)
         results = sim(program).qubits(1).quantum(state_vector()).seed(42).run(50)
 
-        assert "measurement_0" in results, "Should have results even with edge case formatting"
+        assert (
+            "measurement_0" in results
+        ), "Should have results even with edge case formatting"
         assert len(results["measurement_0"]) == 50, "Should complete all shots"
         assert all(m == 0 for m in results["measurement_0"]), "Should measure |0⟩ as 0"
 

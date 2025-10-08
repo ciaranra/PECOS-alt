@@ -5,7 +5,7 @@
 //!
 //! The interface collects quantum operations during program execution without performing
 //! any simulation or complex state management. These operations are later processed by
-//! a QisRuntime implementation.
+//! a `QisRuntime` implementation.
 
 use log::trace;
 use std::cell::RefCell;
@@ -51,6 +51,7 @@ thread_local! {
 
 impl OperationCollector {
     /// Create a new operation collector
+    #[must_use]
     pub fn new() -> Self {
         Self {
             operations: Vec::new(),
@@ -64,7 +65,7 @@ impl OperationCollector {
 
     /// Queue an operation for later execution
     pub fn queue_operation(&mut self, op: Operation) {
-        trace!("Queueing operation: {:?}", op);
+        trace!("Queueing operation: {op:?}");
         self.operations.push(op);
     }
 
@@ -73,7 +74,7 @@ impl OperationCollector {
         let id = self.next_qubit_id;
         self.next_qubit_id += 1;
         self.allocated_qubits.push(id);
-        trace!("Allocated qubit {}", id);
+        trace!("Allocated qubit {id}");
         id
     }
 
@@ -83,17 +84,18 @@ impl OperationCollector {
         self.next_result_id += 1;
         self.allocated_results.push(id);
         self.measurements.insert(id, None);
-        trace!("Allocated result {}", id);
+        trace!("Allocated result {id}");
         id
     }
 
     /// Store a measurement result (used by runtime when results are available)
     pub fn store_result(&mut self, result_id: usize, value: bool) {
-        trace!("Storing result {} = {}", result_id, value);
+        trace!("Storing result {result_id} = {value}");
         self.measurements.insert(result_id, Some(value));
     }
 
     /// Get a measurement result (blocks until available in actual runtime)
+    #[must_use]
     pub fn get_result(&self, result_id: usize) -> Option<bool> {
         self.measurements.get(&result_id).and_then(|v| *v)
     }
@@ -132,5 +134,5 @@ where
 
 /// Reset the thread-local operation collector
 pub fn reset_interface() {
-    with_interface(|interface| interface.reset());
+    with_interface(OperationCollector::reset);
 }

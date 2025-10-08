@@ -3,7 +3,6 @@
 This module provides HUGR to LLVM compilation using PECOS's Rust HUGR compiler.
 """
 
-import importlib.util
 from pathlib import Path
 
 
@@ -26,7 +25,7 @@ def compile_module_to_string(hugr_bytes: bytes) -> str:
     except ImportError as e:
         msg = (
             "PECOS's Rust HUGR compiler is not available. "
-            "Build pecos-rslib with hugr-llvm-pipeline feature to enable it."
+            "This should not happen - please report this as a bug."
         )
         raise RuntimeError(
             msg,
@@ -81,11 +80,10 @@ def is_available() -> bool:
         True if at least one HUGR->LLVM backend is available, False otherwise
     """
     # Check Rust backend
-    try:
-        from pecos_rslib import compile_hugr_to_llvm_rust
+    import importlib.util
+
+    if importlib.util.find_spec("pecos_rslib.compile_hugr_to_llvm_rust") is not None:
         return True
-    except ImportError:
-        pass
 
     try:
         # Check external compiler

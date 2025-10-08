@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Once;
-use std::time::Duration;
 
 // File-based lock is only needed for test_qis_compile_and_run which modifies build directories
 // All other tests use thread-local runtime contexts and can run in parallel
@@ -57,8 +56,6 @@ fn setup() {
             }
         }
 
-        // Give file system operations time to complete
-        std::thread::sleep(Duration::from_millis(500));
         println!("Test environment initialized");
     });
 }
@@ -72,11 +69,8 @@ fn run_pecos(
     noise_prob: &str,
     seed: u64,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    // Add a small delay between test executions to prevent potential file system races
-    std::thread::sleep(Duration::from_millis(100));
     let mut cmd = Command::cargo_bin("pecos")?;
-    cmd.env("RUST_LOG", "info")
-        .arg("run");
+    cmd.env("RUST_LOG", "info").arg("run");
 
     // Add --jit flag for LLVM files (when Selene is not available)
     if file_path.extension().and_then(|s| s.to_str()) == Some("ll") {
@@ -166,13 +160,14 @@ fn get_values(json_output: &str) -> Vec<String> {
 
                 if let Some(idx) = index {
                     // This is an indexed register
-                    let measurements: Vec<i64> = arr.iter()
-                        .map(|v| v.as_i64().unwrap_or(0))
-                        .collect();
+                    let measurements: Vec<i64> =
+                        arr.iter().map(|v| v.as_i64().unwrap_or(0)).collect();
 
-                    register_groups.entry(base_name.clone())
-                        .or_insert_with(Vec::new)
-                        .push((reg_name.clone(), idx, measurements));
+                    register_groups.entry(base_name.clone()).or_default().push((
+                        reg_name.clone(),
+                        idx,
+                        measurements,
+                    ));
                 } else {
                     // Single register (no numeric suffix or couldn't parse)
                     let string_values: Vec<String> =
@@ -189,7 +184,7 @@ fn get_values(json_output: &str) -> Vec<String> {
                 group.sort_by_key(|&(_, idx, _)| idx);
 
                 // Get number of shots
-                let num_shots = group.first().map(|(_, _, m)| m.len()).unwrap_or(0);
+                let num_shots = group.first().map_or(0, |(_, _, m)| m.len());
 
                 // Combine into classical register values
                 let mut combined_values = Vec::new();
@@ -207,8 +202,9 @@ fn get_values(json_output: &str) -> Vec<String> {
                 register_values.insert(base_name, combined_values);
             } else if let Some((orig_name, _, measurements)) = group.into_iter().next() {
                 // Single indexed register - keep as is
-                let string_values: Vec<String> = measurements.iter()
-                    .map(|v| v.to_string())
+                let string_values: Vec<String> = measurements
+                    .iter()
+                    .map(std::string::ToString::to_string)
                     .collect();
                 register_values.insert(orig_name, string_values);
             }
@@ -218,7 +214,6 @@ fn get_values(json_output: &str) -> Vec<String> {
         for (reg_name, values) in single_registers {
             register_values.insert(reg_name, values);
         }
-
     }
 
     // Convert to the format expected by tests: comma-separated values per register
@@ -410,7 +405,7 @@ fn test_qis_compile_and_run() -> Result<(), Box<dyn std::error::Error>> {
             || stderr.contains("Building QisInterface from QisProgram using JIT compiler")
             || stderr.contains("Using explicit JIT interface")
             || stderr.contains("JIT interface created")
-            || stderr.contains("Creating QisControlEngine"),
+            || stderr.contains("Creating QisEngine"),
         "Should show compilation activity. Got stderr: {stderr}"
     );
 

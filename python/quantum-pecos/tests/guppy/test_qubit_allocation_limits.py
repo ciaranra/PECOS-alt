@@ -388,7 +388,7 @@ class TestQubitAllocationLimits:
 
         if "measurement_0" in results:
             # Check all 4 measurements are present
-            for i in range(0, 4):
+            for i in range(4):
                 key = f"measurement_{i}"
                 assert key in results, f"Should have {key}"
                 assert (

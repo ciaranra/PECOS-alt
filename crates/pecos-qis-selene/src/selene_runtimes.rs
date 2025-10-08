@@ -18,9 +18,9 @@ pub enum RuntimeFetchError {
 impl std::fmt::Display for RuntimeFetchError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::IoError(e) => write!(f, "IO error: {}", e),
-            Self::DownloadError(msg) => write!(f, "Download error: {}", msg),
-            Self::InvalidPath(msg) => write!(f, "Invalid path: {}", msg),
+            Self::IoError(e) => write!(f, "IO error: {e}"),
+            Self::DownloadError(msg) => write!(f, "Download error: {msg}"),
+            Self::InvalidPath(msg) => write!(f, "Invalid path: {msg}"),
         }
     }
 }
@@ -33,8 +33,6 @@ impl From<std::io::Error> for RuntimeFetchError {
     }
 }
 
-
-
 /// Create a Selene Simple Runtime
 ///
 /// This loads the Selene Simple runtime plugin that was built by the build script.
@@ -44,7 +42,7 @@ impl From<std::io::Error> for RuntimeFetchError {
 /// # Example
 /// ```rust
 /// use pecos_qis_selene::{selene_simple_runtime};
-/// use pecos_qis_core::{qis_control_engine, QisControlEngine};
+/// use pecos_qis_core::{qis_engine, QisEngine};
 /// use pecos_engines::ClassicalControlEngineBuilder;
 /// use pecos_qis_ffi::OperationCollector;
 ///
@@ -53,7 +51,7 @@ impl From<std::io::Error> for RuntimeFetchError {
 /// match selene_simple_runtime() {
 ///     Ok(runtime) => {
 ///         let interface = OperationCollector::new();
-///         let engine = qis_control_engine().runtime(runtime).program(interface).build()?;
+///         let engine = qis_engine().runtime(runtime).program(interface).build()?;
 ///         // Engine is ready to use
 ///     }
 ///     Err(e) => {
@@ -64,6 +62,9 @@ impl From<std::io::Error> for RuntimeFetchError {
 /// # Ok(())
 /// # }
 /// ```
+///
+/// # Errors
+/// Returns an error if the Selene simple runtime library cannot be found.
 pub fn selene_simple_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
     let runtime_path = find_built_selene_runtime("selene_simple_runtime")?;
     Ok(SeleneRuntime::new(runtime_path))
@@ -78,7 +79,7 @@ pub fn selene_simple_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
 /// # Example
 /// ```rust
 /// use pecos_qis_selene::{selene_soft_rz_runtime};
-/// use pecos_qis_core::{qis_control_engine, QisControlEngine};
+/// use pecos_qis_core::{qis_engine, QisEngine};
 /// use pecos_engines::ClassicalControlEngineBuilder;
 /// use pecos_qis_ffi::OperationCollector;
 ///
@@ -87,7 +88,7 @@ pub fn selene_simple_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
 /// match selene_soft_rz_runtime() {
 ///     Ok(runtime) => {
 ///         let interface = OperationCollector::new();
-///         let engine = qis_control_engine().runtime(runtime).program(interface).build()?;
+///         let engine = qis_engine().runtime(runtime).program(interface).build()?;
 ///         // Engine is ready with soft RZ gate support
 ///     }
 ///     Err(e) => {
@@ -98,6 +99,9 @@ pub fn selene_simple_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
 /// # Ok(())
 /// # }
 /// ```
+///
+/// # Errors
+/// Returns an error if the Selene soft RZ runtime library cannot be found.
 pub fn selene_soft_rz_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
     let runtime_path = find_built_selene_runtime("selene_soft_rz_runtime")?;
     Ok(SeleneRuntime::new(runtime_path))
@@ -114,24 +118,29 @@ pub fn selene_soft_rz_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
 fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchError> {
     // Check the same paths as the build script
     let possible_selene_paths = [
-        PathBuf::from("../../../selene"),  // From crate directory
-        PathBuf::from("../selene"),         // From workspace root
+        PathBuf::from("../../../selene"), // From crate directory
+        PathBuf::from("../selene"),       // From workspace root
     ];
 
     let selene_path = possible_selene_paths
         .iter()
         .find(|p| p.exists())
-        .ok_or_else(|| RuntimeFetchError::InvalidPath(
-            "Selene repository not found. Expected at ../selene or ../../../selene".to_string()
-        ))?;
+        .ok_or_else(|| {
+            RuntimeFetchError::InvalidPath(
+                "Selene repository not found. Expected at ../selene or ../../../selene".to_string(),
+            )
+        })?;
 
     // The runtime should be in selene/target/release/lib{name}.so
-    let runtime_path = selene_path.join("target/release").join(format!("lib{}.so", lib_name));
+    let runtime_path = selene_path
+        .join("target/release")
+        .join(format!("lib{lib_name}.so"));
 
     if !runtime_path.exists() {
         return Err(RuntimeFetchError::InvalidPath(format!(
             "Selene runtime {} not found at {}. Run 'cargo build --release' in Selene repository to build it.",
-            lib_name, runtime_path.display()
+            lib_name,
+            runtime_path.display()
         )));
     }
 
@@ -142,13 +151,14 @@ fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchErro
 /// Try to find a Selene runtime in common locations
 ///
 /// Searches in order:
-/// 1. PECOS_SELENE_DIR environment variable
+/// 1. `PECOS_SELENE_DIR` environment variable
 /// 2. Selene repository target directory (../selene/target/release)
 /// 3. Current target/release or target/debug
 /// 4. Workspace target directory
 /// 5. System library paths
+#[must_use]
 pub fn find_selene_runtime(name: &str) -> Option<PathBuf> {
-    let filename = format!("libselene_{}.so", name);
+    let filename = format!("libselene_{name}.so");
 
     // Check environment variable
     if let Ok(selene_dir) = std::env::var("PECOS_SELENE_DIR") {
@@ -186,9 +196,10 @@ pub fn find_selene_runtime(name: &str) -> Option<PathBuf> {
             }
 
             // From crate directory
-            let compiler_from_crate = PathBuf::from("../../../selene/selene-compilers/hugr_qis/target")
-                .join(profile)
-                .join(&filename);
+            let compiler_from_crate =
+                PathBuf::from("../../../selene/selene-compilers/hugr_qis/target")
+                    .join(profile)
+                    .join(&filename);
             if compiler_from_crate.exists() {
                 return Some(compiler_from_crate);
             }
@@ -205,7 +216,8 @@ pub fn find_selene_runtime(name: &str) -> Option<PathBuf> {
         // Check parent directories (in case we're in a workspace member)
         if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
             let workspace_target = PathBuf::from(manifest_dir)
-                .parent()?.parent()? // Go up to workspace root
+                .parent()?
+                .parent()? // Go up to workspace root
                 .join("target")
                 .join(profile)
                 .join(&filename);
@@ -229,12 +241,12 @@ pub fn find_selene_runtime(name: &str) -> Option<PathBuf> {
 /// Create a Selene runtime automatically
 ///
 /// This loads a runtime that was built by the build script. The name should be
-/// the library name (e.g., "selene_simple_runtime", "selene_soft_rz_runtime").
+/// the library name (e.g., "`selene_simple_runtime`", "`selene_soft_rz_runtime`").
 ///
 /// # Example
 /// ```rust
 /// use pecos_qis_selene::{selene_runtime_auto};
-/// use pecos_qis_core::{qis_control_engine, QisControlEngine};
+/// use pecos_qis_core::{qis_engine, QisEngine};
 /// use pecos_engines::ClassicalControlEngineBuilder;
 /// use pecos_qis_ffi::OperationCollector;
 ///
@@ -243,7 +255,7 @@ pub fn find_selene_runtime(name: &str) -> Option<PathBuf> {
 /// match selene_runtime_auto("selene_simple_runtime") {
 ///     Ok(runtime) => {
 ///         let interface = OperationCollector::new();
-///         let engine = qis_control_engine().runtime(runtime).program(interface).build()?;
+///         let engine = qis_engine().runtime(runtime).program(interface).build()?;
 ///         // Engine is ready with the runtime
 ///     }
 ///     Err(e) => {
@@ -254,6 +266,9 @@ pub fn find_selene_runtime(name: &str) -> Option<PathBuf> {
 /// # Ok(())
 /// # }
 /// ```
+///
+/// # Errors
+/// Returns an error if the specified Selene runtime library cannot be found.
 pub fn selene_runtime_auto(lib_name: &str) -> Result<SeleneRuntime, RuntimeFetchError> {
     let runtime_path = find_built_selene_runtime(lib_name)?;
     Ok(SeleneRuntime::new(runtime_path))
@@ -272,5 +287,4 @@ mod tests {
             assert!(path.to_string_lossy().contains("selene_simple"));
         }
     }
-
 }

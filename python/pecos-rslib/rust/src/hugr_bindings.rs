@@ -1,11 +1,10 @@
 /*!
+use pecos::prelude::*;
 `PyO3` bindings for HUGR/LLVM functionality
 
 This module exposes HUGR compilation and LLVM engine functionality to Python.
 */
 
-use pecos_hugr_qis::{HugrCompiler, HugrCompilerConfig};
-use pecos_qis_runtime::QisEngine;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
 use std::collections::HashMap;

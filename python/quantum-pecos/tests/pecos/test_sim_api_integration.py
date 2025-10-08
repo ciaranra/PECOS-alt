@@ -362,6 +362,7 @@ class TestHUGRSimulation:
 
     def test_sim_api_hugr_routing(self) -> None:
         """Test that HUGR programs route through compilation to Selene engine."""
+
         # Create a real HUGR program from Guppy for routing test
         @guppy
         def simple_h_measure() -> bool:
@@ -424,17 +425,17 @@ class TestPHIRSimulation:
                     "data": "qvar_define",
                     "data_type": "qubits",
                     "variable": "q",
-                    "size": 1
+                    "size": 1,
                 },
                 {
                     "data": "cvar_define",
                     "data_type": "i64",
                     "variable": "m",
-                    "size": 1
+                    "size": 1,
                 },
                 {"qop": "H", "args": [["q", 0]]},
                 {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
-                {"cop": "Result", "args": ["m"], "returns": ["c"]}
+                {"cop": "Result", "args": ["m"], "returns": ["c"]},
             ],
         }
 
@@ -450,9 +451,7 @@ class TestPHIRSimulation:
         assert len(measurements) == 50, "Should have 50 measurements"
 
         # Should be binary values
-        assert all(
-            m in [0, 1] for m in measurements
-        ), "Measurements should be binary"
+        assert all(m in [0, 1] for m in measurements), "Measurements should be binary"
 
         # H gate should give roughly 50/50 distribution
         ones = sum(measurements)
@@ -469,19 +468,19 @@ class TestPHIRSimulation:
                     "data": "qvar_define",
                     "data_type": "qubits",
                     "variable": "q",
-                    "size": 2
+                    "size": 2,
                 },
                 {
                     "data": "cvar_define",
                     "data_type": "i64",
                     "variable": "m",
-                    "size": 2
+                    "size": 2,
                 },
                 {"qop": "H", "args": [["q", 0]]},
                 {"qop": "CX", "args": [["q", 0], ["q", 1]]},
                 {"qop": "Measure", "args": [["q", 0]], "returns": [["m", 0]]},
                 {"qop": "Measure", "args": [["q", 1]], "returns": [["m", 1]]},
-                {"cop": "Result", "args": ["m"], "returns": ["c"]}
+                {"cop": "Result", "args": ["m"], "returns": ["c"]},
             ],
         }
 

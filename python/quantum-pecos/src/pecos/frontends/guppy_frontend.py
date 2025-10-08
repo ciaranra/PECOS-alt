@@ -151,6 +151,7 @@ class GuppyFrontend:
             raise ValueError(msg)
 
         # Step 1: Compile Guppy to HUGR
+        hugr_bytes = None
         try:
             # Try both new and old API
             compiled = (
@@ -166,12 +167,13 @@ class GuppyFrontend:
             elif hasattr(compiled, "to_package"):
                 package = compiled.to_package()
                 hugr_bytes = package.to_bytes()
-            else:
-                msg = "Cannot serialize HUGR to binary envelope format"
-                raise RuntimeError(msg)
         except Exception as e:
             msg = f"Failed to compile Guppy to HUGR: {e}"
             raise RuntimeError(msg) from e
+
+        if hugr_bytes is None:
+            msg = "Cannot serialize HUGR to binary envelope format"
+            raise RuntimeError(msg)
 
         if self.use_rust_backend:
             # Use Rust backend for compilation

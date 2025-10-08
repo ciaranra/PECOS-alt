@@ -1,7 +1,7 @@
 //! JIT measurement management for handling quantum conditionals
 //!
 //! This module provides utilities for managing measurement futures during JIT execution.
-//! It is NOT related to the QisRuntime trait - it's a JIT-specific helper for handling
+//! It is NOT related to the `QisRuntime` trait - it's a JIT-specific helper for handling
 //! quantum conditionals through a two-phase execution model.
 
 use std::collections::HashMap;
@@ -9,7 +9,7 @@ use std::collections::HashMap;
 /// Manager for quantum measurement futures during JIT execution
 /// This allows handling of quantum conditionals by managing measurement results
 /// across collection and simulation phases of JIT execution.
-/// Note: This is NOT a QisRuntime trait implementation - it's a JIT-specific helper.
+/// Note: This is NOT a `QisRuntime` trait implementation - it's a JIT-specific helper.
 #[derive(Clone)]
 pub struct JitMeasurementManager {
     /// Maps future IDs to their measurement results
@@ -23,7 +23,14 @@ pub struct JitMeasurementManager {
     simulation_mode: bool,
 }
 
+impl Default for JitMeasurementManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JitMeasurementManager {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             measurements: HashMap::new(),
@@ -46,16 +53,18 @@ impl JitMeasurementManager {
     /// Read a future's boolean value
     /// In collection mode: returns false (default path)
     /// In simulation mode: returns the actual measurement result
+    #[must_use]
     pub fn read_future_bool(&self, future_id: i64) -> bool {
-        if !self.simulation_mode {
+        if self.simulation_mode {
+            // Simulation mode: return actual measurement result
+            self.measurements
+                .get(&future_id)
+                .and_then(|opt| *opt)
+                .unwrap_or(false)
+        } else {
             // Collection mode: return false to follow default path
             // This allows us to discover all quantum operations
             false
-        } else {
-            // Simulation mode: return actual measurement result
-            self.measurements.get(&future_id)
-                .and_then(|opt| *opt)
-                .unwrap_or(false)
         }
     }
 
@@ -103,10 +112,11 @@ where
 
 /// Reset the thread-local measurement manager
 pub fn reset_measurement_manager() {
-    with_measurement_manager_mut(|manager| manager.reset());
+    with_measurement_manager_mut(JitMeasurementManager::reset);
 }
 
 // Compatibility functions that work with the thread-local manager
+#[must_use]
 pub fn get_measurement_manager() -> JitMeasurementManager {
     MEASUREMENT_MANAGER.with(|manager| manager.borrow().clone())
 }
@@ -117,11 +127,12 @@ pub fn clear_measurement_manager() {
 
 // Deprecated aliases for backwards compatibility
 #[deprecated(since = "0.2.0", note = "Use `get_measurement_manager` instead")]
+#[must_use]
 pub fn get_runtime() -> JitMeasurementManager {
     get_measurement_manager()
 }
 
 #[deprecated(since = "0.2.0", note = "Use `clear_measurement_manager` instead")]
 pub fn clear_runtime() {
-    clear_measurement_manager()
+    clear_measurement_manager();
 }

@@ -242,10 +242,6 @@ impl Type {
     #[must_use]
     pub fn is_copyable(&self) -> bool {
         match self {
-            // Quantum types are not copyable (no-cloning theorem)
-            Type::Qubit | Type::QuantumReg(_) | Type::Never | Type::Unknown | Type::Custom(_) => {
-                false
-            }
             // Classical primitive types, references, and function pointers are copyable
             Type::Bit
             | Type::Bool
@@ -261,7 +257,13 @@ impl Type {
             Type::Array(elem_type, _) => elem_type.is_copyable(),
             Type::Tuple(types) => types.iter().all(Type::is_copyable),
             Type::Optional(inner) => inner.is_copyable(),
-            Type::Future => false, // Futures are not copyable
+            // Quantum types, futures, and unknown types are not copyable
+            Type::Qubit
+            | Type::QuantumReg(_)
+            | Type::Future
+            | Type::Never
+            | Type::Unknown
+            | Type::Custom(_) => false,
         }
     }
 

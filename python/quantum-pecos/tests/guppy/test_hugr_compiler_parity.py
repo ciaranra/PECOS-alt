@@ -43,9 +43,9 @@ def normalize_llvm_ir(llvm_ir: str) -> list[str]:
     Returns a list of non-comment, non-blank lines.
     """
     lines = []
-    for line in llvm_ir.split("\n"):
+    for raw_line in llvm_ir.split("\n"):
         # Skip comments and blank lines
-        line = line.strip()
+        line = raw_line.strip()
         if not line or line.startswith(";"):
             continue
         # Normalize whitespace
@@ -63,8 +63,8 @@ def extract_qis_calls(llvm_ir: str) -> list[str]:
     import re
 
     qis_calls = []
-    for line in llvm_ir.split("\n"):
-        line = line.strip()
+    for raw_line in llvm_ir.split("\n"):
+        line = raw_line.strip()
         # Look for QIS function calls
         if "call" in line and (
             "___q" in line
@@ -271,6 +271,7 @@ if __name__ == "__main__":
 
         @guppy
         def test_circuit() -> bool:
+            """Simple test circuit with H gate and measurement."""
             q = qubit()
             h(q)
             return measure(q)

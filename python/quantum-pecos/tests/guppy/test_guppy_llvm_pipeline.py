@@ -287,7 +287,7 @@ def test_superposition_statistics(n_qubits: int, expected_avg: float) -> None:
         total_ones = 0
         if "measurement_0" in result:
             # Separate measurement keys
-            for i in range(0, n_qubits):
+            for i in range(n_qubits):
                 total_ones += sum(result[f"measurement_{i}"])
         elif "measurements" in result:
             measurements = result["measurements"]

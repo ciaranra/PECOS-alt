@@ -10,7 +10,7 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use pecos_qsim::{CoinToss, QuantumSimulator, CliffordGateable};
+use pecos::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 

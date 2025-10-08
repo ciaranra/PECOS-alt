@@ -6,22 +6,16 @@
 // PyO3 convention is to return PyResult even for infallible operations
 #![allow(clippy::unnecessary_wraps)]
 
-use pecos_engines::quantum_engine_builder::{
-    SparseStabilizerEngineBuilder as RustSparseStabilizerEngineBuilder,
-    StateVectorEngineBuilder as RustStateVectorEngineBuilder,
-    sparse_stabilizer as rust_sparse_stabilizer, state_vector as rust_state_vector,
-};
-use pecos_phir_json::{
-    PhirJsonEngineBuilder as RustPhirJsonEngineBuilder, phir_json_engine as rust_phir_json_engine,
-};
-use pecos_programs::{HugrProgram, PhirJsonProgram, QasmProgram, QisProgram};
-use pecos_qasm::{QasmEngineBuilder as RustQasmEngineBuilder, qasm_engine as rust_qasm_engine};
-// QIS engine functionality is now provided by qis_control_engine
-use pecos_qis_core::{
-    QisEngineBuilder as RustQisControlEngineBuilder,
-    qis_control_engine as rust_qis_control_engine,
-};
-use pecos_qis_native::native_runtime as rust_native_runtime;
+// Import from pecos metacrate prelude
+use pecos::prelude::*;
+
+// Rename quantum engine builder types for clarity (from pecos prelude)
+type RustQasmEngineBuilder = pecos::QasmEngineBuilder;
+type RustQisEngineBuilder = pecos::QisEngineBuilder;
+type RustPhirJsonEngineBuilder = pecos::PhirJsonEngineBuilder;
+type RustSparseStabilizerEngineBuilder = SparseStabilizerEngineBuilder;
+type RustStateVectorEngineBuilder = StateVectorEngineBuilder;
+
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -31,11 +25,6 @@ use crate::shot_results_bindings::PyShotVec;
 
 // Import the unified SimBuilder from sim.rs
 use crate::sim::{PySimBuilder, SimBuilderInner};
-
-// Noise builder wrappers
-use pecos_engines::noise::{
-    BiasedDepolarizingNoiseModelBuilder, DepolarizingNoiseModelBuilder, GeneralNoiseModelBuilder,
-};
 
 /// Python wrapper for QASM engine builder
 #[pyclass(name = "QasmEngineBuilder")]
@@ -49,7 +38,7 @@ impl PyQasmEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: rust_qasm_engine(),
+            inner: pecos::qasm_engine(),
         }
     }
 
@@ -61,7 +50,6 @@ impl PyQasmEngineBuilder {
     }
 
     /// Set the WebAssembly module for foreign function calls
-    #[cfg(feature = "wasm")]
     #[pyo3(signature = (wasm_path))]
     fn wasm(&mut self, wasm_path: &str) -> PyResult<Self> {
         self.inner = self.inner.clone().wasm(wasm_path);
@@ -73,9 +61,11 @@ impl PyQasmEngineBuilder {
         self.inner.has_source()
     }
 
-    /// Get the QasmProgram from this builder (if any)
+    /// Get the `QasmProgram` from this builder (if any)
     pub fn get_program(&self) -> Option<PyQasmProgram> {
-        self.inner.get_program().map(|prog| PyQasmProgram { inner: prog })
+        self.inner
+            .get_program()
+            .map(|prog| PyQasmProgram { inner: prog })
     }
 
     /// Convert to simulation builder
@@ -93,12 +83,11 @@ impl PyQasmEngineBuilder {
     }
 }
 
-/// Python wrapper for LLVM/QIS engine builder
-/// Now uses QIS Control Engine internally
+/// Python wrapper for QIS Engine builder (unified QIS/HUGR engine)
 #[pyclass(name = "QisEngineBuilder")]
 #[derive(Clone)]
 pub struct PyQisEngineBuilder {
-    pub(crate) inner: RustQisControlEngineBuilder,
+    pub(crate) inner: RustQisEngineBuilder,
 }
 
 #[pymethods]
@@ -106,7 +95,7 @@ impl PyQisEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: rust_qis_control_engine(),
+            inner: pecos::qis_engine(),
         }
     }
 
@@ -116,77 +105,27 @@ impl PyQisEngineBuilder {
     fn program(&mut self, program: Py<PyAny>, py: Python) -> PyResult<Self> {
         // Check if it's a QisProgram
         if let Ok(qis_prog) = program.extract::<PyQisProgram>(py) {
-            self.inner = self.inner.clone()
+            self.inner = self
+                .inner
+                .clone()
                 .try_program(qis_prog.inner)
-                .map_err(|e| PyRuntimeError::new_err(format!("Failed to set QIS program: {}", e)))?;
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                        "Failed to load QIS program: {e}"
+                    ))
+                })?;
         }
         // Check if it's a HugrProgram
         else if let Ok(hugr_prog) = program.extract::<PyHugrProgram>(py) {
-            self.inner = self.inner.clone()
+            self.inner = self
+                .inner
+                .clone()
                 .try_program(hugr_prog.inner)
-                .map_err(|e| PyRuntimeError::new_err(format!("Failed to set HUGR program: {}", e)))?;
-        } else {
-            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "program must be either a QisProgram or HugrProgram instance",
-            ));
-        }
-        Ok(self.clone())
-    }
-
-    // Note: .qubits() method should be called on the sim builder, not the engine builder
-    // This is consistent with the overall PECOS architecture where sim.qubits() sets
-    // the number of qubits for the simulation
-
-    // Note: verbose method not available on QisControlEngineBuilder
-
-    /// Convert to simulation builder
-    fn to_sim(&self) -> PyResult<PySimBuilder> {
-        Ok(PySimBuilder {
-            inner: SimBuilderInner::Llvm(PyQisSimBuilder {
-                engine_builder: Arc::new(Mutex::new(Some(self.inner.clone()))),
-                seed: None,
-                workers: None,
-                quantum_engine_builder: None,
-                noise_builder: None,
-                explicit_num_qubits: None,
-            }),
-        })
-    }
-}
-
-/// Python wrapper for QIS Control Engine builder (new unified QIS/HUGR engine)
-#[pyclass(name = "QisControlEngineBuilder")]
-#[derive(Clone)]
-pub struct PyQisControlEngineBuilder {
-    pub(crate) inner: RustQisControlEngineBuilder,
-}
-
-#[pymethods]
-impl PyQisControlEngineBuilder {
-    #[new]
-    fn new() -> Self {
-        Self {
-            inner: rust_qis_control_engine(),
-        }
-    }
-
-    /// Set the program for this engine
-    #[pyo3(signature = (program))]
-    #[allow(clippy::needless_pass_by_value)] // Py<PyAny> must be passed by value for PyO3
-    fn program(&mut self, program: Py<PyAny>, py: Python) -> PyResult<Self> {
-        // Check if it's a QisProgram
-        if let Ok(qis_prog) = program.extract::<PyQisProgram>(py) {
-            self.inner = self.inner.clone().try_program(qis_prog.inner)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                    format!("Failed to load QIS program: {}", e)
-                ))?;
-        }
-        // Check if it's a HugrProgram
-        else if let Ok(hugr_prog) = program.extract::<PyHugrProgram>(py) {
-            self.inner = self.inner.clone().try_program(hugr_prog.inner)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                    format!("Failed to load HUGR program: {}", e)
-                ))?;
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                        "Failed to load HUGR program: {e}"
+                    ))
+                })?;
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "program must be either a QisProgram or HugrProgram instance",
@@ -197,7 +136,7 @@ impl PyQisControlEngineBuilder {
 
     /// Use native runtime (default if Selene is not available)
     fn native_runtime(&mut self) -> PyResult<Self> {
-        self.inner = self.inner.clone().runtime(rust_native_runtime());
+        self.inner = self.inner.clone().runtime(pecos::native_runtime());
         Ok(self.clone())
     }
 
@@ -207,29 +146,18 @@ impl PyQisControlEngineBuilder {
         // The PyQisInterfaceBuilder contains a boxed trait object which we can't easily clone
         // As a workaround, we'll just use JIT interface since that's what the tests use
         // and it's the default fallback anyway
-        use pecos_qis_jit::jit_interface_builder;
-
         log::debug!("Python interface() called, setting JIT interface");
 
         // Set JIT interface
         self.inner = self.inner.clone().interface(jit_interface_builder());
 
-        // If no runtime is set, default to native runtime (which works with JIT)
+        // Always set native runtime to work with JIT interface
         // This matches the behavior of the Rust sim() function
-        if !self.has_runtime() {
-            log::debug!("No runtime set, defaulting to native runtime");
-            self.inner = self.inner.clone().runtime(rust_native_runtime());
-        }
+        log::debug!("Setting native runtime for JIT interface");
+        self.inner = self.inner.clone().runtime(pecos::native_runtime());
 
         log::debug!("JIT interface and runtime configured");
         Ok(self.clone())
-    }
-
-    /// Helper to check if runtime is set
-    fn has_runtime(&self) -> bool {
-        // We can't directly access the runtime field, but we can check by attempting to build
-        // For now, just assume false and always set a runtime
-        false
     }
 
     /// Convert to simulation builder
@@ -247,7 +175,6 @@ impl PyQisControlEngineBuilder {
     }
 }
 
-
 /// Python wrapper for PHIR JSON engine builder
 #[pyclass(name = "PhirJsonEngineBuilder")]
 #[derive(Clone)]
@@ -260,7 +187,7 @@ impl PyPhirJsonEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: rust_phir_json_engine(),
+            inner: pecos::phir_json_engine(),
         }
     }
 
@@ -272,7 +199,6 @@ impl PyPhirJsonEngineBuilder {
     }
 
     /// Set the WebAssembly module for foreign function calls
-    #[cfg(feature = "wasm")]
     #[pyo3(signature = (wasm_path))]
     fn wasm(&mut self, wasm_path: &str) -> PyResult<Self> {
         self.inner = self.inner.clone().wasm(wasm_path);
@@ -310,7 +236,7 @@ pub struct PyQasmSimBuilder {
 /// Python wrapper for built QASM simulation
 #[pyclass(name = "QasmSimulation")]
 pub struct PyQasmSimulation {
-    pub(crate) inner: Arc<Mutex<pecos_engines::MonteCarloEngine>>,
+    pub(crate) inner: Arc<Mutex<MonteCarloEngine>>,
 }
 
 #[pymethods]
@@ -338,7 +264,7 @@ impl PyQasmSimulation {
 /// Python wrapper for built PHIR JSON simulation
 #[pyclass(name = "PhirJsonSimulation")]
 pub struct PyPhirJsonSimulation {
-    pub(crate) inner: Arc<Mutex<pecos_engines::MonteCarloEngine>>,
+    pub(crate) inner: Arc<Mutex<MonteCarloEngine>>,
 }
 
 #[pymethods]
@@ -363,27 +289,15 @@ impl PyPhirJsonSimulation {
     }
 }
 
-/// Internal LLVM/QIS simulation builder state
-/// Now uses QIS Control Engine internally
-pub struct PyQisSimBuilder {
-    pub(crate) engine_builder: Arc<Mutex<Option<RustQisControlEngineBuilder>>>,
-    pub(crate) seed: Option<u64>,
-    pub(crate) workers: Option<usize>,
-    pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
-    pub(crate) noise_builder: Option<Py<PyAny>>,
-    pub(crate) explicit_num_qubits: Option<usize>,
-}
-
-/// Internal QIS Control Engine simulation builder state
+/// Internal QIS Engine simulation builder state
 pub struct PyQisControlSimBuilder {
-    pub(crate) engine_builder: Arc<Mutex<Option<RustQisControlEngineBuilder>>>,
+    pub(crate) engine_builder: Arc<Mutex<Option<RustQisEngineBuilder>>>,
     pub(crate) seed: Option<u64>,
     pub(crate) workers: Option<usize>,
     pub(crate) quantum_engine_builder: Option<Py<PyAny>>,
     pub(crate) noise_builder: Option<Py<PyAny>>,
     pub(crate) explicit_num_qubits: Option<usize>,
 }
-
 
 /// Internal PHIR JSON simulation builder state
 pub struct PyPhirJsonSimBuilder {
@@ -394,8 +308,6 @@ pub struct PyPhirJsonSimBuilder {
     pub(crate) noise_builder: Option<Py<PyAny>>,
     pub(crate) explicit_num_qubits: Option<usize>,
 }
-
-
 
 /// Python wrapper for program types
 #[pyclass(name = "QasmProgram")]
@@ -490,45 +402,35 @@ impl PyPhirJsonProgram {
     }
 }
 
-
 /// Create a QASM engine builder
 #[pyfunction]
 pub fn qasm_engine() -> PyQasmEngineBuilder {
     PyQasmEngineBuilder {
-        inner: rust_qasm_engine(),
+        inner: pecos::qasm_engine(),
     }
 }
 
-/// Create an LLVM engine builder
+/// Create a QIS Engine builder (unified QIS/HUGR engine)
 #[pyfunction]
 pub fn qis_engine() -> PyQisEngineBuilder {
     PyQisEngineBuilder {
-        inner: rust_qis_control_engine(),
-    }
-}
-
-/// Create a QIS Control Engine builder (new unified QIS/HUGR engine)
-#[pyfunction]
-pub fn qis_control_engine() -> PyQisControlEngineBuilder {
-    PyQisControlEngineBuilder {
-        inner: rust_qis_control_engine(),
+        inner: pecos::qis_engine(),
     }
 }
 
 /// Create native runtime for QIS Control Engine
 #[pyfunction]
-pub fn native_runtime() -> PyQisControlEngineBuilder {
-    PyQisControlEngineBuilder {
-        inner: rust_qis_control_engine().runtime(rust_native_runtime()),
+pub fn native_runtime() -> PyQisEngineBuilder {
+    PyQisEngineBuilder {
+        inner: pecos::qis_engine().runtime(pecos::native_runtime()),
     }
 }
-
 
 /// Create a PHIR JSON engine builder
 #[pyfunction]
 pub fn phir_json_engine() -> PyPhirJsonEngineBuilder {
     PyPhirJsonEngineBuilder {
-        inner: rust_phir_json_engine(),
+        inner: pecos::phir_json_engine(),
     }
 }
 
@@ -688,7 +590,6 @@ impl PyGeneralNoiseModelBuilder {
 
     /// Add a noiseless gate
     fn with_noiseless_gate(&self, gate_name: &str) -> PyResult<Self> {
-        use pecos_core::gate_type::GateType;
         // Make it case-insensitive
         let gate_type = match gate_name.to_uppercase().as_str() {
             "I" => GateType::I,
@@ -1073,7 +974,7 @@ impl PyStateVectorEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: Some(rust_state_vector()),
+            inner: Some(pecos::state_vector()),
         }
     }
 
@@ -1104,7 +1005,7 @@ impl PySparseStabilizerEngineBuilder {
     #[new]
     fn new() -> Self {
         Self {
-            inner: Some(rust_sparse_stabilizer()),
+            inner: Some(pecos::sparse_stabilizer()),
         }
     }
 
@@ -1141,7 +1042,6 @@ pub fn sparse_stab() -> PySparseStabilizerEngineBuilder {
     sparse_stabilizer()
 }
 
-
 /// Create a `SimBuilder` from scratch without a program
 #[pyfunction]
 pub fn sim_builder() -> PySimBuilder {
@@ -1150,7 +1050,7 @@ pub fn sim_builder() -> PySimBuilder {
     }
 }
 
-/// Python wrapper for QisInterfaceBuilder
+/// Python wrapper for `QisInterfaceBuilder`
 /// Since we can't directly expose trait objects to Python, we'll use an opaque wrapper
 ///
 /// This is deprecated - interface builders have moved to implementation crates
@@ -1159,16 +1059,14 @@ pub struct PyQisInterfaceBuilder {
     // Store the actual Rust builder internally
     // Field is intentionally unused as this is a deprecated stub
     #[allow(dead_code)]
-    inner: Box<dyn pecos_qis_core::QisInterfaceBuilder>,
+    inner: Box<dyn QisInterfaceBuilder>,
 }
 
 /// Interface builders have been moved to implementation crates.
 /// This function is deprecated and will be removed in a future version.
 #[pyfunction]
 pub fn qis_jit_interface() -> PyResult<PyQisInterfaceBuilder> {
-    // Use the actual JIT interface builder from pecos_qis_jit
-    use pecos_qis_jit::jit_interface_builder;
-
+    // Use the actual JIT interface builder from pecos
     Ok(PyQisInterfaceBuilder {
         inner: Box::new(jit_interface_builder()),
     })
@@ -1180,7 +1078,7 @@ pub fn qis_jit_interface() -> PyResult<PyQisInterfaceBuilder> {
 pub fn qis_selene_helios_interface() -> PyResult<PyQisInterfaceBuilder> {
     Err(PyRuntimeError::new_err(
         "qis_selene_helios_interface has been moved to pecos_qis_selene crate.\n\
-        Please use the implementation crate directly."
+        Please use the implementation crate directly.",
     ))
 }
 
@@ -1189,9 +1087,8 @@ pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Engine builders
     m.add_class::<PyQasmEngineBuilder>()?;
     m.add_class::<PyQisEngineBuilder>()?;
-    m.add_class::<PyQisControlEngineBuilder>()?;
+    m.add_class::<PyQisEngineBuilder>()?;
     m.add_class::<PyPhirJsonEngineBuilder>()?;
-
 
     // Simulation builders are now handled by the unified PySimBuilder in sim.rs
 
@@ -1217,27 +1114,27 @@ pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyQisInterfaceBuilder>()?;
 
     // Engine functions
-    m.add_function(wrap_pyfunction!(qasm_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(qis_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(qis_control_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(native_runtime, m)?)?;
-    m.add_function(wrap_pyfunction!(phir_json_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(self::qasm_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(self::qis_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(self::qis_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(self::native_runtime, m)?)?;
+    m.add_function(wrap_pyfunction!(self::phir_json_engine, m)?)?;
 
     // Interface builder functions
-    m.add_function(wrap_pyfunction!(qis_jit_interface, m)?)?;
-    m.add_function(wrap_pyfunction!(qis_selene_helios_interface, m)?)?;
+    m.add_function(wrap_pyfunction!(self::qis_jit_interface, m)?)?;
+    m.add_function(wrap_pyfunction!(self::qis_selene_helios_interface, m)?)?;
 
     // SimBuilder function
-    m.add_function(wrap_pyfunction!(sim_builder, m)?)?;
+    m.add_function(wrap_pyfunction!(self::sim_builder, m)?)?;
 
     // Noise builder functions
-    m.add_function(wrap_pyfunction!(general_noise, m)?)?;
-    m.add_function(wrap_pyfunction!(depolarizing_noise, m)?)?;
-    m.add_function(wrap_pyfunction!(biased_depolarizing_noise, m)?)?;
+    m.add_function(wrap_pyfunction!(self::general_noise, m)?)?;
+    m.add_function(wrap_pyfunction!(self::depolarizing_noise, m)?)?;
+    m.add_function(wrap_pyfunction!(self::biased_depolarizing_noise, m)?)?;
 
     // Quantum engine builder functions
-    m.add_function(wrap_pyfunction!(state_vector, m)?)?;
-    m.add_function(wrap_pyfunction!(sparse_stabilizer, m)?)?;
+    m.add_function(wrap_pyfunction!(self::state_vector, m)?)?;
+    m.add_function(wrap_pyfunction!(self::sparse_stabilizer, m)?)?;
     m.add_function(wrap_pyfunction!(sparse_stab, m)?)?;
 
     Ok(())

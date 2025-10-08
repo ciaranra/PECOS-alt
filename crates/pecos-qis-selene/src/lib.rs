@@ -1,6 +1,6 @@
 //! Selene QIS Interface and Runtime
 //!
-//! This crate provides Selene-based implementations of QisInterface and QisRuntime traits.
+//! This crate provides Selene-based implementations of `QisInterface` and `QisRuntime` traits.
 //!
 //! ## Helios Interface
 //!
@@ -9,7 +9,7 @@
 //! 1. Linking user program bitcode with Selene's libhelios.a to create an executable
 //! 2. Loading the executable in-process using dlopen
 //! 3. Providing a shim .so that implements selene_* functions forwarding to PECOS FFI
-//! 4. Calling qmain() directly to execute the program and collect operations
+//! 4. Calling `qmain()` directly to execute the program and collect operations
 //!
 //! # Architecture
 //!
@@ -29,30 +29,24 @@
 //!   Operations collected in thread-local storage
 //! ```
 
-pub mod shim;
-pub mod executor;
 pub mod builder;
+pub mod executor;
+pub mod prelude;
+pub mod selene_library_runtime;
 pub mod selene_runtime;
 pub mod selene_runtimes;
-pub mod selene_library_runtime;
+pub mod shim;
 
-pub use executor::QisHeliosInterface;
 pub use builder::{HeliosInterfaceBuilder, helios_interface_builder};
+pub use executor::QisHeliosInterface;
+pub use selene_library_runtime::{
+    QisSeleneLibraryRuntime, QisSeleneSimpleRuntime, SeleneRuntimeConfig, selene_library_runtime,
+    selene_simple_runtime as selene_simple_runtime_v2, selene_simple_runtime_from_path,
+};
 pub use selene_runtime::SeleneRuntime;
 pub use selene_runtimes::{
-    selene_simple_runtime,
+    RuntimeFetchError, find_selene_runtime, selene_runtime_auto, selene_simple_runtime,
     selene_soft_rz_runtime,
-    selene_runtime_auto,
-    find_selene_runtime,
-    RuntimeFetchError,
-};
-pub use selene_library_runtime::{
-    QisSeleneLibraryRuntime,
-    QisSeleneSimpleRuntime,
-    SeleneRuntimeConfig,
-    selene_simple_runtime as selene_simple_runtime_v2,
-    selene_simple_runtime_from_path,
-    selene_library_runtime,
 };
 
 // Re-export pecos_qis_interface to ensure its FFI symbols are included

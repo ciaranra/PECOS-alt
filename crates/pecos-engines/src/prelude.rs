@@ -24,12 +24,16 @@ pub use crate::quantum::{
     QuantumEngine, SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate,
 };
 pub use crate::quantum_engine_builder::{
-    IntoQuantumEngineBuilder, sparse_stabilizer, state_vector,
+    IntoQuantumEngineBuilder, SparseStabilizerEngineBuilder, StateVectorEngineBuilder,
+    sparse_stabilizer, state_vector,
 };
 
 // Noise models - both traits and common implementations
 pub use crate::noise::{
+    BiasedDepolarizingNoiseModelBuilder,
     DepolarizingNoiseModel,
+    DepolarizingNoiseModelBuilder,
+    GeneralNoiseModelBuilder,
     IntoNoiseModel, // Needed for .noise() method to work smoothly
     NoiseModel,
     PassThroughNoiseModel,

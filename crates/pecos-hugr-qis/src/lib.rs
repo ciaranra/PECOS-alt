@@ -36,6 +36,7 @@ let llvm_path = compiler.compile_hugr("input.hugr")?;
 
 pub mod array;
 pub mod compiler;
+pub mod prelude;
 
 // Re-export main functions
 pub use compiler::compile_hugr_bytes_to_string;
@@ -71,11 +72,17 @@ impl HugrCompiler {
     }
 
     /// Compile HUGR bytes to LLVM IR string
+    ///
+    /// # Errors
+    /// Returns an error if HUGR parsing, validation, or LLVM compilation fails.
     pub fn compile_hugr_bytes_to_string(&self, hugr_bytes: &[u8]) -> Result<String, PecosError> {
         compile_hugr_bytes_to_string(hugr_bytes)
     }
 
     /// Compile HUGR bytes to file
+    ///
+    /// # Errors
+    /// Returns an error if HUGR compilation or file writing fails.
     pub fn compile_hugr_bytes(
         &self,
         hugr_bytes: &[u8],
@@ -88,6 +95,9 @@ impl HugrCompiler {
     }
 
     /// Compile HUGR file to LLVM IR file
+    ///
+    /// # Errors
+    /// Returns an error if HUGR file reading, compilation, or output writing fails.
     pub fn compile_hugr<P: AsRef<Path>>(&self, hugr_path: P) -> Result<PathBuf, PecosError> {
         compile_hugr_to_llvm(hugr_path, self.config.output_path.clone())
     }

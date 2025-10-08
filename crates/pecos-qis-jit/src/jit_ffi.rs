@@ -3,8 +3,8 @@
 //! This module contains FFI functions that are specific to JIT execution,
 //! including the JIT interface pointer management and measurement futures.
 
-use pecos_qis_ffi::{OperationCollector, Operation, QuantumOp};
 use crate::measurement_manager::with_measurement_manager_mut;
+use pecos_qis_ffi::{Operation, OperationCollector, QuantumOp};
 
 /// Helper to convert i64 to usize
 #[inline]
@@ -19,23 +19,27 @@ fn i64_to_usize(value: i64) -> usize {
 // Thread-local interface pointer for JIT execution
 // This is set by the JIT executor before running code in each thread
 thread_local! {
-    static JIT_INTERFACE_PTR: std::cell::Cell<*mut OperationCollector> = std::cell::Cell::new(std::ptr::null_mut());
+    static JIT_INTERFACE_PTR: std::cell::Cell<*mut OperationCollector> = const { std::cell::Cell::new(std::ptr::null_mut()) };
 }
 
 /// Set the thread-local interface pointer for JIT execution
-/// SAFETY: This must only be called before JIT execution in each thread
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The `interface_ptr` must be a valid pointer
+/// to an `OperationCollector` that will remain valid for the duration of the JIT execution in this thread.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_set_jit_interface(interface_ptr: *mut OperationCollector) {
     JIT_INTERFACE_PTR.with(|ptr| ptr.set(interface_ptr));
 }
 
 /// Get the thread-local interface pointer for JIT execution
-/// SAFETY: This must only be called after __pecos_set_jit_interface
+/// SAFETY: This must only be called after __`pecos_set_jit_interface`
 unsafe fn get_jit_interface() -> &'static mut OperationCollector {
-    let ptr = JIT_INTERFACE_PTR.with(|ptr| ptr.get());
-    if ptr.is_null() {
-        panic!("JIT interface not set - call __pecos_set_jit_interface first");
-    }
+    let ptr = JIT_INTERFACE_PTR.with(std::cell::Cell::get);
+    assert!(
+        !ptr.is_null(),
+        "JIT interface not set - call __pecos_set_jit_interface first"
+    );
     unsafe { &mut *ptr }
 }
 
@@ -43,6 +47,14 @@ unsafe fn get_jit_interface() -> &'static mut OperationCollector {
 // JIT-safe versions of quantum operations
 // =============================================================================
 
+/// Allocate a new qubit
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. It requires that the JIT interface
+/// has been set via `__pecos_set_jit_interface`.
+///
+/// # Panics
+/// Panics if the JIT interface is not set or if the allocated qubit ID exceeds `i64::MAX`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_qalloc() -> i64 {
     let interface = unsafe { get_jit_interface() };
@@ -51,6 +63,11 @@ pub unsafe extern "C" fn __pecos_jit_qalloc() -> i64 {
     i64::try_from(id).expect("Qubit ID too large for i64")
 }
 
+/// Hadamard gate operation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_h(qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -58,6 +75,11 @@ pub unsafe extern "C" fn __pecos_jit_h(qubit: i64) {
     interface.queue_operation(QuantumOp::H(qubit_id).into());
 }
 
+/// Pauli X gate operation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_x(qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -65,6 +87,11 @@ pub unsafe extern "C" fn __pecos_jit_x(qubit: i64) {
     interface.queue_operation(QuantumOp::X(qubit_id).into());
 }
 
+/// Pauli Y gate operation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_y(qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -72,6 +99,11 @@ pub unsafe extern "C" fn __pecos_jit_y(qubit: i64) {
     interface.queue_operation(QuantumOp::Y(qubit_id).into());
 }
 
+/// Pauli Z gate operation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_z(qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -79,6 +111,11 @@ pub unsafe extern "C" fn __pecos_jit_z(qubit: i64) {
     interface.queue_operation(QuantumOp::Z(qubit_id).into());
 }
 
+/// S gate operation (phase gate, sqrt(Z))
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_s(qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -86,6 +123,11 @@ pub unsafe extern "C" fn __pecos_jit_s(qubit: i64) {
     interface.queue_operation(QuantumOp::S(qubit_id).into());
 }
 
+/// S-dagger gate operation (inverse S gate)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_sdg(qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -93,6 +135,11 @@ pub unsafe extern "C" fn __pecos_jit_sdg(qubit: i64) {
     interface.queue_operation(QuantumOp::Sdg(qubit_id).into());
 }
 
+/// T gate operation (π/8 gate)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_t(qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -100,6 +147,11 @@ pub unsafe extern "C" fn __pecos_jit_t(qubit: i64) {
     interface.queue_operation(QuantumOp::T(qubit_id).into());
 }
 
+/// T-dagger gate operation (inverse T gate)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_tdg(qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -107,6 +159,11 @@ pub unsafe extern "C" fn __pecos_jit_tdg(qubit: i64) {
     interface.queue_operation(QuantumOp::Tdg(qubit_id).into());
 }
 
+/// Controlled-X (CNOT) gate operation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Both qubit parameters must be valid
+/// non-negative qubit IDs that fit in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_cx(control: i64, target: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -115,6 +172,11 @@ pub unsafe extern "C" fn __pecos_jit_cx(control: i64, target: i64) {
     interface.queue_operation(QuantumOp::CX(control_id, target_id).into());
 }
 
+/// Controlled-NOT gate operation (alias for CX)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Both qubit parameters must be valid
+/// non-negative qubit IDs that fit in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_cnot(control: i64, target: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -123,6 +185,11 @@ pub unsafe extern "C" fn __pecos_jit_cnot(control: i64, target: i64) {
     interface.queue_operation(QuantumOp::CX(control_id, target_id).into());
 }
 
+/// Controlled-Y gate operation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Both qubit parameters must be valid
+/// non-negative qubit IDs that fit in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_cy(control: i64, target: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -131,6 +198,11 @@ pub unsafe extern "C" fn __pecos_jit_cy(control: i64, target: i64) {
     interface.queue_operation(QuantumOp::CY(control_id, target_id).into());
 }
 
+/// Controlled-Z gate operation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Both qubit parameters must be valid
+/// non-negative qubit IDs that fit in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_cz(control: i64, target: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -139,6 +211,11 @@ pub unsafe extern "C" fn __pecos_jit_cz(control: i64, target: i64) {
     interface.queue_operation(QuantumOp::CZ(control_id, target_id).into());
 }
 
+/// Controlled-Hadamard gate operation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Both qubit parameters must be valid
+/// non-negative qubit IDs that fit in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_ch(control: i64, target: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -147,16 +224,24 @@ pub unsafe extern "C" fn __pecos_jit_ch(control: i64, target: i64) {
     interface.queue_operation(QuantumOp::CH(control_id, target_id).into());
 }
 
+/// Lazy measurement operation that returns a future ID
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
+/// Returns a future ID that can be read later with `__read_future_bool`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_lazy_measure(qubit: i64) -> i64 {
     let interface = unsafe { get_jit_interface() };
     let qubit_id = i64_to_usize(qubit);
 
     // Allocate a future ID from the runtime for tracking
-    let future_id = with_measurement_manager_mut(|manager| manager.allocate_future());
+    let future_id = with_measurement_manager_mut(
+        super::measurement_manager::JitMeasurementManager::allocate_future,
+    );
 
     // Use the future ID as the result ID for consistency
-    let result_id = future_id as usize;
+    let result_id = i64_to_usize(future_id);
 
     // Queue the measurement operations
     interface.queue_operation(Operation::AllocateResult { id: result_id });
@@ -166,6 +251,11 @@ pub unsafe extern "C" fn __pecos_jit_lazy_measure(qubit: i64) -> i64 {
     future_id
 }
 
+/// Rotation around Z axis
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_rz(qubit: i64, theta: f64) {
     let interface = unsafe { get_jit_interface() };
@@ -173,6 +263,11 @@ pub unsafe extern "C" fn __pecos_jit_rz(qubit: i64, theta: f64) {
     interface.queue_operation(QuantumOp::RZ(theta, qubit_id).into());
 }
 
+/// Rotation in XY plane
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_rxy(qubit: i64, theta: f64, phi: f64) {
     let interface = unsafe { get_jit_interface() };
@@ -180,6 +275,11 @@ pub unsafe extern "C" fn __pecos_jit_rxy(qubit: i64, theta: f64, phi: f64) {
     interface.queue_operation(QuantumOp::RXY(theta, phi, qubit_id).into());
 }
 
+/// Two-qubit ZZ rotation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Both qubit parameters must be valid
+/// non-negative qubit IDs that fit in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_rzz(qubit1: i64, qubit2: i64, theta: f64) {
     let interface = unsafe { get_jit_interface() };
@@ -188,6 +288,11 @@ pub unsafe extern "C" fn __pecos_jit_rzz(qubit1: i64, qubit2: i64, theta: f64) {
     interface.queue_operation(QuantumOp::RZZ(theta, qubit1_id, qubit2_id).into());
 }
 
+/// Rotation around X axis
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_rx(theta: f64, qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -195,6 +300,11 @@ pub unsafe extern "C" fn __pecos_jit_rx(theta: f64, qubit: i64) {
     interface.queue_operation(QuantumOp::RX(theta, qubit_id).into());
 }
 
+/// Rotation around Y axis
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_ry(theta: f64, qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -202,6 +312,11 @@ pub unsafe extern "C" fn __pecos_jit_ry(theta: f64, qubit: i64) {
     interface.queue_operation(QuantumOp::RY(theta, qubit_id).into());
 }
 
+/// Single-qubit rotation in XY plane (R1XY gate)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_r1xy(theta: f64, phi: f64, qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -209,6 +324,11 @@ pub unsafe extern "C" fn __pecos_jit_r1xy(theta: f64, phi: f64, qubit: i64) {
     interface.queue_operation(QuantumOp::RXY(theta, phi, qubit_id).into());
 }
 
+/// Controlled rotation around Z axis
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Both qubit parameters must be valid
+/// non-negative qubit IDs that fit in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_crz(theta: f64, control: i64, target: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -217,6 +337,11 @@ pub unsafe extern "C" fn __pecos_jit_crz(theta: f64, control: i64, target: i64) 
     interface.queue_operation(QuantumOp::CRZ(theta, control_id, target_id).into());
 }
 
+/// Toffoli (CCX) gate operation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. All qubit parameters must be valid
+/// non-negative qubit IDs that fit in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_ccx(control1: i64, control2: i64, target: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -226,6 +351,11 @@ pub unsafe extern "C" fn __pecos_jit_ccx(control1: i64, control2: i64, target: i
     interface.queue_operation(QuantumOp::CCX(control1_id, control2_id, target_id).into());
 }
 
+/// Two-qubit ZZ gate operation
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Both qubit parameters must be valid
+/// non-negative qubit IDs that fit in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_zz(qubit1: i64, qubit2: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -234,6 +364,11 @@ pub unsafe extern "C" fn __pecos_jit_zz(qubit1: i64, qubit2: i64) {
     interface.queue_operation(QuantumOp::ZZ(qubit1_id, qubit2_id).into());
 }
 
+/// Reset qubit to |0⟩ state
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_reset(qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -241,6 +376,11 @@ pub unsafe extern "C" fn __pecos_jit_reset(qubit: i64) {
     interface.queue_operation(QuantumOp::Reset(qubit_id).into());
 }
 
+/// Release (deallocate) a qubit
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_qfree(qubit: i64) {
     let interface = unsafe { get_jit_interface() };
@@ -248,6 +388,12 @@ pub unsafe extern "C" fn __pecos_jit_qfree(qubit: i64) {
     interface.queue_operation(Operation::ReleaseQubit { id: qubit_id });
 }
 
+/// Measure a qubit and store result
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Both parameters must be valid
+/// non-negative IDs that fit in usize. Invalid IDs will cause a panic.
+/// Returns 0 during collection mode - actual result available after runtime execution.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_m(qubit: i64, result: i64) -> i32 {
     let interface = unsafe { get_jit_interface() };
@@ -262,16 +408,24 @@ pub unsafe extern "C" fn __pecos_jit_m(qubit: i64, result: i64) -> i32 {
 // Measurement future functions (Selene-style)
 // =============================================================================
 
+/// Lazy measurement with global interface (Selene-style)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
+/// Returns a future ID that can be read later with `___read_future_bool`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___lazy_measure(qubit: i64) -> i64 {
     // Allocate a future ID from the runtime
-    let future_id = with_measurement_manager_mut(|manager| manager.allocate_future());
+    let future_id = with_measurement_manager_mut(
+        super::measurement_manager::JitMeasurementManager::allocate_future,
+    );
 
     // Queue the measurement operation with the future ID
     let qubit_id = i64_to_usize(qubit);
     pecos_qis_ffi::with_interface(|interface| {
         // Store the future ID as a result ID for later processing
-        let result_id = future_id as usize;
+        let result_id = i64_to_usize(future_id);
         interface.queue_operation(Operation::AllocateResult { id: result_id });
         interface.queue_operation(QuantumOp::Measure(qubit_id, result_id).into());
     });
@@ -280,6 +434,12 @@ pub unsafe extern "C" fn ___lazy_measure(qubit: i64) -> i64 {
     future_id
 }
 
+/// Read measurement result from a future ID (Selene-style)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The `future_id` must be a valid
+/// ID returned from a previous `___lazy_measure` call.
+/// Returns false during collection mode, actual measurement result during execution.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___read_future_bool(future_id: i64) -> bool {
     use crate::measurement_manager::with_measurement_manager;
@@ -290,6 +450,12 @@ pub unsafe extern "C" fn ___read_future_bool(future_id: i64) -> bool {
     with_measurement_manager(|manager| manager.read_future_bool(future_id))
 }
 
+/// Read measurement result from a future ID (JIT version)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. The `future_id` must be a valid
+/// ID returned from a previous lazy measurement call.
+/// Returns false during collection mode, actual measurement result during execution.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_read_future_bool(future_id: i64) -> bool {
     use crate::measurement_manager::with_measurement_manager;
@@ -298,6 +464,11 @@ pub unsafe extern "C" fn __pecos_jit_read_future_bool(future_id: i64) -> bool {
     with_measurement_manager(|manager| manager.read_future_bool(future_id))
 }
 
+/// Increment reference count for a future (no-op)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Currently a no-op placeholder
+/// for compatibility with Selene-style code.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___inc_future_refcount(future_id: i64) {
     // Increment reference count for the future
@@ -305,6 +476,11 @@ pub unsafe extern "C" fn ___inc_future_refcount(future_id: i64) {
     let _ = future_id;
 }
 
+/// Decrement reference count for a future (no-op)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Currently a no-op placeholder
+/// for compatibility with Selene-style code.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___dec_future_refcount(future_id: i64) {
     // Decrement reference count for the future
@@ -312,6 +488,11 @@ pub unsafe extern "C" fn ___dec_future_refcount(future_id: i64) {
     let _ = future_id;
 }
 
+/// Decrement reference count for a future (JIT version, no-op)
+///
+/// # Safety
+/// This function is safe to call from LLVM JIT code. Currently a no-op placeholder
+/// for compatibility with Selene-style code.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __pecos_jit_dec_future_refcount(future_id: i64) {
     // No-op for JIT execution

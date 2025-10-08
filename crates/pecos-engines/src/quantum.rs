@@ -97,8 +97,8 @@ impl StateVecEngine {
     /// * `required_qubits` - The number of qubits required for the simulation
     pub fn ensure_qubit_count(&mut self, required_qubits: usize) {
         if self.simulator.num_qubits() != required_qubits {
-            eprintln!(
-                "DEBUG StateVecEngine: Recreating simulator (was {} qubits, now {} qubits)",
+            debug!(
+                "StateVecEngine: Recreating simulator (was {} qubits, now {} qubits)",
                 self.simulator.num_qubits(),
                 required_qubits
             );
@@ -317,7 +317,7 @@ impl Engine for StateVecEngine {
     }
 
     fn reset(&mut self) -> Result<(), PecosError> {
-        eprintln!("DEBUG StateVecEngine: reset() called");
+        debug!("StateVecEngine: reset() called");
         self.simulator.reset();
         Ok(())
     }

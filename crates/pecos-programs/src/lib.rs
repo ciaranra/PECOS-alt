@@ -3,6 +3,8 @@
 //! This crate provides pure data types for quantum programs that can be used
 //! across different PECOS engine crates without creating dependencies between them.
 
+pub mod prelude;
+
 use std::fmt;
 use std::io;
 use std::path::Path;
@@ -112,7 +114,7 @@ impl QisProgram {
         Self::from_string(s)
     }
 
-    /// Preprocess LLVM IR without creating a QisProgram (for debugging)
+    /// Preprocess LLVM IR without creating a `QisProgram` (for debugging)
     pub fn preprocess_ir(llvm_ir: impl Into<String>) -> String {
         Self::preprocess_llvm_ir(&llvm_ir.into())
     }

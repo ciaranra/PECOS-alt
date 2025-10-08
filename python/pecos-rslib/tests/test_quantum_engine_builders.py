@@ -11,7 +11,6 @@ from pecos_rslib import (
 from pecos_rslib.programs import QisProgram, QasmProgram
 from pecos_rslib.sim import (
     depolarizing_noise,
-    qis_engine,
     qasm_engine,
 )
 
@@ -178,7 +177,9 @@ attributes #0 = { "EntryPoint" }
                     result_key = key
                     break
 
-            assert result_key is not None, f"No measurement result found. Keys: {list(results_dict.keys())}"
+            assert (
+                result_key is not None
+            ), f"No measurement result found. Keys: {list(results_dict.keys())}"
             assert len(results_dict[result_key]) == 100
 
             # Count occurrences

@@ -1,27 +1,27 @@
 //! Program abstraction for QIS Classical Control Engine
 //!
 //! This module provides a unified program interface that allows different
-//! program types (QisProgram, HUGR, raw QisInterface) to be used with
-//! the QisControlEngine through a consistent `.program()` API.
+//! program types (`QisProgram`, HUGR, raw `QisInterface`) to be used with
+//! the `QisEngine` through a consistent `.program()` API.
 //!
 //! Default implementations use Selene-based interfaces with explicit
 //! error handling - no silent fallbacks are provided.
 
 use pecos_core::errors::PecosError;
-use pecos_programs::{QisProgram, HugrProgram};
+use pecos_programs::{HugrProgram, QisProgram};
 use pecos_qis_ffi::OperationCollector;
 use std::process::Command;
 use tempfile::NamedTempFile;
 
-/// A trait for types that can be converted into a QisInterface
+/// A trait for types that can be converted into a `QisInterface`
 ///
-/// This allows the QisControlEngine builder to accept different program types
-/// through a unified `.program()` method, similar to how QASMEngine works.
+/// This allows the `QisEngine` builder to accept different program types
+/// through a unified `.program()` method, similar to how `QASMEngine` works.
 ///
 /// Default implementations use Selene-based interfaces (Helios for QIS/HUGR programs).
 /// If the default is not available, explicit error messages guide users to alternatives.
 pub trait IntoQisInterface {
-    /// Convert this program into a QisInterface
+    /// Convert this program into a `QisInterface`
     ///
     /// # Errors
     /// Returns an error directing users to use explicit implementation crates.
@@ -39,12 +39,15 @@ pub enum ProgramType {
     HugrBytes,
 }
 
-/// Trait for different QisInterface implementation strategies
+/// Trait for different `QisInterface` implementation strategies
 ///
 /// This allows pluggable compilation strategies - JIT execution,
 /// Selene Helios compilation, or other future approaches.
 pub trait QisInterfaceProvider: Send + Sync {
     /// Get the interface (may involve compilation/linking)
+    ///
+    /// # Errors
+    /// Returns an error if the interface cannot be obtained (e.g., compilation/linking failures).
     fn get_interface(&mut self) -> Result<OperationCollector, PecosError>;
 
     /// Get provider type for debugging and logging
@@ -59,10 +62,10 @@ pub trait QisInterfaceProvider: Send + Sync {
     }
 }
 
-/// Selene Helios-based QisInterface provider
+/// Selene Helios-based `QisInterface` provider
 ///
 /// This provider uses Selene's Helios compiler to compile QIS bitcode
-/// into optimized quantum programs, then converts the result into a QisInterface.
+/// into optimized quantum programs, then converts the result into a `QisInterface`.
 #[derive(Debug)]
 pub struct QisSeleneHeliosInterface {
     program_data: Vec<u8>,
@@ -97,15 +100,20 @@ impl Default for HeliosConfig {
 
 impl QisSeleneHeliosInterface {
     /// Create a new Selene Helios interface provider from QIS bitcode
+    #[must_use]
     pub fn from_bitcode(bitcode: Vec<u8>) -> Self {
         Self::from_bitcode_with_config(bitcode, HeliosConfig::default())
     }
 
     /// Create a new Selene Helios interface provider with custom configuration
+    #[must_use]
     pub fn from_bitcode_with_config(bitcode: Vec<u8>, config: HeliosConfig) -> Self {
         let mut metadata = std::collections::BTreeMap::new();
         metadata.insert("bitcode_size".to_string(), bitcode.len().to_string());
-        metadata.insert("compilation_strategy".to_string(), "selene_helios".to_string());
+        metadata.insert(
+            "compilation_strategy".to_string(),
+            "selene_helios".to_string(),
+        );
         metadata.insert("opt_level".to_string(), config.opt_level.to_string());
 
         Self {
@@ -117,15 +125,20 @@ impl QisSeleneHeliosInterface {
     }
 
     /// Create a new Selene Helios interface provider from HUGR bytes
+    #[must_use]
     pub fn from_hugr_bytes(hugr_bytes: Vec<u8>) -> Self {
         Self::from_hugr_bytes_with_config(hugr_bytes, HeliosConfig::default())
     }
 
     /// Create a new Selene Helios interface provider from HUGR bytes with custom configuration
+    #[must_use]
     pub fn from_hugr_bytes_with_config(hugr_bytes: Vec<u8>, config: HeliosConfig) -> Self {
         let mut metadata = std::collections::BTreeMap::new();
         metadata.insert("hugr_size".to_string(), hugr_bytes.len().to_string());
-        metadata.insert("compilation_strategy".to_string(), "selene_helios".to_string());
+        metadata.insert(
+            "compilation_strategy".to_string(),
+            "selene_helios".to_string(),
+        );
         metadata.insert("opt_level".to_string(), config.opt_level.to_string());
 
         Self {
@@ -137,7 +150,8 @@ impl QisSeleneHeliosInterface {
     }
 
     /// Create from LLVM IR text by converting to bitcode
-    pub fn from_llvm_ir(llvm_ir: String) -> Self {
+    #[must_use]
+    pub fn from_llvm_ir(llvm_ir: &str) -> Self {
         // Convert LLVM IR text to bitcode using inkwell
         use inkwell::context::Context;
         use inkwell::targets::{InitializationConfig, Target};
@@ -150,28 +164,35 @@ impl QisSeleneHeliosInterface {
             inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
                 llvm_ir.as_bytes(),
                 "llvm_ir",
-            )
+            ),
         ) {
             Ok(module) => {
                 // Write module to bitcode
                 module.write_bitcode_to_memory().as_slice().to_vec()
             }
             Err(e) => {
-                log::error!("Failed to convert LLVM IR to bitcode: {}", e);
+                log::error!("Failed to convert LLVM IR to bitcode: {e}");
                 // Store the IR text as-is and let Helios handle it
                 llvm_ir.as_bytes().to_vec()
             }
         };
 
         let mut interface = Self::from_bitcode(bitcode);
-        interface.metadata.insert("original_format".to_string(), "llvm_ir".to_string());
-        interface.metadata.insert("ir_size".to_string(), llvm_ir.len().to_string());
+        interface
+            .metadata
+            .insert("original_format".to_string(), "llvm_ir".to_string());
+        interface
+            .metadata
+            .insert("ir_size".to_string(), llvm_ir.len().to_string());
         interface
     }
 
-    /// Compile the program using Selene Helios and convert to QisInterface
+    /// Compile the program using Selene Helios and convert to `QisInterface`
     fn compile_with_helios(&mut self) -> Result<OperationCollector, PecosError> {
-        log::info!("Using Selene Helios compilation strategy for {:?}", self.program_type);
+        log::info!(
+            "Using Selene Helios compilation strategy for {:?}",
+            self.program_type
+        );
 
         match self.program_type {
             ProgramType::QisBitcode => {
@@ -188,7 +209,7 @@ impl QisSeleneHeliosInterface {
                      For LLVM IR text, please use qis_jit_interface() instead of qis_selene_helios_interface().\n\
                      \n\
                      Example:\n\
-                     engine = qis_control_engine()\n\
+                     engine = qis_engine()\n\
                          .interface(qis_jit_interface())  // Use JIT for LLVM IR\n\
                          .program(qis_program)".to_string()
                 ))
@@ -225,16 +246,20 @@ impl QisSeleneHeliosInterface {
 
         // Write bitcode to a temporary file
         let mut bitcode_file = NamedTempFile::new()
-            .map_err(|e| PecosError::Generic(format!("Failed to create temp file: {}", e)))?;
-        bitcode_file.write_all(&self.program_data)
-            .map_err(|e| PecosError::Generic(format!("Failed to write bitcode: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Failed to create temp file: {e}")))?;
+        bitcode_file
+            .write_all(&self.program_data)
+            .map_err(|e| PecosError::Generic(format!("Failed to write bitcode: {e}")))?;
 
         // Try multiple strategies to find and use Selene Helios
         self.try_selene_helios_compilation(&bitcode_file)
     }
 
     /// Try different strategies for Selene Helios compilation
-    fn try_selene_helios_compilation(&mut self, bitcode_file: &NamedTempFile) -> Result<String, PecosError> {
+    fn try_selene_helios_compilation(
+        &mut self,
+        bitcode_file: &NamedTempFile,
+    ) -> Result<String, PecosError> {
         let strategy_names = [
             "Custom Path",
             "Environment Variable",
@@ -254,15 +279,24 @@ impl QisSeleneHeliosInterface {
         for (strategy_name, result) in strategy_names.iter().zip(strategies.iter()) {
             match result {
                 Ok(llvm_ir) => {
-                    log::info!("Selene Helios compilation succeeded using: {}", strategy_name);
-                    self.metadata.insert("helios_strategy".to_string(), strategy_name.to_string());
-                    self.metadata.insert("helios_compilation".to_string(), "success".to_string());
-                    self.metadata.insert("llvm_ir_size".to_string(), llvm_ir.len().to_string());
+                    log::info!("Selene Helios compilation succeeded using: {strategy_name}");
+                    self.metadata
+                        .insert("helios_strategy".to_string(), (*strategy_name).to_string());
+                    self.metadata
+                        .insert("helios_compilation".to_string(), "success".to_string());
+                    self.metadata
+                        .insert("llvm_ir_size".to_string(), llvm_ir.len().to_string());
                     return Ok(llvm_ir.clone());
                 }
                 Err(e) => {
-                    log::debug!("Selene Helios strategy '{}' failed: {}", strategy_name, e);
-                    self.metadata.insert(format!("helios_strategy_{}_error", strategy_name.to_lowercase().replace(' ', "_")), e.to_string());
+                    log::debug!("Selene Helios strategy '{strategy_name}' failed: {e}");
+                    self.metadata.insert(
+                        format!(
+                            "helios_strategy_{}_error",
+                            strategy_name.to_lowercase().replace(' ', "_")
+                        ),
+                        e.to_string(),
+                    );
                 }
             }
         }
@@ -283,14 +317,16 @@ impl QisSeleneHeliosInterface {
 
     /// Try compilation using user-provided Selene path
     fn try_custom_selene_path(&self, bitcode_file: &NamedTempFile) -> Result<String, PecosError> {
-        let selene_path = self.helios_config.selene_path
+        let selene_path = self
+            .helios_config
+            .selene_path
             .as_ref()
             .ok_or_else(|| PecosError::Generic("No custom Selene path provided".to_string()))?;
 
         self.run_selene_helios_compiler(selene_path, bitcode_file)
     }
 
-    /// Try compilation using SELENE_PATH environment variable
+    /// Try compilation using `SELENE_PATH` environment variable
     fn try_env_selene_path(&self, bitcode_file: &NamedTempFile) -> Result<String, PecosError> {
         let selene_path = std::env::var("SELENE_PATH")
             .map_err(|_| PecosError::Generic("SELENE_PATH not set".to_string()))?;
@@ -300,7 +336,10 @@ impl QisSeleneHeliosInterface {
     }
 
     /// Try compilation using standard Selene installation locations
-    fn try_standard_selene_locations(&self, bitcode_file: &NamedTempFile) -> Result<String, PecosError> {
+    fn try_standard_selene_locations(
+        &self,
+        bitcode_file: &NamedTempFile,
+    ) -> Result<String, PecosError> {
         let standard_paths = [
             "/home/ciaranra/Repos/cl_projects/gup/selene",
             "/opt/selene",
@@ -318,29 +357,34 @@ impl QisSeleneHeliosInterface {
             }
         }
 
-        Err(PecosError::Generic("No Selene found in standard locations".to_string()))
+        Err(PecosError::Generic(
+            "No Selene found in standard locations".to_string(),
+        ))
     }
 
     /// Try compilation using conda environment
     fn try_conda_selene(&self, bitcode_file: &NamedTempFile) -> Result<String, PecosError> {
         // Check if we're in a conda environment with Selene
-        let python_script = format!(r#"
+        let python_script = r"
 import sys
 try:
     import selene_helios_compiler
     print(selene_helios_compiler.__file__)
 except ImportError:
     sys.exit(1)
-"#);
+"
+        .to_string();
 
         let output = Command::new("python3")
             .arg("-c")
             .arg(&python_script)
             .output()
-            .map_err(|e| PecosError::Generic(format!("Failed to check conda Selene: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Failed to check conda Selene: {e}")))?;
 
         if !output.status.success() {
-            return Err(PecosError::Generic("Selene not available in conda environment".to_string()));
+            return Err(PecosError::Generic(
+                "Selene not available in conda environment".to_string(),
+            ));
         }
 
         // Run compilation directly using available Python module
@@ -356,7 +400,9 @@ except ImportError:
             .map_err(|_| PecosError::Generic("selene-helios not in PATH".to_string()))?;
 
         if !output.status.success() {
-            return Err(PecosError::Generic("selene-helios command not found".to_string()));
+            return Err(PecosError::Generic(
+                "selene-helios command not found".to_string(),
+            ));
         }
 
         // Use command-line tool
@@ -364,7 +410,11 @@ except ImportError:
     }
 
     /// Run Selene Helios compiler from a specific path
-    fn run_selene_helios_compiler(&self, selene_path: &std::path::Path, bitcode_file: &NamedTempFile) -> Result<String, PecosError> {
+    fn run_selene_helios_compiler(
+        &self,
+        selene_path: &std::path::Path,
+        bitcode_file: &NamedTempFile,
+    ) -> Result<String, PecosError> {
         let helios_python_path = selene_path.join("selene-compilers/helios/python");
 
         if !helios_python_path.exists() {
@@ -374,7 +424,8 @@ except ImportError:
             )));
         }
 
-        let python_script = format!(r#"
+        let python_script = format!(
+            r#"
 import sys
 sys.path.insert(0, '{helios_python_path}')
 
@@ -408,23 +459,32 @@ except Exception as e:
             .arg("-c")
             .arg(&python_script)
             .output()
-            .map_err(|e| PecosError::Generic(format!("Failed to run Selene Helios: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Failed to run Selene Helios: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(PecosError::Generic(format!("Selene Helios compilation failed: {}", stderr)));
+            return Err(PecosError::Generic(format!(
+                "Selene Helios compilation failed: {stderr}"
+            )));
         }
 
         let llvm_ir = String::from_utf8(output.stdout)
-            .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 output: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 output: {e}")))?;
 
-        log::debug!("Successfully compiled bitcode using Selene Helios from: {}", selene_path.display());
+        log::debug!(
+            "Successfully compiled bitcode using Selene Helios from: {}",
+            selene_path.display()
+        );
         Ok(llvm_ir.trim().to_string())
     }
 
     /// Run Selene Helios compilation using conda environment
-    fn run_conda_selene_compilation(&self, bitcode_file: &NamedTempFile) -> Result<String, PecosError> {
-        let python_script = format!(r#"
+    fn run_conda_selene_compilation(
+        &self,
+        bitcode_file: &NamedTempFile,
+    ) -> Result<String, PecosError> {
+        let python_script = format!(
+            r#"
 import selene_helios_compiler
 
 try:
@@ -451,21 +511,26 @@ except Exception as e:
             .arg("-c")
             .arg(&python_script)
             .output()
-            .map_err(|e| PecosError::Generic(format!("Failed to run conda Selene: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Failed to run conda Selene: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(PecosError::Generic(format!("Conda Selene compilation failed: {}", stderr)));
+            return Err(PecosError::Generic(format!(
+                "Conda Selene compilation failed: {stderr}"
+            )));
         }
 
         let llvm_ir = String::from_utf8(output.stdout)
-            .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 output: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 output: {e}")))?;
 
         Ok(llvm_ir.trim().to_string())
     }
 
     /// Run Selene Helios compilation using system command
-    fn run_system_selene_compilation(&self, bitcode_file: &NamedTempFile) -> Result<String, PecosError> {
+    fn run_system_selene_compilation(
+        &self,
+        bitcode_file: &NamedTempFile,
+    ) -> Result<String, PecosError> {
         let output = Command::new("selene-helios")
             .arg("compile")
             .arg("--input")
@@ -477,15 +542,17 @@ except Exception as e:
             .arg("--target-triple")
             .arg(&self.helios_config.target_triple)
             .output()
-            .map_err(|e| PecosError::Generic(format!("Failed to run system Selene: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Failed to run system Selene: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(PecosError::Generic(format!("System Selene compilation failed: {}", stderr)));
+            return Err(PecosError::Generic(format!(
+                "System Selene compilation failed: {stderr}"
+            )));
         }
 
         let llvm_ir = String::from_utf8(output.stdout)
-            .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 output: {}", e)))?;
+            .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 output: {e}")))?;
 
         Ok(llvm_ir.trim().to_string())
     }
@@ -501,7 +568,10 @@ impl QisInterfaceProvider for QisSeleneHeliosInterface {
     }
 
     fn can_handle(&self, program_type: &ProgramType) -> bool {
-        matches!(program_type, ProgramType::QisBitcode | ProgramType::HugrBytes)
+        matches!(
+            program_type,
+            ProgramType::QisBitcode | ProgramType::HugrBytes
+        )
     }
 
     fn get_metadata(&self) -> std::collections::BTreeMap<String, String> {
@@ -509,25 +579,45 @@ impl QisInterfaceProvider for QisSeleneHeliosInterface {
     }
 }
 
-/// Implement IntoQisInterface for OperationCollector itself (identity conversion)
+/// Implement `IntoQisInterface` for `OperationCollector` itself (identity conversion)
 impl IntoQisInterface for OperationCollector {
     fn into_qis_interface(self) -> Result<OperationCollector, PecosError> {
         Ok(self)
     }
 }
 
-/// Trait for building QisInterface instances from programs
+/// Trait for building `QisInterface` instances from programs
 ///
 /// This trait allows different compilation strategies (JIT, Helios, etc.)
-/// to be plugged into the QisEngineBuilder through the .interface() method.
+/// to be plugged into the `QisEngineBuilder` through the .`interface()` method.
 pub trait QisInterfaceBuilder: Send + Sync + dyn_clone::DynClone {
-    /// Build a QisInterface from the given program using this builder's strategy
+    /// Build a `QisInterface` from the given program using this builder's strategy
     ///
     /// Since we can't call sized methods on trait objects, each implementation
     /// needs to handle the program type directly
-    fn build_from_qis_program(&self, program: QisProgram) -> Result<OperationCollector, PecosError>;
-    fn build_from_hugr_program(&self, program: HugrProgram) -> Result<OperationCollector, PecosError>;
-    fn build_from_interface(&self, interface: OperationCollector) -> Result<OperationCollector, PecosError>;
+    ///
+    /// # Errors
+    /// Returns an error if the program cannot be built into an interface.
+    fn build_from_qis_program(&self, program: QisProgram)
+    -> Result<OperationCollector, PecosError>;
+
+    /// Build from HUGR program
+    ///
+    /// # Errors
+    /// Returns an error if the program cannot be built into an interface.
+    fn build_from_hugr_program(
+        &self,
+        program: HugrProgram,
+    ) -> Result<OperationCollector, PecosError>;
+
+    /// Build from pre-built interface
+    ///
+    /// # Errors
+    /// Returns an error if the interface cannot be processed.
+    fn build_from_interface(
+        &self,
+        interface: OperationCollector,
+    ) -> Result<OperationCollector, PecosError>;
 
     /// Get a descriptive name for this builder
     fn name(&self) -> &'static str;
@@ -543,7 +633,7 @@ pub enum InterfaceChoice {
     Auto,
 }
 
-/// Implement IntoQisInterface for QisProgram
+/// Implement `IntoQisInterface` for `QisProgram`
 ///
 /// Users must explicitly choose an interface implementation from pecos-qis-jit or pecos-qis-selene.
 impl IntoQisInterface for QisProgram {
@@ -556,61 +646,66 @@ impl IntoQisInterface for QisProgram {
             let interface = QisJitInterface::from_llvm_ir(program);\n\n\
             For Selene Helios interface:\n\
             use pecos_qis_selene::QisHeliosInterface;\n\
-            let interface = QisHeliosInterface::new();".to_string()
+            let interface = QisHeliosInterface::new();"
+                .to_string(),
         ))
     }
 }
 
-/// Implement IntoQisInterface for HUGR bytes
+/// Implement `IntoQisInterface` for HUGR bytes
 ///
 /// Users must explicitly choose an interface implementation.
 impl IntoQisInterface for &[u8] {
     fn into_qis_interface(self) -> Result<OperationCollector, PecosError> {
         Err(PecosError::Processing(
             "No default interface implementation for HUGR bytes.\n\
-            Please use an explicit interface from pecos-qis-jit or pecos-qis-selene.".to_string()
+            Please use an explicit interface from pecos-qis-jit or pecos-qis-selene."
+                .to_string(),
         ))
     }
 }
 
-/// Implement IntoQisInterface for HUGR bytes (owned)
+/// Implement `IntoQisInterface` for HUGR bytes (owned)
 impl IntoQisInterface for Vec<u8> {
     fn into_qis_interface(self) -> Result<OperationCollector, PecosError> {
         Err(PecosError::Processing(
             "No default interface implementation for HUGR bytes.\n\
-            Please use an explicit interface from pecos-qis-jit or pecos-qis-selene.".to_string()
+            Please use an explicit interface from pecos-qis-jit or pecos-qis-selene."
+                .to_string(),
         ))
     }
 }
 
-/// Implement IntoQisInterface for HugrProgram
+/// Implement `IntoQisInterface` for `HugrProgram`
 ///
 /// Users must explicitly choose an interface implementation.
 impl IntoQisInterface for HugrProgram {
     fn into_qis_interface(self) -> Result<OperationCollector, PecosError> {
         Err(PecosError::Processing(
             "No default interface implementation for HUGR programs.\n\
-            Please use an explicit interface from pecos-qis-jit or pecos-qis-selene.".to_string()
+            Please use an explicit interface from pecos-qis-jit or pecos-qis-selene."
+                .to_string(),
         ))
     }
 }
 
 /// Wrapper type to represent a QIS Control Engine Program
 ///
-/// This is conceptually equivalent to QisInterface, but provides a
+/// This is conceptually equivalent to `QisInterface`, but provides a
 /// more semantically clear type name for the builder API.
 #[derive(Debug, Clone)]
-pub struct QisControlEngineProgram {
+pub struct QisEngineProgram {
     interface: OperationCollector,
 }
 
-impl QisControlEngineProgram {
-    /// Create a new program from a QisInterface
+impl QisEngineProgram {
+    /// Create a new program from a `QisInterface`
+    #[must_use]
     pub fn new(interface: OperationCollector) -> Self {
         Self { interface }
     }
 
-    /// Create a program from anything that can be converted to QisInterface
+    /// Create a program from anything that can be converted to `QisInterface`
     ///
     /// # Errors
     /// Returns an error if the conversion fails
@@ -619,24 +714,26 @@ impl QisControlEngineProgram {
         Ok(Self::new(interface))
     }
 
-    /// Get the underlying QisInterface
+    /// Get the underlying `QisInterface`
+    #[must_use]
     pub fn into_interface(self) -> OperationCollector {
         self.interface
     }
 
-    /// Get a reference to the underlying QisInterface
+    /// Get a reference to the underlying `QisInterface`
+    #[must_use]
     pub fn interface(&self) -> &OperationCollector {
         &self.interface
     }
 }
 
-impl IntoQisInterface for QisControlEngineProgram {
+impl IntoQisInterface for QisEngineProgram {
     fn into_qis_interface(self) -> Result<OperationCollector, PecosError> {
         Ok(self.interface)
     }
 }
 
-impl From<OperationCollector> for QisControlEngineProgram {
+impl From<OperationCollector> for QisEngineProgram {
     fn from(interface: OperationCollector) -> Self {
         Self::new(interface)
     }
@@ -644,7 +741,6 @@ impl From<OperationCollector> for QisControlEngineProgram {
 
 // Tests for program conversion are in the implementation crates (pecos-qis-jit, pecos-qis-selene, etc.)
 // since they require actual interface implementations.
-
 
 /// Compile HUGR bytes using Selene's compiler
 ///
@@ -657,12 +753,11 @@ fn compile_hugr_with_selene(hugr_bytes: &[u8]) -> Result<String, PecosError> {
     compile_hugr_with_selene_python(hugr_bytes)
         .map_err(|e| {
             PecosError::Generic(format!(
-                "Selene Helios compilation failed: {}\n\n\
+                "Selene Helios compilation failed: {e}\n\n\
                 To use Helios interface, ensure Selene is installed and available:\n\
                 1. Ensure Selene repository is at ../selene or ../../../selene\n\
                 2. Build Selene compilers: 'cargo build --release' in Selene directory\n\
-                3. Or use explicit JIT interface: qis_control_engine().interface(qis_jit_interface()).program()",
-                e
+                3. Or use explicit JIT interface: qis_engine().interface(qis_jit_interface()).program()"
             ))
         })
 }
@@ -674,14 +769,16 @@ fn compile_hugr_with_selene_python(hugr_bytes: &[u8]) -> Result<String, PecosErr
 
     // Write HUGR bytes to a temporary file
     let mut hugr_file = NamedTempFile::new()
-        .map_err(|e| PecosError::Generic(format!("Failed to create temp file: {}", e)))?;
-    hugr_file.write_all(hugr_bytes)
-        .map_err(|e| PecosError::Generic(format!("Failed to write HUGR bytes: {}", e)))?;
+        .map_err(|e| PecosError::Generic(format!("Failed to create temp file: {e}")))?;
+    hugr_file
+        .write_all(hugr_bytes)
+        .map_err(|e| PecosError::Generic(format!("Failed to write HUGR bytes: {e}")))?;
 
     // Call Selene's compiler using Python
     let output = Command::new("python3")
         .arg("-c")
-        .arg(format!(r#"
+        .arg(format!(
+            r"
 import sys
 sys.path.insert(0, '{}/selene-compilers/hugr_qis/python')
 from selene_hugr_qis_compiler import compile_to_llvm_ir
@@ -691,22 +788,23 @@ with open('{}', 'rb') as f:
 
 llvm_ir = compile_to_llvm_ir(hugr_bytes, opt_level=2, target_triple='native')
 print(llvm_ir)
-"#,
+",
             "/home/ciaranra/Repos/cl_projects/gup/selene",
-            hugr_file.path().display()))
+            hugr_file.path().display()
+        ))
         .output()
-        .map_err(|e| PecosError::Generic(format!("Failed to run Selene compiler: {}", e)))?;
+        .map_err(|e| PecosError::Generic(format!("Failed to run Selene compiler: {e}")))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(PecosError::Generic(format!("Selene compiler failed: {}", stderr)));
+        return Err(PecosError::Generic(format!(
+            "Selene compiler failed: {stderr}"
+        )));
     }
 
     let llvm_ir = String::from_utf8(output.stdout)
-        .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 output: {}", e)))?;
+        .map_err(|e| PecosError::Generic(format!("Invalid UTF-8 output: {e}")))?;
 
     log::debug!("Successfully compiled HUGR using Selene compiler");
     Ok(llvm_ir)
 }
-
-

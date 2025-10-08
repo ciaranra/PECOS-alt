@@ -71,7 +71,7 @@ except ImportError:
         """PECOS's Rust HUGR to LLVM compiler."""
         raise ImportError(
             "PECOS's Rust HUGR compiler is not available. "
-            "Build pecos-rslib with hugr-llvm-pipeline feature to enable it."
+            "This should not happen - please report this as a bug."
         )
 
 
@@ -95,7 +95,7 @@ def compile_hugr_to_llvm_selene(hugr_bytes: bytes, output_path=None) -> str:
         raise ImportError(
             "Selene's hugr-qis compiler is not available. "
             "Install it with: pip install selene-hugr-qis-compiler"
-        )
+        ) from None
 
     # Check if this is JSON (starts with '{') and needs to be converted to envelope format
     if hugr_bytes.startswith(b"{"):
@@ -269,13 +269,13 @@ try:
         phir_json_engine,
         qasm_engine,
     )
+
     # Import QIS engine functions directly from Rust
     from pecos_rslib._pecos_rslib import (
         qis_engine,
-        qis_control_engine,
         qis_jit_interface,
         qis_selene_helios_interface,
-        QisInterfaceBuilder
+        QisInterfaceBuilder,
     )
 except ImportError:
     # Provide stubs if not available
@@ -284,9 +284,6 @@ except ImportError:
 
     def qis_engine(*_args, **_kwargs) -> NoReturn:
         raise ImportError("qis_engine not available")
-
-    def qis_control_engine(*_args, **_kwargs) -> NoReturn:
-        raise ImportError("qis_control_engine not available")
 
     def qis_jit_interface(*_args, **_kwargs) -> NoReturn:
         raise ImportError("qis_jit_interface not available")
@@ -309,7 +306,6 @@ except ImportError:
     class QisEngineBuilder:
         def __init__(self) -> None:
             raise ImportError("QisEngineBuilder not available")
-
 
     class PhirJsonEngineBuilder:
         def __init__(self) -> None:
@@ -538,7 +534,7 @@ __all__ = [
     "sim",
     "qasm_engine",
     "qis_engine",
-    "qis_control_engine",
+    "qis_engine",
     "qis_jit_interface",
     "qis_selene_helios_interface",
     "QisInterfaceBuilder",

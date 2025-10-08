@@ -35,6 +35,11 @@ log.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true
 
+# Quantum simulator backends (optional - for Python bindings and advanced users)
+pecos-cppsparsesim = { workspace = true, optional = true }
+pecos-quest = { workspace = true, optional = true }
+pecos-qulacs = { workspace = true, optional = true }
+
 [features]
 default = ["jit"]
 qasm = []
@@ -42,6 +47,15 @@ llvm = []
 phir = []
 jit = ["pecos-qis-jit"]
 selene = ["pecos-qis-selene"]
+
+# Quantum simulator backends
+cppsparsesim = ["pecos-cppsparsesim"]
+quest = ["pecos-quest"]
+qulacs = ["pecos-qulacs"]
+
+# All simulator backends
+all-simulators = ["cppsparsesim", "quest", "qulacs"]
+
 
 [dev-dependencies]
 tempfile.workspace = true

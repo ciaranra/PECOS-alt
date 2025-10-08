@@ -694,14 +694,20 @@ class TestQuantumErrorHandling:
         success_ones = [m for m in success_cases if m[1] == 1]
         # With H gate, should get both 0 and 1 outcomes
         # Being lenient since distribution can vary with small samples
-        assert len(success_zeros) > 5, f"H gate should produce some 0s, got {len(success_zeros)}"
-        assert len(success_ones) > 5, f"H gate should produce some 1s, got {len(success_ones)}"
+        assert (
+            len(success_zeros) > 5
+        ), f"H gate should produce some 0s, got {len(success_zeros)}"
+        assert (
+            len(success_ones) > 5
+        ), f"H gate should produce some 1s, got {len(success_ones)}"
 
         # Check error cases (X gate should give all 1s, but allow some variance due to potential issues)
         error_zeros = [m for m in error_cases if m[1] == 0]
         error_ones = [m for m in error_cases if m[1] == 1]
         # X gate should mostly produce 1s
-        assert len(error_ones) > len(error_zeros), f"X gate should produce mostly 1s, got {len(error_ones)} ones vs {len(error_zeros)} zeros"
+        assert len(error_ones) > len(
+            error_zeros,
+        ), f"X gate should produce mostly 1s, got {len(error_ones)} ones vs {len(error_zeros)} zeros"
 
     def test_projective_measurement(self) -> None:
         """Test measurement collapse behavior."""

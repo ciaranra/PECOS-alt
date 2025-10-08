@@ -2,6 +2,7 @@
 name = "pecos-qis-selene"
 version.workspace = true
 edition.workspace = true
+description = "Selene runtime integration for quantum instruction set programs"
 readme.workspace = true
 authors.workspace = true
 homepage.workspace = true

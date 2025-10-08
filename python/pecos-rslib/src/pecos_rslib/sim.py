@@ -65,7 +65,6 @@ __all__ = [
     "PhirJsonProgram",
     "QasmEngineBuilder",
     "QasmProgram",
-    "SeleneEngineBuilder",
     "SimBuilder",
     "SparseStabilizerEngineBuilder",
     "StateVectorEngineBuilder",

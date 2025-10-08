@@ -16,6 +16,9 @@ description = "PECOS High-level Intermediate Representation (PHIR) pipeline for 
 pecos-core = { workspace = true, features = ["anyhow"] }
 pecos-engines.workspace = true
 
+# Logging
+log.workspace = true
+
 # JSON serialization (keeping for HUGR parsing)
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

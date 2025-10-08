@@ -1,9 +1,8 @@
 """Test QisInterfaceBuilder pattern with Helios as reference implementation."""
 
 import pytest
-import pecos_rslib
 from pecos_rslib import (
-    qis_control_engine,
+    qis_engine,
     qis_jit_interface,
     qis_selene_helios_interface,
     QisProgram,
@@ -23,15 +22,15 @@ def run_with_both_interfaces(test_name, test_fn):
     test_program = QisProgram.from_string("define void @main() { ret void }")
     can_use_helios = False
     try:
-        engine = qis_control_engine().interface(qis_selene_helios_interface()).program(test_program)
+        (qis_engine().interface(qis_selene_helios_interface()).program(test_program))
         can_use_helios = True
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"  Helios interface not available: {e}")
 
     if can_use_helios:
         try:
             test_fn("Helios")
-            print(f"  Helios test passed (reference)")
+            print("  Helios test passed (reference)")
         except Exception as e:
             pytest.fail(f"Helios reference implementation failed: {e}")
 
@@ -39,7 +38,7 @@ def run_with_both_interfaces(test_name, test_fn):
         print(f"\nTesting {test_name} with JIT interface (should match Helios):")
         try:
             test_fn("JIT")
-            print(f"  JIT test passed (matches reference)")
+            print("  JIT test passed (matches reference)")
         except Exception as e:
             pytest.fail(f"JIT implementation differs from Helios reference: {e}")
     else:
@@ -92,11 +91,7 @@ class TestQisInterfaceBuilder:
                 interface_builder = qis_jit_interface()
 
             # Run simulation (runtime is default/built-in)
-            engine = (
-                qis_control_engine()
-                .interface(interface_builder)
-                .program(qis_program)
-            )
+            engine = qis_engine().interface(interface_builder).program(qis_program)
             sim = engine.to_sim().qubits(2).seed(42)
             results = sim.run(100)
 
@@ -114,14 +109,20 @@ class TestQisInterfaceBuilder:
                 elif m0 == 1 and m1 == 1:
                     count_11 += 1
                 else:
-                    raise ValueError(f"Bell state should only produce |00⟩ or |11⟩, got: ({m0}, {m1})")
+                    raise ValueError(
+                        f"Bell state should only produce |00⟩ or |11⟩, got: ({m0}, {m1})"
+                    )
 
-            print(f"    {interface_name} interface: |00⟩: {count_00} times, |11⟩: {count_11} times")
+            print(
+                f"    {interface_name} interface: |00⟩: {count_00} times, |11⟩: {count_11} times"
+            )
 
             # Verify distribution is reasonable (allowing for statistical variation)
             assert 20 < count_00 < 80, f"00 count out of expected range: {count_00}"
             assert 20 < count_11 < 80, f"11 count out of expected range: {count_11}"
-            assert count_00 + count_11 == 100, f"Total should be 100, got {count_00 + count_11}"
+            assert (
+                count_00 + count_11 == 100
+            ), f"Total should be 100, got {count_00 + count_11}"
 
         run_with_both_interfaces("Bell state", run_bell_test)
 
@@ -155,11 +156,7 @@ class TestQisInterfaceBuilder:
                 interface_builder = qis_jit_interface()
 
             # Run simulation (runtime is default/built-in)
-            engine = (
-                qis_control_engine()
-                .interface(interface_builder)
-                .program(qis_program)
-            )
+            engine = qis_engine().interface(interface_builder).program(qis_program)
             sim = engine.to_sim().qubits(3).seed(42)
             results = sim.run(100)
 
@@ -178,12 +175,18 @@ class TestQisInterfaceBuilder:
                 elif m0 == 1 and m1 == 1 and m2 == 1:
                     count_111 += 1
                 else:
-                    raise ValueError(f"GHZ state should only produce |000⟩ or |111⟩, got: ({m0}, {m1}, {m2})")
+                    raise ValueError(
+                        f"GHZ state should only produce |000⟩ or |111⟩, got: ({m0}, {m1}, {m2})"
+                    )
 
-            print(f"    {interface_name} interface: |000⟩: {count_000} times, |111⟩: {count_111} times")
+            print(
+                f"    {interface_name} interface: |000⟩: {count_000} times, |111⟩: {count_111} times"
+            )
 
             # Verify we got valid measurements
-            assert count_000 + count_111 == 100, f"Total should be 100, got {count_000 + count_111}"
+            assert (
+                count_000 + count_111 == 100
+            ), f"Total should be 100, got {count_000 + count_111}"
             assert count_000 > 0 or count_111 > 0, "Should have some valid measurements"
 
         run_with_both_interfaces("GHZ state", run_ghz_test)
@@ -195,7 +198,7 @@ class TestQisInterfaceBuilder:
 
         try:
             # No .interface() call - should default to Helios
-            engine = qis_control_engine().program(qis_program)
+            qis_engine().program(qis_program)
             print("Default behavior uses Helios interface")
         except Exception as e:
             if "Selene Helios compilation failed" in str(e) or "Selene" in str(e):
@@ -215,11 +218,7 @@ class TestQisInterfaceBuilder:
         qis_program = QisProgram.from_string(simple_qis)
 
         # Explicitly select JIT - should always work
-        engine = (
-            qis_control_engine()
-            .interface(qis_jit_interface())
-            .program(qis_program)
-        )
+        engine = qis_engine().interface(qis_jit_interface()).program(qis_program)
         sim = engine.to_sim().qubits(1)
         results = sim.run(1)
 

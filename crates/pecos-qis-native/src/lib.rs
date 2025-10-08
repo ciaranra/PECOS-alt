@@ -1,12 +1,14 @@
-//! Native Rust implementation of QisRuntime
+//! Native Rust implementation of `QisRuntime`
 //!
 //! This provides a simple native Rust interpreter for QIS programs.
-//! It processes the operations collected by QisInterface and manages
+//! It processes the operations collected by `QisInterface` and manages
 //! classical control flow without requiring external dependencies.
 
+pub mod prelude;
+
 use log::{debug, trace};
-use pecos_qis_ffi::{Operation, OperationCollector, QuantumOp};
 use pecos_qis_core::runtime::{ClassicalState, QisRuntime, Result, RuntimeError};
+use pecos_qis_ffi::{Operation, OperationCollector, QuantumOp};
 use std::collections::BTreeMap;
 
 /// Create a new native runtime
@@ -17,22 +19,23 @@ use std::collections::BTreeMap;
 /// # Example
 /// ```
 /// use pecos_qis_native::native_runtime;
-/// use pecos_qis_core::qis_control_engine;
+/// use pecos_qis_core::qis_engine;
 /// use pecos_engines::ClassicalControlEngineBuilder;
 /// use pecos_qis_ffi::OperationCollector;
 ///
 /// let interface = OperationCollector::new();
-/// let engine = qis_control_engine()
+/// let engine = qis_engine()
 ///     .runtime(native_runtime())
 ///     .program(interface)
 ///     .build()
 ///     .unwrap();
 /// ```
+#[must_use]
 pub fn native_runtime() -> NativeRuntime {
     NativeRuntime::new()
 }
 
-/// Native Rust implementation of QisRuntime
+/// Native Rust implementation of `QisRuntime`
 ///
 /// This is a simple interpreter that processes QIS operations sequentially.
 /// It's primarily useful for testing and as a reference implementation.
@@ -59,6 +62,7 @@ pub struct NativeRuntime {
 
 impl NativeRuntime {
     /// Create a new native runtime
+    #[must_use]
     pub fn new() -> Self {
         Self {
             interface: None,
@@ -71,29 +75,35 @@ impl NativeRuntime {
     }
 
     /// Extract all qubit IDs referenced by a quantum operation
-    fn extract_qubit_ids(&self, qop: &QuantumOp) -> Vec<usize> {
+    fn extract_qubit_ids(qop: &QuantumOp) -> Vec<usize> {
         match qop {
-            // Single-qubit gates
-            QuantumOp::H(q) | QuantumOp::X(q) | QuantumOp::Y(q) | QuantumOp::Z(q) |
-            QuantumOp::S(q) | QuantumOp::Sdg(q) | QuantumOp::T(q) | QuantumOp::Tdg(q) |
-            QuantumOp::Reset(q) => vec![*q],
+            // Single-qubit gates and rotations
+            QuantumOp::H(q)
+            | QuantumOp::X(q)
+            | QuantumOp::Y(q)
+            | QuantumOp::Z(q)
+            | QuantumOp::S(q)
+            | QuantumOp::Sdg(q)
+            | QuantumOp::T(q)
+            | QuantumOp::Tdg(q)
+            | QuantumOp::Reset(q)
+            | QuantumOp::RX(_, q)
+            | QuantumOp::RY(_, q)
+            | QuantumOp::RZ(_, q)
+            | QuantumOp::RXY(_, _, q)
+            | QuantumOp::Measure(q, _) => vec![*q],
 
-            // Rotation gates
-            QuantumOp::RX(_, q) | QuantumOp::RY(_, q) | QuantumOp::RZ(_, q) |
-            QuantumOp::RXY(_, _, q) => vec![*q],
-
-            // Two-qubit gates
-            QuantumOp::CX(c, t) | QuantumOp::CY(c, t) | QuantumOp::CZ(c, t) |
-            QuantumOp::CH(c, t) | QuantumOp::ZZ(c, t) | QuantumOp::RZZ(_, c, t) => vec![*c, *t],
-
-            // Controlled rotations
-            QuantumOp::CRZ(_, c, t) => vec![*c, *t],
+            // Two-qubit gates and controlled rotations
+            QuantumOp::CX(c, t)
+            | QuantumOp::CY(c, t)
+            | QuantumOp::CZ(c, t)
+            | QuantumOp::CH(c, t)
+            | QuantumOp::ZZ(c, t)
+            | QuantumOp::RZZ(_, c, t)
+            | QuantumOp::CRZ(_, c, t) => vec![*c, *t],
 
             // Three-qubit gates
             QuantumOp::CCX(c1, c2, t) => vec![*c1, *c2, *t],
-
-            // Measurement
-            QuantumOp::Measure(q, _) => vec![*q],
         }
     }
 
@@ -113,23 +123,23 @@ impl NativeRuntime {
 
         match op {
             Operation::Quantum(qop) => {
-                trace!("Processing quantum operation: {:?}", qop);
+                trace!("Processing quantum operation: {qop:?}");
                 Ok(Some(qop.clone()))
             }
             Operation::AllocateQubit { id } => {
-                trace!("Allocating qubit {}", id);
+                trace!("Allocating qubit {id}");
                 self.num_qubits = self.num_qubits.max(*id + 1);
                 // Process next operation
                 self.process_next_operation()
             }
             Operation::AllocateResult { id } => {
-                trace!("Allocating result {}", id);
+                trace!("Allocating result {id}");
                 // Just track it, process next operation
                 let _ = id;
                 self.process_next_operation()
             }
             Operation::ReleaseQubit { id } => {
-                trace!("Releasing qubit {}", id);
+                trace!("Releasing qubit {id}");
                 // Just track it, process next operation
                 let _ = id;
                 self.process_next_operation()
@@ -151,26 +161,36 @@ impl Default for NativeRuntime {
 
 impl QisRuntime for NativeRuntime {
     fn load_interface(&mut self, interface: OperationCollector) -> Result<()> {
-        debug!("Loading QIS interface with {} operations", interface.operations.len());
+        debug!(
+            "Loading QIS interface with {} operations",
+            interface.operations.len()
+        );
 
         // Count qubits from both explicit allocations AND from operations that reference qubits
-        let max_qubit_from_allocations = interface.allocated_qubits.iter().max().cloned();
+        let max_qubit_from_allocations = interface.allocated_qubits.iter().max().copied();
         let mut max_qubit_from_operations: Option<usize> = None;
 
         // Scan all operations to find the maximum qubit ID referenced
         for operation in &interface.operations {
             match operation {
                 Operation::Quantum(qop) => {
-                    let qubits = self.extract_qubit_ids(qop);
+                    let qubits = Self::extract_qubit_ids(qop);
                     if let Some(max_in_op) = qubits.into_iter().max() {
-                        max_qubit_from_operations = Some(max_qubit_from_operations.map_or(max_in_op, |current: usize| current.max(max_in_op)));
+                        max_qubit_from_operations = Some(
+                            max_qubit_from_operations
+                                .map_or(max_in_op, |current: usize| current.max(max_in_op)),
+                        );
                     }
                 }
                 Operation::AllocateQubit { id } => {
-                    max_qubit_from_operations = Some(max_qubit_from_operations.map_or(*id, |current: usize| current.max(*id)));
+                    max_qubit_from_operations = Some(
+                        max_qubit_from_operations.map_or(*id, |current: usize| current.max(*id)),
+                    );
                 }
                 Operation::ReleaseQubit { id } => {
-                    max_qubit_from_operations = Some(max_qubit_from_operations.map_or(*id, |current: usize| current.max(*id)));
+                    max_qubit_from_operations = Some(
+                        max_qubit_from_operations.map_or(*id, |current: usize| current.max(*id)),
+                    );
                 }
                 _ => {} // Other operations don't reference qubits
             }
@@ -185,8 +205,10 @@ impl QisRuntime for NativeRuntime {
         };
 
         self.num_qubits = max_qubit.map_or(0, |q| q + 1);
-        debug!("Determined {} qubits needed (from allocations: {:?}, from operations: {:?})",
-               self.num_qubits, max_qubit_from_allocations, max_qubit_from_operations);
+        debug!(
+            "Determined {} qubits needed (from allocations: {:?}, from operations: {:?})",
+            self.num_qubits, max_qubit_from_allocations, max_qubit_from_operations
+        );
 
         self.interface = Some(interface);
         self.current_op_index = 0;
@@ -213,7 +235,10 @@ impl QisRuntime for NativeRuntime {
             trace!("No more quantum operations");
             Ok(None)
         } else {
-            trace!("Returning batch of {} quantum operations", self.operations_buffer.len());
+            trace!(
+                "Returning batch of {} quantum operations",
+                self.operations_buffer.len()
+            );
             Ok(Some(self.operations_buffer.clone()))
         }
     }
@@ -223,7 +248,7 @@ impl QisRuntime for NativeRuntime {
 
         // Store measurements in classical state
         for (result_id, value) in measurements {
-            trace!("Measurement result {} = {}", result_id, value);
+            trace!("Measurement result {result_id} = {value}");
             self.state.measurements.insert(result_id, value);
 
             // Also update the interface if it exists
@@ -246,7 +271,7 @@ impl QisRuntime for NativeRuntime {
     fn is_complete(&self) -> bool {
         self.interface
             .as_ref()
-            .map_or(false, |i| self.current_op_index >= i.operations.len())
+            .is_some_and(|i| self.current_op_index >= i.operations.len())
     }
 
     fn num_qubits(&self) -> usize {
@@ -261,7 +286,7 @@ impl QisRuntime for NativeRuntime {
         // Reset the state but keep the interface
         self.state = ClassicalState::default();
         self.operations_buffer.clear();
-        self.current_op_index = 0;  // Reset to beginning of operations
+        self.current_op_index = 0; // Reset to beginning of operations
         Ok(())
     }
 }
@@ -328,6 +353,9 @@ mod tests {
         runtime.provide_measurements(measurements).unwrap();
 
         // Check that measurement was stored
-        assert_eq!(runtime.get_classical_state().measurements.get(&r0), Some(&true));
+        assert_eq!(
+            runtime.get_classical_state().measurements.get(&r0),
+            Some(&true)
+        );
     }
 }

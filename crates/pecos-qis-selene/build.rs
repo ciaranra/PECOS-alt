@@ -1,5 +1,5 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
@@ -25,28 +25,29 @@ fn main() {
 
     // Add include paths if needed
     if let Ok(selene_include) = env::var("SELENE_INCLUDE_PATH") {
-        cmd.arg(format!("-I{}", selene_include));
+        cmd.arg(format!("-I{selene_include}"));
     }
 
-    let output = cmd.output()
-        .expect("Failed to execute clang");
+    let output = cmd.output().expect("Failed to execute clang");
 
-    if !output.status.success() {
-        panic!(
-            "Failed to compile selene shim:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    assert!(
+        output.status.success(),
+        "Failed to compile selene shim:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Set environment variable so Rust code can find the shim
-    println!("cargo:rustc-env=PECOS_SELENE_SHIM_PATH={}", output_file.display());
+    println!(
+        "cargo:rustc-env=PECOS_SELENE_SHIM_PATH={}",
+        output_file.display()
+    );
 
     // Tell cargo to recompile if the C source changes
     println!("cargo:rerun-if-changed=src/c/selene_shim.c");
 }
 
-fn find_or_build_helios_lib(out_dir: &PathBuf) {
+fn find_or_build_helios_lib(out_dir: &Path) {
     let helios_lib = out_dir.join("libhelios_selene_interface.a");
 
     // Check if already exists in our output directory
@@ -57,21 +58,19 @@ fn find_or_build_helios_lib(out_dir: &PathBuf) {
 
     // Try to find Selene repository
     let possible_paths = [
-        PathBuf::from("../../../selene"),  // From crate directory
-        PathBuf::from("../selene"),         // From workspace root
+        PathBuf::from("../../../selene"), // From crate directory
+        PathBuf::from("../selene"),       // From workspace root
     ];
 
-    let selene_path = possible_paths
-        .iter()
-        .find(|p| p.exists())
-        .cloned();
+    let selene_path = possible_paths.iter().find(|p| p.exists()).cloned();
 
     if let Some(selene_path) = selene_path {
         // Found Selene, look for pre-built library
         let helios_path = selene_path.join("selene-ext/interfaces/helios_qis");
         let prebuilt_paths = [
             helios_path.join("c/build/libhelios_selene_interface.a"),
-            helios_path.join("python/selene_helios_qis_plugin/_dist/lib/libhelios_selene_interface.a"),
+            helios_path
+                .join("python/selene_helios_qis_plugin/_dist/lib/libhelios_selene_interface.a"),
         ];
 
         for prebuilt in &prebuilt_paths {
@@ -92,7 +91,7 @@ fn find_or_build_helios_lib(out_dir: &PathBuf) {
 }
 
 /// Build Selene runtime plugins (.so files) if the Selene repository is available
-fn build_runtime_plugins(selene_path: &PathBuf) {
+fn build_runtime_plugins(selene_path: &Path) {
     // List of runtime crates to build
     let runtimes = [
         ("selene-ext/runtimes/simple", "selene_simple_runtime"),
@@ -103,18 +102,23 @@ fn build_runtime_plugins(selene_path: &PathBuf) {
         let full_path = selene_path.join(crate_path);
 
         if !full_path.exists() {
-            println!("cargo:warning=Runtime crate not found: {}", full_path.display());
+            println!(
+                "cargo:warning=Runtime crate not found: {}",
+                full_path.display()
+            );
             continue;
         }
 
         // Check if .so already exists
-        let so_path = selene_path.join("target/release").join(format!("lib{}.so", lib_name));
+        let so_path = selene_path
+            .join("target/release")
+            .join(format!("lib{lib_name}.so"));
         if so_path.exists() {
             // Already built, skip
             continue;
         }
 
-        println!("cargo:warning=Building Selene runtime: {}", lib_name);
+        println!("cargo:warning=Building Selene runtime: {lib_name}");
 
         // Build the runtime using cargo
         let output = Command::new("cargo")
@@ -126,30 +130,35 @@ fn build_runtime_plugins(selene_path: &PathBuf) {
 
         match output {
             Ok(output) if output.status.success() => {
-                println!("cargo:warning=Successfully built {}", lib_name);
+                println!("cargo:warning=Successfully built {lib_name}");
 
                 // The .so file should be in ../selene/target/release/
-                let so_path = selene_path.join("target/release").join(format!("lib{}.so", lib_name));
+                let so_path = selene_path
+                    .join("target/release")
+                    .join(format!("lib{lib_name}.so"));
                 if so_path.exists() {
                     println!("cargo:warning=Runtime available at: {}", so_path.display());
                 } else {
-                    println!("cargo:warning=Warning: Built {} but .so not found at expected location", lib_name);
+                    println!(
+                        "cargo:warning=Warning: Built {lib_name} but .so not found at expected location"
+                    );
                 }
             }
             Ok(output) => {
-                println!("cargo:warning=Failed to build {}: {}",
+                println!(
+                    "cargo:warning=Failed to build {}: {}",
                     lib_name,
                     String::from_utf8_lossy(&output.stderr)
                 );
             }
             Err(e) => {
-                println!("cargo:warning=Error running cargo for {}: {}", lib_name, e);
+                println!("cargo:warning=Error running cargo for {lib_name}: {e}");
             }
         }
     }
 }
 
-fn build_helios_lib_from_vendor(out_dir: &PathBuf) {
+fn build_helios_lib_from_vendor(out_dir: &Path) {
     let vendor_dir = PathBuf::from("vendor/helios_qis");
     let interface_c = vendor_dir.join("src/interface.c");
     let interface_o = out_dir.join("interface.o");
@@ -162,7 +171,7 @@ fn build_helios_lib_from_vendor(out_dir: &PathBuf) {
         .arg("-fPIC")
         .arg("-O2")
         .arg("-std=c11")
-        .arg("-D_USE_MATH_DEFINES")  // For M_PI on some platforms
+        .arg("-D_USE_MATH_DEFINES") // For M_PI on some platforms
         .arg("-DSELENE_LOG_LEVEL=0")
         .arg("-I")
         .arg(vendor_dir.join("include"))
@@ -170,34 +179,29 @@ fn build_helios_lib_from_vendor(out_dir: &PathBuf) {
         .arg(&interface_o)
         .arg(&interface_c);
 
-    let output = compile_cmd.output()
+    let output = compile_cmd
+        .output()
         .expect("Failed to execute clang for interface.c");
 
-    if !output.status.success() {
-        panic!(
-            "Failed to compile interface.c:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    assert!(
+        output.status.success(),
+        "Failed to compile interface.c:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Create static library from object file
     let mut ar_cmd = Command::new("ar");
-    ar_cmd
-        .arg("rcs")
-        .arg(&helios_lib)
-        .arg(&interface_o);
+    ar_cmd.arg("rcs").arg(&helios_lib).arg(&interface_o);
 
-    let output = ar_cmd.output()
-        .expect("Failed to execute ar");
+    let output = ar_cmd.output().expect("Failed to execute ar");
 
-    if !output.status.success() {
-        panic!(
-            "Failed to create libhelios_selene_interface.a:\nstdout: {}\nstderr: {}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    assert!(
+        output.status.success(),
+        "Failed to create libhelios_selene_interface.a:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     // Export the path for use in tests
     println!("cargo:rustc-env=HELIOS_LIB_PATH={}", helios_lib.display());

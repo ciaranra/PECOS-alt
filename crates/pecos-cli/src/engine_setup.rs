@@ -1,6 +1,9 @@
 use log::debug;
 use pecos::DynamicEngineBuilder;
+#[cfg(feature = "phir")]
+use pecos::phir_json_engine;
 use pecos::prelude::*;
+use pecos::qis_engine;
 use std::path::Path;
 
 /// Sets up a classical engine for the CLI based on the program type
@@ -32,7 +35,6 @@ pub fn setup_cli_engine(
     match program_type {
         ProgramType::QIR => {
             debug!("Setting up QIR engine");
-            use pecos::{qis_control_engine, native_runtime, QisProgram};
 
             if use_jit {
                 // Explicit JIT interface requested
@@ -41,7 +43,7 @@ pub fn setup_cli_engine(
                 {
                     let qis_program = QisProgram::from_file(program_path)?;
 
-                    let engine = qis_control_engine()
+                    let engine = qis_engine()
                         .runtime(native_runtime())
                         .interface(jit_interface_builder())
                         .try_program(qis_program)?
@@ -51,7 +53,9 @@ pub fn setup_cli_engine(
                 }
                 #[cfg(not(feature = "jit"))]
                 {
-                    Err(PecosError::Processing("JIT interface not available. Please enable the 'jit' feature.".to_string()))
+                    Err(PecosError::Processing(
+                        "JIT interface not available. Please enable the 'jit' feature.".to_string(),
+                    ))
                 }
             } else {
                 // Use default Selene interface and runtime
@@ -61,7 +65,8 @@ pub fn setup_cli_engine(
                     "Default QIS execution requires Selene runtime.\n\
                     \n\
                     To use JIT interface instead, run with --jit flag:\n\
-                    pecos run --jit program.ll".to_string()
+                    pecos run --jit program.ll"
+                        .to_string(),
                 ))
             }
         }
@@ -79,7 +84,10 @@ pub fn setup_cli_engine(
 /// Sets up a classical engine builder for the CLI based on the program type
 ///
 /// This function returns a `DynamicEngineBuilder` that can be used with `sim_builder`
-pub fn setup_cli_engine_builder(program_path: &Path, use_jit: bool) -> Result<DynamicEngineBuilder, PecosError> {
+pub fn setup_cli_engine_builder(
+    program_path: &Path,
+    use_jit: bool,
+) -> Result<DynamicEngineBuilder, PecosError> {
     debug!(
         "Setting up engine builder for path: {}",
         program_path.display()
@@ -92,7 +100,6 @@ pub fn setup_cli_engine_builder(program_path: &Path, use_jit: bool) -> Result<Dy
             debug!("Setting up QIR engine builder");
             #[cfg(feature = "llvm")]
             {
-                use pecos::prelude::*;
                 let qis_program = QisProgram::from_file(program_path)?;
 
                 let engine_builder = if use_jit {
@@ -100,18 +107,21 @@ pub fn setup_cli_engine_builder(program_path: &Path, use_jit: bool) -> Result<Dy
                     debug!("Using explicit JIT interface for QIR engine builder");
                     #[cfg(feature = "jit")]
                     {
-                        qis_control_engine()
+                        qis_engine()
                             .runtime(native_runtime())
                             .interface(jit_interface_builder())
                             .try_program(qis_program.clone())?
                     }
                     #[cfg(not(feature = "jit"))]
                     {
-                        return Err(PecosError::Processing("JIT interface not available. Please enable the 'jit' feature.".to_string()));
+                        return Err(PecosError::Processing(
+                            "JIT interface not available. Please enable the 'jit' feature."
+                                .to_string(),
+                        ));
                     }
                 } else {
                     // Use Selene interface (default) - fail with helpful message if not available
-                    qis_control_engine().try_program(qis_program)?
+                    qis_engine().try_program(qis_program)?
                 };
 
                 Ok(DynamicEngineBuilder::new(engine_builder))
@@ -127,7 +137,6 @@ pub fn setup_cli_engine_builder(program_path: &Path, use_jit: bool) -> Result<Dy
             debug!("Setting up PHIR-JSON engine builder");
             #[cfg(feature = "phir")]
             {
-                use pecos::phir_json_engine;
                 Ok(DynamicEngineBuilder::new(
                     phir_json_engine().file(program_path)?,
                 ))

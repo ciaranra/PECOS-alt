@@ -1,11 +1,11 @@
 //! Final simplified `sim()` API examples
 
 use pecos::prelude::*;
+use pecos::qis_engine;
 use pecos::{sim, sim_builder};
 use pecos_engines::{DepolarizingNoise, sparse_stab, state_vector};
 use pecos_programs::{QasmProgram, QisProgram};
 use pecos_qasm::qasm_engine;
-use pecos::qis_control_engine;
 
 fn main() -> Result<(), PecosError> {
     println!("PECOS Simplified Simulation API Examples\n");
@@ -99,7 +99,7 @@ fn main() -> Result<(), PecosError> {
 
     // QASM program but use LLVM engine
     let results = sim(qasm_prog)
-        .classical(qis_control_engine().program(llvm_prog))
+        .classical(qis_engine().program(llvm_prog))
         .qubits(1)
         .run(10)?;
 

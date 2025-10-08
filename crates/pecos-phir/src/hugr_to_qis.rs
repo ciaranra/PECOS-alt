@@ -19,9 +19,13 @@ use std::collections::HashMap;
 use std::f64::consts::PI;
 
 /// Convert a HUGR module to use QIS operations
+///
+/// # Errors
+/// Returns an error if the module conversion fails (e.g., unsupported operations or invalid module structure).
 pub fn convert_hugr_to_qis(module: &mut Module) -> Result<()> {
     let mut converter = HugrToQisConverter::new();
-    converter.convert_module(module)
+    converter.convert_module(module);
+    Ok(())
 }
 
 struct HugrToQisConverter {
@@ -46,20 +50,18 @@ impl HugrToQisConverter {
         value
     }
 
-    fn convert_module(&mut self, module: &mut Module) -> Result<()> {
+    fn convert_module(&mut self, module: &mut Module) {
         // Process the module's body region
-        self.convert_region(&mut module.body)?;
-        Ok(())
+        self.convert_region(&mut module.body);
     }
 
-    fn convert_region(&mut self, region: &mut Region) -> Result<()> {
+    fn convert_region(&mut self, region: &mut Region) {
         for block in &mut region.blocks {
-            self.convert_block(block)?;
+            self.convert_block(block);
         }
-        Ok(())
     }
 
-    fn convert_block(&mut self, block: &mut Block) -> Result<()> {
+    fn convert_block(&mut self, block: &mut Block) {
         let mut new_instructions = Vec::new();
 
         for instruction in &block.operations {
@@ -70,7 +72,7 @@ impl HugrToQisConverter {
                         custom_op,
                         &instruction.operands,
                         &instruction.results,
-                    )?;
+                    );
                     new_instructions.extend(qis_ops);
                 }
                 _ => {
@@ -81,15 +83,15 @@ impl HugrToQisConverter {
         }
 
         block.operations = new_instructions;
-        Ok(())
     }
 
+    #[allow(clippy::too_many_lines)] // Operation conversion requires a comprehensive match on all gate types
     fn convert_hugr_op(
         &mut self,
         op: &CustomOp,
         operands: &[SSAValue],
         results: &[SSAValue],
-    ) -> Result<Vec<Instruction>> {
+    ) -> Vec<Instruction> {
         let mut instructions = Vec::new();
 
         match op.name() {
@@ -324,7 +326,7 @@ impl HugrToQisConverter {
             }
         }
 
-        Ok(instructions)
+        instructions
     }
 
     fn make_float_constant(&mut self, _value: f64) -> SSAValue {
@@ -375,7 +377,7 @@ mod tests {
 
         // Convert HUGR to QIS
         let mut converter = HugrToQisConverter::new();
-        converter.convert_module(&mut module).unwrap();
+        converter.convert_module(&mut module);
 
         // Check that we have 3 QIS operations (RZ, RXY, RZ)
         assert_eq!(module.body.blocks[0].operations.len(), 3);
@@ -423,7 +425,7 @@ mod tests {
 
         // Convert HUGR to QIS
         let mut converter = HugrToQisConverter::new();
-        converter.convert_module(&mut module).unwrap();
+        converter.convert_module(&mut module);
 
         // Check that we have 4 QIS operations (RXY, RZZ, RZ, RXY)
         assert_eq!(module.body.blocks[0].operations.len(), 4);

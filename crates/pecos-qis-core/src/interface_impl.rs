@@ -1,29 +1,34 @@
 //! Interface trait and implementations
 //!
-//! This module provides implementations of the QisInterface trait.
+//! This module provides implementations of the `QisInterface` trait.
 
-use pecos_qis_ffi::OperationCollector;
-use crate::qis_interface::{QisInterface, InterfaceError, ProgramFormat};
+use crate::qis_interface::{InterfaceError, ProgramFormat, QisInterface};
 use pecos_core::prelude::PecosError;
+use pecos_qis_ffi::OperationCollector;
 use std::collections::HashMap;
 
 /// Simple wrapper for pre-built operation lists
 ///
-/// This allows pre-built OperationCollector instances to be used directly
-/// with the QisControlEngine without needing compilation.
+/// This allows pre-built `OperationCollector` instances to be used directly
+/// with the `QisEngine` without needing compilation.
 pub struct SimpleQisInterface {
     operations: OperationCollector,
 }
 
 impl SimpleQisInterface {
-    /// Create a new SimpleQisInterface from a pre-built operations list
+    /// Create a new `SimpleQisInterface` from a pre-built operations list
+    #[must_use]
     pub fn new(operations: OperationCollector) -> Self {
         Self { operations }
     }
 }
 
 impl QisInterface for SimpleQisInterface {
-    fn load_program(&mut self, _program_bytes: &[u8], _format: ProgramFormat) -> Result<(), InterfaceError> {
+    fn load_program(
+        &mut self,
+        _program_bytes: &[u8],
+        _format: ProgramFormat,
+    ) -> Result<(), InterfaceError> {
         // Pre-built interface doesn't need to load programs
         Ok(())
     }
@@ -52,12 +57,15 @@ impl QisInterface for SimpleQisInterface {
     }
 }
 
-/// Convert InterfaceError to PecosError
+/// Convert `InterfaceError` to `PecosError`
+#[must_use]
 pub fn interface_error_to_pecos(err: InterfaceError) -> PecosError {
     match err {
-        InterfaceError::LoadError(msg) => PecosError::Generic(format!("Load error: {}", msg)),
-        InterfaceError::ExecutionError(msg) => PecosError::Generic(format!("Execution error: {}", msg)),
-        InterfaceError::InvalidFormat(msg) => PecosError::Generic(format!("Invalid format: {}", msg)),
+        InterfaceError::LoadError(msg) => PecosError::Generic(format!("Load error: {msg}")),
+        InterfaceError::ExecutionError(msg) => {
+            PecosError::Generic(format!("Execution error: {msg}"))
+        }
+        InterfaceError::InvalidFormat(msg) => PecosError::Generic(format!("Invalid format: {msg}")),
         InterfaceError::Other(msg) => PecosError::Generic(msg),
     }
 }

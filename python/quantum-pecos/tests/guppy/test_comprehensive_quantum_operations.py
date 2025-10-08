@@ -751,7 +751,10 @@ class TestQuantumCircuitPatterns:
             # Here we just measure all three
             return r1, r2, r3
 
-        results = sim(simplified_repeat).qubits(10).quantum(state_vector()).run(100)
+        # Use seed for deterministic results
+        results = (
+            sim(simplified_repeat).qubits(10).quantum(state_vector()).seed(42).run(100)
+        )
 
         # With H gate producing 50/50, we should see various patterns
         decoded_results = get_decoded_results(results, n_bits=3)
@@ -759,7 +762,8 @@ class TestQuantumCircuitPatterns:
         # Count how many shots have at least one |1⟩ (would have succeeded)
         success_count = sum(1 for r in decoded_results if any(r))
         # Probability of at least one |1⟩ in 3 tries = 1 - (0.5)^3 = 0.875
-        assert success_count >= 80  # Should be around 87-88 out of 100
+        # With seed=42, we deterministically get 89 successes out of 100
+        assert success_count == 89
 
 
 @pytest.mark.skipif(not GUPPY_AVAILABLE, reason="Guppy not available")

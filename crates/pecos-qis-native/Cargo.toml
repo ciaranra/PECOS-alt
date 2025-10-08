@@ -2,6 +2,7 @@
 name = "pecos-qis-native"
 version.workspace = true
 edition.workspace = true
+description = "Native execution runtime for quantum instruction set programs"
 readme.workspace = true
 authors.workspace = true
 homepage.workspace = true

@@ -24,8 +24,11 @@ def test_guppy_with_explicit_qis_override() -> None:
     # Use state vector to avoid stabilizer issues with decomposed gates
     from pecos_rslib import state_vector
 
-    results_auto = sim(bell_state).quantum(state_vector()).qubits(2).run(100).to_binary_dict()
-    assert "measurement_0" in results_auto and "measurement_1" in results_auto
+    results_auto = (
+        sim(bell_state).quantum(state_vector()).qubits(2).run(100).to_binary_dict()
+    )
+    assert "measurement_0" in results_auto
+    assert "measurement_1" in results_auto
 
     # Test 2: Use default auto-detection (since explicit override API changed)
     results_explicit = (
@@ -35,12 +38,17 @@ def test_guppy_with_explicit_qis_override() -> None:
         .run(100)
         .to_binary_dict()
     )
-    assert "measurement_0" in results_explicit and "measurement_1" in results_explicit
+    assert "measurement_0" in results_explicit
+    assert "measurement_1" in results_explicit
 
     # Both should produce correlated results for Bell state
     for results in [results_auto, results_explicit]:
-        assert "measurement_0" in results, f"measurement_0 not found in {list(results.keys())}"
-        assert "measurement_1" in results, f"measurement_1 not found in {list(results.keys())}"
+        assert (
+            "measurement_0" in results
+        ), f"measurement_0 not found in {list(results.keys())}"
+        assert (
+            "measurement_1" in results
+        ), f"measurement_1 not found in {list(results.keys())}"
 
         # Check correlation
         m0_list = results["measurement_0"]
@@ -104,17 +112,19 @@ def test_invalid_engine_override_rejected() -> None:
     # LLVM program should reject QASM engine
     qis_program = QisProgram.from_string("define void @main() { ret void }")
 
-    with pytest.raises(Exception, match=r"(QisControlEngineBuilder|QisEngineBuilder|SeleneEngineBuilder)"):
+    with pytest.raises(
+        Exception,
+        match=r"(QisEngineBuilder|QisEngineBuilder|SeleneEngineBuilder)",
+    ):
         sim(qis_program).classical(qasm_engine()).run(1)
 
 
 def test_engine_override_with_noise() -> None:
     """Test that noise models work with explicit engine overrides."""
     from guppylang import guppy
+    from guppylang.std.builtins import result
     from guppylang.std.quantum import h, measure, qubit
     from pecos_rslib import depolarizing_noise
-
-    from guppylang.std.builtins import result
 
     @guppy
     def simple_h() -> None:
@@ -137,7 +147,9 @@ def test_engine_override_with_noise() -> None:
     )
 
     # With noise, we should see both 0 and 1 outcomes
-    assert "measurement_0" in results, f"measurement_0 not found in {list(results.keys())}"
+    assert (
+        "measurement_0" in results
+    ), f"measurement_0 not found in {list(results.keys())}"
     values = results["measurement_0"]
     # Values are integers (0 or 1), not strings
     zeros = sum(1 for v in values if v == 0)

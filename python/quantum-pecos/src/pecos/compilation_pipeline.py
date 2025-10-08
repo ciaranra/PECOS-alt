@@ -201,9 +201,8 @@ def compile_hugr_to_llvm(
             error_msg = str(e)
             if "Unknown type:" in error_msg:
                 raise HugrTypeError(error_msg) from e
-            else:
-                msg = f"Failed to compile HUGR to LLVM: {e}"
-                raise RuntimeError(msg) from e
+            msg = f"Failed to compile HUGR to LLVM: {e}"
+            raise RuntimeError(msg) from e
     else:
         # Try our execute_llvm module as fallback
         try:

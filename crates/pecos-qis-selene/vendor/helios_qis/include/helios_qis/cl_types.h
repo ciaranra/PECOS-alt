@@ -8,7 +8,7 @@ typedef struct cl_array {
     uint32_t y;
     union {
         uint64_t* u64s;
-        int64_t*  i64s; 
+        int64_t*  i64s;
         double*   f64s;
         uint8_t*  bytes;
     };

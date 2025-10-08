@@ -1,4 +1,5 @@
 // Copyright 2025 The PECOS Developers
+use pecos::prelude::*;
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.You may obtain a copy of the License at
@@ -10,15 +11,10 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+use pecos::prelude::*;
 //! Python bindings for LLVM execution
 
 
-use pecos_core::rng::RngManageable;
-use pecos_engines::NoiseModel;
-use pecos_engines::noise::DepolarizingNoiseModel;
-use pecos_qis_core::setup_qis_control_engine_with_runtime;
-use pecos_qis_selene::selene_simple_runtime;
-use pecos_engines::shot_results;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -153,7 +149,7 @@ fn execute_llvm_safe(
         )))?;
 
     log::info!("Using Selene simple runtime for QIS program");
-    let classical_engine = setup_qis_control_engine_with_runtime(llvm_path, selene_runtime)?;
+    let classical_engine = setup_qis_engine_with_runtime(llvm_path, selene_runtime)?;
 
     // Create noise model
     let noise_model: Box<dyn NoiseModel> = if let Some(prob) = noise_probability {
@@ -202,12 +198,7 @@ fn execute_llvm_safe(
         pecos_qis_runtime::runtime::llvm_runtime_reset();
     }
 
-    // Clear any stored engines from HUGR bindings
-    #[cfg(feature = "hugr-llvm-pipeline")]
-    {
-        use crate::hugr_bindings::PYTHON_LLVM_ENGINES;
-        PYTHON_LLVM_ENGINES.lock().unwrap().clear();
-    }
+    // Note: HUGR bindings module is currently disabled due to symbol conflicts
 
     // Clean up runtime registry
     pecos_qis_runtime::runtime::registry::cleanup_all_runtimes();
@@ -342,12 +333,7 @@ pub fn py_reset_llvm_runtime() {
     use std::thread;
     use std::time::Duration;
 
-    // Clear all stored engines first
-    #[cfg(feature = "hugr-llvm-pipeline")]
-    {
-        use crate::hugr_bindings::PYTHON_LLVM_ENGINES;
-        PYTHON_LLVM_ENGINES.lock().unwrap().clear();
-    }
+    // Note: HUGR bindings module is currently disabled due to symbol conflicts
 
     // Simple reset - no aggressive cleanup
     unsafe {

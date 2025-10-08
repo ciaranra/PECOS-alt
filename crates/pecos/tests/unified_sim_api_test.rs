@@ -11,10 +11,10 @@ mod tests {
 
         // The fact that this compiles proves the API is consistent
         let _ = || {
+            use pecos::qis_engine;
             use pecos_engines::{DepolarizingNoise, sim_builder, sparse_stabilizer, state_vector};
             use pecos_programs::{QasmProgram, QisProgram};
             use pecos_qasm::qasm_engine;
-            use pecos::qis_control_engine;
 
             // QASM engine with unified API
             let _results = sim_builder()
@@ -31,7 +31,7 @@ mod tests {
             // LLVM engine with unified API
             let _results = sim_builder()
                 .classical(
-                    qis_control_engine()
+                    qis_engine()
                         .program(QisProgram::from_string("define void @main() { ret void }")),
                 )
                 .seed(42)
@@ -40,7 +40,6 @@ mod tests {
                 .qubits(1)
                 .quantum(sparse_stabilizer())
                 .run(1000);
-
         };
     }
 
@@ -48,10 +47,10 @@ mod tests {
     fn test_consistent_method_names() {
         // Verify all builders have consistent input methods
         let _ = || {
+            use pecos::qis_engine;
             use pecos_engines::{BiasedDepolarizingNoise, PassThroughNoise, sim_builder};
             use pecos_programs::{QasmProgram, QisProgram};
             use pecos_qasm::qasm_engine;
-            use pecos::qis_control_engine;
 
             // QASM-specific inputs
             let _q1 = qasm_engine().program(QasmProgram::from_string("..."));
@@ -59,10 +58,10 @@ mod tests {
             // let _q2 = qasm_engine().program(QasmProgram::from_file("circuit.qasm")?);
 
             // LLVM-specific inputs
-            let _l1 = qis_control_engine().program(QisProgram::from_string("..."));
-            let _l2 = qis_control_engine().program(QisProgram::from_bitcode(vec![]));
+            let _l1 = qis_engine().program(QisProgram::from_string("..."));
+            let _l2 = qis_engine().program(QisProgram::from_bitcode(vec![]));
             // Note: from_file returns Result, so in real code you'd handle the error
-            // let _l3 = qis_control_engine().try_program(QisProgram::from_file("circuit.ll")?);
+            // let _l3 = qis_engine().try_program(QisProgram::from_file("circuit.ll")?);
 
             // Common simulation methods
 
@@ -73,7 +72,7 @@ mod tests {
                 .noise(PassThroughNoise);
 
             let _sim2 = sim_builder()
-                .classical(qis_control_engine().program(QisProgram::from_string("...")))
+                .classical(qis_engine().program(QisProgram::from_string("...")))
                 .seed(123)
                 .auto_workers()
                 .noise(BiasedDepolarizingNoise { p: 0.02 })
@@ -85,11 +84,11 @@ mod tests {
     fn test_unified_sim_api() {
         // Test the new unified simulation API patterns
         let _ = || {
+            use pecos::qis_engine;
             use pecos::sim;
             use pecos_engines::{DepolarizingNoise, sim_builder, sparse_stabilizer, state_vector};
             use pecos_programs::{QasmProgram, QisProgram};
             use pecos_qasm::qasm_engine;
-            use pecos::qis_control_engine;
 
             // Pattern 1: Base sim_builder from pecos-engines with explicit .classical()
             let _results1 = sim_builder()
@@ -109,7 +108,7 @@ mod tests {
             // Pattern 3: Override auto-selection with explicit .classical()
             let _results3 = sim(QisProgram::from_string("define void @main() { ret void }"))
                 .classical(
-                    qis_control_engine()
+                    qis_engine()
                         .program(QisProgram::from_string("define void @main() { ret void }")),
                 )
                 .run(100);

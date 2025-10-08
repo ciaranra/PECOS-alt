@@ -2500,6 +2500,7 @@ version = "0.1.1"
 dependencies = [
  "log",
  "pecos-core",
+ "pecos-cppsparsesim",
  "pecos-engines",
  "pecos-hugr-qis",
  "pecos-phir",
@@ -2512,6 +2513,8 @@ dependencies = [
  "pecos-qis-native",
  "pecos-qis-selene",
  "pecos-qsim",
+ "pecos-quest",
+ "pecos-qulacs",
  "pecos-rng",
  "serde_json",
  "tempfile",
@@ -2638,6 +2641,7 @@ dependencies = [
 name = "pecos-phir"
 version = "0.1.1"
 dependencies = [
+ "log",
  "pecos-core",
  "pecos-engines",
  "regex",
@@ -2816,22 +2820,7 @@ version = "0.1.1"
 dependencies = [
  "log",
  "parking_lot",
- "pecos-core",
- "pecos-cppsparsesim",
- "pecos-engines",
- "pecos-hugr-qis",
- "pecos-phir",
- "pecos-phir-json",
- "pecos-programs",
- "pecos-qasm",
- "pecos-qis-core",
- "pecos-qis-jit",
- "pecos-qis-native",
- "pecos-qis-selene",
- "pecos-qsim",
- "pecos-quest",
- "pecos-qulacs",
- "pecos-rng",
+ "pecos",
  "pyo3",
  "pyo3-build-config",
  "serde_json",

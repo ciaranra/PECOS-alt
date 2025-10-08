@@ -5,10 +5,10 @@
 
 #[cfg(test)]
 mod tests {
+    use pecos::qis_engine;
     use pecos_engines::sim;
     use pecos_programs::{HugrProgram, QasmProgram, QisProgram};
     use pecos_qasm::qasm_engine;
-    use pecos::qis_control_engine;
 
     #[test]
     fn test_qasm_engine_accepts_shared_program() {
@@ -23,12 +23,11 @@ mod tests {
     #[test]
     fn test_qis_engine_builder_creation() {
         // Test that builder can be created (doesn't require interface/runtime)
-        let _ = qis_control_engine();
+        let _ = qis_engine();
 
         // Note: Testing .program() requires an interface implementation (JIT or Selene)
         // which are in separate crates. Those are tested in their respective integration tests.
     }
-
 
     #[test]
     fn test_sim_function_with_program_api() {
@@ -78,7 +77,10 @@ mod tests {
         assert_eq!(format!("{qasm}"), "OPENQASM 2.0;");
 
         let llvm = QisProgram::from_string("define void @main() {\nentry:\n  ret void\n}");
-        assert_eq!(format!("{llvm}"), "define void @main() {\nentry:\n  ret void\n}");
+        assert_eq!(
+            format!("{llvm}"),
+            "define void @main() {\nentry:\n  ret void\n}"
+        );
 
         let hugr = HugrProgram::from_bytes(vec![1, 2, 3]);
         assert_eq!(format!("{hugr}"), "HugrProgram(3 bytes)");

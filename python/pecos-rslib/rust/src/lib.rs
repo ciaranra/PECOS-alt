@@ -37,9 +37,7 @@ mod sparse_stab_engine_bindings;
 mod state_vec_bindings;
 mod state_vec_engine_bindings;
 
-// Disabled - conflicts with pecos-qis-interface due to duplicate symbols
-// #[cfg(feature = "hugr-llvm-pipeline")]
-// mod hugr_bindings;
+// Note: hugr_bindings module is currently disabled - conflicts with pecos-qis-interface due to duplicate symbols
 
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use coin_toss_bindings::RsCoinToss;
@@ -58,14 +56,8 @@ use state_vec_engine_bindings::PyStateVecEngine;
 /// Clear the global JIT compilation cache (useful for testing)
 #[pyfunction]
 fn clear_jit_cache() {
-    #[cfg(feature = "jit")]
-    {
-        pecos_qis_jit::JitExecutor::clear_global_cache();
-    }
-    #[cfg(not(feature = "jit"))]
-    {
-        log::warn!("JIT cache clear requested but JIT feature not enabled");
-    }
+    // JIT is always available through the pecos metacrate prelude
+    pecos::prelude::JitExecutor::clear_global_cache();
 }
 
 /// A Python module implemented in Rust.
@@ -107,7 +99,7 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register engine builder functions
     m.add_function(wrap_pyfunction!(engine_builders::qasm_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::qis_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(engine_builders::qis_control_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::qis_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::native_runtime, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::phir_json_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sim_builder, m)?)?;

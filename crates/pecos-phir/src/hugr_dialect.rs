@@ -24,6 +24,7 @@ impl Dialect for HugrDialect {
         "HUGR (Hierarchical Unified Graph Representation) operations for quantum programs"
     }
 
+    #[allow(clippy::too_many_lines)] // Dialect initialization is inherently a long list of operation registrations
     fn initialize(&self, registry: &mut DialectRegistry) -> Result<()> {
         // Register HUGR quantum operations
         registry.register_operation(
@@ -192,6 +193,9 @@ impl Dialect for HugrDialect {
 }
 
 /// Register the HUGR dialect
+///
+/// # Errors
+/// Returns an error if the dialect cannot be registered with the registry.
 pub fn register_dialect(registry: &mut DialectRegistry) -> Result<()> {
     let dialect = HugrDialect;
     registry.register_dialect(dialect)

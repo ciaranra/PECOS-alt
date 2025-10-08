@@ -164,17 +164,18 @@ pub fn setup_engine_for_program(
                 \n\
                 Please use the builder API with Selene or Native runtime:\n\
                 \n\
-                use pecos_qis_core::{{qis_control_engine, setup_qis_control_engine_with_runtime}};\n\
+                use pecos_qis_core::{{qis_engine, setup_qis_engine_with_runtime}};\n\
                 use pecos_qis_selene::selene_simple_runtime;\n\
                 \n\
                 // Option 1: Use setup function\n\
-                let engine = setup_qis_control_engine_with_runtime(path, selene_simple_runtime()?);\n\
+                let engine = setup_qis_engine_with_runtime(path, selene_simple_runtime()?);\n\
                 \n\
                 // Option 2: Use builder\n\
-                let engine = qis_control_engine()\n\
+                let engine = qis_engine()\n\
                     .runtime(selene_simple_runtime()?)\n\
                     .program(program)\n\
-                    .build()?;".to_string()
+                    .build()?;"
+                    .to_string(),
             ))
         }
         ProgramType::PHIR => setup_phir_json_engine(program_path),

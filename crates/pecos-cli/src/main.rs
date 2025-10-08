@@ -10,9 +10,6 @@ use std::io::Write;
 mod engine_setup;
 use engine_setup::{setup_cli_engine, setup_cli_engine_builder};
 
-// Constants
-const QIR_CLEANUP_DELAY_MS: u64 = 100;
-
 #[derive(Parser)]
 #[command(
     name = "pecos",
@@ -306,7 +303,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
             let mut quantum_builder = state_vector();
             if let Some(qubits) = num_qubits {
                 quantum_builder = quantum_builder.qubits(qubits);
-                debug!("Set quantum engine to use {} qubits", qubits);
+                debug!("Set quantum engine to use {qubits} qubits");
             }
             builder = builder.quantum(quantum_builder);
         }
@@ -314,7 +311,7 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
             let mut quantum_builder = sparse_stabilizer();
             if let Some(qubits) = num_qubits {
                 quantum_builder = quantum_builder.qubits(qubits);
-                debug!("Set quantum engine to use {} qubits", qubits);
+                debug!("Set quantum engine to use {qubits} qubits");
             }
             builder = builder.quantum(quantum_builder);
         }
@@ -372,11 +369,6 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     // Force all output to be written
     let _ = std::io::stdout().flush();
     let _ = std::io::stderr().flush();
-
-    // For debugging: add a small delay for QIR programs to test timing hypothesis
-    if program_type == ProgramType::QIR {
-        std::thread::sleep(std::time::Duration::from_millis(QIR_CLEANUP_DELAY_MS));
-    }
 
     Ok(())
 }

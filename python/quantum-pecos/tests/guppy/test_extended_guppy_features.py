@@ -453,11 +453,15 @@ class TestControlFlow:
             # We can count the number of measurements to approximate tries, but can't directly verify the int return
             # Just verify that we got measurement results
             measurements = result["result"]["results"]
-            assert len(measurements) == 100, f"Expected 100 shots, got {len(measurements)}"
+            assert (
+                len(measurements) == 100
+            ), f"Expected 100 shots, got {len(measurements)}"
             # Each shot should have at least one measurement (at least 1 try)
             for shot_measurements in measurements:
                 if isinstance(shot_measurements, tuple):
-                    assert len(shot_measurements) >= 1, "Should have at least 1 measurement per shot"
+                    assert (
+                        len(shot_measurements) >= 1
+                    ), "Should have at least 1 measurement per shot"
                 # Can't verify avg_tries since we don't get the integer return value
 
     def test_early_return(self, tester: ExtendedGuppyTester) -> None:
@@ -482,10 +486,14 @@ class TestControlFlow:
             # Each shot should have a tuple of measurements, all should be 1
             for shot_measurements in values:
                 if isinstance(shot_measurements, tuple):
-                    assert all(m == 1 for m in shot_measurements), f"X gate not applied in shot: {shot_measurements}"
+                    assert all(
+                        m == 1 for m in shot_measurements
+                    ), f"X gate not applied in shot: {shot_measurements}"
                 else:
                     # Single measurement case
-                    assert shot_measurements == 1, f"X gate not applied: {shot_measurements}"
+                    assert (
+                        shot_measurements == 1
+                    ), f"X gate not applied: {shot_measurements}"
 
 
 # ============================================================================

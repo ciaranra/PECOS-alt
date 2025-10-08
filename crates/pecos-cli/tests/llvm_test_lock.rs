@@ -91,7 +91,5 @@ impl Drop for LlvmTestLock {
     fn drop(&mut self) {
         eprintln!("Releasing LLVM test lock");
         let _ = std::fs::remove_file(&self.path);
-        // Add a small delay to ensure file system updates
-        std::thread::sleep(Duration::from_millis(50));
     }
 }

@@ -366,6 +366,9 @@ fn compile_hugr<'c>(
 /// Compile HUGR bytes to LLVM IR string
 ///
 /// This is the main entry point for the compiler.
+///
+/// # Errors
+/// Returns an error if HUGR parsing, validation, or LLVM compilation fails.
 pub fn compile_hugr_bytes_to_string(hugr_bytes: &[u8]) -> Result<String, PecosError> {
     log::info!("Compiling HUGR to LLVM IR");
 

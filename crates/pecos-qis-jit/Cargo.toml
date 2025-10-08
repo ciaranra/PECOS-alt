@@ -2,6 +2,7 @@
 name = "pecos-qis-jit"
 version.workspace = true
 edition.workspace = true
+description = "JIT execution engine for quantum instruction set programs using LLVM"
 readme.workspace = true
 authors.workspace = true
 homepage.workspace = true

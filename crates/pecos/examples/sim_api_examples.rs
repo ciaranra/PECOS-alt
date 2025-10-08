@@ -1,11 +1,11 @@
 //! Examples of using the `sim()` API for quantum simulations
 
 use pecos::prelude::*;
+use pecos::qis_engine;
 use pecos::{sim, sim_builder};
 use pecos_engines::{DepolarizingNoise, sim as sim_from, sparse_stab, state_vector};
 use pecos_programs::{QasmProgram, QisProgram};
 use pecos_qasm::qasm_engine;
-use pecos::qis_control_engine;
 
 fn main() -> Result<(), PecosError> {
     // Example 1: Using sim(program) for automatic engine selection
@@ -76,7 +76,7 @@ fn main() -> Result<(), PecosError> {
 
     // QASM program but use LLVM engine
     let results = sim(qasm_prog)
-        .classical(qis_control_engine().program(llvm_prog))
+        .classical(qis_engine().program(llvm_prog))
         .run(20)?;
     println!("  Results: {} shots", results.len());
 

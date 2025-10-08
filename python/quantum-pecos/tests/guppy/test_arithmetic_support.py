@@ -22,6 +22,7 @@ def test_integer_arithmetic() -> None:
         return measure(q)
 
     import logging
+
     logging.basicConfig(level=logging.INFO)
 
     sim_builder = sim(quantum_add).qubits(1).quantum(state_vector()).seed(42)
@@ -31,7 +32,7 @@ def test_integer_arithmetic() -> None:
     print(f"Results: {results}")
     print(f"Results type: {type(results)}")
 
-    if hasattr(results, 'to_binary_dict'):
+    if hasattr(results, "to_binary_dict"):
         binary_dict = results.to_binary_dict()
         print(f"Binary dict: {binary_dict}")
         results = binary_dict

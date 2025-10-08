@@ -69,6 +69,7 @@ def sim(program: ProgramType) -> object:
 
             # Compile HUGR to QIS using Selene's hugr-qis compiler
             from selene_hugr_qis_compiler import compile_to_llvm_ir
+
             qis_ir = compile_to_llvm_ir(hugr_bytes)
             logger.info("Compiled HUGR to QIS LLVM IR successfully")
 
@@ -78,16 +79,21 @@ def sim(program: ProgramType) -> object:
 
             # Debug support
             import os
+            import tempfile
+
             if os.getenv("DEBUG_QIS_CRASH"):
-                with open("/tmp/qis_before_sim.ll", "w") as f:
+                debug_path = os.path.join(tempfile.gettempdir(), "qis_before_sim.ll")
+                with open(debug_path, "w") as f:
                     f.write(qis_ir)
-                logger.info("Saved QIS IR to /tmp/qis_before_sim.ll for debugging")
+                logger.info("Saved QIS IR to %s for debugging", debug_path)
 
             program = qis_program
         except Exception as e:
             # If HUGR compilation fails, pass the HugrProgram to Rust
             # This allows Rust to provide appropriate error messages
-            logger.warning(f"HUGR compilation failed: {e}. Passing HugrProgram to Rust for error handling.")
+            logger.warning(
+                f"HUGR compilation failed: {e}. Passing HugrProgram to Rust for error handling."
+            )
             # Keep program as HugrProgram - Rust will handle it
 
     elif is_guppy_function(program):
@@ -106,6 +112,7 @@ def sim(program: ProgramType) -> object:
 
         # Compile HUGR to QIS using Selene's hugr-qis compiler
         from selene_hugr_qis_compiler import compile_to_llvm_ir
+
         qis_ir = compile_to_llvm_ir(hugr_bytes)
         logger.info("Compiled HUGR to QIS LLVM IR successfully")
 
@@ -115,10 +122,14 @@ def sim(program: ProgramType) -> object:
 
         # Debug support
         import os
+
         if os.getenv("DEBUG_QIS_CRASH"):
-            with open("/tmp/qis_before_sim.ll", "w") as f:
+            import tempfile
+
+            debug_path = os.path.join(tempfile.gettempdir(), "qis_before_sim.ll")
+            with open(debug_path, "w") as f:
                 f.write(qis_ir)
-            logger.info("Saved QIS IR to /tmp/qis_before_sim.ll for debugging")
+            logger.info("Saved QIS IR to %s for debugging", debug_path)
 
         program = qis_program
 
@@ -129,11 +140,12 @@ def sim(program: ProgramType) -> object:
     # Force comprehensive cleanup after each simulation to prevent state pollution between tests
     try:
         _pecos_rslib.clear_jit_cache()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Cache clearing failed (this is non-critical): %s", e)
 
     # Force garbage collection to clean up any lingering engine resources
     import gc
+
     gc.collect()
 
     return result

@@ -29,7 +29,6 @@ except ImportError:
     HUGR_LLVM_AVAILABLE = False
 
 
-
 def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, ...]]:
     """Decode integer-encoded results back to tuples of booleans."""
     decoded = []
@@ -364,7 +363,7 @@ class TestCompletePipeline:
 
             # If we have individual measurements, check structure
             if "measurement_0" in results:
-                for i in range(0, 3):
+                for i in range(3):
                     key = f"measurement_{i}"
                     if key in results:
                         assert (

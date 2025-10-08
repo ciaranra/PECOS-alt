@@ -12,7 +12,7 @@ categories.workspace = true
 description = "PHIR-JSON (PECOS High-level Intermediate Representation JSON format) specification and execution capabilities for PECOS"
 
 [features]
-default = ["v0_1"]
+default = ["v0_1", "wasm"]
 v0_1 = []
 all-versions = ["v0_1"]
 wasm = ["wasmtime", "wat", "parking_lot"]
