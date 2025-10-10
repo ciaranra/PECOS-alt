@@ -144,7 +144,11 @@ pub mod quantum {
     pub use pecos_cppsparsesim::CppSparseStab;
 
     #[cfg(feature = "quest")]
-    pub use pecos_quest::{QuestDensityMatrix, QuestStateVec};
+    pub use pecos_quest::{
+        QuestDensityMatrix, QuestDensityMatrixEngine, QuestDensityMatrixEngineBuilder,
+        QuestStateVec, QuestStateVecEngine, QuestStateVectorEngineBuilder, quest_density_matrix,
+        quest_state_vec,
+    };
 
     #[cfg(feature = "qulacs")]
     pub use pecos_qulacs::QulacsStateVec;
@@ -303,7 +307,10 @@ pub use engine_type::{DynamicEngineBuilder, EngineType, sim_dynamic};
 pub use pecos_cppsparsesim::CppSparseStab;
 
 #[cfg(feature = "quest")]
-pub use pecos_quest::{QuestDensityMatrix, QuestStateVec};
+pub use pecos_quest::{
+    QuestDensityMatrix, QuestDensityMatrixEngine, QuestDensityMatrixEngineBuilder, QuestStateVec,
+    QuestStateVecEngine, QuestStateVectorEngineBuilder, quest_density_matrix, quest_state_vec,
+};
 
 #[cfg(feature = "qulacs")]
 pub use pecos_qulacs::QulacsStateVec;

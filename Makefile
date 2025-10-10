@@ -61,6 +61,18 @@ build-native: installreqs ## Build a faster version of binaries with native CPU 
 	&& uv run maturin develop --uv --release
 	@unset CONDA_PREFIX && uv pip install -e "./python/quantum-pecos[all]"
 
+.PHONY: build-cuda
+build-cuda: installreqs ## Compile and install for development with CUDA support
+	@unset CONDA_PREFIX && cd python/pecos-rslib/ && uv run maturin develop --uv
+	@unset CONDA_PREFIX && uv pip install -e "./python/quantum-pecos[all,cuda]"
+	@if command -v julia >/dev/null 2>&1; then \
+		echo "Julia detected, building Julia FFI library..."; \
+		cd julia/pecos-julia-ffi && cargo build; \
+		echo "Julia FFI library built successfully"; \
+	else \
+		echo "Julia not detected, skipping Julia build"; \
+	fi
+
 # Documentation
 # -------------
 
@@ -429,6 +441,12 @@ dev: clean build test  ## Run the typical sequence of commands to check everythi
 .PHONY: devl
 devl: dev lint  ## Run the commands to make sure everything runs + lint
 
+.PHONY: devc
+devc: clean build-cuda test  ## Run dev sequence with CUDA support (requires CUDA Toolkit 13)
+
+.PHONY: devcl
+devcl: devc lint  ## Run dev sequence with CUDA support + lint (requires CUDA Toolkit 13)
+
 # Help
 # ----
 
@@ -443,3 +461,9 @@ help:  ## Show the help menu
 	@echo "  - 'make test' will also run Julia tests if Julia is installed"
 	@echo "  - 'make lint' checks code quality; 'make lint-fix' fixes issues"
 	@echo "  - Use 'make julia-info' for more Julia-specific information"
+	@echo ""
+	@echo "CUDA GPU Simulator Support:"
+	@echo "  - 'make build-cuda' builds with CUDA GPU simulator support"
+	@echo "  - 'make devc' runs full dev cycle with CUDA support"
+	@echo "  - 'make devcl' runs dev + linting with CUDA support"
+	@echo "  - Requires: CUDA Toolkit 13 (see docs/user-guide/cuda-setup.md)"

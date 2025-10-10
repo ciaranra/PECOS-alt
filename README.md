@@ -154,11 +154,26 @@ If you are interested in editing or developing the code in this project, see thi
 
 Certain simulators from `pecos.simulators` require external packages that are not installed by `pip install .[all]`.
 
-- `CuStateVec` requires a Linux machine with an NVIDIA GPU (see requirements [here](https://docs.nvidia.com/cuda/cuquantum/latest/getting_started/getting_started.html#dependencies-custatevec-label)). PECOS' dependencies are
-specified in the `[cuda]` section of `pyproject.toml`, however, installation via `pip` is not reliable. The recommended method of installation is via `conda`, as discussed [here](https://docs.nvidia.com/cuda/cuquantum/latest/getting_started/getting_started.html#installing-cuquantum). Note that there might be conflicts between `conda` and `venv`; if you intend to use `CuStateVec`, you may follow the installation instructions for PECOS within a `conda` environment without involving the `venv` commands.
-- `MPS` uses `pytket-cutensornet` (see [repository](https://github.com/CQCL/pytket-cutensornet)) and can be installed via `pip install .[cuda]`. These
-simulators use NVIDIA GPUs and cuQuantum. Unfortunately, installation of cuQuantum does not currently work via `pip`.
-Please follow the instructions specified above for `CuStateVec` to install cuQuantum.
+### GPU-Accelerated Simulators (CuStateVec and MPS)
+
+- **`CuStateVec`** and **`MPS`** require:
+  - Linux machine with NVIDIA GPU (Compute Capability 7.0+)
+  - CUDA Toolkit 13 or 12 (system-level installation)
+  - Python packages: `cupy-cuda13x`, `cuquantum-python-cu13`, `pytket-cutensornet`
+
+**Installation:** See the comprehensive [CUDA Setup Guide](docs/user-guide/cuda-setup.md) for detailed step-by-step instructions.
+
+**Quick install** (after installing CUDA Toolkit):
+```bash
+uv pip install quantum-pecos[cuda]
+
+# For development with CUDA support:
+make build-cuda  # Build with CUDA
+make devc        # Full dev cycle (clean + build-cuda + test)
+make devcl       # Dev cycle + linting
+```
+
+**Note:** When using `uv` or `pip`, install CUDA Toolkit via system package manager (e.g., `sudo apt install cuda-toolkit-13`), then install Python packages. Conda environments may conflict with `uv`/`venv` workflows.
 
 ## Uninstall
 

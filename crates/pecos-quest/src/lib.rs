@@ -23,6 +23,12 @@ use thiserror::Error;
 pub mod bridge;
 use bridge::ffi;
 
+pub mod quantum_engine;
+pub use quantum_engine::{
+    QuestDensityMatrixEngine, QuestDensityMatrixEngineBuilder, QuestStateVecEngine,
+    QuestStateVectorEngineBuilder, quest_density_matrix, quest_state_vec,
+};
+
 pub use pecos_core::rng::RngManageable;
 pub use pecos_qsim::{
     ArbitraryRotationGateable, CliffordGateable, MeasurementResult, QuantumSimulator,
@@ -123,7 +129,7 @@ where
     num_qubits: usize,
     // The QuEST environment must be kept alive for the lifetime of the simulator.
     // This field manages the global QuEST environment reference count via RAII.
-    _env: QuestEnvWrapper,
+    env: QuestEnvWrapper,
     qureg: QuregWrapper,
     rng: R,
 }
@@ -172,7 +178,7 @@ where
 
         let state = Self {
             num_qubits,
-            _env: env,
+            env,
             qureg,
             rng,
         };
@@ -226,6 +232,11 @@ where
         unsafe { ffi::quest_get_qureg_info(self.qureg.ptr) }
     }
 
+    /// Get information about the `QuEST` environment (for debugging/introspection)
+    pub fn get_env_info(&self) -> ffi::QuESTEnvInfo {
+        unsafe { ffi::quest_get_env_info(self.env.ptr) }
+    }
+
     fn check_qubit_index(&self, qubit: usize) -> Result<()> {
         if qubit >= self.num_qubits {
             Err(QuestError::InvalidQubit(qubit))
@@ -257,7 +268,7 @@ where
 
         Self {
             num_qubits: self.num_qubits,
-            _env: env,
+            env,
             qureg,
             rng: self.rng.clone(),
         }
@@ -495,7 +506,7 @@ where
     num_qubits: usize,
     // The QuEST environment must be kept alive for the lifetime of the simulator.
     // This field manages the global QuEST environment reference count via RAII.
-    _env: QuestEnvWrapper,
+    env: QuestEnvWrapper,
     qureg: QuregWrapper,
     rng: R,
 }
@@ -544,7 +555,7 @@ where
 
         let state = Self {
             num_qubits,
-            _env: env,
+            env,
             qureg,
             rng,
         };
@@ -602,6 +613,11 @@ where
         unsafe { ffi::quest_get_qureg_info(self.qureg.ptr) }
     }
 
+    /// Get information about the `QuEST` environment (for debugging/introspection)
+    pub fn get_env_info(&self) -> ffi::QuESTEnvInfo {
+        unsafe { ffi::quest_get_env_info(self.env.ptr) }
+    }
+
     fn check_qubit_index(&self, qubit: usize) -> Result<()> {
         if qubit >= self.num_qubits {
             Err(QuestError::InvalidQubit(qubit))
@@ -640,7 +656,7 @@ where
 
         Self {
             num_qubits: self.num_qubits,
-            _env: env,
+            env,
             qureg,
             rng: self.rng.clone(),
         }

@@ -33,8 +33,8 @@ pub const CHROMOBIUS_SHA256: &str =
 
 /// `QuEST` library constants
 /// Used by `QuEST` quantum simulator wrapper
-pub const QUEST_COMMIT: &str = "v4.0.0";
-pub const QUEST_SHA256: &str = "e6a922a9dc1d6ee7c4d2591a277646dca2ce2fd90eecf36fd66970cb24bbfb67";
+pub const QUEST_COMMIT: &str = "v4.1.0";
+pub const QUEST_SHA256: &str = "85aa95bba6457c4f4e93221f4c417d988588891a1f7cb211c307dfe81a10cadd";
 
 /// Qulacs library constants
 /// Used by Qulacs quantum simulator

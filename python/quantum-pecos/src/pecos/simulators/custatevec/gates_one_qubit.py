@@ -26,7 +26,7 @@ import cupy as cp
 if TYPE_CHECKING:
     from pecos.simulators.custatevec.state import CuStateVec
     from pecos.typing import SimulatorGateParams
-from cuquantum import custatevec as cusv
+from cuquantum.bindings import custatevec as cusv
 
 
 def _apply_one_qubit_matrix(state: CuStateVec, qubit: int, matrix: cp.ndarray) -> None:

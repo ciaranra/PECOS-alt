@@ -50,6 +50,9 @@ cppsparsesim = ["pecos-cppsparsesim"]
 quest = ["pecos-quest"]
 qulacs = ["pecos-qulacs"]
 
+# Quest-specific features
+gpu = ["quest", "pecos-quest/gpu"]
+
 # All simulator backends
 all-simulators = ["cppsparsesim", "quest", "qulacs"]
 
