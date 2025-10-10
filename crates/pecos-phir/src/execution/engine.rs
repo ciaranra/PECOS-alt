@@ -410,17 +410,17 @@ mod tests {
     fn test_engine_with_module() {
         let module = Module {
             name: "test_module".to_string(),
-            attributes: std::collections::HashMap::new(),
+            attributes: std::collections::BTreeMap::new(),
             body: Region {
                 blocks: vec![Block {
                     label: None,
                     arguments: vec![],
                     operations: vec![],
                     terminator: None,
-                    attributes: std::collections::HashMap::new(),
+                    attributes: std::collections::BTreeMap::new(),
                 }],
                 kind: RegionKind::SSACFG,
-                attributes: std::collections::HashMap::new(),
+                attributes: std::collections::BTreeMap::new(),
             },
         };
 
@@ -433,17 +433,17 @@ mod tests {
     fn test_engine_compile() {
         let module = Module {
             name: "test_module".to_string(),
-            attributes: std::collections::HashMap::new(),
+            attributes: std::collections::BTreeMap::new(),
             body: Region {
                 blocks: vec![Block {
                     label: None,
                     arguments: vec![],
                     operations: vec![],
                     terminator: None,
-                    attributes: std::collections::HashMap::new(),
+                    attributes: std::collections::BTreeMap::new(),
                 }],
                 kind: RegionKind::SSACFG,
-                attributes: std::collections::HashMap::new(),
+                attributes: std::collections::BTreeMap::new(),
             },
         };
 

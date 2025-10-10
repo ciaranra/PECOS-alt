@@ -1,5 +1,5 @@
 use serde::{Deserialize, Deserializer};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::f64::consts::PI;
 
 /// Program structure for PHIR (PECOS High-level Intermediate Representation)
@@ -7,7 +7,7 @@ use std::f64::consts::PI;
 pub struct PHIRProgram {
     pub format: String,
     pub version: String,
-    pub metadata: HashMap<String, serde_json::Value>,
+    pub metadata: BTreeMap<String, serde_json::Value>,
     pub ops: Vec<Operation>,
 }
 
@@ -32,7 +32,7 @@ pub enum Operation {
         #[serde(default)]
         returns: Vec<(String, usize)>,
         #[serde(default)]
-        metadata: Option<HashMap<String, serde_json::Value>>,
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
     /// Classical operation (e.g., Result for exporting values)
     ClassicalOp {
@@ -42,7 +42,7 @@ pub enum Operation {
         #[serde(default)]
         returns: Vec<ArgItem>,
         #[serde(default)]
-        metadata: Option<HashMap<String, serde_json::Value>>,
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         function: Option<String>, // For ffcall
     },
@@ -58,7 +58,7 @@ pub enum Operation {
         #[serde(default)]
         false_branch: Option<Vec<Operation>>,
         #[serde(default)]
-        metadata: Option<HashMap<String, serde_json::Value>>,
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
     /// Machine operation (e.g., Idle, Transport)
     MachineOp {
@@ -68,7 +68,7 @@ pub enum Operation {
         #[serde(default)]
         duration: Option<(f64, String)>,
         #[serde(default)]
-        metadata: Option<HashMap<String, serde_json::Value>>,
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
     /// Meta instruction (e.g., barrier)
     MetaInstruction {
@@ -76,7 +76,7 @@ pub enum Operation {
         #[serde(default)]
         args: Vec<(String, usize)>,
         #[serde(default)]
-        metadata: Option<HashMap<String, serde_json::Value>>,
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
     /// Comment
     Comment {

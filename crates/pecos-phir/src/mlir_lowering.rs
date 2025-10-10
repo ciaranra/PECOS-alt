@@ -113,8 +113,8 @@ fn convert_function_to_mlir(func: &crate::builtin_ops::FuncOp) -> Result<String>
         && let Some(block) = entry_region.blocks.first()
     {
         // Track SSA value to qubit mapping
-        let mut ssa_to_qubit: std::collections::HashMap<u32, u32> =
-            std::collections::HashMap::new();
+        let mut ssa_to_qubit: std::collections::BTreeMap<u32, u32> =
+            std::collections::BTreeMap::new();
 
         // Convert instructions
         for instruction in &block.operations {
@@ -152,7 +152,7 @@ fn type_to_mlir(ty: &crate::types::Type) -> String {
 /// Convert PHIR instruction to MLIR text with SSA value mapping
 fn convert_instruction_to_mlir_with_mapping(
     instruction: &crate::phir::Instruction,
-    ssa_to_qubit: &mut std::collections::HashMap<u32, u32>,
+    ssa_to_qubit: &mut std::collections::BTreeMap<u32, u32>,
 ) -> Result<String> {
     use crate::ops::{Operation, QuantumOp};
 

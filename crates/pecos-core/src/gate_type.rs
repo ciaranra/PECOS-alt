@@ -11,7 +11,7 @@ use std::fmt;
 /// It represents the same gate types as the core `GateType` enum but with a more
 /// predictable memory layout.
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GateType {
     I = 0b00,
     X = 0b01,

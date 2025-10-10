@@ -765,17 +765,16 @@ fn compile_hugr_with_selene(hugr_bytes: &[u8]) -> Result<String, PecosError> {
     log::info!("Compiling HUGR with Selene compiler (required)");
 
     // Use Selene's Python compiler - no fallbacks
-    compile_hugr_with_selene_python(hugr_bytes)
-        .map_err(|e| {
-            PecosError::Generic(format!(
-                "Selene Helios compilation failed: {e}\n\n\
+    compile_hugr_with_selene_python(hugr_bytes).map_err(|e| {
+        PecosError::Generic(format!(
+            "Selene Helios compilation failed: {e}\n\n\
                 To use Helios interface, ensure Selene is installed and available:\n\
                 1. Ensure Selene repository is at ../selene or ../../../selene\n\
                 2. Build Selene compilers: 'cargo build --release' in Selene directory\n\
                 \n\
                 Selene is the only supported interface for QIS programs."
-            ))
-        })
+        ))
+    })
 }
 
 /// Compile HUGR using Selene's Python compiler

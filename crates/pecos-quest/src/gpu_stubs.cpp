@@ -370,11 +370,11 @@ double gpu_statevec_calcTotalProb_sub(Qureg q) { return 1.0; }
 double gpu_densmatr_calcTotalProb_sub(Qureg q) { return 1.0; }
 std::complex<double> gpu_statevec_calcInnerProduct_sub(Qureg q1, Qureg q2) { return 0.0; }
 double gpu_densmatr_calcHilbertSchmidtDistance_sub(Qureg q1, Qureg q2) { return 0.0; }
-double gpu_statevec_calcExpecAnyTargZ_sub(Qureg q, std::vector<int> targets) { return 0.0; }
-std::complex<double> gpu_densmatr_calcExpecAnyTargZ_sub(Qureg q, std::vector<int> targets) { return 0.0; }
-std::complex<double> gpu_statevec_calcExpecPauliStr_subA(Qureg q, std::vector<int> a, std::vector<int> b, std::vector<int> c) { return 0.0; }
-std::complex<double> gpu_statevec_calcExpecPauliStr_subB(Qureg q, std::vector<int> a, std::vector<int> b, std::vector<int> c) { return 0.0; }
-std::complex<double> gpu_densmatr_calcExpecPauliStr_sub(Qureg q, std::vector<int> a, std::vector<int> b, std::vector<int> c) { return 0.0; }
+double gpu_statevec_calcExpectAnyTargZ_sub(Qureg q, std::vector<int> targets) { return 0.0; }
+std::complex<double> gpu_densmatr_calcExpectAnyTargZ_sub(Qureg q, std::vector<int> targets) { return 0.0; }
+std::complex<double> gpu_statevec_calcExpectPauliStr_subA(Qureg q, std::vector<int> a, std::vector<int> b, std::vector<int> c) { return 0.0; }
+std::complex<double> gpu_statevec_calcExpectPauliStr_subB(Qureg q, std::vector<int> a, std::vector<int> b, std::vector<int> c) { return 0.0; }
+std::complex<double> gpu_densmatr_calcExpectPauliStr_sub(Qureg q, std::vector<int> a, std::vector<int> b, std::vector<int> c) { return 0.0; }
 
 // Init functions
 void gpu_statevec_initDebugState_sub(Qureg q) {}
@@ -432,12 +432,12 @@ std::complex<double> gpu_densmatr_calcFidelityWithPureState_sub(Qureg densMatr, 
 
 // Template stubs for expectation value calculations
 template<bool HasPower, bool UseRealPow>
-std::complex<double> gpu_statevec_calcExpecFullStateDiagMatr_sub(Qureg q, FullStateDiagMatr m, std::complex<double> globalPhase) {
+std::complex<double> gpu_statevec_calcExpectFullStateDiagMatr_sub(Qureg q, FullStateDiagMatr m, std::complex<double> globalPhase) {
     return std::complex<double>(0.0, 0.0);
 }
 
 template<bool HasPower, bool UseRealPow>
-std::complex<double> gpu_densmatr_calcExpecFullStateDiagMatr_sub(Qureg q, FullStateDiagMatr m, std::complex<double> globalPhase) {
+std::complex<double> gpu_densmatr_calcExpectFullStateDiagMatr_sub(Qureg q, FullStateDiagMatr m, std::complex<double> globalPhase) {
     return std::complex<double>(0.0, 0.0);
 }
 
@@ -823,12 +823,12 @@ template std::complex<double> gpu_densmatr_calcFidelityWithPureState_sub<false>(
 template std::complex<double> gpu_densmatr_calcFidelityWithPureState_sub<true>(Qureg, Qureg);
 
 // Explicit template instantiations for expectation value calculations
-template std::complex<double> gpu_statevec_calcExpecFullStateDiagMatr_sub<false, false>(Qureg, FullStateDiagMatr, std::complex<double>);
-template std::complex<double> gpu_statevec_calcExpecFullStateDiagMatr_sub<false, true>(Qureg, FullStateDiagMatr, std::complex<double>);
-template std::complex<double> gpu_statevec_calcExpecFullStateDiagMatr_sub<true, false>(Qureg, FullStateDiagMatr, std::complex<double>);
-template std::complex<double> gpu_statevec_calcExpecFullStateDiagMatr_sub<true, true>(Qureg, FullStateDiagMatr, std::complex<double>);
+template std::complex<double> gpu_statevec_calcExpectFullStateDiagMatr_sub<false, false>(Qureg, FullStateDiagMatr, std::complex<double>);
+template std::complex<double> gpu_statevec_calcExpectFullStateDiagMatr_sub<false, true>(Qureg, FullStateDiagMatr, std::complex<double>);
+template std::complex<double> gpu_statevec_calcExpectFullStateDiagMatr_sub<true, false>(Qureg, FullStateDiagMatr, std::complex<double>);
+template std::complex<double> gpu_statevec_calcExpectFullStateDiagMatr_sub<true, true>(Qureg, FullStateDiagMatr, std::complex<double>);
 
-template std::complex<double> gpu_densmatr_calcExpecFullStateDiagMatr_sub<false, false>(Qureg, FullStateDiagMatr, std::complex<double>);
-template std::complex<double> gpu_densmatr_calcExpecFullStateDiagMatr_sub<false, true>(Qureg, FullStateDiagMatr, std::complex<double>);
-template std::complex<double> gpu_densmatr_calcExpecFullStateDiagMatr_sub<true, false>(Qureg, FullStateDiagMatr, std::complex<double>);
-template std::complex<double> gpu_densmatr_calcExpecFullStateDiagMatr_sub<true, true>(Qureg, FullStateDiagMatr, std::complex<double>);
+template std::complex<double> gpu_densmatr_calcExpectFullStateDiagMatr_sub<false, false>(Qureg, FullStateDiagMatr, std::complex<double>);
+template std::complex<double> gpu_densmatr_calcExpectFullStateDiagMatr_sub<false, true>(Qureg, FullStateDiagMatr, std::complex<double>);
+template std::complex<double> gpu_densmatr_calcExpectFullStateDiagMatr_sub<true, false>(Qureg, FullStateDiagMatr, std::complex<double>);
+template std::complex<double> gpu_densmatr_calcExpectFullStateDiagMatr_sub<true, true>(Qureg, FullStateDiagMatr, std::complex<double>);

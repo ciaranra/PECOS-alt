@@ -92,7 +92,7 @@ use pecos_core::QubitId;
 use pecos_core::errors::PecosError;
 use rand_chacha::ChaCha8Rng;
 use std::any::Any;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 
 /// General noise model implementation that includes parameterized error channels for various quantum operations
 ///
@@ -110,7 +110,7 @@ pub struct GeneralNoiseModel {
     ///
     /// Gates in this set may be those that are implemented in software rather than
     /// with physical operations, so no noise should be applied to them.
-    noiseless_gates: HashSet<GateType>,
+    noiseless_gates: BTreeSet<GateType>,
 
     /// Scale leakage events to be completely depolarizing events instead.
     ///
@@ -321,7 +321,7 @@ pub struct GeneralNoiseModel {
     ///
     /// Tracks which qubits have leaked out of the computational subspace and are
     /// therefore not affected by computational gates but might still affect measurements.
-    leaked_qubits: HashSet<usize>,
+    leaked_qubits: BTreeSet<usize>,
 
     /// Random number generator for stochastic noise processes
     rng: NoiseRng<ChaCha8Rng>,

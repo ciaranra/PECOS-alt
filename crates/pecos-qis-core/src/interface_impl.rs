@@ -5,7 +5,7 @@
 use crate::qis_interface::{InterfaceError, ProgramFormat, QisInterface};
 use pecos_core::prelude::PecosError;
 use pecos_qis_ffi_types::OperationCollector;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Simple wrapper for pre-built operation lists
 ///
@@ -40,7 +40,7 @@ impl QisInterface for SimpleQisInterface {
 
     fn execute_with_measurements(
         &mut self,
-        _measurements: HashMap<usize, bool>,
+        _measurements: BTreeMap<usize, bool>,
     ) -> Result<OperationCollector, InterfaceError> {
         // For pre-built interfaces, just return the operations as-is
         // since there are no conditional paths

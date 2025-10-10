@@ -18,7 +18,7 @@ use crate::ops::{Operation, QuantumOp, ClassicalOp, SSAValue};
 use crate::types::Type;
 use serde::{Serialize, Deserialize};
 use serde_json::Value as JsonValue;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// PHIR-JSON format version
 pub const PHIR_JSON_VERSION: &str = "0.2.0";
@@ -32,7 +32,7 @@ pub struct PhirJson {
     pub version: String,
     /// Optional metadata
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, JsonValue>>,
+    pub metadata: Option<BTreeMap<String, JsonValue>>,
     /// The PHIR module
     pub module: PhirModule,
 }
@@ -41,8 +41,8 @@ pub struct PhirJson {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhirModule {
     pub name: String,
-    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-    pub attributes: HashMap<String, JsonValue>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub attributes: BTreeMap<String, JsonValue>,
     pub body: PhirRegion,
 }
 
@@ -50,8 +50,8 @@ pub struct PhirModule {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhirRegion {
     pub kind: String,
-    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-    pub attributes: HashMap<String, JsonValue>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub attributes: BTreeMap<String, JsonValue>,
     pub blocks: Vec<PhirBlock>,
 }
 
@@ -62,8 +62,8 @@ pub struct PhirBlock {
     pub label: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub arguments: Vec<PhirBlockArg>,
-    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-    pub attributes: HashMap<String, JsonValue>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub attributes: BTreeMap<String, JsonValue>,
     pub ops: Vec<PhirOperation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub terminator: Option<PhirTerminator>,
@@ -88,8 +88,8 @@ pub enum PhirOperation {
         args: Vec<String>,
         #[serde(skip_serializing_if = "Vec::is_empty", default)]
         returns: Vec<String>,
-        #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-        attributes: HashMap<String, JsonValue>,
+        #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+        attributes: BTreeMap<String, JsonValue>,
     },
     /// Classical operation
     Classical {
@@ -98,8 +98,8 @@ pub enum PhirOperation {
         args: Vec<String>,
         #[serde(skip_serializing_if = "Vec::is_empty", default)]
         returns: Vec<String>,
-        #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-        attributes: HashMap<String, JsonValue>,
+        #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+        attributes: BTreeMap<String, JsonValue>,
     },
     /// Function definition
     Function {
@@ -125,8 +125,8 @@ pub struct PhirFunction {
     pub inputs: Vec<PhirType>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub outputs: Vec<PhirType>,
-    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-    pub attributes: HashMap<String, JsonValue>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub attributes: BTreeMap<String, JsonValue>,
     pub body: Vec<PhirRegion>,
 }
 
@@ -221,7 +221,7 @@ fn instruction_to_phir(inst: &Instruction) -> Result<PhirOperation, serde_json::
                 qop: quantum_op_name(qop),
                 args: inst.operands.iter().map(|v| format!("{}", v)).collect(),
                 returns: inst.results.iter().map(|v| format!("{}", v)).collect(),
-                attributes: HashMap::new(), // TODO: Add instruction attributes
+                attributes: BTreeMap::new(), // TODO: Add instruction attributes
             })
         }
         Operation::Classical(cop) => {
@@ -229,7 +229,7 @@ fn instruction_to_phir(inst: &Instruction) -> Result<PhirOperation, serde_json::
                 cop: classical_op_name(cop),
                 args: inst.operands.iter().map(|v| format!("{}", v)).collect(),
                 returns: inst.results.iter().map(|v| format!("{}", v)).collect(),
-                attributes: HashMap::new(),
+                attributes: BTreeMap::new(),
             })
         }
         Operation::Builtin(BuiltinOp::Func(func)) => {
@@ -292,7 +292,7 @@ fn terminator_to_phir(term: &crate::phir::Terminator) -> Result<PhirTerminator, 
 }
 
 /// Convert attributes to JSON
-fn attributes_to_json(attrs: &HashMap<String, AttributeValue>) -> HashMap<String, JsonValue> {
+fn attributes_to_json(attrs: &BTreeMap<String, AttributeValue>) -> BTreeMap<String, JsonValue> {
     attrs.iter()
         .map(|(k, v)| (k.clone(), attribute_value_to_json(v)))
         .collect()

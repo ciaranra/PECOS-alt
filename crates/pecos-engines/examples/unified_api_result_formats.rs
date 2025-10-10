@@ -48,7 +48,7 @@ fn main() {
         }
     }
 
-    // Convert to columnar format (HashMap<String, Vec<i64>>)
+    // Convert to columnar format (BTreeMap<String, Vec<i64>>)
     // This format provides columnar data access for analysis
     let columnar = shots_to_columnar(&shot_vec);
     println!("Columnar format: {columnar:?}");

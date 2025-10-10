@@ -188,12 +188,12 @@ impl fmt::Display for EngineType {
 /// ```rust
 /// # #[cfg(feature = "qasm")]
 /// # {
-/// use std::collections::HashMap;
+/// use std::collections::BTreeMap;
 /// use pecos::{DynamicEngineBuilder};
 /// use pecos_qasm::qasm_engine;
 /// use pecos_programs::QasmProgram;
 ///
-/// let mut engines = HashMap::new();
+/// let mut engines = BTreeMap::new();
 /// let qasm_code = r#"
 /// OPENQASM 2.0;
 /// include "qelib1.inc";

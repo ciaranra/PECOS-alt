@@ -1,6 +1,6 @@
 use crate::v0_1::environment::{BoolBit, Environment};
 use pecos_core::errors::PecosError;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Enhanced result handling functions for PHIR
 /// These provide similar functionality to the Python PHIR interpreter's result handling
@@ -38,7 +38,7 @@ pub trait EnhancedResultHandling {
     fn get_result_as_binary_string(&self, var_name: &str) -> Result<String, PecosError>;
 
     /// Get results with various formats
-    fn get_formatted_results(&self, format: ResultFormat) -> HashMap<String, String>;
+    fn get_formatted_results(&self, format: ResultFormat) -> BTreeMap<String, String>;
 }
 
 /// Format options for result values
@@ -106,8 +106,8 @@ impl EnhancedResultHandling for Environment {
         }
     }
 
-    fn get_formatted_results(&self, format: ResultFormat) -> HashMap<String, String> {
-        let mut results = HashMap::new();
+    fn get_formatted_results(&self, format: ResultFormat) -> BTreeMap<String, String> {
+        let mut results = BTreeMap::new();
 
         // Process all mappings first
         for (source, dest) in self.get_mappings() {
@@ -198,8 +198,8 @@ impl ResultUtils {
 
     /// Combines named result bits into a map of variable values
     #[must_use]
-    pub fn named_bits_to_map(bit_map: &HashMap<String, Vec<BoolBit>>) -> HashMap<String, u64> {
-        let mut result = HashMap::new();
+    pub fn named_bits_to_map(bit_map: &BTreeMap<String, Vec<BoolBit>>) -> BTreeMap<String, u64> {
+        let mut result = BTreeMap::new();
 
         for (name, bits) in bit_map {
             result.insert(name.clone(), Self::bits_to_int(bits));

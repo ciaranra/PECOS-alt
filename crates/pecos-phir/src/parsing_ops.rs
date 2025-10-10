@@ -8,7 +8,7 @@ They handle forward references, unresolved names, and gradual type checking.
 use crate::ops::{SSAValue, ValueRef};
 use crate::phir::Region;
 use crate::types::Type;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Parsing-specific operations that get resolved/lowered later
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -174,14 +174,14 @@ pub struct NameResolver {
     /// Type inference context
     type_context: TypeContext,
     /// Forward declarations waiting to be resolved
-    forward_decls: HashMap<String, ForwardDecl>,
+    forward_decls: BTreeMap<String, ForwardDecl>,
 }
 
 /// Symbol table for a scope
 #[allow(dead_code)]
 pub struct SymbolTable {
     /// Symbols in this scope
-    symbols: HashMap<String, Symbol>,
+    symbols: BTreeMap<String, Symbol>,
     /// Parent scope (if any)
     parent: Option<usize>,
 }
@@ -205,7 +205,7 @@ pub enum SymbolKind {
 #[allow(dead_code)]
 pub struct TypeContext {
     /// Type variables
-    type_vars: HashMap<u32, Option<Type>>,
+    type_vars: BTreeMap<u32, Option<Type>>,
     /// Type constraints
     constraints: Vec<(u32, TypeConstraint)>,
 }
@@ -221,21 +221,21 @@ impl NameResolver {
     pub fn new() -> Self {
         Self {
             scopes: vec![SymbolTable {
-                symbols: HashMap::new(),
+                symbols: BTreeMap::new(),
                 parent: None,
             }],
             type_context: TypeContext {
-                type_vars: HashMap::new(),
+                type_vars: BTreeMap::new(),
                 constraints: Vec::new(),
             },
-            forward_decls: HashMap::new(),
+            forward_decls: BTreeMap::new(),
         }
     }
 
     pub fn push_scope(&mut self) {
         let parent = self.scopes.len() - 1;
         self.scopes.push(SymbolTable {
-            symbols: HashMap::new(),
+            symbols: BTreeMap::new(),
             parent: Some(parent),
         });
     }

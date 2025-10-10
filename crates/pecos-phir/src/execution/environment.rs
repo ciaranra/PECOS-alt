@@ -6,7 +6,7 @@ This is adapted from the pecos-phir-json environment but works with PHIR types.
 */
 
 use crate::error::{PhirError, Result};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 
@@ -165,9 +165,9 @@ pub struct VariableDefinition {
 #[derive(Debug, Clone)]
 pub struct Environment {
     /// Variable definitions and their current values
-    variables: HashMap<String, VariableDefinition>,
+    variables: BTreeMap<String, VariableDefinition>,
     /// Mapping from variable names to their bit positions (for result extraction)
-    bit_mappings: HashMap<String, Vec<usize>>,
+    bit_mappings: BTreeMap<String, Vec<usize>>,
 }
 
 impl Environment {
@@ -175,8 +175,8 @@ impl Environment {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            variables: HashMap::new(),
-            bit_mappings: HashMap::new(),
+            variables: BTreeMap::new(),
+            bit_mappings: BTreeMap::new(),
         }
     }
 
@@ -238,8 +238,8 @@ impl Environment {
 
     /// Get all variables with their values (for result extraction)
     #[must_use]
-    pub fn get_all_variables(&self) -> HashMap<String, TypedValue> {
-        let mut result = HashMap::new();
+    pub fn get_all_variables(&self) -> BTreeMap<String, TypedValue> {
+        let mut result = BTreeMap::new();
         for (name, var_def) in &self.variables {
             if let Some(value) = &var_def.value {
                 result.insert(name.clone(), value.clone());

@@ -11,7 +11,7 @@ use crate::region_kinds::RegionKind;
 use crate::types::Type;
 use pecos_engines::ClassicalEngine;
 use pecos_engines::byte_message::builder::ByteMessageBuilder;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Create a simple PHIR module for testing
 fn create_test_module() -> Module {
@@ -22,7 +22,7 @@ fn create_test_module() -> Module {
         results: vec![SSAValue { id: 1, version: 0 }],
         result_types: vec![Type::Qubit],
         regions: vec![],
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
         location: None,
     };
 
@@ -31,16 +31,16 @@ fn create_test_module() -> Module {
         arguments: vec![],
         operations: vec![h_instruction],
         terminator: None,
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
     };
 
     Module {
         name: "test_module".to_string(),
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
         body: Region {
             blocks: vec![main_block],
             kind: RegionKind::SSACFG,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         },
     }
 }
@@ -53,7 +53,7 @@ fn create_bell_state_module() -> Module {
         results: vec![SSAValue { id: 2, version: 0 }],
         result_types: vec![Type::Qubit],
         regions: vec![],
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
         location: None,
     };
 
@@ -66,7 +66,7 @@ fn create_bell_state_module() -> Module {
         results: vec![SSAValue { id: 3, version: 0 }],
         result_types: vec![Type::Qubit],
         regions: vec![],
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
         location: None,
     };
 
@@ -76,7 +76,7 @@ fn create_bell_state_module() -> Module {
         results: vec![SSAValue { id: 4, version: 0 }],
         result_types: vec![Type::Bit],
         regions: vec![],
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
         location: None,
     };
 
@@ -86,7 +86,7 @@ fn create_bell_state_module() -> Module {
         results: vec![SSAValue { id: 5, version: 0 }],
         result_types: vec![Type::Bit],
         regions: vec![],
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
         location: None,
     };
 
@@ -100,16 +100,16 @@ fn create_bell_state_module() -> Module {
             measure2_instruction,
         ],
         terminator: None,
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
     };
 
     Module {
         name: "bell_state".to_string(),
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
         body: Region {
             blocks: vec![main_block],
             kind: RegionKind::SSACFG,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         },
     }
 }
@@ -164,17 +164,17 @@ fn test_bell_state_circuit() -> Result<(), Box<dyn std::error::Error>> {
 fn test_empty_module() -> Result<(), Box<dyn std::error::Error>> {
     let empty_module = Module {
         name: "empty".to_string(),
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
         body: Region {
             blocks: vec![Block {
                 label: None,
                 arguments: vec![],
                 operations: vec![],
                 terminator: None,
-                attributes: HashMap::new(),
+                attributes: BTreeMap::new(),
             }],
             kind: RegionKind::SSACFG,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         },
     };
 

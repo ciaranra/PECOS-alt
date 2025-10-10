@@ -8,7 +8,6 @@
 //! a `QisRuntime` implementation.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 pub mod ffi;
 
@@ -34,11 +33,12 @@ pub fn reset_interface() {
 }
 
 /// Get a clone of the thread-local operation collector
+#[must_use]
 pub fn get_interface_clone() -> OperationCollector {
     with_interface(|interface| interface.clone())
 }
 
 /// Set measurement results in the thread-local operation collector
-pub fn set_measurements(measurements: HashMap<usize, bool>) {
+pub fn set_measurements(measurements: impl IntoIterator<Item = (usize, bool)>) {
     with_interface(|interface| interface.set_measurement_results(measurements));
 }

@@ -1,6 +1,6 @@
 //! Example showing how symbol resolution works in PMIR without a separate AST
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 fn main() {
     println!("=== Symbol Resolution in PMIR ===\n");
@@ -56,7 +56,7 @@ fn example_multi_pass_resolution() {
     println!("Pass 1: Collect Declarations");
     println!("----------------------------");
 
-    let mut declarations = HashMap::new();
+    let mut declarations = BTreeMap::new();
 
     // First pass: collect all declarations
     declarations.insert(
@@ -166,7 +166,7 @@ fn example_scoped_resolution() {
     #[derive(Debug)]
     struct Scope {
         level: usize,
-        symbols: HashMap<String, String>, // name -> type
+        symbols: BTreeMap<String, String>, // name -> type
         parent: Option<Box<Scope>>,
     }
 
@@ -174,7 +174,7 @@ fn example_scoped_resolution() {
         fn new(level: usize) -> Self {
             Self {
                 level,
-                symbols: HashMap::new(),
+                symbols: BTreeMap::new(),
                 parent: None,
             }
         }
@@ -182,7 +182,7 @@ fn example_scoped_resolution() {
         fn with_parent(level: usize, parent: Scope) -> Self {
             Self {
                 level,
-                symbols: HashMap::new(),
+                symbols: BTreeMap::new(),
                 parent: Some(Box::new(parent)),
             }
         }

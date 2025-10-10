@@ -7,7 +7,7 @@ allowing for extensible operations and types.
 
 use crate::error::Result;
 use crate::ops::CustomOp;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock, RwLock};
 
 /// Dialect definition
@@ -45,11 +45,11 @@ pub trait Dialect: Send + Sync {
 /// Registry for dialects and their operations
 pub struct DialectRegistry {
     /// Registered dialects
-    dialects: HashMap<String, Arc<dyn Dialect>>,
+    dialects: BTreeMap<String, Arc<dyn Dialect>>,
     /// Operation definitions by dialect
-    operations: HashMap<String, HashMap<String, OperationDef>>,
+    operations: BTreeMap<String, BTreeMap<String, OperationDef>>,
     /// Type definitions by dialect
-    types: HashMap<String, HashMap<String, TypeDef>>,
+    types: BTreeMap<String, BTreeMap<String, TypeDef>>,
 }
 
 /// Operation definition
@@ -110,9 +110,9 @@ impl DialectRegistry {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            dialects: HashMap::new(),
-            operations: HashMap::new(),
-            types: HashMap::new(),
+            dialects: BTreeMap::new(),
+            operations: BTreeMap::new(),
+            types: BTreeMap::new(),
         }
     }
 

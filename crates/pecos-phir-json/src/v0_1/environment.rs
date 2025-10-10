@@ -1,5 +1,5 @@
 use pecos_core::errors::PecosError;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt;
 
 /// Represents the data type of a variable
@@ -542,7 +542,7 @@ pub struct VariableInfo {
     /// Size of the variable (number of elements)
     pub size: usize,
     /// Additional metadata
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
+    pub metadata: Option<BTreeMap<String, serde_json::Value>>,
 }
 
 /// Environment for storing variables with efficient access
@@ -551,7 +551,7 @@ pub struct Environment {
     /// Values of all variables (stored with their type information)
     values: Vec<TypedValue>,
     /// Maps variable names to indices in the values vector
-    name_to_index: HashMap<String, usize>,
+    name_to_index: BTreeMap<String, usize>,
     /// Metadata for each variable
     metadata: Vec<VariableInfo>,
     /// Maps source variable names to destination names for output
@@ -564,7 +564,7 @@ impl Environment {
     pub fn new() -> Self {
         Self {
             values: Vec::new(),
-            name_to_index: HashMap::new(),
+            name_to_index: BTreeMap::new(),
             metadata: Vec::new(),
             mappings: Vec::new(),
         }
@@ -601,7 +601,7 @@ impl Environment {
         name: &str,
         data_type: DataType,
         size: usize,
-        metadata: Option<HashMap<String, serde_json::Value>>,
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     ) -> Result<(), PecosError> {
         if self.name_to_index.contains_key(name) {
             return Err(PecosError::Input(format!(
@@ -785,8 +785,8 @@ impl Environment {
 
     /// Gets all measurement result variables and their values
     #[must_use]
-    pub fn get_measurement_results(&self) -> HashMap<String, TypedValue> {
-        let mut results = HashMap::new();
+    pub fn get_measurement_results(&self) -> BTreeMap<String, TypedValue> {
+        let mut results = BTreeMap::new();
         for (i, info) in self.metadata.iter().enumerate() {
             // Include all variables that start with "m" or "measurement"
             if info.name.starts_with('m') || info.name.starts_with("measurement") {
@@ -862,8 +862,8 @@ impl Environment {
     /// This method returns mapped results from defined mappings or falls back to all variables
     /// if no mappings are defined or no mapped variables have values.
     #[must_use]
-    pub fn get_mapped_results(&self) -> HashMap<String, u32> {
-        let mut results = HashMap::new();
+    pub fn get_mapped_results(&self) -> BTreeMap<String, u32> {
+        let mut results = BTreeMap::new();
 
         // Apply all mappings from source to destination
         for (source, dest) in &self.mappings {

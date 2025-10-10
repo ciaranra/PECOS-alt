@@ -67,14 +67,17 @@ impl ProgrammedSimBuilder {
                     // Use Selene runtime and Helios interface
                     #[cfg(feature = "selene")]
                     {
-                        let selene_runtime = crate::selene_simple_runtime()
-                            .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                        let selene_runtime = crate::selene_simple_runtime().map_err(|e| {
+                            PecosError::Generic(format!("Failed to load Selene runtime: {e}"))
+                        })?;
                         let helios_builder = crate::helios_interface_builder();
                         let engine_builder = qis_engine()
                             .runtime(selene_runtime)
                             .interface(helios_builder)
                             .try_program(qis)
-                            .map_err(|e| PecosError::Generic(format!("Failed to load QIS program: {e}")))?;
+                            .map_err(|e| {
+                                PecosError::Generic(format!("Failed to load QIS program: {e}"))
+                            })?;
 
                         self.base_builder.classical(engine_builder).build()
                     }
@@ -89,14 +92,17 @@ impl ProgrammedSimBuilder {
                     // Use Selene runtime and Helios interface for HUGR programs
                     #[cfg(feature = "selene")]
                     {
-                        let selene_runtime = crate::selene_simple_runtime()
-                            .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                        let selene_runtime = crate::selene_simple_runtime().map_err(|e| {
+                            PecosError::Generic(format!("Failed to load Selene runtime: {e}"))
+                        })?;
                         let helios_builder = crate::helios_interface_builder();
                         let engine_builder = qis_engine()
                             .runtime(selene_runtime)
                             .interface(helios_builder)
                             .try_program(hugr)
-                            .map_err(|e| PecosError::Generic(format!("Failed to load HUGR program: {e}")))?;
+                            .map_err(|e| {
+                                PecosError::Generic(format!("Failed to load HUGR program: {e}"))
+                            })?;
 
                         self.base_builder.classical(engine_builder).build()
                     }
@@ -149,14 +155,17 @@ impl ProgrammedSimBuilder {
                     // Use Selene runtime and Helios interface
                     #[cfg(feature = "selene")]
                     {
-                        let selene_runtime = crate::selene_simple_runtime()
-                            .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                        let selene_runtime = crate::selene_simple_runtime().map_err(|e| {
+                            PecosError::Generic(format!("Failed to load Selene runtime: {e}"))
+                        })?;
                         let helios_builder = crate::helios_interface_builder();
                         let engine_builder = qis_engine()
                             .runtime(selene_runtime)
                             .interface(helios_builder)
                             .try_program(qis)
-                            .map_err(|e| PecosError::Generic(format!("Failed to load QIS program: {e}")))?;
+                            .map_err(|e| {
+                                PecosError::Generic(format!("Failed to load QIS program: {e}"))
+                            })?;
 
                         self.base_builder.classical(engine_builder).run(shots)
                     }
@@ -171,14 +180,17 @@ impl ProgrammedSimBuilder {
                     // Use Selene runtime and Helios interface for HUGR programs
                     #[cfg(feature = "selene")]
                     {
-                        let selene_runtime = crate::selene_simple_runtime()
-                            .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                        let selene_runtime = crate::selene_simple_runtime().map_err(|e| {
+                            PecosError::Generic(format!("Failed to load Selene runtime: {e}"))
+                        })?;
                         let helios_builder = crate::helios_interface_builder();
                         let engine_builder = qis_engine()
                             .runtime(selene_runtime)
                             .interface(helios_builder)
                             .try_program(hugr)
-                            .map_err(|e| PecosError::Generic(format!("Failed to load HUGR program: {e}")))?;
+                            .map_err(|e| {
+                                PecosError::Generic(format!("Failed to load HUGR program: {e}"))
+                            })?;
 
                         self.base_builder.classical(engine_builder).run(shots)
                     }

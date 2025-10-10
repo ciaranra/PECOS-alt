@@ -7,7 +7,7 @@ mod tests {
     use pecos_phir_json::v0_1::ast::PHIRProgram;
     use pecos_phir_json::v0_1::engine::PhirJsonEngine;
     use pecos_phir_json::v0_1::operations::{MachineOperationResult, OperationProcessor};
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     // Test direct machine operation processing
     #[test]
@@ -35,7 +35,7 @@ mod tests {
         }
 
         // Test Timing operation
-        let mut metadata = HashMap::new();
+        let mut metadata = BTreeMap::new();
         metadata.insert(
             "timing_type".to_string(),
             serde_json::Value::String("start".to_string()),

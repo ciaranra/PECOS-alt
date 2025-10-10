@@ -44,7 +44,7 @@ fn example_forward_references() {
     let mut module = ModuleOp::new("quantum_program");
 
     // Phase 1: First pass - collect declarations
-    let mut forward_decls = std::collections::HashMap::new();
+    let mut forward_decls = std::collections::BTreeMap::new();
     forward_decls.insert(
         "helper",
         FunctionType {

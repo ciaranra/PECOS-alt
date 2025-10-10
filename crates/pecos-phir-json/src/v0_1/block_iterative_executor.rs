@@ -139,7 +139,7 @@ impl<'a> BlockIterativeExecutor<'a> {
                         }
 
                         // Verify no qubit is used more than once
-                        let mut used_qubits = std::collections::HashSet::new();
+                        let mut used_qubits = std::collections::BTreeSet::new();
 
                         for op in ops {
                             if let Operation::QuantumOp { args, .. } = op {

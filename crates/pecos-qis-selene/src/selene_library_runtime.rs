@@ -444,7 +444,7 @@ impl QisRuntime for QisSeleneLibraryRuntime {
         Ok(Shot {
             measurements: self.state.measurements.clone(),
             registers: self.state.registers.clone(),
-            metadata: std::collections::HashMap::new(),
+            metadata: std::collections::BTreeMap::new(),
         })
     }
 

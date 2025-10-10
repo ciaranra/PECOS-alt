@@ -7,7 +7,7 @@ use pecos_engines::byte_message::{ByteMessage, builder::ByteMessageBuilder};
 use pecos_engines::shot_results::{Data, Shot};
 use pecos_engines::{ClassicalEngine, ControlEngine, Engine, EngineStage};
 use std::any::Any;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 /// `PhirJsonEngine` processes PHIR programs and generates quantum operations
@@ -872,12 +872,12 @@ impl ClassicalEngine for PhirJsonEngine {
 
             // Keep only the registers that are explicitly mapped as destinations
             // This provides a general approach that works for all tests including Bell state tests
-            let destination_registers: HashSet<String> =
+            let destination_registers: BTreeSet<String> =
                 mappings.iter().map(|(_, dest)| dest.clone()).collect();
 
             // Keep only the explicitly mapped destination registers if we have any
             if !destination_registers.is_empty() {
-                let mut filtered_values = HashMap::new();
+                let mut filtered_values = BTreeMap::new();
 
                 for dest in destination_registers {
                     if exported_values.contains_key(&dest) {

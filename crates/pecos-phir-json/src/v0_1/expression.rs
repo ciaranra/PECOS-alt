@@ -1,7 +1,7 @@
 use crate::v0_1::ast::{ArgItem, Expression};
 use crate::v0_1::environment::{DataType, Environment, TypedValue};
 use pecos_core::errors::PecosError;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::{self, Write};
 
 /// Expression value with type information
@@ -141,9 +141,9 @@ pub struct ExpressionEvaluator<'a> {
     /// Environment for variable lookups
     environment: &'a Environment,
     /// Cache for variable lookups to improve performance
-    var_cache: HashMap<String, ExprValue>,
+    var_cache: BTreeMap<String, ExprValue>,
     /// Cache for expression evaluation results
-    expr_cache: HashMap<String, ExprValue>,
+    expr_cache: BTreeMap<String, ExprValue>,
 }
 
 impl<'a> ExpressionEvaluator<'a> {
@@ -152,8 +152,8 @@ impl<'a> ExpressionEvaluator<'a> {
     pub fn new(environment: &'a Environment) -> Self {
         Self {
             environment,
-            var_cache: HashMap::new(),
-            expr_cache: HashMap::new(),
+            var_cache: BTreeMap::new(),
+            expr_cache: BTreeMap::new(),
         }
     }
 
@@ -161,13 +161,13 @@ impl<'a> ExpressionEvaluator<'a> {
     #[must_use]
     pub fn with_capacity(
         environment: &'a Environment,
-        var_capacity: usize,
-        expr_capacity: usize,
+        _var_capacity: usize,
+        _expr_capacity: usize,
     ) -> Self {
         Self {
             environment,
-            var_cache: HashMap::with_capacity(var_capacity),
-            expr_cache: HashMap::with_capacity(expr_capacity),
+            var_cache: BTreeMap::new(),
+            expr_cache: BTreeMap::new(),
         }
     }
 

@@ -2,7 +2,7 @@ use parking_lot::Mutex;
 use pecos::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 // Import the Rust PhirJsonEngine with a renamed alias to distinguish from Python wrapper
 // Re-exported by pecos::prelude when the phir feature is enabled
@@ -14,9 +14,9 @@ pub struct PhirJsonEngine {
     // Python interpreter for test compatibility
     interpreter: Mutex<Py<PyAny>>,
     // Lightweight cache for test results
-    results: Mutex<HashMap<String, u32>>,
+    results: Mutex<BTreeMap<String, u32>>,
     // Map from result_id to (register_name, index)
-    result_to_register: Mutex<HashMap<u32, (String, u32)>>,
+    result_to_register: Mutex<BTreeMap<u32, (String, u32)>>,
     // Internal Rust PHIR-JSON engine that does the real work - None for test programs
     engine: Option<Mutex<RustPhirJsonEngine>>,
 }
@@ -89,8 +89,8 @@ impl PhirJsonEngine {
             // Create a new engine
             let engine = Self {
                 interpreter: Mutex::new(interpreter.into()),
-                results: Mutex::new(HashMap::new()),
-                result_to_register: Mutex::new(HashMap::new()),
+                results: Mutex::new(BTreeMap::new()),
+                result_to_register: Mutex::new(BTreeMap::new()),
                 engine: rust_engine,
             };
 
@@ -150,8 +150,8 @@ impl PhirJsonEngine {
             // Create a new engine
             let engine = Self {
                 interpreter: Mutex::new(interpreter.into()),
-                results: Mutex::new(HashMap::new()),
-                result_to_register: Mutex::new(HashMap::new()),
+                results: Mutex::new(BTreeMap::new()),
+                result_to_register: Mutex::new(BTreeMap::new()),
                 engine: rust_engine,
             };
 
@@ -331,7 +331,7 @@ impl PhirJsonEngine {
                     let interpreter = self.interpreter.lock();
                     if let Ok(program) = interpreter.getattr(py, "program") {
                         if let Ok(csym2id) = program.getattr(py, "csym2id") {
-                            if let Ok(dict) = csym2id.extract::<HashMap<String, usize>>(py) {
+                            if let Ok(dict) = csym2id.extract::<BTreeMap<String, usize>>(py) {
                                 if dict.contains_key("c") {
                                     // Handle test_phir_full_circuit case
                                     "c".to_string()
@@ -390,7 +390,7 @@ impl PhirJsonEngine {
     ///
     /// # Errors
     /// Returns an error if results cannot be retrieved.
-    pub fn get_results(&self) -> PyResult<HashMap<String, u32>> {
+    pub fn get_results(&self) -> PyResult<BTreeMap<String, u32>> {
         Python::attach(|py| {
             // First try to use the Rust engine if available
             if let Some(engine) = &self.engine {
@@ -400,7 +400,7 @@ impl PhirJsonEngine {
                         // The Rust engine already properly handles the "Result" instruction
                         // which maps internal register names to user-facing ones.
                         // Extract u32 values from the Data enum
-                        let mut u32_results = HashMap::new();
+                        let mut u32_results = BTreeMap::new();
                         for (key, data) in shot_result.data {
                             // Convert Data to u32 if possible
                             let value = match data {
@@ -482,7 +482,7 @@ impl PhirJsonEngine {
             let py_results = interpreter.call_method0(py, "results")?;
 
             // Extract the results from Python
-            let mut results: HashMap<String, u32> = py_results.extract(py)?;
+            let mut results: BTreeMap<String, u32> = py_results.extract(py)?;
 
             // If we're in a test context and the Result mapping needs to be applied manually,
             // we can apply the mapping here. This is a safety net for tests that expect "c" register
@@ -529,10 +529,10 @@ impl PhirJsonEngine {
     }
 
     // Helper method to get all registers defined in the program
-    fn get_defined_registers(&self, py: Python<'_>) -> HashMap<String, String> {
+    fn get_defined_registers(&self, py: Python<'_>) -> BTreeMap<String, String> {
         let interpreter = self.interpreter.lock();
         let py_obj = interpreter.bind(py);
-        let mut registers = HashMap::new();
+        let mut registers = BTreeMap::new();
 
         // Try to get the program
         let Ok(program) = py_obj.getattr("program") else {
@@ -545,7 +545,7 @@ impl PhirJsonEngine {
         };
 
         // Extract the csym2id dictionary to get all register names
-        if let Ok(csym_dict) = csym2id.extract::<HashMap<String, usize>>() {
+        if let Ok(csym_dict) = csym2id.extract::<BTreeMap<String, usize>>() {
             for register_name in csym_dict.keys() {
                 registers.insert(register_name.clone(), register_name.clone());
             }
@@ -575,12 +575,12 @@ impl PhirJsonEngine {
 
         let mut result_to_register = self.result_to_register.lock();
         let mut result_id = 0;
-        let mut register_mappings: HashMap<String, String> = HashMap::new();
+        let mut register_mappings: BTreeMap<String, String> = BTreeMap::new();
 
         // First pass: extract all Measure operations to get result_id mappings
         for op in &ops_list {
             // Check if this is a Measure operation
-            let Ok(op_dict) = op.extract::<HashMap<String, Py<PyAny>>>(py) else {
+            let Ok(op_dict) = op.extract::<BTreeMap<String, Py<PyAny>>>(py) else {
                 continue; // If we can't extract the op as a dict, skip it
             };
 
@@ -621,7 +621,7 @@ impl PhirJsonEngine {
         // Second pass: extract all Result operations to get register mappings
         for op in &ops_list {
             // Check if this is a Result operation
-            let Ok(op_dict) = op.extract::<HashMap<String, Py<PyAny>>>(py) else {
+            let Ok(op_dict) = op.extract::<BTreeMap<String, Py<PyAny>>>(py) else {
                 continue; // If we can't extract the op as a dict, skip it
             };
 
@@ -648,7 +648,7 @@ impl PhirJsonEngine {
 
         // Apply register mappings to the result_id mappings
         // This handles cases where a register that's measured is later renamed via a Result instruction
-        let mut updated_mappings = HashMap::new();
+        let mut updated_mappings = BTreeMap::new();
         for (result_id, (register_name, index)) in result_to_register.iter() {
             if let Some(mapped_name) = register_mappings.get(register_name) {
                 // If this register is mapped to another name, update the mapping
@@ -1036,7 +1036,7 @@ impl ClassicalEngine for PhirJsonEngine {
                         let program = interpreter.getattr(py, "program").ok();
                         let csym2id = program.and_then(|p| p.getattr(py, "csym2id").ok());
                         let csym_dict =
-                            csym2id.and_then(|c| c.extract::<HashMap<String, usize>>(py).ok());
+                            csym2id.and_then(|c| c.extract::<BTreeMap<String, usize>>(py).ok());
 
                         if let Some(dict) = csym_dict {
                             if dict.contains_key("c") {
@@ -1103,14 +1103,14 @@ impl ClassicalEngine for PhirJsonEngine {
                 .call_method0(py, "results")
                 .map_err(to_pecos_error)?;
 
-            let internal_registers: HashMap<String, u32> =
+            let internal_registers: BTreeMap<String, u32> =
                 py_results.extract(py).map_err(to_pecos_error)?;
 
             // Update our local results cache
             (*self.results.lock()).clone_from(&internal_registers);
 
             // Create the registers map that will be populated
-            let mut mapped_registers: HashMap<String, u32> = HashMap::new();
+            let mut mapped_registers: BTreeMap<String, u32> = BTreeMap::new();
 
             // First, include all internal registers
             for (key, &value) in &internal_registers {

@@ -7,7 +7,7 @@ This module exposes HUGR compilation and LLVM engine functionality to Python.
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyType};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 use tempfile::TempDir;
@@ -21,8 +21,8 @@ pub struct QisEngineEntry {
 }
 
 /// Global storage for LLVM engines when called from Python bindings
-pub static PYTHON_LLVM_ENGINES: LazyLock<Mutex<HashMap<usize, QisEngineEntry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+pub static PYTHON_LLVM_ENGINES: LazyLock<Mutex<BTreeMap<usize, QisEngineEntry>>> =
+    LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
 /// Get the next available engine ID
 fn get_next_engine_id() -> usize {

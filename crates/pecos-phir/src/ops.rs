@@ -14,7 +14,7 @@ All operations follow MLIR's design where operations can contain nested regions.
 */
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Core operation enum for PHIR
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -255,7 +255,7 @@ pub struct CustomOp {
     /// Operands (for parsing compatibility)
     pub operands: Vec<crate::phir::SSAValue>,
     /// Operation-specific attributes
-    pub attributes: HashMap<String, crate::phir::AttributeValue>,
+    pub attributes: BTreeMap<String, crate::phir::AttributeValue>,
 }
 
 impl CustomOp {
@@ -265,7 +265,7 @@ impl CustomOp {
         dialect: &str,
         name: &str,
         operands: Vec<crate::phir::SSAValue>,
-        attributes: HashMap<String, crate::phir::AttributeValue>,
+        attributes: BTreeMap<String, crate::phir::AttributeValue>,
     ) -> Self {
         Self {
             dialect: dialect.to_string(),
@@ -379,7 +379,7 @@ pub enum ValueRef {
 }
 
 /// SSA value identifier
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct SSAValue {
     pub id: u32,
     pub version: u32, // For phi nodes and versioning
@@ -416,7 +416,7 @@ pub enum Attribute {
     Float(f64),
     String(String),
     Array(Vec<Attribute>),
-    Dict(HashMap<String, Attribute>),
+    Dict(BTreeMap<String, Attribute>),
 }
 
 impl Operation {

@@ -153,7 +153,10 @@ impl PyQisEngineBuilder {
         log::debug!("Python interface() called, setting Helios interface");
 
         // Set Helios interface
-        self.inner = self.inner.clone().interface(pecos::helios_interface_builder());
+        self.inner = self
+            .inner
+            .clone()
+            .interface(pecos::helios_interface_builder());
 
         // Always set Selene runtime to work with Helios interface
         log::debug!("Setting Selene runtime for Helios interface");
@@ -545,7 +548,10 @@ impl PyGeneralNoiseModelBuilder {
     }
 
     /// Set single-qubit Pauli error model
-    fn with_p1_pauli_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
+    fn with_p1_pauli_model(
+        &self,
+        model: std::collections::BTreeMap<String, f64>,
+    ) -> PyResult<Self> {
         use std::collections::BTreeMap;
         let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
         Ok(Self {
@@ -554,7 +560,10 @@ impl PyGeneralNoiseModelBuilder {
     }
 
     /// Set two-qubit Pauli error model
-    fn with_p2_pauli_model(&self, model: std::collections::HashMap<String, f64>) -> PyResult<Self> {
+    fn with_p2_pauli_model(
+        &self,
+        model: std::collections::BTreeMap<String, f64>,
+    ) -> PyResult<Self> {
         use std::collections::BTreeMap;
         let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
         Ok(Self {
@@ -668,7 +677,7 @@ impl PyGeneralNoiseModelBuilder {
     /// Set the stochastic model for idling that is linearly dependent on time
     fn with_p_idle_linear_model(
         &self,
-        model: std::collections::HashMap<String, f64>,
+        model: std::collections::BTreeMap<String, f64>,
     ) -> PyResult<Self> {
         use std::collections::BTreeMap;
         let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
@@ -746,7 +755,7 @@ impl PyGeneralNoiseModelBuilder {
     /// Set the emission model for single-qubit gates
     fn with_p1_emission_model(
         &self,
-        model: std::collections::HashMap<String, f64>,
+        model: std::collections::BTreeMap<String, f64>,
     ) -> PyResult<Self> {
         use std::collections::BTreeMap;
         let btree_map: BTreeMap<String, f64> = model.into_iter().collect();
@@ -793,7 +802,7 @@ impl PyGeneralNoiseModelBuilder {
     /// Set the emission model for two-qubit gates
     fn with_p2_emission_model(
         &self,
-        model: std::collections::HashMap<String, f64>,
+        model: std::collections::BTreeMap<String, f64>,
     ) -> PyResult<Self> {
         use std::collections::BTreeMap;
         let btree_map: BTreeMap<String, f64> = model.into_iter().collect();

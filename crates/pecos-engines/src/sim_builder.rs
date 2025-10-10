@@ -475,10 +475,10 @@ impl crate::noise::IntoNoiseModel for BiasedDepolarizingNoise {
 #[must_use]
 pub fn shots_to_columnar(
     shots: &crate::shot_results::ShotVec,
-) -> std::collections::HashMap<String, Vec<i64>> {
-    use std::collections::HashMap;
+) -> std::collections::BTreeMap<String, Vec<i64>> {
+    use std::collections::BTreeMap;
 
-    let mut columnar = HashMap::new();
+    let mut columnar = BTreeMap::new();
 
     if shots.is_empty() {
         return columnar;

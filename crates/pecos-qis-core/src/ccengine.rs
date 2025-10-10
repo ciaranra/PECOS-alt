@@ -15,7 +15,7 @@ use pecos_engines::{
 use pecos_qis_ffi_types::{OperationCollector as OperationList, QuantumOp};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 /// QIS Control Engine that mediates between interface and runtime
 ///
@@ -42,7 +42,7 @@ pub struct QisEngine {
     measurement_mapping: Vec<usize>,
 
     /// Stored measurement results for `get_results()`
-    measurement_results: HashMap<usize, bool>,
+    measurement_results: BTreeMap<usize, bool>,
 
     /// RNG for generating per-shot seeds
     rng: ChaCha8Rng,
@@ -62,7 +62,7 @@ impl QisEngine {
             num_qubits: 0,
             started: false,
             measurement_mapping: Vec::new(),
-            measurement_results: HashMap::new(),
+            measurement_results: BTreeMap::new(),
             rng: ChaCha8Rng::seed_from_u64(0), // Will be properly seeded via set_seed()
             current_shot_seed: None,
         }
@@ -117,7 +117,7 @@ impl QisEngine {
             num_qubits: 0,
             started: false,
             measurement_mapping: Vec::new(),
-            measurement_results: HashMap::new(),
+            measurement_results: BTreeMap::new(),
             rng: ChaCha8Rng::seed_from_u64(0), // Will be properly seeded via set_seed()
             current_shot_seed: None,
         }

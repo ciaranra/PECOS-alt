@@ -68,7 +68,10 @@ impl From<std::io::Error> for RuntimeFetchError {
 pub fn selene_simple_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
     eprintln!("[selene_simple_runtime] Called");
     let runtime_path = find_built_selene_runtime("selene_simple_runtime")?;
-    eprintln!("[selene_simple_runtime] Found runtime at: {:?}", runtime_path);
+    eprintln!(
+        "[selene_simple_runtime] Found runtime at: {}",
+        runtime_path.display()
+    );
     let runtime = SeleneRuntime::new(runtime_path);
     eprintln!("[selene_simple_runtime] Created SeleneRuntime, returning");
     Ok(runtime)

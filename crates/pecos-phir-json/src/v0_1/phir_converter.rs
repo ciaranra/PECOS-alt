@@ -18,7 +18,7 @@ use pecos_phir::{
     types::{IntWidth, Type},
 };
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Information about a bit-indexed write
 #[derive(Debug, Clone)]
@@ -87,20 +87,20 @@ pub fn phir_json_to_module(json_str: &str) -> Result<Module, PecosError> {
         arguments: vec![],
         operations: instructions,
         terminator: None,
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
     };
 
     // Create main region
     let main_region = Region {
         blocks: vec![main_block],
         kind: RegionKind::SSACFG,
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
     };
 
     // Create module
     let module = Module {
         name: module_name.to_string(),
-        attributes: HashMap::new(),
+        attributes: BTreeMap::new(),
         body: main_region,
     };
 
@@ -109,18 +109,18 @@ pub fn phir_json_to_module(json_str: &str) -> Result<Module, PecosError> {
 
 struct ImprovedConverter {
     next_ssa_id: u32,
-    variable_map: HashMap<String, u32>,
-    variable_types: HashMap<String, Type>,
-    bit_indexed_writes: HashMap<String, Vec<BitIndexedWrite>>,
+    variable_map: BTreeMap<String, u32>,
+    variable_types: BTreeMap<String, Type>,
+    bit_indexed_writes: BTreeMap<String, Vec<BitIndexedWrite>>,
 }
 
 impl ImprovedConverter {
     fn new() -> Self {
         Self {
             next_ssa_id: 0,
-            variable_map: HashMap::new(),
-            variable_types: HashMap::new(),
-            bit_indexed_writes: HashMap::new(),
+            variable_map: BTreeMap::new(),
+            variable_types: BTreeMap::new(),
+            bit_indexed_writes: BTreeMap::new(),
         }
     }
 
@@ -214,7 +214,7 @@ impl ImprovedConverter {
             results: vec![zero_ssa],
             result_types: vec![Type::UInt(IntWidth::I32)],
             regions: vec![],
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
             location: None,
         };
         instructions.push(zero_instruction);
@@ -234,7 +234,7 @@ impl ImprovedConverter {
                 results: vec![bit_as_int],
                 result_types: vec![Type::UInt(IntWidth::I32)],
                 regions: vec![],
-                attributes: HashMap::new(),
+                attributes: BTreeMap::new(),
                 location: None,
             };
             instructions.push(cast_instruction);
@@ -251,7 +251,7 @@ impl ImprovedConverter {
                     results: vec![shifted_ssa],
                     result_types: vec![Type::UInt(IntWidth::I32)],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 };
                 instructions.push(shift_instruction);
@@ -267,7 +267,7 @@ impl ImprovedConverter {
                     results: vec![or_ssa],
                     result_types: vec![Type::UInt(IntWidth::I32)],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 };
                 instructions.push(or_instruction);
@@ -284,7 +284,7 @@ impl ImprovedConverter {
                     results: vec![or_ssa],
                     result_types: vec![Type::UInt(IntWidth::I32)],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 };
                 instructions.push(or_instruction);
@@ -368,7 +368,7 @@ impl ImprovedConverter {
                     }],
                     result_types: vec![result_type],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 };
 
@@ -485,7 +485,7 @@ impl ImprovedConverter {
             results,
             result_types,
             regions: vec![],
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
             location: None,
         };
 
@@ -532,7 +532,7 @@ impl ImprovedConverter {
                 }
 
                 // Create attributes to store the export names
-                let mut attributes = HashMap::new();
+                let mut attributes = BTreeMap::new();
                 if let Some(returns) = obj.get("returns").and_then(|v| v.as_array())
                     && let Some(export_name) = returns.first().and_then(|v| v.as_str())
                 {

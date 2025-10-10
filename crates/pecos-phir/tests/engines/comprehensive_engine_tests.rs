@@ -21,7 +21,7 @@ use pecos_engines::quantum::StateVecEngine;
 use pecos_phir_json::phir_json_to_module;
 use pecos_phir_json::PhirJsonEngine;
 use pecos_phir::PhirEngine;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Helper function to convert PhirError to PecosError
 fn convert_phir_error(e: pecos_phir::PhirError) -> PecosError {
@@ -35,7 +35,7 @@ fn create_phir_engine_from_json(json: &str) -> Result<PhirEngine, PecosError> {
 }
 
 /// Helper function to run multiple shots and collect statistics using HybridEngine
-fn run_statistical_test(phir_engine: PhirEngine, shots: usize) -> Result<HashMap<String, usize>, PecosError> {
+fn run_statistical_test(phir_engine: PhirEngine, shots: usize) -> Result<BTreeMap<String, usize>, PecosError> {
     // Create a quantum engine with the appropriate number of qubits
     let num_qubits = phir_engine.num_qubits();
     let quantum_engine = Box::new(StateVecEngine::new(num_qubits));
@@ -55,7 +55,7 @@ fn run_statistical_test(phir_engine: PhirEngine, shots: usize) -> Result<HashMap
     }
 
     // Count occurrences of each result
-    let mut counts: HashMap<String, usize> = HashMap::new();
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
 
     for shot in &results.shots {
         // Check all possible output keys
@@ -257,7 +257,7 @@ fn test_bell_state_distribution_comparison() -> Result<(), PecosError> {
         .with_quantum_engine(quantum_engine)
         .build();
 
-    let mut json_counts: HashMap<u32, usize> = HashMap::new();
+    let mut json_counts: BTreeMap<u32, usize> = BTreeMap::new();
     for i in 0..1000 {
         let shot = json_hybrid.run_shot()?;
         if let Some(Data::U32(value)) = shot.data.get("c") {
@@ -295,7 +295,7 @@ fn test_bell_state_distribution_comparison() -> Result<(), PecosError> {
         .with_quantum_engine(quantum_engine2)
         .build();
 
-    let mut phir_counts: HashMap<u32, usize> = HashMap::new();
+    let mut phir_counts: BTreeMap<u32, usize> = BTreeMap::new();
     for i in 0..1000 {
         let shot = phir_hybrid.run_shot()?;
         if let Some(Data::U32(value)) = shot.data.get("c") {

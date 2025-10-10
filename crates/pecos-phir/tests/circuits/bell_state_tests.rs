@@ -15,7 +15,7 @@ use pecos_phir::PhirEngine;
 use pecos_phir_json::v0_1::engine::PhirJsonEngine;
 use pecos_phir_json::v0_1::ast::PHIRProgram;
 use pecos_phir_json::phir_json_to_module;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Helper function to create Bell state JSON
 fn bell_state_json() -> &'static str {
@@ -111,7 +111,7 @@ fn test_bell_state_engine_comparison() -> Result<(), PecosError> {
         .with_quantum_engine(quantum_engine)
         .build();
 
-    let mut phir_results = HashMap::new();
+    let mut phir_results = BTreeMap::new();
     for _ in 0..num_shots {
         let shot = hybrid.run_shot()?;
         if let Some(Data::U32(value)) = shot.data.get("result") {
@@ -124,7 +124,7 @@ fn test_bell_state_engine_comparison() -> Result<(), PecosError> {
     let program: PHIRProgram = serde_json::from_str(bell_state_json())?;
     let mut json_engine = PhirJsonEngine::from_program(program)?;
 
-    let mut json_results = HashMap::new();
+    let mut json_results = BTreeMap::new();
     for _ in 0..num_shots {
         let shot = json_engine.process(())?;
         let value = shot.data.get("result")
@@ -168,7 +168,7 @@ fn test_bell_state_distribution() -> Result<(), PecosError> {
         .with_quantum_engine(quantum_engine)
         .build();
 
-    let mut counts = HashMap::new();
+    let mut counts = BTreeMap::new();
     for _ in 0..num_shots {
         let shot = hybrid.run_shot()?;
         if let Some(Data::U32(value)) = shot.data.get("result") {

@@ -7,10 +7,10 @@ common functionality for operations.
 
 use crate::ops::{ControlFlowOp, Operation, QuantumOp};
 use crate::phir::{Instruction, Region};
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 /// Core operation traits
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum OpTrait {
     /// Operation has no side effects and can be eliminated if unused
     NoSideEffect,
@@ -46,21 +46,21 @@ pub enum OpTrait {
 
 /// Get traits for an operation
 #[must_use]
-pub fn get_operation_traits(op: &Operation) -> HashSet<OpTrait> {
+pub fn get_operation_traits(op: &Operation) -> BTreeSet<OpTrait> {
     match op {
         Operation::Quantum(q_op) => get_quantum_traits(q_op),
         Operation::Classical(c_op) => get_classical_traits(c_op),
         Operation::ControlFlow(cf_op) => get_control_flow_traits(cf_op),
         Operation::Memory(m_op) => get_memory_traits(m_op),
-        Operation::Custom(_) => HashSet::new(), // Custom ops specify their own traits
+        Operation::Custom(_) => BTreeSet::new(), // Custom ops specify their own traits
         Operation::Builtin(_) => {
-            let mut traits = HashSet::new();
+            let mut traits = BTreeSet::new();
             traits.insert(OpTrait::NoSideEffect);
             traits.insert(OpTrait::SymbolTable);
             traits
         }
         Operation::Parsing(_) => {
-            let mut traits = HashSet::new();
+            let mut traits = BTreeSet::new();
             traits.insert(OpTrait::NoSideEffect);
             traits
         }
@@ -69,9 +69,9 @@ pub fn get_operation_traits(op: &Operation) -> HashSet<OpTrait> {
 
 /// Get traits for quantum operations
 #[allow(clippy::match_same_arms)] // Known and unknown ops intentionally have same empty trait set
-fn get_quantum_traits(q_op: &QuantumOp) -> HashSet<OpTrait> {
+fn get_quantum_traits(q_op: &QuantumOp) -> BTreeSet<OpTrait> {
     use OpTrait::{AllocatesResources, Measurement, NoSideEffect, PureQuantum};
-    let mut traits = HashSet::new();
+    let mut traits = BTreeSet::new();
 
     match q_op {
         // Pure quantum gates
@@ -121,10 +121,10 @@ fn get_quantum_traits(q_op: &QuantumOp) -> HashSet<OpTrait> {
 }
 
 /// Get traits for classical operations
-fn get_classical_traits(c_op: &crate::ops::ClassicalOp) -> HashSet<OpTrait> {
+fn get_classical_traits(c_op: &crate::ops::ClassicalOp) -> BTreeSet<OpTrait> {
     use crate::ops::ClassicalOp;
     use OpTrait::{Associative, Commutative, ConstantLike, Idempotent, NoSideEffect, Speculatable};
-    let mut traits = HashSet::new();
+    let mut traits = BTreeSet::new();
 
     match c_op {
         // Commutative and associative operations
@@ -179,10 +179,10 @@ fn get_classical_traits(c_op: &crate::ops::ClassicalOp) -> HashSet<OpTrait> {
 }
 
 /// Get traits for control flow operations
-fn get_control_flow_traits(cf_op: &crate::ops::ControlFlowOp) -> HashSet<OpTrait> {
+fn get_control_flow_traits(cf_op: &crate::ops::ControlFlowOp) -> BTreeSet<OpTrait> {
     use crate::ops::ControlFlowOp;
     use OpTrait::{IsolatedFromAbove, RecursiveSideEffects, Terminator};
-    let mut traits = HashSet::new();
+    let mut traits = BTreeSet::new();
 
     match cf_op {
         ControlFlowOp::Return | ControlFlowOp::Branch(_) | ControlFlowOp::Jump(_) => {
@@ -200,10 +200,10 @@ fn get_control_flow_traits(cf_op: &crate::ops::ControlFlowOp) -> HashSet<OpTrait
 }
 
 /// Get traits for memory operations
-fn get_memory_traits(m_op: &crate::ops::MemoryOp) -> HashSet<OpTrait> {
+fn get_memory_traits(m_op: &crate::ops::MemoryOp) -> BTreeSet<OpTrait> {
     use crate::ops::MemoryOp;
     use OpTrait::{AllocatesResources, Speculatable};
-    let mut traits = HashSet::new();
+    let mut traits = BTreeSet::new();
 
     match m_op {
         MemoryOp::Alloc(_) => {

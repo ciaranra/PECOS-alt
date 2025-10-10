@@ -100,10 +100,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // =========================================================================
     println!("3. Advanced: Managing multiple engines:");
 
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     // Create a collection of engines (useful for benchmarking, A/B testing, etc.)
-    let mut engines: HashMap<&str, DynamicEngineBuilder> = HashMap::new();
+    let mut engines: BTreeMap<&str, DynamicEngineBuilder> = BTreeMap::new();
 
     // Add different engine configurations
     engines.insert("qasm_basic", DynamicEngineBuilder::new(

@@ -12,7 +12,7 @@
 
 use log::trace;
 use pecos_qis_ffi_types::{OperationCollector, QuantumOp};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 /// Result type for runtime operations
 pub type Result<T> = std::result::Result<T, RuntimeError>;
@@ -111,7 +111,7 @@ pub struct Shot {
     pub registers: BTreeMap<String, Vec<bool>>,
 
     /// Additional metadata - `HashMap` is OK here since it's just metadata
-    pub metadata: HashMap<String, String>,
+    pub metadata: BTreeMap<String, String>,
 }
 
 /// Trait for classical interpreters that process QIS programs
@@ -183,7 +183,7 @@ pub trait QisRuntime: Send + Sync + dyn_clone::DynClone {
         Ok(Shot {
             measurements: state.measurements.clone(),
             registers: state.registers.clone(),
-            metadata: HashMap::new(),
+            metadata: BTreeMap::new(),
         })
     }
 

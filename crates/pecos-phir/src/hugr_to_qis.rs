@@ -15,7 +15,7 @@ The conversion maps high-level quantum gates to hardware-native gates:
 use crate::error::Result;
 use crate::ops::{CustomOp, Operation};
 use crate::phir::{Block, Instruction, Module, Region, SSAValue};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::f64::consts::PI;
 
 /// Convert a HUGR module to use QIS operations
@@ -31,7 +31,7 @@ pub fn convert_hugr_to_qis(module: &mut Module) -> Result<()> {
 struct HugrToQisConverter {
     /// Map from HUGR qubit values to QIS qubit IDs
     #[allow(dead_code)]
-    qubit_map: HashMap<SSAValue, SSAValue>,
+    qubit_map: BTreeMap<SSAValue, SSAValue>,
     /// Counter for generating fresh SSA values
     next_value_id: u32,
 }
@@ -39,7 +39,7 @@ struct HugrToQisConverter {
 impl HugrToQisConverter {
     fn new() -> Self {
         Self {
-            qubit_map: HashMap::new(),
+            qubit_map: BTreeMap::new(),
             next_value_id: 1000, // Start from a high number to avoid conflicts
         }
     }
@@ -97,28 +97,28 @@ impl HugrToQisConverter {
         match op.name() {
             "qalloc" => {
                 // HUGR qalloc → QIS qalloc
-                let qis_op = CustomOp::new("qis", "qalloc", vec![], HashMap::new());
+                let qis_op = CustomOp::new("qis", "qalloc", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: results.to_vec(),
                     operation: Operation::Custom(qis_op),
                     operands: vec![],
                     result_types: vec![crate::types::Type::Qubit],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
             }
 
             "qfree" => {
                 // HUGR qfree → QIS qfree
-                let qis_op = CustomOp::new("qis", "qfree", vec![], HashMap::new());
+                let qis_op = CustomOp::new("qis", "qfree", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(qis_op),
                     operands: operands.to_vec(),
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
             }
@@ -128,19 +128,19 @@ impl HugrToQisConverter {
                 let qubit = &operands[0];
 
                 // RZ(-π/2)
-                let rz1 = CustomOp::new("qis", "rz", vec![], HashMap::new());
+                let rz1 = CustomOp::new("qis", "rz", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rz1),
                     operands: vec![*qubit, self.make_float_constant(-PI / 2.0)],
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
 
                 // RXY(π/2, 0)
-                let rxy = CustomOp::new("qis", "rxy", vec![], HashMap::new());
+                let rxy = CustomOp::new("qis", "rxy", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rxy),
@@ -151,19 +151,19 @@ impl HugrToQisConverter {
                     ],
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
 
                 // RZ(-π/2)
-                let rz2 = CustomOp::new("qis", "rz", vec![], HashMap::new());
+                let rz2 = CustomOp::new("qis", "rz", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rz2),
                     operands: vec![*qubit, self.make_float_constant(-PI / 2.0)],
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
             }
@@ -174,7 +174,7 @@ impl HugrToQisConverter {
                 let target = &operands[1];
 
                 // RXY(π/2, 0) on target
-                let rxy1 = CustomOp::new("qis", "rxy", vec![], HashMap::new());
+                let rxy1 = CustomOp::new("qis", "rxy", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rxy1),
@@ -185,36 +185,36 @@ impl HugrToQisConverter {
                     ],
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
 
                 // RZZ(π/2) on control and target
-                let rzz = CustomOp::new("qis", "rzz", vec![], HashMap::new());
+                let rzz = CustomOp::new("qis", "rzz", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rzz),
                     operands: vec![*control, *target, self.make_float_constant(PI / 2.0)],
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
 
                 // RZ(-π/2) on control
-                let rz = CustomOp::new("qis", "rz", vec![], HashMap::new());
+                let rz = CustomOp::new("qis", "rz", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rz),
                     operands: vec![*control, self.make_float_constant(-PI / 2.0)],
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
 
                 // RXY(-π/2, 0) on target
-                let rxy2 = CustomOp::new("qis", "rxy", vec![], HashMap::new());
+                let rxy2 = CustomOp::new("qis", "rxy", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rxy2),
@@ -225,7 +225,7 @@ impl HugrToQisConverter {
                     ],
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
             }
@@ -235,14 +235,14 @@ impl HugrToQisConverter {
                 let qubit = &operands[0];
                 let angle = &operands[1];
 
-                let rxy = CustomOp::new("qis", "rxy", vec![], HashMap::new());
+                let rxy = CustomOp::new("qis", "rxy", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rxy),
                     operands: vec![*qubit, *angle, self.make_float_constant(0.0)],
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
             }
@@ -252,14 +252,14 @@ impl HugrToQisConverter {
                 let qubit = &operands[0];
                 let angle = &operands[1];
 
-                let rxy = CustomOp::new("qis", "rxy", vec![], HashMap::new());
+                let rxy = CustomOp::new("qis", "rxy", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(rxy),
                     operands: vec![*qubit, *angle, self.make_float_constant(PI / 2.0)],
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
             }
@@ -269,14 +269,14 @@ impl HugrToQisConverter {
                 let qubit = &operands[0];
                 let angle = &operands[1];
 
-                let qis_rz = CustomOp::new("qis", "rz", vec![], HashMap::new());
+                let qis_rz = CustomOp::new("qis", "rz", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![],
                     operation: Operation::Custom(qis_rz),
                     operands: vec![*qubit, *angle],
                     result_types: vec![],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
             }
@@ -287,26 +287,26 @@ impl HugrToQisConverter {
 
                 // Create a future for the measurement
                 let future = self.fresh_value();
-                let lazy_measure = CustomOp::new("qis", "lazy_measure", vec![], HashMap::new());
+                let lazy_measure = CustomOp::new("qis", "lazy_measure", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: vec![future],
                     operation: Operation::Custom(lazy_measure),
                     operands: vec![*qubit],
                     result_types: vec![crate::types::Type::Future],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
 
                 // Read the future to get the result
-                let read_future = CustomOp::new("qis", "read_future", vec![], HashMap::new());
+                let read_future = CustomOp::new("qis", "read_future", vec![], BTreeMap::new());
                 instructions.push(Instruction {
                     results: results.to_vec(),
                     operation: Operation::Custom(read_future),
                     operands: vec![future],
                     result_types: vec![crate::types::Type::Bool],
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
             }
@@ -320,7 +320,7 @@ impl HugrToQisConverter {
                     operands: operands.to_vec(),
                     result_types: vec![], // Unknown types for unhandled ops
                     regions: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     location: None,
                 });
             }
@@ -348,26 +348,26 @@ mod tests {
         // Create a module with a Hadamard gate
         let mut module = Module {
             name: "test".to_string(),
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
             body: Region {
                 kind: crate::region_kinds::RegionKind::Graph,
-                attributes: HashMap::new(),
+                attributes: BTreeMap::new(),
                 blocks: vec![Block {
                     label: None,
                     arguments: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     operations: vec![Instruction {
                         results: vec![],
                         operation: Operation::Custom(CustomOp::new(
                             "hugr",
                             "h",
                             vec![],
-                            HashMap::new(),
+                            BTreeMap::new(),
                         )),
                         operands: vec![SSAValue::new(0)], // q0
                         result_types: vec![],
                         regions: vec![],
-                        attributes: HashMap::new(),
+                        attributes: BTreeMap::new(),
                         location: None,
                     }],
                     terminator: None,
@@ -396,26 +396,26 @@ mod tests {
         // Create a module with a CNOT gate
         let mut module = Module {
             name: "test".to_string(),
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
             body: Region {
                 kind: crate::region_kinds::RegionKind::Graph,
-                attributes: HashMap::new(),
+                attributes: BTreeMap::new(),
                 blocks: vec![Block {
                     label: None,
                     arguments: vec![],
-                    attributes: HashMap::new(),
+                    attributes: BTreeMap::new(),
                     operations: vec![Instruction {
                         results: vec![],
                         operation: Operation::Custom(CustomOp::new(
                             "hugr",
                             "cx",
                             vec![],
-                            HashMap::new(),
+                            BTreeMap::new(),
                         )),
                         operands: vec![SSAValue::new(0), SSAValue::new(1)], // q0, q1
                         result_types: vec![],
                         regions: vec![],
-                        attributes: HashMap::new(),
+                        attributes: BTreeMap::new(),
                         location: None,
                     }],
                     terminator: None,

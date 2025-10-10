@@ -15,7 +15,7 @@
 
 use pecos::prelude::*;
 use pecos_engines::sim_builder;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
 
 // Simple deterministic circuit that applies various gates and produces
@@ -73,8 +73,8 @@ const SIMPLE_TEST_PHIR: &str = r#"{
 }"#;
 
 // Helper function to count occurrences of each measurement outcome
-fn count_outcomes(results: &[u32]) -> HashMap<u32, usize> {
-    let mut counts = HashMap::new();
+fn count_outcomes(results: &[u32]) -> BTreeMap<u32, usize> {
+    let mut counts = BTreeMap::new();
     for &result in results {
         *counts.entry(result).or_insert(0) += 1;
     }

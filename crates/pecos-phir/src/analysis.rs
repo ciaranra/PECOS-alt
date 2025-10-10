@@ -8,17 +8,17 @@ and other dataflow analyses that are essential for optimizations.
 use crate::ops::SSAValue;
 use crate::phir::{BlockRef, Function, Region};
 use crate::traits::OperationInterface;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Dominance information for a function
 #[allow(dead_code)]
 pub struct DominanceInfo {
     /// Maps each block to its immediate dominator
-    idom: HashMap<BlockRef, BlockRef>,
+    idom: BTreeMap<BlockRef, BlockRef>,
     /// Maps each block to the set of blocks it dominates
-    dominates: HashMap<BlockRef, HashSet<BlockRef>>,
+    dominates: BTreeMap<BlockRef, BTreeSet<BlockRef>>,
     /// Dominance tree children
-    dom_tree: HashMap<BlockRef, Vec<BlockRef>>,
+    dom_tree: BTreeMap<BlockRef, Vec<BlockRef>>,
 }
 
 impl DominanceInfo {
@@ -26,16 +26,16 @@ impl DominanceInfo {
     #[must_use]
     pub fn compute(region: &Region) -> Self {
         let mut info = Self {
-            idom: HashMap::new(),
-            dominates: HashMap::new(),
-            dom_tree: HashMap::new(),
+            idom: BTreeMap::new(),
+            dominates: BTreeMap::new(),
+            dom_tree: BTreeMap::new(),
         };
 
         // TODO: Implement proper dominance algorithm
         // For now, just mark entry block as dominating all others
         if let Some(_entry) = region.blocks.first() {
             let entry_ref = BlockRef::Index(0);
-            info.dominates.insert(entry_ref.clone(), HashSet::new());
+            info.dominates.insert(entry_ref.clone(), BTreeSet::new());
 
             for (idx, _) in region.blocks.iter().enumerate().skip(1) {
                 let block_ref = BlockRef::Index(idx);
@@ -68,17 +68,17 @@ impl DominanceInfo {
 /// Use-def chain information
 pub struct UseDefInfo {
     /// Maps SSA values to their defining instruction
-    definitions: HashMap<SSAValue, InstructionRef>,
+    definitions: BTreeMap<SSAValue, InstructionRef>,
     /// Maps SSA values to all instructions that use them
-    uses: HashMap<SSAValue, Vec<InstructionRef>>,
+    uses: BTreeMap<SSAValue, Vec<InstructionRef>>,
     /// Maps instructions to the values they define
-    inst_defs: HashMap<InstructionRef, Vec<SSAValue>>,
+    inst_defs: BTreeMap<InstructionRef, Vec<SSAValue>>,
     /// Maps instructions to the values they use
-    inst_uses: HashMap<InstructionRef, Vec<SSAValue>>,
+    inst_uses: BTreeMap<InstructionRef, Vec<SSAValue>>,
 }
 
 /// Reference to an instruction within a function
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct InstructionRef {
     pub region_idx: usize,
     pub block_idx: usize,
@@ -90,10 +90,10 @@ impl UseDefInfo {
     #[must_use]
     pub fn compute(function: &Function) -> Self {
         let mut info = Self {
-            definitions: HashMap::new(),
-            uses: HashMap::new(),
-            inst_defs: HashMap::new(),
-            inst_uses: HashMap::new(),
+            definitions: BTreeMap::new(),
+            uses: BTreeMap::new(),
+            inst_defs: BTreeMap::new(),
+            inst_uses: BTreeMap::new(),
         };
 
         // Scan all instructions
@@ -179,9 +179,9 @@ impl UseDefInfo {
 /// Liveness analysis information
 pub struct LivenessInfo {
     /// Live-in sets for each block
-    live_in: HashMap<BlockRef, HashSet<SSAValue>>,
+    live_in: BTreeMap<BlockRef, BTreeSet<SSAValue>>,
     /// Live-out sets for each block
-    live_out: HashMap<BlockRef, HashSet<SSAValue>>,
+    live_out: BTreeMap<BlockRef, BTreeSet<SSAValue>>,
 }
 
 impl LivenessInfo {
@@ -189,15 +189,15 @@ impl LivenessInfo {
     #[must_use]
     pub fn compute(region: &Region, _use_def: &UseDefInfo) -> Self {
         let mut info = Self {
-            live_in: HashMap::new(),
-            live_out: HashMap::new(),
+            live_in: BTreeMap::new(),
+            live_out: BTreeMap::new(),
         };
 
         // Initialize empty sets
         for (idx, _) in region.blocks.iter().enumerate() {
             let block_ref = BlockRef::Index(idx);
-            info.live_in.insert(block_ref.clone(), HashSet::new());
-            info.live_out.insert(block_ref.clone(), HashSet::new());
+            info.live_in.insert(block_ref.clone(), BTreeSet::new());
+            info.live_out.insert(block_ref.clone(), BTreeSet::new());
         }
 
         // TODO: Implement proper liveness analysis
@@ -226,7 +226,7 @@ impl LivenessInfo {
 /// Dead code analysis
 pub struct DeadCodeInfo {
     /// Set of instructions that are dead (can be eliminated)
-    dead_instructions: HashSet<InstructionRef>,
+    dead_instructions: BTreeSet<InstructionRef>,
 }
 
 impl DeadCodeInfo {
@@ -234,7 +234,7 @@ impl DeadCodeInfo {
     #[must_use]
     pub fn compute(function: &Function, use_def: &UseDefInfo) -> Self {
         let mut info = Self {
-            dead_instructions: HashSet::new(),
+            dead_instructions: BTreeSet::new(),
         };
 
         // Find instructions whose results are never used

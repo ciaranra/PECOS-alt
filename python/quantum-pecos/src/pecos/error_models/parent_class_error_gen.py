@@ -406,8 +406,8 @@ class Generator:
         ) -> None:
             """Apply sampled multi-qubit error after gate execution."""
             # Choose an error symbol or tuple of symbols:
-            indx = np.random.choice(len(self.data))
-            error_symbols = self.data[indx]
+            index = np.random.choice(len(self.data))
+            error_symbols = self.data[index]
 
             if isinstance(error_symbols, tuple | np.ndarray) and len(error_symbols) > 1:
                 for sym, loc in zip(error_symbols, location, strict=False):
@@ -435,8 +435,8 @@ class Generator:
             _error_params: dict[str, Any],
         ) -> None:
             """Apply sampled multi-qubit error before gate execution."""
-            indx = np.random.choice(len(self.data))
-            error_symbols = self.data[indx]
+            index = np.random.choice(len(self.data))
+            error_symbols = self.data[index]
 
             if isinstance(error_symbols, np.ndarray) and len(error_symbols) > 1:
                 for sym, loc in zip(error_symbols, location, strict=False):

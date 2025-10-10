@@ -21,7 +21,7 @@ use crate::ops::Operation;
 pub use crate::ops::SSAValue;
 use crate::types::Type;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// PHIR Module - convenience wrapper around `ModuleOp`
 ///
@@ -137,7 +137,7 @@ pub struct BlockArgument {
 }
 
 /// Block reference
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum BlockRef {
     /// Reference by index within current region
     Index(usize),
@@ -179,7 +179,7 @@ pub enum ConstantValue {
 }
 
 /// Attributes (compile-time metadata)
-pub type Attributes = HashMap<String, AttributeValue>;
+pub type Attributes = BTreeMap<String, AttributeValue>;
 
 /// Attribute values
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -189,7 +189,7 @@ pub enum AttributeValue {
     Float(f64),
     String(String),
     Array(Vec<AttributeValue>),
-    Dict(HashMap<String, AttributeValue>),
+    Dict(BTreeMap<String, AttributeValue>),
 }
 
 // Module and Function implementations are now in builtin_ops.rs
@@ -202,7 +202,7 @@ impl Region {
         Self {
             blocks: Vec::new(),
             kind,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         }
     }
 
@@ -262,7 +262,7 @@ impl Block {
             arguments: Vec::new(),
             operations: Vec::new(),
             terminator: None,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
         }
     }
 
@@ -352,7 +352,7 @@ impl Instruction {
             results,
             result_types,
             regions: Vec::new(),
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
             location: None,
         }
     }
@@ -372,7 +372,7 @@ impl Instruction {
             results,
             result_types,
             regions,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
             location: None,
         }
     }

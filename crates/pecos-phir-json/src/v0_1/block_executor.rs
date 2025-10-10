@@ -6,7 +6,7 @@ use crate::v0_1::operations::OperationProcessor;
 use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::builder::ByteMessageBuilder;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Block executor for processing and executing blocks of operations in PHIR programs.
 /// The `BlockExecutor` manages:
@@ -320,7 +320,7 @@ impl BlockExecutor {
         }
 
         // Verify no qubit is used more than once
-        let mut used_qubits = HashSet::new();
+        let mut used_qubits = BTreeSet::new();
 
         for op in operations {
             if let Operation::QuantumOp { args, .. } = op {
@@ -462,19 +462,19 @@ impl BlockExecutor {
 
     /// Gets the measurement results from the processor
     #[must_use]
-    pub fn get_measurement_results(&self) -> HashMap<String, u32> {
+    pub fn get_measurement_results(&self) -> BTreeMap<String, u32> {
         self.processor.get_measurement_results()
     }
 
     /// Process export mappings to determine values to return from simulations
     #[must_use]
-    pub fn process_export_mappings(&self) -> HashMap<String, u32> {
+    pub fn process_export_mappings(&self) -> BTreeMap<String, u32> {
         self.processor.process_export_mappings()
     }
 
     /// Get mapped results for output (alias for `process_export_mappings`)
     #[must_use]
-    pub fn get_mapped_results(&self) -> HashMap<String, u32> {
+    pub fn get_mapped_results(&self) -> BTreeMap<String, u32> {
         self.processor.process_export_mappings()
     }
 
@@ -485,7 +485,7 @@ impl BlockExecutor {
     pub fn execute_program(
         &mut self,
         program: &[Operation],
-    ) -> Result<HashMap<String, u32>, PecosError> {
+    ) -> Result<BTreeMap<String, u32>, PecosError> {
         debug!("Executing PHIR program with {} operations", program.len());
 
         // Reset state before execution

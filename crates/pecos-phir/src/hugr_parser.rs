@@ -15,7 +15,7 @@ use crate::ops::{Operation, QuantumOp};
 use crate::phir::{Instruction, SSAValue, Terminator};
 use crate::types::{FunctionType, Type};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 #[cfg(feature = "hugr")]
 use tket::hugr::{Hugr, HugrView, Node, NodeIndex, ops::OpType};
@@ -181,7 +181,7 @@ fn convert_function_flat(
     let function_nodes = find_function_nodes(hugr, func_node);
 
     // Extract operations and build SSA values
-    let mut node_values: HashMap<Node, Vec<SSAValue>> = HashMap::new();
+    let mut node_values: BTreeMap<Node, Vec<SSAValue>> = BTreeMap::new();
     let mut next_ssa_id = 0;
     let mut instructions = Vec::new();
 
@@ -229,7 +229,7 @@ fn convert_function_flat(
 /// Find all nodes belonging to a function using BFS
 fn find_function_nodes(hugr: &Hugr, func_node: Node) -> Vec<Node> {
     let mut nodes = Vec::new();
-    let mut visited = HashSet::new();
+    let mut visited = BTreeSet::new();
     let mut queue = VecDeque::new();
 
     // Start with function's children
@@ -259,7 +259,7 @@ fn find_function_nodes(hugr: &Hugr, func_node: Node) -> Vec<Node> {
 fn convert_node_to_instruction_flat(
     hugr: &Hugr,
     node: Node,
-    node_values: &HashMap<Node, Vec<SSAValue>>,
+    node_values: &BTreeMap<Node, Vec<SSAValue>>,
     next_ssa_id: &mut u32,
 ) -> Option<Instruction> {
     let op = hugr.get_optype(node);
@@ -342,7 +342,7 @@ fn convert_node_to_instruction_flat(
 fn convert_extension_op(
     ext_op: &tket::hugr::ops::custom::ExtensionOp,
     _node: Node,
-    _node_values: &HashMap<Node, Vec<SSAValue>>,
+    _node_values: &BTreeMap<Node, Vec<SSAValue>>,
     next_ssa_id: &mut u32,
     _hugr: &Hugr,
 ) -> Option<Instruction> {

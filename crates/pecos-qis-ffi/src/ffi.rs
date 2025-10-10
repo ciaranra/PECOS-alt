@@ -599,10 +599,10 @@ pub unsafe extern "C" fn ___lazy_measure(qubit: i64) -> i64 {
 /// Read a future boolean value (Guppy/HUGR-LLVM style)
 ///
 /// This function retrieves a measurement result from a future/deferred measurement.
-/// The future_id is the result ID returned by `___lazy_measure`.
+/// The `future_id` is the result ID returned by `___lazy_measure`.
 ///
 /// # Safety
-/// This function is safe to call from C/LLVM code. The future_id parameter must be a valid
+/// This function is safe to call from C/LLVM code. The `future_id` parameter must be a valid
 /// result ID previously returned by `___lazy_measure`. Invalid IDs will cause a panic.
 ///
 /// # Returns
@@ -623,7 +623,7 @@ pub unsafe extern "C" fn ___read_future_bool(future_id: i64) -> bool {
 /// In the minimal interface, this is a no-op since we don't do reference counting.
 ///
 /// # Safety
-/// This function is safe to call from C/LLVM code. The future_id parameter is ignored.
+/// This function is safe to call from C/LLVM code. The `future_id` parameter is ignored.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___inc_future_refcount(_future_id: i64) {
     // No-op in the minimal interface - we don't do reference counting
@@ -636,7 +636,7 @@ pub unsafe extern "C" fn ___inc_future_refcount(_future_id: i64) {
 /// In the minimal interface, this is a no-op since we don't do reference counting.
 ///
 /// # Safety
-/// This function is safe to call from C/LLVM code. The future_id parameter is ignored.
+/// This function is safe to call from C/LLVM code. The `future_id` parameter is ignored.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ___dec_future_refcount(_future_id: i64) {
     // No-op in the minimal interface - we don't do reference counting
@@ -810,14 +810,9 @@ pub unsafe extern "C" fn pecos_qis_set_measurements(pairs_ptr: *const (usize, bo
     }
 
     let pairs = unsafe { std::slice::from_raw_parts(pairs_ptr, count) };
-    let mut measurements = std::collections::HashMap::new();
-
-    for &(result_id, value) in pairs {
-        measurements.insert(result_id, value);
-    }
 
     with_interface(|interface| {
-        interface.set_measurement_results(measurements);
+        interface.set_measurement_results(pairs.iter().copied());
     });
 }
 

@@ -9,7 +9,7 @@ This module defines the complete type system used throughout PECOS PHIR, includi
 - Extension types for custom dialects
 */
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Core type system used by PHIR
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -162,9 +162,9 @@ impl From<OrderedFloat> for f64 {
 /// Type registry for managing custom types from dialects
 pub struct TypeRegistry {
     /// Registered custom types
-    custom_types: HashMap<String, CustomTypeDefinition>,
+    custom_types: BTreeMap<String, CustomTypeDefinition>,
     /// Type aliases
-    aliases: HashMap<String, Type>,
+    aliases: BTreeMap<String, Type>,
 }
 
 /// Definition of a custom type
@@ -393,8 +393,8 @@ impl TypeRegistry {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            custom_types: HashMap::new(),
-            aliases: HashMap::new(),
+            custom_types: BTreeMap::new(),
+            aliases: BTreeMap::new(),
         }
     }
 

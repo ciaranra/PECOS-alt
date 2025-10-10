@@ -120,7 +120,7 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
         eprintln!("[SIM.RS] Calling try_program() NOW...");
         let engine_builder = builder.try_program(qis_prog.inner.clone())
             .map_err(|e: PecosError| {
-                eprintln!("[SIM.RS] try_program() FAILED: {}", e);
+                eprintln!("[SIM.RS] try_program() FAILED: {e}");
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
                     "[FROM SIM.RS] Failed to load QIS program with Selene runtime and Helios interface: {e}"
                 ))

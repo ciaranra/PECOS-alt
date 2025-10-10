@@ -5,7 +5,7 @@
 //!
 //! The actual FFI implementation (with `#[no_mangle]` functions) is in `pecos-qis-ffi`.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 mod operations;
 
@@ -21,7 +21,7 @@ pub struct OperationCollector {
     pub operations: Vec<Operation>,
 
     /// Mapping of measurement result IDs to their values (when known)
-    pub measurements: HashMap<usize, Option<bool>>,
+    pub measurements: BTreeMap<usize, Option<bool>>,
 
     /// Allocated qubit IDs
     pub allocated_qubits: Vec<usize>,
@@ -45,7 +45,7 @@ impl OperationCollector {
     pub fn new() -> Self {
         Self {
             operations: Vec::new(),
-            measurements: HashMap::new(),
+            measurements: BTreeMap::new(),
             allocated_qubits: Vec::new(),
             allocated_results: Vec::new(),
             next_qubit_id: 0,
@@ -88,7 +88,7 @@ impl OperationCollector {
 
     /// Pre-populate measurement results (for conditional execution)
     /// This allows setting measurement outcomes before program execution
-    pub fn set_measurement_results(&mut self, results: HashMap<usize, bool>) {
+    pub fn set_measurement_results(&mut self, results: impl IntoIterator<Item = (usize, bool)>) {
         for (result_id, value) in results {
             self.measurements.insert(result_id, Some(value));
         }

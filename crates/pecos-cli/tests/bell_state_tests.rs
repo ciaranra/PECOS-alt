@@ -16,7 +16,7 @@
 /// quantum entanglement, superposition, and noise models.
 use assert_cmd::prelude::*;
 use pecos::prelude::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -116,8 +116,8 @@ fn run_pecos(config: PecosTestConfig) -> Result<String, Box<dyn std::error::Erro
 ///
 /// Also handles output that may contain non-JSON text before the JSON
 fn get_values(json_output: &str) -> Vec<String> {
-    let mut register_values: std::collections::HashMap<String, Vec<String>> =
-        std::collections::HashMap::new();
+    let mut register_values: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
 
     // Extract JSON part from output (may have other text like "Quantum runtime initialized")
     let json_part = json_output
@@ -130,10 +130,12 @@ fn get_values(json_output: &str) -> Vec<String> {
         && let Some(obj) = json.as_object()
     {
         // Group registers by their base name (without numeric suffix)
-        let mut register_groups: std::collections::HashMap<String, Vec<(String, usize, Vec<i64>)>> =
-            std::collections::HashMap::new();
-        let mut single_registers: std::collections::HashMap<String, Vec<String>> =
-            std::collections::HashMap::new();
+        let mut register_groups: std::collections::BTreeMap<
+            String,
+            Vec<(String, usize, Vec<i64>)>,
+        > = std::collections::BTreeMap::new();
+        let mut single_registers: std::collections::BTreeMap<String, Vec<String>> =
+            std::collections::BTreeMap::new();
 
         for (reg_name, values) in obj {
             if let Some(arr) = values.as_array() {
@@ -257,7 +259,7 @@ fn test_perfect_bell_state_distribution() -> Result<(), Box<dyn std::error::Erro
     }
 
     let outcomes = values[0].split(", ").collect::<Vec<_>>();
-    let mut counts = HashMap::new();
+    let mut counts = BTreeMap::new();
 
     for outcome in &outcomes {
         *counts.entry(*outcome).or_insert(0) += 1;
@@ -446,7 +448,7 @@ fn analyze_noisy_bell_state(
     }
 
     let outcomes = values[0].split(", ").collect::<Vec<_>>();
-    let mut counts = HashMap::new();
+    let mut counts = BTreeMap::new();
 
     for outcome in &outcomes {
         *counts.entry(*outcome).or_insert(0) += 1;

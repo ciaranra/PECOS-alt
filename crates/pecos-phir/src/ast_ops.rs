@@ -73,7 +73,7 @@ macro_rules! def_ast_op {
 
 /// Common attributes storage
 #[derive(Debug, Clone, Default)]
-pub struct Attributes(std::collections::HashMap<String, Attribute>);
+pub struct Attributes(std::collections::BTreeMap<String, Attribute>);
 
 impl Attributes {
     pub fn new() -> Self {

@@ -20,7 +20,7 @@ use crate::parsing_ops::{ParsingOp, UnresolvedCall, UnresolvedRef, ForLoop, IfEl
 use crate::types::{Type, FunctionType, IntWidth, FloatWidth};
 use crate::region_kinds::RegionKind;
 use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// PHIR-RON format version
 pub const PHIR_RON_VERSION: &str = "0.2.0";
@@ -31,7 +31,7 @@ pub struct PhirRon {
     pub format: String,
     pub version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, AttributeValue>>,
+    pub metadata: Option<BTreeMap<String, AttributeValue>>,
     pub module: ModuleOp,
 }
 
@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_ron_attributes() {
-        let mut attrs = HashMap::new();
+        let mut attrs = BTreeMap::new();
         attrs.insert("qec.code".to_string(), AttributeValue::String("steane".to_string()));
         attrs.insert("qec.distance".to_string(), AttributeValue::Int(7));
         attrs.insert("verified".to_string(), AttributeValue::Bool(true));

@@ -44,8 +44,9 @@ pub fn setup_cli_engine(
 
                 // Use Selene runtime and Helios interface (default and only option)
                 debug!("Using Selene runtime and Helios interface for QIR engine");
-                let selene_runtime = selene_simple_runtime()
-                    .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                let selene_runtime = selene_simple_runtime().map_err(|e| {
+                    PecosError::Generic(format!("Failed to load Selene runtime: {e}"))
+                })?;
                 let helios_builder = helios_interface_builder();
                 let engine = qis_engine()
                     .runtime(selene_runtime)
@@ -59,7 +60,8 @@ pub fn setup_cli_engine(
             {
                 Err(PecosError::Input(
                     "Selene support is required for QIR programs but not compiled in.\n\
-                     Please rebuild with --features selene".to_string(),
+                     Please rebuild with --features selene"
+                        .to_string(),
                 ))
             }
             #[cfg(not(feature = "llvm"))]
@@ -103,8 +105,9 @@ pub fn setup_cli_engine_builder(
 
                 // Use Selene runtime and Helios interface (default and only option)
                 debug!("Using Selene runtime and Helios interface for QIR engine builder");
-                let selene_runtime = selene_simple_runtime()
-                    .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                let selene_runtime = selene_simple_runtime().map_err(|e| {
+                    PecosError::Generic(format!("Failed to load Selene runtime: {e}"))
+                })?;
                 let helios_builder = helios_interface_builder();
                 let engine_builder = qis_engine()
                     .runtime(selene_runtime)
@@ -117,7 +120,8 @@ pub fn setup_cli_engine_builder(
             {
                 Err(PecosError::Input(
                     "Selene support is required for QIR programs but not compiled in.\n\
-                     Please rebuild with --features selene".to_string(),
+                     Please rebuild with --features selene"
+                        .to_string(),
                 ))
             }
             #[cfg(not(feature = "llvm"))]

@@ -13,7 +13,7 @@
 /// ensure that the LLVM toolchain is properly installed.
 use assert_cmd::prelude::*;
 use pecos::prelude::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Once;
@@ -128,15 +128,15 @@ fn run_pecos(
 /// - Combined format: {"c": [3, 0, ...]} or any single register
 /// - Individual indexed format: {"m0": [0, 1], "m1": [0, 1]} or any indexed registers
 fn get_values(json_output: &str) -> Vec<String> {
-    let mut register_values: HashMap<String, Vec<String>> = HashMap::new();
+    let mut register_values: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     // Parse the JSON - expecting an object with register names as keys
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output)
         && let Some(obj) = json.as_object()
     {
         // Group registers by their base name (without numeric suffix)
-        let mut register_groups: HashMap<String, Vec<(String, usize, Vec<i64>)>> = HashMap::new();
-        let mut single_registers: HashMap<String, Vec<String>> = HashMap::new();
+        let mut register_groups: BTreeMap<String, Vec<(String, usize, Vec<i64>)>> = BTreeMap::new();
+        let mut single_registers: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
         for (reg_name, values) in obj {
             if let Some(arr) = values.as_array() {
@@ -253,7 +253,7 @@ fn test_qis_bell_state_distribution() -> Result<(), Box<dyn std::error::Error>> 
     }
 
     let outcomes = values[0].split(", ").collect::<Vec<_>>();
-    let mut counts = HashMap::new();
+    let mut counts = BTreeMap::new();
 
     for outcome in &outcomes {
         *counts.entry(*outcome).or_insert(0) += 1;

@@ -10,7 +10,7 @@ use pecos_engines::quantum::StateVecEngine;
 use pecos_engines::shot_results::Data;
 use pecos_phir_json::phir_json_to_module;
 use pecos_phir::PhirEngine;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[test]
 fn test_bell_state_with_improved_converter() -> Result<(), PecosError> {
@@ -45,7 +45,7 @@ fn test_bell_state_with_improved_converter() -> Result<(), PecosError> {
         .build();
 
     // Run multiple shots to verify Bell state behavior
-    let mut counts: HashMap<u32, usize> = HashMap::new();
+    let mut counts: BTreeMap<u32, usize> = BTreeMap::new();
 
     for i in 0..1 {  // Changed to just 1 shot for debugging
         eprintln!("=== Running shot {} ===", i);

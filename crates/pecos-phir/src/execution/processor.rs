@@ -12,7 +12,7 @@ use crate::error::{PhirError, Result};
 use crate::ops::{ClassicalOp, Operation, QuantumOp};
 use crate::phir::{Block, Module};
 use pecos_engines::byte_message::builder::ByteMessageBuilder;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// PHIR operation processor - converts PHIR operations to quantum instructions
 #[derive(Debug, Clone)]
@@ -28,13 +28,13 @@ pub struct PhirProcessor {
     /// Measurement index to SSA ID mapping
     pub measurement_mappings: Vec<u32>, // SSA IDs that will receive measurement results
     /// Export mappings from Result operations (source SSA ID to export name)
-    pub export_mappings: HashMap<u32, String>,
+    pub export_mappings: BTreeMap<u32, String>,
     /// SSA value storage (SSA ID to typed value)
-    pub ssa_values: HashMap<u32, TypedValue>,
+    pub ssa_values: BTreeMap<u32, TypedValue>,
     /// Variable name to SSA ID mapping
-    pub variable_ssa_map: HashMap<String, u32>,
+    pub variable_ssa_map: BTreeMap<String, u32>,
     /// Final export values that persist across reset (export name to value)
-    pub final_exports: HashMap<String, TypedValue>,
+    pub final_exports: BTreeMap<String, TypedValue>,
     /// Number of qubits in the program
     qubit_count: usize,
 }
@@ -51,10 +51,10 @@ impl PhirProcessor {
             current_block: 0,
             current_region: 0,
             measurement_mappings: Vec::new(),
-            export_mappings: HashMap::new(),
-            ssa_values: HashMap::new(),
-            variable_ssa_map: HashMap::new(),
-            final_exports: HashMap::new(),
+            export_mappings: BTreeMap::new(),
+            ssa_values: BTreeMap::new(),
+            variable_ssa_map: BTreeMap::new(),
+            final_exports: BTreeMap::new(),
             qubit_count: 0,
         }
     }
@@ -415,7 +415,7 @@ impl PhirProcessor {
         // Process measurement outcomes
 
         // Create a map to track which base variable each measurement SSA ID belongs to
-        let mut measurement_to_base: HashMap<u32, (String, u32, usize)> = HashMap::new();
+        let mut measurement_to_base: BTreeMap<u32, (String, u32, usize)> = BTreeMap::new();
 
         // For each variable, check if any measurement SSA IDs are offsets of it
         for (var_name, &base_ssa_id) in &self.variable_ssa_map {
@@ -450,7 +450,7 @@ impl PhirProcessor {
         }
 
         // Now combine measurement results for integer variables
-        let mut combined_values: HashMap<u32, u32> = HashMap::new();
+        let mut combined_values: BTreeMap<u32, u32> = BTreeMap::new();
 
         // Process each measurement and accumulate bits for its base variable
         for (i, &outcome) in outcomes.iter().enumerate() {
@@ -691,14 +691,14 @@ impl PhirProcessor {
 
     /// Get all results for export
     #[must_use]
-    pub fn get_results(&self) -> HashMap<String, TypedValue> {
+    pub fn get_results(&self) -> BTreeMap<String, TypedValue> {
         self.environment.get_all_variables()
     }
 
     /// Get export results based on finalized exports
     /// Returns the final export values that were computed after measurements
     #[must_use]
-    pub fn get_export_results(&self) -> HashMap<String, TypedValue> {
+    pub fn get_export_results(&self) -> BTreeMap<String, TypedValue> {
         self.final_exports.clone()
     }
 

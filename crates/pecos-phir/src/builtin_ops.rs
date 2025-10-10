@@ -8,7 +8,7 @@ the IR. Everything is an Operation - modules, functions, etc.
 use crate::ops::Operation;
 use crate::phir::{AttributeValue, Attributes, Instruction, Region};
 use crate::types::FunctionType;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::Write;
 
 /// Builtin operations that define IR structure
@@ -46,7 +46,7 @@ impl ModuleOp {
 
         Self {
             name: name.into(),
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
             body: Region::new(RegionKind::SSACFG),
         }
     }
@@ -149,7 +149,7 @@ impl FuncOp {
         Self {
             name: name.into(),
             function_type,
-            attributes: HashMap::new(),
+            attributes: BTreeMap::new(),
             body: vec![region],
         }
     }

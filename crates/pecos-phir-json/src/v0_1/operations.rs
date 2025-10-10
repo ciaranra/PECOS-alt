@@ -5,7 +5,7 @@ use crate::v0_1::foreign_objects::ForeignObject;
 use log::debug;
 use pecos_core::errors::PecosError;
 use pecos_engines::byte_message::builder::ByteMessageBuilder;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Represents the result of processing a meta instruction
 #[derive(Debug, Clone)]
@@ -45,7 +45,7 @@ pub enum MachineOperationResult {
         /// Duration in nanoseconds
         duration_ns: u64,
         /// Additional metadata for the operation
-        metadata: Option<HashMap<String, serde_json::Value>>,
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
     /// Transport operation - qubits are moved from one location to another
     ///
@@ -67,7 +67,7 @@ pub enum MachineOperationResult {
         /// Duration in nanoseconds
         duration_ns: u64,
         /// Additional metadata for the operation
-        metadata: Option<HashMap<String, serde_json::Value>>,
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
     /// Delay operation - insert a specific delay for qubits
     ///
@@ -89,7 +89,7 @@ pub enum MachineOperationResult {
         /// Duration in nanoseconds
         duration_ns: u64,
         /// Additional metadata for the operation
-        metadata: Option<HashMap<String, serde_json::Value>>,
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
     /// Timing operation - synchronize operations in time
     ///
@@ -113,7 +113,7 @@ pub enum MachineOperationResult {
         /// Timing label for synchronization
         label: String,
         /// Additional metadata for the operation
-        metadata: Option<HashMap<String, serde_json::Value>>,
+        metadata: Option<BTreeMap<String, serde_json::Value>>,
     },
     /// Skip operation - does nothing
     ///
@@ -173,7 +173,7 @@ impl OperationProcessor {
     /// Returns a map of quantum variable names to their sizes
     /// This is a helper method that accesses the environment directly
     #[must_use]
-    pub fn get_quantum_variables(&self) -> HashMap<String, usize> {
+    pub fn get_quantum_variables(&self) -> BTreeMap<String, usize> {
         // Use the environment to get all variables of type Qubits
         let qubits_variables = self.environment.get_variables_of_type(&DataType::Qubits);
 
@@ -188,7 +188,7 @@ impl OperationProcessor {
     /// Returns a map of classical variable names to their types and sizes
     /// This is a helper method that accesses the environment directly
     #[must_use]
-    pub fn get_classical_variables(&self) -> HashMap<String, (String, usize)> {
+    pub fn get_classical_variables(&self) -> BTreeMap<String, (String, usize)> {
         // Get all variables except qubits
         self.environment
             .get_all_variables()
@@ -209,9 +209,9 @@ impl OperationProcessor {
     ///
     /// This delegates directly to the environment which is the single source of truth.
     #[must_use]
-    pub fn get_measurement_results(&self) -> HashMap<String, u32> {
+    pub fn get_measurement_results(&self) -> BTreeMap<String, u32> {
         // Get all measurement-related variables from the environment
-        let mut results = HashMap::new();
+        let mut results = BTreeMap::new();
         let all_results = self.environment.get_measurement_results();
 
         // Convert TypedValue to u32
@@ -367,7 +367,7 @@ impl OperationProcessor {
         }
 
         // For qparallel blocks, we need to ensure no qubits are used more than once
-        let mut all_qubits = HashSet::new();
+        let mut all_qubits = BTreeSet::new();
 
         for op in operations {
             if let Operation::QuantumOp { args, .. } = op {
@@ -534,7 +534,7 @@ impl OperationProcessor {
     ///
     /// ```rust,no_run
     /// # use pecos_phir_json::v0_1::operations::OperationProcessor;
-    /// # use std::collections::HashMap;
+    /// # use std::collections::BTreeMap;
     /// # let processor = OperationProcessor::new();
     /// // Process an idle operation for 5 milliseconds
     /// let result = processor.process_machine_op(
@@ -550,7 +550,7 @@ impl OperationProcessor {
         mop_type: &str,
         args: Option<&Vec<QubitArg>>,
         duration: Option<&(f64, String)>,
-        metadata: Option<&HashMap<String, serde_json::Value>>,
+        metadata: Option<&BTreeMap<String, serde_json::Value>>,
     ) -> Result<MachineOperationResult, PecosError> {
         // Define constants at the beginning of the function
         const MAX_SAFE_F64_TO_U64: f64 = 18_446_744_073_709_549_568.0; // 2^64 - 2048
@@ -1882,8 +1882,8 @@ impl OperationProcessor {
     /// This simplified method treats the environment as the single source of truth
     /// and provides a clean, simple approach to gathering exported values.
     #[must_use]
-    pub fn process_export_mappings(&self) -> HashMap<String, u32> {
-        let mut exported_values = HashMap::new();
+    pub fn process_export_mappings(&self) -> BTreeMap<String, u32> {
+        let mut exported_values = BTreeMap::new();
         log::debug!("Processing export mappings using environment as source of truth");
 
         // Get all mappings from the environment

@@ -17,7 +17,7 @@ use pecos_phir::PhirEngine;
 use pecos_engines::ClassicalEngine;
 use pecos_engines::hybrid::builder::HybridEngineBuilder;
 use pecos_engines::quantum::StateVecEngine;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Helper function to convert PhirError to PecosError
 fn convert_phir_error(e: pecos_phir::PhirError) -> PecosError {
@@ -69,7 +69,7 @@ fn test_bell_state_phir_json_reference() -> Result<(), PecosError> {
     }
 
     // Count occurrences of each result
-    let mut counts: HashMap<String, usize> = HashMap::new();
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
 
     // Process results
     for shot in &results.shots {
@@ -137,7 +137,7 @@ fn test_bell_state_phir_engine_version() -> Result<(), PecosError> {
     }
 
     // Count occurrences of each result
-    let mut counts: HashMap<String, usize> = HashMap::new();
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
 
     // Process results
     for shot in &results.shots {

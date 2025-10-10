@@ -35,7 +35,7 @@ Example:
 ```rust
 use pecos_phir::attributes::AttributeBuilder;
 use pecos_phir::phir::AttributeValue;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 // Start simple
 let attrs = AttributeBuilder::new()
@@ -43,7 +43,7 @@ let attrs = AttributeBuilder::new()
     .build();
 
 // Add domain-specific attributes as needed
-let mut schedule_params = HashMap::new();
+let mut schedule_params = BTreeMap::new();
 schedule_params.insert("rounds".to_string(), AttributeValue::Int(3));
 schedule_params.insert("type".to_string(), AttributeValue::String("xy".to_string()));
 
@@ -68,7 +68,7 @@ The core IR doesn't need to understand these attributes - specialized
 passes interpret them to apply appropriate optimizations.
 */
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Common attribute keys used throughout PHIR
 ///
@@ -121,14 +121,14 @@ pub mod tags {
 
 /// Builder for creating attribute sets with common patterns
 pub struct AttributeBuilder {
-    attrs: HashMap<String, crate::phir::AttributeValue>,
+    attrs: BTreeMap<String, crate::phir::AttributeValue>,
 }
 
 impl AttributeBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            attrs: HashMap::new(),
+            attrs: BTreeMap::new(),
         }
     }
 
@@ -240,7 +240,7 @@ impl AttributeBuilder {
     pub fn with_dict(
         mut self,
         key: &str,
-        dict: HashMap<String, crate::phir::AttributeValue>,
+        dict: BTreeMap<String, crate::phir::AttributeValue>,
     ) -> Self {
         self.attrs
             .insert(key.to_string(), crate::phir::AttributeValue::Dict(dict));
@@ -249,21 +249,19 @@ impl AttributeBuilder {
 
     /// Build the attribute map
     #[must_use]
-    pub fn build(self) -> HashMap<String, crate::phir::AttributeValue> {
+    pub fn build(self) -> BTreeMap<String, crate::phir::AttributeValue> {
         self.attrs
     }
 }
 
 /// Helper functions for working with boxed regions
 pub mod helpers {
-    use super::{HashMap, keys};
+    use super::keys;
+    use std::collections::BTreeMap;
 
     /// Check if a region/operation has a specific semantic tag
     #[must_use]
-    pub fn has_tag<S: std::hash::BuildHasher>(
-        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
-        tag: &str,
-    ) -> bool {
+    pub fn has_tag(attrs: &BTreeMap<String, crate::phir::AttributeValue>, tag: &str) -> bool {
         attrs
             .get(keys::SEMANTIC_TAG)
             .and_then(|v| match v {
@@ -275,9 +273,7 @@ pub mod helpers {
 
     /// Get the algorithm name if specified
     #[must_use]
-    pub fn get_algorithm<S: std::hash::BuildHasher>(
-        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
-    ) -> Option<String> {
+    pub fn get_algorithm(attrs: &BTreeMap<String, crate::phir::AttributeValue>) -> Option<String> {
         attrs.get(keys::ALGORITHM).and_then(|v| match v {
             crate::phir::AttributeValue::String(s) => Some(s.clone()),
             _ => None,
@@ -286,9 +282,7 @@ pub mod helpers {
 
     /// Check if marked as parallelizable
     #[must_use]
-    pub fn is_parallelizable<S: std::hash::BuildHasher>(
-        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
-    ) -> bool {
+    pub fn is_parallelizable(attrs: &BTreeMap<String, crate::phir::AttributeValue>) -> bool {
         attrs
             .get(keys::PARALLELIZABLE)
             .and_then(|v| match v {
@@ -300,8 +294,8 @@ pub mod helpers {
 
     /// Get any string attribute by key
     #[must_use]
-    pub fn get_string_attr<S: std::hash::BuildHasher>(
-        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
+    pub fn get_string_attr(
+        attrs: &BTreeMap<String, crate::phir::AttributeValue>,
         key: &str,
     ) -> Option<String> {
         attrs.get(key).and_then(|v| match v {
@@ -312,8 +306,8 @@ pub mod helpers {
 
     /// Get any integer attribute by key
     #[must_use]
-    pub fn get_int_attr<S: std::hash::BuildHasher>(
-        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
+    pub fn get_int_attr(
+        attrs: &BTreeMap<String, crate::phir::AttributeValue>,
         key: &str,
     ) -> Option<i64> {
         attrs.get(key).and_then(|v| match v {
@@ -324,8 +318,8 @@ pub mod helpers {
 
     /// Get any boolean attribute by key
     #[must_use]
-    pub fn get_bool_attr<S: std::hash::BuildHasher>(
-        attrs: &HashMap<String, crate::phir::AttributeValue, S>,
+    pub fn get_bool_attr(
+        attrs: &BTreeMap<String, crate::phir::AttributeValue>,
         key: &str,
     ) -> Option<bool> {
         attrs.get(key).and_then(|v| match v {
@@ -338,7 +332,7 @@ pub mod helpers {
     #[must_use]
     pub fn attrs_from_pairs(
         pairs: &[(&str, crate::phir::AttributeValue)],
-    ) -> HashMap<String, crate::phir::AttributeValue> {
+    ) -> BTreeMap<String, crate::phir::AttributeValue> {
         pairs
             .iter()
             .map(|(k, v)| ((*k).to_string(), v.clone()))
@@ -348,7 +342,7 @@ pub mod helpers {
 
 /// Example: Creating a "boxed" QFT region with metadata
 #[must_use]
-pub fn example_qft_box() -> HashMap<String, crate::phir::AttributeValue> {
+pub fn example_qft_box() -> BTreeMap<String, crate::phir::AttributeValue> {
     AttributeBuilder::new()
         .with_tag(tags::QFT)
         .with_algorithm("quantum_fourier_transform")
@@ -361,7 +355,7 @@ pub fn example_qft_box() -> HashMap<String, crate::phir::AttributeValue> {
 
 /// Example: Creating a custom boxed operation with flexible attributes
 #[must_use]
-pub fn example_custom_box() -> HashMap<String, crate::phir::AttributeValue> {
+pub fn example_custom_box() -> BTreeMap<String, crate::phir::AttributeValue> {
     AttributeBuilder::new()
         .with_tag("custom_protocol")
         .with_interface(vec!["inputs".to_string()], vec!["outputs".to_string()])
@@ -372,7 +366,7 @@ pub fn example_custom_box() -> HashMap<String, crate::phir::AttributeValue> {
         .with_float("protocol.fidelity", 0.999)
         // Nested attributes for complex metadata
         .with_dict("protocol.parameters", {
-            let mut params = HashMap::new();
+            let mut params = BTreeMap::new();
             params.insert("rounds".to_string(), crate::phir::AttributeValue::Int(10));
             params.insert(
                 "threshold".to_string(),

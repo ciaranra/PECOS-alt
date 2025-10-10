@@ -69,8 +69,12 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // This prevents conflicts with LLVM-14 when the Selene runtime is loaded later
     #[cfg(unix)]
     {
-        eprintln!("[MODULE INIT] Unix detected, attempting preload...");
         use std::ffi::CString;
+
+        const RTLD_LAZY: i32 = 0x00001;
+        const RTLD_GLOBAL: i32 = 0x00100;
+
+        eprintln!("[MODULE INIT] Unix detected, attempting preload...");
 
         // Try to find libselene_simple_runtime.so
         let possible_paths = [
@@ -82,26 +86,24 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
         eprintln!("[PRELOAD] Checking for Selene runtime libraries...");
         for path in &possible_paths {
-            eprintln!("[PRELOAD] Checking path: {}", path);
+            eprintln!("[PRELOAD] Checking path: {path}");
             if std::path::Path::new(path).exists() {
-                eprintln!("[PRELOAD] Found! Attempting to preload: {}", path);
-                log::debug!("Preloading Selene runtime from: {}", path);
+                eprintln!("[PRELOAD] Found! Attempting to preload: {path}");
+                log::debug!("Preloading Selene runtime from: {path}");
 
                 unsafe {
                     let path_cstr = CString::new(path.as_bytes()).unwrap();
-                    const RTLD_LAZY: i32 = 0x00001;
-                    const RTLD_GLOBAL: i32 = 0x00100;
                     let handle = libc::dlopen(path_cstr.as_ptr(), RTLD_LAZY | RTLD_GLOBAL);
-                    if !handle.is_null() {
-                        eprintln!("[PRELOAD] SUCCESS! Preloaded with RTLD_GLOBAL");
-                        log::info!("Successfully preloaded Selene runtime with RTLD_GLOBAL");
-                        break;
-                    } else {
+                    if handle.is_null() {
                         let error_ptr = libc::dlerror();
                         if !error_ptr.is_null() {
                             let error = std::ffi::CStr::from_ptr(error_ptr).to_string_lossy();
-                            log::warn!("Failed to preload {}: {}", path, error);
+                            log::warn!("Failed to preload {path}: {error}");
                         }
+                    } else {
+                        eprintln!("[PRELOAD] SUCCESS! Preloaded with RTLD_GLOBAL");
+                        log::info!("Successfully preloaded Selene runtime with RTLD_GLOBAL");
+                        break;
                     }
                 }
             }

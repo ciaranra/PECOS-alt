@@ -8,7 +8,7 @@ use pecos_phir::{
     phir::{Block, Instruction, Terminator},
     types::{IntWidth, Type},
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 fn main() {
     println!("=== SSA Construction During Parsing ===\n");
@@ -23,7 +23,7 @@ fn example_basic_ssa() {
     struct SSABuilder {
         next_id: u32,
         current_block: Block,
-        value_map: HashMap<String, SSAValue>,
+        value_map: BTreeMap<String, SSAValue>,
     }
 
     impl SSABuilder {
@@ -31,7 +31,7 @@ fn example_basic_ssa() {
             Self {
                 next_id: 1,
                 current_block: Block::new(Some("entry".to_string())),
-                value_map: HashMap::new(),
+                value_map: BTreeMap::new(),
             }
         }
 
@@ -103,8 +103,8 @@ fn example_basic_ssa() {
 
 #[derive(Debug)]
 struct BranchDefs {
-    then_defs: HashMap<String, SSAValue>,
-    else_defs: HashMap<String, SSAValue>,
+    then_defs: BTreeMap<String, SSAValue>,
+    else_defs: BTreeMap<String, SSAValue>,
 }
 
 /// Handling control flow with phi nodes
@@ -127,8 +127,8 @@ fn example_phi_nodes() {
     println!("  Parsing if-else with variable definitions:");
 
     let mut branch_defs = BranchDefs {
-        then_defs: HashMap::new(),
-        else_defs: HashMap::new(),
+        then_defs: BTreeMap::new(),
+        else_defs: BTreeMap::new(),
     };
 
     // In then branch: x = 1
@@ -187,7 +187,7 @@ fn example_dominance_frontier() {
 
     println!("  Parsing while loop with mutations:");
 
-    let mut var_defs: HashMap<String, Vec<DefSite>> = HashMap::new();
+    let mut var_defs: BTreeMap<String, Vec<DefSite>> = BTreeMap::new();
 
     // Entry block: x = 0
     let x_init = SSAValue::new(20);

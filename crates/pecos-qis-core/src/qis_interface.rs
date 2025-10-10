@@ -4,7 +4,7 @@
 //! (JIT, Helios, etc.) must implement to execute quantum programs and collect operations.
 
 use pecos_qis_ffi_types::OperationCollector;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Program format for loading
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,12 +90,12 @@ pub trait QisInterface: Send + Sync {
     /// Returns an error if the program execution fails.
     fn execute_with_measurements(
         &mut self,
-        measurements: HashMap<usize, bool>,
+        measurements: BTreeMap<usize, bool>,
     ) -> Result<OperationCollector, InterfaceError>;
 
     /// Get metadata about the implementation
-    fn metadata(&self) -> HashMap<String, String> {
-        HashMap::new()
+    fn metadata(&self) -> BTreeMap<String, String> {
+        BTreeMap::new()
     }
 
     /// Get the name of this implementation
