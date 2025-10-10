@@ -273,7 +273,7 @@ try:
     # Import QIS engine functions directly from Rust
     from pecos_rslib._pecos_rslib import (
         qis_engine,
-        qis_jit_interface,
+        qis_helios_interface,
         qis_selene_helios_interface,
         QisInterfaceBuilder,
     )
@@ -285,8 +285,8 @@ except ImportError:
     def qis_engine(*_args, **_kwargs) -> NoReturn:
         raise ImportError("qis_engine not available")
 
-    def qis_jit_interface(*_args, **_kwargs) -> NoReturn:
-        raise ImportError("qis_jit_interface not available")
+    def qis_helios_interface(*_args, **_kwargs) -> NoReturn:
+        raise ImportError("qis_helios_interface not available")
 
     def qis_selene_helios_interface(*_args, **_kwargs) -> NoReturn:
         raise ImportError("qis_selene_helios_interface not available")
@@ -534,8 +534,7 @@ __all__ = [
     "sim",
     "qasm_engine",
     "qis_engine",
-    "qis_engine",
-    "qis_jit_interface",
+    "qis_helios_interface",
     "qis_selene_helios_interface",
     "QisInterfaceBuilder",
     "phir_json_engine",

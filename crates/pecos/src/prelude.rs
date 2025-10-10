@@ -45,7 +45,7 @@
 //! - `pecos_qasm::prelude` - `OpenQASM` language support
 //! - `pecos_qsim::prelude` - Quantum simulation implementations
 //! - `pecos_qis_core::prelude` - QIS control engine
-//! - `pecos_qis_native::prelude` - Native Rust QIS runtime
+//! - `pecos_qis_selene::prelude` - Selene-based QIS interface (when `selene` feature enabled)
 //! - `pecos_programs::prelude` - Program type definitions
 //! - `pecos_rng::prelude` - Random number generation
 //! - `pecos_hugr_qis::prelude` - HUGR to QIS compilation
@@ -78,14 +78,9 @@ pub use pecos_qsim::prelude::*;
 // to avoid conflicts with pecos_engines (which provides the main Shot type users should use)
 pub use pecos_qis_core::prelude::*;
 
-// Re-export QIS interface implementations when features are enabled
-#[cfg(feature = "jit")]
-pub use pecos_qis_jit::prelude::*;
+// Re-export Selene QIS interface when feature is enabled
 #[cfg(feature = "selene")]
 pub use pecos_qis_selene::prelude::*;
-
-// Re-export native runtime prelude
-pub use pecos_qis_native::prelude::*;
 
 // Re-export program types prelude
 pub use pecos_programs::prelude::*;

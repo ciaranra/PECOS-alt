@@ -11,7 +11,7 @@
 //! doesn't perform quantum simulation but manages program execution flow.
 
 use log::trace;
-use pecos_qis_ffi::{OperationCollector, QuantumOp};
+use pecos_qis_ffi_types::{OperationCollector, QuantumOp};
 use std::collections::{BTreeMap, HashMap};
 
 /// Result type for runtime operations

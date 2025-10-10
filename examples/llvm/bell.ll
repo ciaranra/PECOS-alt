@@ -8,7 +8,8 @@ declare void @__quantum__rt__result_record_output(i64, i8*)
 
 @.str.c = constant [2 x i8] c"c\00"
 
-define void @main() #0 {
+; Helios-compatible entry point: i64 qmain(i64)
+define i64 @qmain(i64 %arg) #0 {
     ; Create Bell state: |00⟩ + |11⟩
     call void @__quantum__qis__h__body(i64 0)
     call void @__quantum__qis__cx__body(i64 0, i64 1)
@@ -24,7 +25,7 @@ define void @main() #0 {
     ; Note: %result0 and %result1 are available here for immediate classical logic
     ; but we're keeping this example simple
 
-    ret void
+    ret i64 0
 }
 
 attributes #0 = { "EntryPoint" }

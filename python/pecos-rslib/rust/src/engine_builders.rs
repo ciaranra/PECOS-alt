@@ -134,29 +134,37 @@ impl PyQisEngineBuilder {
         Ok(self.clone())
     }
 
-    /// Use native runtime (default if Selene is not available)
-    fn native_runtime(&mut self) -> PyResult<Self> {
-        self.inner = self.inner.clone().runtime(pecos::native_runtime());
+    /// Use Selene simple runtime
+    fn selene_runtime(&mut self) -> PyResult<Self> {
+        let runtime = pecos::selene_simple_runtime().map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to load Selene runtime: {e}"
+            ))
+        })?;
+        self.inner = self.inner.clone().runtime(runtime);
         Ok(self.clone())
     }
 
-    /// Set the interface builder (JIT or Helios)
+    /// Set the interface builder (Helios)
     #[pyo3(signature = (_builder))]
     fn interface(&mut self, _builder: &PyQisInterfaceBuilder) -> PyResult<Self> {
         // The PyQisInterfaceBuilder contains a boxed trait object which we can't easily clone
-        // As a workaround, we'll just use JIT interface since that's what the tests use
-        // and it's the default fallback anyway
-        log::debug!("Python interface() called, setting JIT interface");
+        // Use Helios interface as the default
+        log::debug!("Python interface() called, setting Helios interface");
 
-        // Set JIT interface
-        self.inner = self.inner.clone().interface(jit_interface_builder());
+        // Set Helios interface
+        self.inner = self.inner.clone().interface(pecos::helios_interface_builder());
 
-        // Always set native runtime to work with JIT interface
-        // This matches the behavior of the Rust sim() function
-        log::debug!("Setting native runtime for JIT interface");
-        self.inner = self.inner.clone().runtime(pecos::native_runtime());
+        // Always set Selene runtime to work with Helios interface
+        log::debug!("Setting Selene runtime for Helios interface");
+        let runtime = pecos::selene_simple_runtime().map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to load Selene runtime: {e}"
+            ))
+        })?;
+        self.inner = self.inner.clone().runtime(runtime);
 
-        log::debug!("JIT interface and runtime configured");
+        log::debug!("Helios interface and Selene runtime configured");
         Ok(self.clone())
     }
 
@@ -418,12 +426,17 @@ pub fn qis_engine() -> PyQisEngineBuilder {
     }
 }
 
-/// Create native runtime for QIS Control Engine
+/// Create Selene runtime for QIS Control Engine
 #[pyfunction]
-pub fn native_runtime() -> PyQisEngineBuilder {
-    PyQisEngineBuilder {
-        inner: pecos::qis_engine().runtime(pecos::native_runtime()),
-    }
+pub fn selene_runtime() -> PyResult<PyQisEngineBuilder> {
+    let runtime = pecos::selene_simple_runtime().map_err(|e| {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+            "Failed to load Selene runtime: {e}"
+        ))
+    })?;
+    Ok(PyQisEngineBuilder {
+        inner: pecos::qis_engine().runtime(runtime),
+    })
 }
 
 /// Create a PHIR JSON engine builder
@@ -1062,13 +1075,12 @@ pub struct PyQisInterfaceBuilder {
     inner: Box<dyn QisInterfaceBuilder>,
 }
 
-/// Interface builders have been moved to implementation crates.
-/// This function is deprecated and will be removed in a future version.
+/// Create a Helios interface builder
 #[pyfunction]
-pub fn qis_jit_interface() -> PyResult<PyQisInterfaceBuilder> {
-    // Use the actual JIT interface builder from pecos
+pub fn qis_helios_interface() -> PyResult<PyQisInterfaceBuilder> {
+    // Use the Helios interface builder from pecos
     Ok(PyQisInterfaceBuilder {
-        inner: Box::new(jit_interface_builder()),
+        inner: Box::new(pecos::helios_interface_builder()),
     })
 }
 
@@ -1116,12 +1128,11 @@ pub fn register_engine_builders(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Engine functions
     m.add_function(wrap_pyfunction!(self::qasm_engine, m)?)?;
     m.add_function(wrap_pyfunction!(self::qis_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(self::qis_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(self::native_runtime, m)?)?;
+    m.add_function(wrap_pyfunction!(self::selene_runtime, m)?)?;
     m.add_function(wrap_pyfunction!(self::phir_json_engine, m)?)?;
 
     // Interface builder functions
-    m.add_function(wrap_pyfunction!(self::qis_jit_interface, m)?)?;
+    m.add_function(wrap_pyfunction!(self::qis_helios_interface, m)?)?;
     m.add_function(wrap_pyfunction!(self::qis_selene_helios_interface, m)?)?;
 
     // SimBuilder function

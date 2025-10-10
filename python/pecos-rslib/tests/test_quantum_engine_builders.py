@@ -139,6 +139,7 @@ class TestQuantumEngineBuilders:
         because the builder API doesn't yet have automatic JIT interface selection.
         """
         # Minimal LLVM IR - single qubit H gate and measurement
+        # Uses qmain entry point expected by Helios interface
         llvm_ir = """; ModuleID = 'test_module'
 source_filename = "test_module"
 
@@ -148,12 +149,12 @@ declare void @__quantum__qis__h__body(i64)
 declare i32 @__quantum__qis__m__body(i64, i64)
 declare void @__quantum__rt__result_record_output(i64, i8*)
 
-define void @test_function() #0 {
+define i64 @qmain(i64 %arg) #0 {
 entry:
     call void @__quantum__qis__h__body(i64 0)
     %result = call i32 @__quantum__qis__m__body(i64 0, i64 0)
     call void @__quantum__rt__result_record_output(i64 0, i8* getelementptr inbounds ([3 x i8], [3 x i8]* @str_r0, i32 0, i32 0))
-    ret void
+    ret i64 0
 }
 
 attributes #0 = { "EntryPoint" }

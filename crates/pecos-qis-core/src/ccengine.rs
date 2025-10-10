@@ -12,7 +12,7 @@ use pecos_engines::shot_results::{Data, Shot};
 use pecos_engines::{
     ByteMessage, ByteMessageBuilder, ClassicalEngine, ControlEngine, Engine, EngineStage,
 };
-use pecos_qis_ffi::{OperationCollector as OperationList, QuantumOp};
+use pecos_qis_ffi_types::{OperationCollector as OperationList, QuantumOp};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::collections::{BTreeMap, HashMap};
@@ -141,14 +141,8 @@ impl QisEngine {
 
         // Load into the interface
         if let Some(ref mut interface) = self.interface {
-            // Reset the thread-local interface for clean state (only for global-state interfaces)
-            let interface_name = interface.name();
-            if interface_name == "LLVM JIT" {
-                // Only JIT interface uses thread-local state
-                pecos_qis_ffi::reset_interface();
-                // Note: JIT interface now lives in pecos-qis-jit crate
-                // Users of JIT interface should call pecos_qis_jit::reset_measurement_manager() directly
-            }
+            // Note: Thread-local state management (for JIT interface) has been removed.
+            // The JIT and Native interfaces have been removed from PECOS - use Selene instead.
 
             interface
                 .load_program(program_bytes, format)

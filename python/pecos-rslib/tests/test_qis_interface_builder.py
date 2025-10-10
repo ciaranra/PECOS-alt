@@ -3,7 +3,7 @@
 import pytest
 from pecos_rslib import (
     qis_engine,
-    qis_jit_interface,
+    qis_helios_interface,
     qis_selene_helios_interface,
     QisProgram,
 )
@@ -60,7 +60,7 @@ class TestQisInterfaceBuilder:
 
     def test_builder_functions_exist(self):
         """Test that the interface builder functions exist."""
-        assert callable(qis_jit_interface)
+        assert callable(qis_helios_interface)
         assert callable(qis_selene_helios_interface)
 
     def test_bell_state_with_both_interfaces(self):
@@ -88,7 +88,7 @@ class TestQisInterfaceBuilder:
             if interface_name == "Helios":
                 interface_builder = qis_selene_helios_interface()
             else:
-                interface_builder = qis_jit_interface()
+                interface_builder = qis_helios_interface()
 
             # Run simulation (runtime is default/built-in)
             engine = qis_engine().interface(interface_builder).program(qis_program)
@@ -153,7 +153,7 @@ class TestQisInterfaceBuilder:
             if interface_name == "Helios":
                 interface_builder = qis_selene_helios_interface()
             else:
-                interface_builder = qis_jit_interface()
+                interface_builder = qis_helios_interface()
 
             # Run simulation (runtime is default/built-in)
             engine = qis_engine().interface(interface_builder).program(qis_program)
@@ -218,7 +218,7 @@ class TestQisInterfaceBuilder:
         qis_program = QisProgram.from_string(simple_qis)
 
         # Explicitly select JIT - should always work
-        engine = qis_engine().interface(qis_jit_interface()).program(qis_program)
+        engine = qis_engine().interface(qis_helios_interface()).program(qis_program)
         sim = engine.to_sim().qubits(1)
         results = sim.run(1)
 

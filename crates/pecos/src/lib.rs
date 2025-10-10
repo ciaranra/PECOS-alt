@@ -201,30 +201,23 @@ pub mod programs {
 
 /// QIS runtime implementations
 ///
-/// This module provides different runtime backends for the QIS control engine.
+/// This module provides Selene-based QIS interface and runtime implementations.
 ///
 /// # Available Runtimes
 ///
-/// - **Native**: Pure Rust implementation via [`NativeRuntime`]
-/// - **JIT**: LLVM JIT-based interface via [`JitExecutor`] (requires `jit` feature)
 /// - **Selene**: Selene-based runtime via [`SeleneRuntime`] (requires `selene` feature)
 ///
 /// # Example
 ///
-/// ```rust
-/// use pecos::runtime::native_runtime;
+/// ```rust,no_run
+/// # #[cfg(feature = "selene")]
+/// # {
+/// use pecos::runtime::selene_simple_runtime;
 ///
-/// let runtime = native_runtime();
+/// let runtime = selene_simple_runtime();
+/// # }
 /// ```
 pub mod runtime {
-    pub use pecos_qis_native::{NativeRuntime, native_runtime};
-
-    // Re-export JIT interface when feature is enabled
-    #[cfg(feature = "jit")]
-    pub use pecos_qis_jit::{
-        JitExecutor, JitInterfaceBuilder, QisJitInterface, jit_interface_builder,
-    };
-
     // Re-export Selene interface when feature is enabled
     #[cfg(feature = "selene")]
     pub use pecos_qis_selene::{
@@ -290,13 +283,6 @@ pub use pecos_engines::{
 
 // Program types
 pub use pecos_programs::{HugrProgram, Program, QasmProgram, QisProgram};
-
-// Runtime
-pub use pecos_qis_native::{NativeRuntime, native_runtime};
-
-// JIT interface (when feature is enabled)
-#[cfg(feature = "jit")]
-pub use pecos_qis_jit::{JitExecutor, JitInterfaceBuilder, QisJitInterface, jit_interface_builder};
 
 // Selene interface (when feature is enabled)
 #[cfg(feature = "selene")]

@@ -53,16 +53,61 @@ use sparse_stab_engine_bindings::PySparseStabEngine;
 use state_vec_bindings::RsStateVec;
 use state_vec_engine_bindings::PyStateVecEngine;
 
-/// Clear the global JIT compilation cache (useful for testing)
+/// Clear the global JIT compilation cache (deprecated - JIT is no longer available)
 #[pyfunction]
 fn clear_jit_cache() {
-    // JIT is always available through the pecos metacrate prelude
-    pecos::prelude::JitExecutor::clear_global_cache();
+    // JIT has been removed - this function is now a no-op for compatibility
+    log::warn!("clear_jit_cache() is deprecated - JIT has been removed from PECOS");
 }
 
 /// A Python module implemented in Rust.
 #[pymodule]
 fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    eprintln!("[MODULE INIT] _pecos_rslib module initializing...");
+
+    // CRITICAL: Preload libselene_simple_runtime.so with RTLD_GLOBAL BEFORE anything else
+    // This prevents conflicts with LLVM-14 when the Selene runtime is loaded later
+    #[cfg(unix)]
+    {
+        eprintln!("[MODULE INIT] Unix detected, attempting preload...");
+        use std::ffi::CString;
+
+        // Try to find libselene_simple_runtime.so
+        let possible_paths = [
+            "/home/ciaranra/Repos/cl_projects/gup/selene/target/debug/libselene_simple_runtime.so",
+            "/home/ciaranra/Repos/cl_projects/gup/selene/target/release/libselene_simple_runtime.so",
+            "../selene/target/debug/libselene_simple_runtime.so",
+            "../selene/target/release/libselene_simple_runtime.so",
+        ];
+
+        eprintln!("[PRELOAD] Checking for Selene runtime libraries...");
+        for path in &possible_paths {
+            eprintln!("[PRELOAD] Checking path: {}", path);
+            if std::path::Path::new(path).exists() {
+                eprintln!("[PRELOAD] Found! Attempting to preload: {}", path);
+                log::debug!("Preloading Selene runtime from: {}", path);
+
+                unsafe {
+                    let path_cstr = CString::new(path.as_bytes()).unwrap();
+                    const RTLD_LAZY: i32 = 0x00001;
+                    const RTLD_GLOBAL: i32 = 0x00100;
+                    let handle = libc::dlopen(path_cstr.as_ptr(), RTLD_LAZY | RTLD_GLOBAL);
+                    if !handle.is_null() {
+                        eprintln!("[PRELOAD] SUCCESS! Preloaded with RTLD_GLOBAL");
+                        log::info!("Successfully preloaded Selene runtime with RTLD_GLOBAL");
+                        break;
+                    } else {
+                        let error_ptr = libc::dlerror();
+                        if !error_ptr.is_null() {
+                            let error = std::ffi::CStr::from_ptr(error_ptr).to_string_lossy();
+                            log::warn!("Failed to preload {}: {}", path, error);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     log::debug!("_pecos_rslib module initializing (version 2)...");
     m.add_class::<SparseSim>()?;
     m.add_class::<phir_json_bridge::PhirJsonEngine>()?;
@@ -99,8 +144,7 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register engine builder functions
     m.add_function(wrap_pyfunction!(engine_builders::qasm_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::qis_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(engine_builders::qis_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(engine_builders::native_runtime, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::selene_runtime, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::phir_json_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sim_builder, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::general_noise, m)?)?;

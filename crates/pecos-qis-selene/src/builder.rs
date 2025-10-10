@@ -7,7 +7,7 @@ use pecos_core::errors::PecosError;
 use pecos_programs::{HugrProgram, QisContent, QisProgram};
 use pecos_qis_core::program::QisInterfaceBuilder;
 use pecos_qis_core::qis_interface::{ProgramFormat, QisInterface};
-use pecos_qis_ffi::OperationCollector;
+use pecos_qis_ffi_types::OperationCollector;
 
 /// Helios-based interface builder
 ///

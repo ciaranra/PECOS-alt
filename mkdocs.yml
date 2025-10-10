@@ -58,6 +58,7 @@ nav:
   - api/api-reference.md
 - Development:
   - development/DEVELOPMENT.md
+  - development/QIS_ARCHITECTURE.md
 - Releases:
   - releases/changelog.md
 markdown_extensions:

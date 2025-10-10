@@ -217,9 +217,9 @@ class TestSeleneBuildProcess:
         declare void @setup(i64) local_unnamed_addr
         declare i64 @teardown() local_unnamed_addr
 
-        define void @main() #0 {
+        define i64 @qmain(i64 %arg) #0 {
         entry:
-          tail call void @setup(i64 0)
+          tail call void @setup(i64 %arg)
           %qubit = tail call i64 @___qalloc()
           %not_max = icmp eq i64 %qubit, -1
           br i1 %not_max, label %skip_reset, label %do_reset
@@ -235,7 +235,7 @@ class TestSeleneBuildProcess:
           %result = tail call i64 @___lazy_measure(i64 %qubit)
           tail call void @___qfree(i64 %qubit)
           %final = tail call i64 @teardown()
-          ret void
+          ret i64 %final
         }
 
         attributes #0 = { "EntryPoint" }
@@ -314,10 +314,10 @@ class TestSeleneBuildProcess:
         ; === Main Entry Point ===
         ; This function allocates a qubit, puts it in superposition,
         ; measures it, and returns the result
-        define void @main() #0 {
+        define i64 @qmain(i64 %arg) #0 {
         entry:
           ; Setup quantum system
-          tail call void @setup(i64 0)
+          tail call void @setup(i64 %arg)
 
           ; Allocate qubit
           %q = tail call i64 @___qalloc()
@@ -328,7 +328,7 @@ class TestSeleneBuildProcess:
           ; Cleanup
           tail call void @___qfree(i64 %q)
           %final = tail call i64 @teardown() ; Get final state
-          ret void ; Return
+          ret i64 %final ; Return
         }
 
         ; Attributes section
@@ -378,14 +378,14 @@ class TestSeleneBuildProcess:
         declare i64 @teardown() local_unnamed_addr
 
 
-        define void @main() #0 {
+        define i64 @qmain(i64 %arg) #0 {
         entry:
-          tail call void @setup(i64 0)
+          tail call void @setup(i64 %arg)
           %q = tail call i64 @___qalloc()
           %r = tail call i64 @___lazy_measure(i64 %q)
           tail call void @___qfree(i64 %q)
           %f = tail call i64 @teardown()
-          ret void
+          ret i64 %f
         }
 
 
@@ -429,16 +429,16 @@ class TestSeleneBuildProcess:
         declare void @setup(i64) local_unnamed_addr
         declare i64 @teardown() local_unnamed_addr
 
-        define void @main() #0 {
+        define i64 @qmain(i64 %arg) #0 {
         entry:
-          tail call void @setup(i64 0)
+          tail call void @setup(i64 %arg)
           %q = tail call i64 @___qalloc()
           ; Apply X gate using rotations to get |1⟩
           tail call void @___rxy(i64 %q, double 0x400921FB54442D18, double 0.0)
           %r = tail call i64 @___lazy_measure(i64 %q)
           tail call void @___qfree(i64 %q)
           %f = tail call i64 @teardown()
-          ret void
+          ret i64 %f
         }
 
         attributes #0 = { "EntryPoint" }

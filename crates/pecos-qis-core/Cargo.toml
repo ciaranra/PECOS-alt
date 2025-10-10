@@ -13,7 +13,7 @@ categories.workspace = true
 
 
 [dependencies]
-pecos-qis-ffi.workspace = true
+pecos-qis-ffi-types.workspace = true
 pecos-core.workspace = true
 pecos-engines.workspace = true
 pecos-programs.workspace = true
@@ -27,7 +27,7 @@ rand.workspace = true
 rand_chacha.workspace = true
 
 [dev-dependencies]
-pecos-qis-native.workspace = true
+pecos-qis-selene.workspace = true
 
 [lints]
 workspace = true

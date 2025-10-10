@@ -51,4 +51,4 @@ pub use selene_runtimes::{
 
 // Re-export pecos_qis_interface to ensure its FFI symbols are included
 // when this crate is built as a cdylib
-pub use pecos_qis_ffi;
+pub use pecos_qis_ffi_types;

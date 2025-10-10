@@ -8,12 +8,16 @@ fn main() {
     // Find or build libhelios_selene_interface.a
     find_or_build_helios_lib(&out_dir);
 
-    // Then build our PECOS shim
+    // Tell cargo to rerun this build script if pecos-qis-ffi changes
+    println!("cargo:rerun-if-changed=../pecos-qis-ffi/src");
+
+    // Then build our PECOS shim with undefined __quantum__* symbols
+    // These will be resolved at runtime from libpecos_qis_ffi.so
     let source_file = PathBuf::from("src/c/selene_shim.c");
     let output_file = out_dir.join("libpecos_selene.so");
 
-    // Build the C shim as a proper shared library using clang
-    // This creates a .so that can be loaded with RTLD_GLOBAL
+    // Build the C shim as a shared library with undefined __quantum__* symbols
+    // These symbols will be resolved from libpecos_qis_ffi.so at runtime
     let mut cmd = Command::new("clang");
     cmd.arg("-shared")
         .arg("-fPIC")

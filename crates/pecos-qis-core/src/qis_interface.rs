@@ -3,7 +3,7 @@
 //! This module defines the `QisInterface` trait that different implementations
 //! (JIT, Helios, etc.) must implement to execute quantum programs and collect operations.
 
-use pecos_qis_ffi::OperationCollector;
+use pecos_qis_ffi_types::OperationCollector;
 use std::collections::HashMap;
 
 /// Program format for loading

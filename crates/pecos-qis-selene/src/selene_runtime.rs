@@ -5,7 +5,7 @@
 
 use log::{debug, trace};
 use pecos_qis_core::runtime::{ClassicalState, QisRuntime, Result, RuntimeError, Shot};
-use pecos_qis_ffi::{Operation, OperationCollector, QuantumOp};
+use pecos_qis_ffi_types::{Operation, OperationCollector, QuantumOp};
 use std::collections::BTreeMap;
 use std::ffi::c_void;
 use std::path::Path;

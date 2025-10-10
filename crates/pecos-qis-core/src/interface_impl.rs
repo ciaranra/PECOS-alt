@@ -4,7 +4,7 @@
 
 use crate::qis_interface::{InterfaceError, ProgramFormat, QisInterface};
 use pecos_core::prelude::PecosError;
-use pecos_qis_ffi::OperationCollector;
+use pecos_qis_ffi_types::OperationCollector;
 use std::collections::HashMap;
 
 /// Simple wrapper for pre-built operation lists

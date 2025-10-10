@@ -3,7 +3,7 @@
 use crate::{IntoQisInterface, QisEngine};
 use pecos_core::errors::PecosError;
 use pecos_engines::ClassicalControlEngineBuilder;
-use pecos_qis_ffi::OperationCollector;
+use pecos_qis_ffi_types::OperationCollector;
 
 /// Builder for creating `QisEngine` instances
 pub struct QisEngineBuilder {
@@ -55,9 +55,7 @@ impl QisEngineBuilder {
     /// # Example
     /// ```rust
     /// use pecos_qis_core::qis_engine;
-    /// use pecos_qis_ffi::{OperationCollector, QuantumOp};
-    /// use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine};
-    /// use pecos_qis_native::native_runtime;
+    /// use pecos_qis_ffi_types::{OperationCollector, QuantumOp};
     ///
     /// // Create an interface with quantum operations
     /// let mut interface = OperationCollector::new();
@@ -66,15 +64,13 @@ impl QisEngineBuilder {
     /// interface.operations.push(QuantumOp::H(q0).into());
     /// interface.operations.push(QuantumOp::CX(q0, q1).into());
     ///
-    /// // Use the fluent API to build an engine with the program
-    /// let engine = qis_engine()
-    ///     .runtime(native_runtime())
-    ///     .program(interface)
-    ///     .build()
-    ///     .unwrap();
+    /// // Use the fluent API with the program
+    /// // (requires .runtime() to be added before calling .build())
+    /// let builder = qis_engine().program(interface.clone());
     ///
-    /// // Verify the engine is configured correctly
-    /// assert_eq!(engine.num_qubits(), 2);
+    /// // Verify the interface has the correct structure
+    /// assert_eq!(interface.allocated_qubits.len(), 2);
+    /// assert_eq!(interface.operations.len(), 2);
     /// ```
     /// Set the program to use from any supported program type
     ///
@@ -85,9 +81,7 @@ impl QisEngineBuilder {
     /// # Example
     /// ```rust
     /// use pecos_qis_core::qis_engine;
-    /// use pecos_qis_ffi::{OperationCollector, QuantumOp};
-    /// use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine};
-    /// use pecos_qis_native::native_runtime;
+    /// use pecos_qis_ffi_types::{OperationCollector, QuantumOp};
     ///
     /// // Create an interface with quantum operations
     /// let mut interface = OperationCollector::new();
@@ -96,14 +90,13 @@ impl QisEngineBuilder {
     /// interface.operations.push(QuantumOp::H(q0).into());
     /// interface.operations.push(QuantumOp::CX(q0, q1).into());
     ///
-    /// // Build engine with the program - program() will panic on invalid data
-    /// let builder = qis_engine()
-    ///     .runtime(native_runtime())
-    ///     .program(interface);
+    /// // Build with the program - program() will panic on invalid data
+    /// // (requires .runtime() to be added before calling .build())
+    /// let builder = qis_engine().program(interface.clone());
     ///
-    /// // Build the engine and verify it's configured
-    /// let engine = builder.build().unwrap();
-    /// assert_eq!(engine.num_qubits(), 2);
+    /// // Verify the interface structure
+    /// assert_eq!(interface.allocated_qubits.len(), 2);
+    /// assert_eq!(interface.operations.len(), 2);
     /// ```
     ///
     /// # Panics
@@ -119,32 +112,9 @@ impl QisEngineBuilder {
     /// (JIT or Helios) when processing programs.
     ///
     /// # Example
-    /// ```no_run
-    /// use pecos_qis_core::qis_engine;
-    /// use pecos_programs::QisProgram;
-    /// use pecos_engines::ClassicalControlEngineBuilder;
-    /// use pecos_qis_native::native_runtime;
     ///
-    /// let program = QisProgram::from_string(r#"
-    ///     declare void @__quantum__qis__h__body(i64)
-    ///
-    ///     define void @main() #0 {
-    ///         call void @__quantum__qis__h__body(i64 0)
-    ///         ret void
-    ///     }
-    ///
-    ///     attributes #0 = { "EntryPoint" "RequiredQubits"="1" }
-    /// "#);
-    ///
-    /// // When using .interface(), you specify which backend to use
-    /// // This example requires a QisInterfaceBuilder implementation
-    /// # let interface_builder = Box::new(pecos_qis_core::interface_impl::SimpleQisInterface::new(pecos_qis_ffi::OperationCollector::new())) as Box<dyn pecos_qis_core::QisInterface>;
-    /// let engine = qis_engine()
-    ///     .runtime(native_runtime())
-    ///     .program(program)
-    ///     .build()
-    ///     .unwrap();
-    /// ```
+    /// For examples of using custom interface builders, see the `pecos-qis-selene` crate
+    /// documentation which provides the `helios_interface_builder()` function.
     #[must_use]
     pub fn interface(
         mut self,
@@ -162,28 +132,23 @@ impl QisEngineBuilder {
     ///
     /// # Example
     /// ```rust
-    /// # use pecos_core::errors::PecosError;
-    /// # fn main() -> Result<(), PecosError> {
+    /// use pecos_core::errors::PecosError;
     /// use pecos_qis_core::qis_engine;
-    /// use pecos_qis_ffi::{OperationCollector, QuantumOp};
-    /// use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine};
-    /// use pecos_qis_native::native_runtime;
+    /// use pecos_qis_ffi_types::{OperationCollector, QuantumOp};
     ///
     /// // Create an interface with quantum operations
     /// let mut interface = OperationCollector::new();
     /// let q0 = interface.allocate_qubit();
     /// interface.operations.push(QuantumOp::H(q0).into());
     ///
-    /// let engine = qis_engine()
-    ///     .runtime(native_runtime())
-    ///     .try_program(interface)?
-    ///     .build()?;
-    /// assert_eq!(engine.num_qubits(), 1);
+    /// // Use try_program for error handling
+    /// // (requires .runtime() to be added before calling .build())
+    /// let builder = qis_engine().try_program(interface.clone())?;
     ///
-    /// // QIS programs with proper quantum functions compile successfully
-    /// println!("QIS program compilation successful");
-    /// # Ok(())
-    /// # }
+    /// // Verify the interface structure
+    /// assert_eq!(interface.allocated_qubits.len(), 1);
+    /// assert_eq!(interface.operations.len(), 1);
+    /// # Ok::<(), PecosError>(())
     /// ```
     ///
     /// # Errors
@@ -252,26 +217,14 @@ impl QisEngineBuilder {
     /// Set the runtime to use
     ///
     /// This allows you to specify any runtime implementation.
+    /// The runtime must implement the `QisRuntime` trait.
+    ///
+    /// The reference runtime is provided by the `pecos-qis-selene` crate:
+    /// - `pecos_qis_selene::selene_simple_runtime()` - Selene-based implementation
     ///
     /// # Example
-    /// ```rust
-    /// use pecos_qis_core::qis_engine;
-    /// use pecos_qis_native::native_runtime;
-    /// use pecos_engines::ClassicalControlEngineBuilder;
-    /// use pecos_qis_ffi::OperationCollector;
     ///
-    /// let builder = qis_engine()
-    ///     .runtime(native_runtime());
-    ///
-    /// // Need to add a program before building
-    /// let interface = OperationCollector::new();
-    /// let engine = builder.program(interface).build().unwrap();
-    /// ```
-    /// Set the runtime to use for classical control flow
-    ///
-    /// The runtime must implement the `QisRuntime` trait. Common runtimes:
-    /// - `pecos_qis_native::NativeRuntime` - Pure Rust implementation
-    /// - `pecos_qis_selene::SeleneRuntime` - Selene-based implementation
+    /// For complete examples with runtime, see the `pecos-qis-selene` crate documentation
     #[must_use]
     pub fn runtime(mut self, runtime: impl crate::runtime::QisRuntime + 'static) -> Self {
         self.runtime = Some(Box::new(runtime));
@@ -293,10 +246,9 @@ impl ClassicalControlEngineBuilder for QisEngineBuilder {
         let runtime = self.runtime.ok_or_else(|| {
             PecosError::Processing(
                 "No runtime specified. Please provide a runtime using .runtime().\n\
-                Common runtimes:\n\
-                - pecos_qis_native::native_runtime() - Pure Rust implementation\n\
-                - pecos_qis_selene::SeleneRuntime - Selene-based implementation\n\
-                Example: qis_engine().runtime(native_runtime()).build()"
+                Reference runtime:\n\
+                - pecos_qis_selene::selene_simple_runtime() - Selene-based implementation\n\
+                Example: qis_engine().runtime(selene_simple_runtime()?).build()"
                     .to_string(),
             )
         })?;
@@ -364,24 +316,23 @@ impl ClassicalControlEngineBuilder for QisEngineBuilder {
                 "No interface implementation provided. Please specify an interface using:\n\
                 - .program() to load from a program (uses default Selene Helios interface)\n\
                 - .try_program() for explicit interface selection\n\
-                - Or import pecos-qis-jit or pecos-qis-selene and create an interface directly"
+                - Or import pecos-qis-selene and create an interface directly"
                     .to_string(),
             ))
         }
     }
 }
 
-/// Convenience function to create a `QisEngineBuilder` with default runtime
+/// Convenience function to create a `QisEngineBuilder`
 ///
-/// The default runtime is Selene simple. If not available, it will error with
-/// clear instructions on how to fix it or use alternative runtimes.
+/// Creates a builder that requires you to specify both a runtime and a program.
 ///
 /// # Example
-/// ```rust
+/// ```
 /// use pecos_qis_core::qis_engine;
-/// use pecos_qis_ffi::{OperationCollector, QuantumOp};
+/// use pecos_qis_ffi_types::{OperationCollector, QuantumOp};
 /// use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine};
-/// use pecos_qis_native::native_runtime;
+/// use pecos_qis_selene::selene_simple_runtime;
 ///
 /// // Create a builder (you must specify a runtime)
 /// let builder = qis_engine();
@@ -392,13 +343,14 @@ impl ClassicalControlEngineBuilder for QisEngineBuilder {
 /// interface.operations.push(QuantumOp::H(q0).into());
 ///
 /// let engine = builder
-///     .runtime(native_runtime())
+///     .runtime(selene_simple_runtime()?)
 ///     .program(interface)
 ///     .build()
 ///     .unwrap();
 ///
 /// // Engine is ready for quantum simulation
 /// assert_eq!(engine.num_qubits(), 1);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[must_use]
 pub fn qis_engine() -> QisEngineBuilder {

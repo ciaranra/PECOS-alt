@@ -12,7 +12,8 @@ keywords.workspace = true
 categories.workspace = true
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+# Just an rlib - the cdylib with __quantum__rt__* symbols is in pecos-qis-ffi
+crate-type = ["rlib"]
 
 [features]
 default = ["hugr"]
@@ -21,7 +22,8 @@ hugr = ["pecos-hugr-qis"]
 [dependencies]
 pecos-core.workspace = true
 pecos-programs.workspace = true
-pecos-qis-ffi.workspace = true
+pecos-qis-ffi-types.workspace = true
+pecos-qis-ffi.workspace = true  # Ensures cdylib gets built for runtime dlopen
 pecos-qis-core.workspace = true
 pecos-hugr-qis = { workspace = true, optional = true }
 log.workspace = true

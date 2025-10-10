@@ -15,8 +15,8 @@ pub trait SimBuilderExt {
     ///
     /// This method inspects the program type and selects:
     /// - QASM programs → QASM engine
-    /// - QIS programs → QIS control engine (Selene Helios interface, fallback to JIT)
-    /// - HUGR programs → QIS control engine (Selene Helios interface, no fallback)
+    /// - QIS programs → QIS control engine (Selene Helios interface)
+    /// - HUGR programs → QIS control engine (Selene Helios interface)
     /// - WASM/WAT programs → Error (not yet supported)
     /// - PHIR JSON programs → Error (not yet supported)
     ///
@@ -64,34 +64,48 @@ impl ProgrammedSimBuilder {
                     .classical(qasm_engine().program(qasm))
                     .build(),
                 Program::Qis(qis) => {
-                    // Try Selene default first, fall back to JIT for unified API convenience
-                    let engine_builder = qis_engine().try_program(qis.clone())
-                        .or_else(|_| {
-                            log::info!("Default Selene interface failed, falling back to JIT for unified sim API");
-                            #[cfg(feature = "jit")]
-                            {
-                                use pecos_qis_jit::jit_interface_builder;
-                                qis_engine().interface(jit_interface_builder()).try_program(qis)
-                            }
-                            #[cfg(not(feature = "jit"))]
-                            {
-                                Err(PecosError::Processing("JIT interface not available. Please enable the 'jit' feature or provide a Selene interface.".to_string()))
-                            }
-                        })
-                        .map_err(|e| PecosError::Generic(format!("Failed to load QIS program: {e}")))?;
+                    // Use Selene runtime and Helios interface
+                    #[cfg(feature = "selene")]
+                    {
+                        let selene_runtime = crate::selene_simple_runtime()
+                            .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                        let helios_builder = crate::helios_interface_builder();
+                        let engine_builder = qis_engine()
+                            .runtime(selene_runtime)
+                            .interface(helios_builder)
+                            .try_program(qis)
+                            .map_err(|e| PecosError::Generic(format!("Failed to load QIS program: {e}")))?;
 
-                    self.base_builder.classical(engine_builder).build()
+                        self.base_builder.classical(engine_builder).build()
+                    }
+                    #[cfg(not(feature = "selene"))]
+                    {
+                        Err(PecosError::Generic(
+                            "QIS programs require Selene support. Please rebuild with --features selene".to_string()
+                        ))
+                    }
                 }
                 Program::Hugr(hugr) => {
-                    // Try Selene default first (optimized for HUGR), fall back to error for HUGR
-                    // Note: HUGR really needs Selene, so we don't fall back to JIT
-                    self.base_builder
-                        .classical(qis_engine().try_program(hugr).map_err(|e| {
-                            PecosError::Generic(format!(
-                                "Failed to load HUGR program (requires Selene): {e}"
-                            ))
-                        })?)
-                        .build()
+                    // Use Selene runtime and Helios interface for HUGR programs
+                    #[cfg(feature = "selene")]
+                    {
+                        let selene_runtime = crate::selene_simple_runtime()
+                            .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                        let helios_builder = crate::helios_interface_builder();
+                        let engine_builder = qis_engine()
+                            .runtime(selene_runtime)
+                            .interface(helios_builder)
+                            .try_program(hugr)
+                            .map_err(|e| PecosError::Generic(format!("Failed to load HUGR program: {e}")))?;
+
+                        self.base_builder.classical(engine_builder).build()
+                    }
+                    #[cfg(not(feature = "selene"))]
+                    {
+                        Err(PecosError::Generic(
+                            "HUGR programs require Selene support. Please rebuild with --features selene".to_string()
+                        ))
+                    }
                 }
                 Program::Wasm(_) => Err(PecosError::Input(
                     "WASM programs are not yet supported in unified simulation".to_string(),
@@ -132,34 +146,48 @@ impl ProgrammedSimBuilder {
                     .classical(qasm_engine().program(qasm))
                     .run(shots),
                 Program::Qis(qis) => {
-                    // Try Selene default first, fall back to JIT for unified API convenience
-                    let engine_builder = qis_engine().try_program(qis.clone())
-                        .or_else(|_| {
-                            log::info!("Default Selene interface failed, falling back to JIT for unified sim API");
-                            #[cfg(feature = "jit")]
-                            {
-                                use pecos_qis_jit::jit_interface_builder;
-                                qis_engine().interface(jit_interface_builder()).try_program(qis)
-                            }
-                            #[cfg(not(feature = "jit"))]
-                            {
-                                Err(PecosError::Processing("JIT interface not available. Please enable the 'jit' feature or provide a Selene interface.".to_string()))
-                            }
-                        })
-                        .map_err(|e| PecosError::Generic(format!("Failed to load QIS program: {e}")))?;
+                    // Use Selene runtime and Helios interface
+                    #[cfg(feature = "selene")]
+                    {
+                        let selene_runtime = crate::selene_simple_runtime()
+                            .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                        let helios_builder = crate::helios_interface_builder();
+                        let engine_builder = qis_engine()
+                            .runtime(selene_runtime)
+                            .interface(helios_builder)
+                            .try_program(qis)
+                            .map_err(|e| PecosError::Generic(format!("Failed to load QIS program: {e}")))?;
 
-                    self.base_builder.classical(engine_builder).run(shots)
+                        self.base_builder.classical(engine_builder).run(shots)
+                    }
+                    #[cfg(not(feature = "selene"))]
+                    {
+                        Err(PecosError::Generic(
+                            "QIS programs require Selene support. Please rebuild with --features selene".to_string()
+                        ))
+                    }
                 }
                 Program::Hugr(hugr) => {
-                    // Try Selene default first (optimized for HUGR), fall back to error for HUGR
-                    // Note: HUGR really needs Selene, so we don't fall back to JIT
-                    self.base_builder
-                        .classical(qis_engine().try_program(hugr).map_err(|e| {
-                            PecosError::Generic(format!(
-                                "Failed to load HUGR program (requires Selene): {e}"
-                            ))
-                        })?)
-                        .run(shots)
+                    // Use Selene runtime and Helios interface for HUGR programs
+                    #[cfg(feature = "selene")]
+                    {
+                        let selene_runtime = crate::selene_simple_runtime()
+                            .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                        let helios_builder = crate::helios_interface_builder();
+                        let engine_builder = qis_engine()
+                            .runtime(selene_runtime)
+                            .interface(helios_builder)
+                            .try_program(hugr)
+                            .map_err(|e| PecosError::Generic(format!("Failed to load HUGR program: {e}")))?;
+
+                        self.base_builder.classical(engine_builder).run(shots)
+                    }
+                    #[cfg(not(feature = "selene"))]
+                    {
+                        Err(PecosError::Generic(
+                            "HUGR programs require Selene support. Please rebuild with --features selene".to_string()
+                        ))
+                    }
                 }
                 Program::Wasm(_) => Err(PecosError::Input(
                     "WASM programs are not yet supported in unified simulation".to_string(),
@@ -259,8 +287,8 @@ impl ProgrammedSimBuilder {
 /// # Automatic Engine Selection
 ///
 /// - QASM programs → QASM engine
-/// - QIS programs → QIS control engine (Selene Helios, fallback to JIT)
-/// - HUGR programs → QIS control engine (Selene Helios, no fallback)
+/// - QIS programs → QIS control engine (Selene Helios interface)
+/// - HUGR programs → QIS control engine (Selene Helios interface)
 /// - Other formats → Error (not yet supported)
 ///
 /// # Examples
@@ -276,12 +304,6 @@ impl ProgrammedSimBuilder {
 ///     .quantum(sparse_stab())
 ///     .noise(DepolarizingNoise { p: 0.01 })
 ///     .seed(42)
-///     .run(100)?;
-///
-/// // Override automatic engine selection if needed
-/// let qasm_prog = QasmProgram::from_string("OPENQASM 2.0; qreg q[1]; h q[0];");
-/// let results = sim(qasm_prog)
-///     .classical(pecos_qis_core::qis_engine().runtime(pecos_qis_native::NativeRuntime::new()))
 ///     .run(100)?;
 /// # Ok::<(), pecos_core::errors::PecosError>(())
 /// ```

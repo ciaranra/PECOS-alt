@@ -13,8 +13,9 @@
 ///
 /// The shim is compiled by build.rs and placed in the output directory
 pub fn get_shim_library_path() -> Option<std::path::PathBuf> {
-    // The build script will set this environment variable
+    // Try runtime environment variable first, then fall back to compile-time value
     std::env::var("PECOS_SELENE_SHIM_PATH")
         .ok()
+        .or_else(|| Some(env!("PECOS_SELENE_SHIM_PATH").to_string()))
         .map(std::path::PathBuf::from)
 }

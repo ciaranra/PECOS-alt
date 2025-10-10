@@ -4,8 +4,7 @@
 //! with Rust. These functions simply collect operations into the thread-local interface
 //! without performing any simulation or complex state management.
 
-use crate::operations::{Operation, QuantumOp};
-use crate::with_interface;
+use crate::{Operation, QuantumOp, with_interface};
 use log::debug;
 
 /// Helper to convert i64 to usize
@@ -504,6 +503,17 @@ pub unsafe extern "C" fn ___rz(qubit: i64, theta: f64) {
     unsafe { __quantum__qis__rz__body(theta, qubit) };
 }
 
+/// RZZ two-qubit rotation (Selene-style)
+///
+/// # Safety
+/// This function is safe to call from C/LLVM code. The qubit parameters must be valid
+/// non-negative qubit IDs that fit in usize. Invalid IDs will cause a panic.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___rzz(qubit1: i64, qubit2: i64, theta: f64) {
+    // Delegate to the QIS-style function
+    unsafe { __quantum__qis__rzz__body(theta, qubit1, qubit2) };
+}
+
 /// Qubit allocation (Selene-style)
 ///
 /// # Safety
@@ -554,6 +564,83 @@ pub unsafe extern "C" fn ___h(qubit: i64) {
 pub unsafe extern "C" fn ___cx(control: i64, target: i64) {
     // Delegate to the QIS-style function
     unsafe { __quantum__qis__cx__body(control, target) };
+}
+
+/// Lazy measurement function (Selene/HUGR-LLVM style)
+///
+/// This function performs a lazy measurement: it allocates a result ID, queues the measurement
+/// operation, and returns the result ID. The actual measurement result will be available after
+/// runtime execution via `__quantum__rt__result_get_one` or `___read_future_bool`.
+///
+/// # Safety
+/// This function is safe to call from C/LLVM code. The qubit parameter must be a valid
+/// non-negative qubit ID that fits in usize. Invalid IDs will cause a panic.
+///
+/// # Returns
+/// Returns the allocated result ID as i64.
+///
+/// # Panics
+/// Panics if the allocated result ID is too large to fit in i64.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___lazy_measure(qubit: i64) -> i64 {
+    let qubit_id = i64_to_usize(qubit);
+    with_interface(|interface| {
+        // Allocate a result ID for this measurement
+        let result_id = interface.allocate_result();
+        // Queue the allocation operation
+        interface.queue_operation(Operation::AllocateResult { id: result_id });
+        // Queue the measurement operation
+        interface.queue_operation(QuantumOp::Measure(qubit_id, result_id).into());
+        // Return the result ID
+        i64::try_from(result_id).expect("Result ID too large for i64")
+    })
+}
+
+/// Read a future boolean value (Guppy/HUGR-LLVM style)
+///
+/// This function retrieves a measurement result from a future/deferred measurement.
+/// The future_id is the result ID returned by `___lazy_measure`.
+///
+/// # Safety
+/// This function is safe to call from C/LLVM code. The future_id parameter must be a valid
+/// result ID previously returned by `___lazy_measure`. Invalid IDs will cause a panic.
+///
+/// # Returns
+/// Returns the boolean measurement result (true = 1, false = 0).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___read_future_bool(future_id: i64) -> bool {
+    let result_id = i64_to_usize(future_id);
+    with_interface(|interface| {
+        // Get the measurement result from the interface
+        // Returns false if the result is not yet available
+        interface.get_result(result_id).unwrap_or(false)
+    })
+}
+
+/// Increment the reference count of a future (Guppy/HUGR-LLVM style)
+///
+/// This function is called when a future value is copied or shared.
+/// In the minimal interface, this is a no-op since we don't do reference counting.
+///
+/// # Safety
+/// This function is safe to call from C/LLVM code. The future_id parameter is ignored.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___inc_future_refcount(_future_id: i64) {
+    // No-op in the minimal interface - we don't do reference counting
+    // The runtime will clean up measurement results when the shot completes
+}
+
+/// Decrement the reference count of a future (Guppy/HUGR-LLVM style)
+///
+/// This function is called when a future value is no longer needed.
+/// In the minimal interface, this is a no-op since we don't do reference counting.
+///
+/// # Safety
+/// This function is safe to call from C/LLVM code. The future_id parameter is ignored.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ___dec_future_refcount(_future_id: i64) {
+    // No-op in the minimal interface - we don't do reference counting
+    // The runtime will clean up measurement results when the shot completes
 }
 
 /// Teardown function (called at program end)

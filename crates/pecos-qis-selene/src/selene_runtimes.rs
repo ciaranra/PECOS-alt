@@ -44,7 +44,7 @@ impl From<std::io::Error> for RuntimeFetchError {
 /// use pecos_qis_selene::{selene_simple_runtime};
 /// use pecos_qis_core::{qis_engine, QisEngine};
 /// use pecos_engines::ClassicalControlEngineBuilder;
-/// use pecos_qis_ffi::OperationCollector;
+/// use pecos_qis_ffi_types::OperationCollector;
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// // Load the simple runtime (built during compilation)
@@ -66,8 +66,12 @@ impl From<std::io::Error> for RuntimeFetchError {
 /// # Errors
 /// Returns an error if the Selene simple runtime library cannot be found.
 pub fn selene_simple_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
+    eprintln!("[selene_simple_runtime] Called");
     let runtime_path = find_built_selene_runtime("selene_simple_runtime")?;
-    Ok(SeleneRuntime::new(runtime_path))
+    eprintln!("[selene_simple_runtime] Found runtime at: {:?}", runtime_path);
+    let runtime = SeleneRuntime::new(runtime_path);
+    eprintln!("[selene_simple_runtime] Created SeleneRuntime, returning");
+    Ok(runtime)
 }
 
 /// Create a Selene Soft RZ Runtime
@@ -81,7 +85,7 @@ pub fn selene_simple_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
 /// use pecos_qis_selene::{selene_soft_rz_runtime};
 /// use pecos_qis_core::{qis_engine, QisEngine};
 /// use pecos_engines::ClassicalControlEngineBuilder;
-/// use pecos_qis_ffi::OperationCollector;
+/// use pecos_qis_ffi_types::OperationCollector;
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// // Load the soft RZ runtime (built during compilation)
@@ -248,7 +252,7 @@ pub fn find_selene_runtime(name: &str) -> Option<PathBuf> {
 /// use pecos_qis_selene::{selene_runtime_auto};
 /// use pecos_qis_core::{qis_engine, QisEngine};
 /// use pecos_engines::ClassicalControlEngineBuilder;
-/// use pecos_qis_ffi::OperationCollector;
+/// use pecos_qis_ffi_types::OperationCollector;
 ///
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// // Load a runtime by name (built during compilation)

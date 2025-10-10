@@ -3,63 +3,56 @@
 //! This crate provides the orchestration between `QisInterface` (linked programs)
 //! and `QisRuntime` (interpreters), implementing `ClassicalControlEngine` for PECOS integration.
 //!
-//! It includes multiple runtime implementations:
-//! - `NativeRuntime`: Pure Rust interpreter
-//! - `SeleneRuntime`: FFI wrapper for Selene .so
+//! The reference runtime implementation is:
+//! - `SeleneRuntime`: Selene-based QIS runtime (in pecos-qis-selene crate)
 //!
 //! # Example Usage
 //!
+//! This crate provides the core builder API for QIS engines. Specific runtime
+//! implementations are provided by other crates (e.g., `pecos-qis-selene`).
+//!
 //! ```rust
-//! use pecos_qis_core::{qis_engine, QisEngine};
-//! use pecos_qis_native::native_runtime;
-//! use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine};
-//! use pecos_qis_ffi::{OperationCollector, QuantumOp};
+//! use pecos_qis_core::qis_engine;
+//! use pecos_qis_ffi_types::{OperationCollector, QuantumOp};
 //!
 //! // Create an interface with quantum operations
 //! let mut interface = OperationCollector::new();
 //! let q0 = interface.allocate_qubit();
 //! interface.operations.push(QuantumOp::H(q0).into());
 //!
-//! // Build engine with native runtime
-//! let engine = qis_engine()
-//!     .runtime(native_runtime())
-//!     .program(interface)
-//!     .build()
-//!     .unwrap();
+//! // Create a builder (requires a runtime to build)
+//! let builder = qis_engine().with_interface(interface.clone());
 //!
-//! assert_eq!(engine.num_qubits(), 1);
+//! // For complete examples with runtime, see the pecos-qis-selene crate
+//! assert_eq!(interface.allocated_qubits.len(), 1);
 //! ```
 //!
-//! # Using Alternative Runtimes
+//! # Builder API
 //!
-//! The QIS control engine can work with different runtime implementations.
-//! This example shows using a custom runtime with an interface:
+//! The QIS engine builder follows the standard PECOS builder pattern.
+//! This example shows the API structure:
 //!
 //! ```rust
 //! use pecos_qis_core::qis_engine;
-//! use pecos_qis_native::native_runtime;
-//! use pecos_engines::{ClassicalControlEngineBuilder, ClassicalEngine};
-//! use pecos_qis_ffi::OperationCollector;
+//! use pecos_qis_ffi_types::{OperationCollector, QuantumOp};
 //!
-//! // Create a simple program with operations
+//! // Create a Bell state program
 //! let mut interface = OperationCollector::new();
 //! let q0 = interface.allocate_qubit();
 //! let q1 = interface.allocate_qubit();
-//! interface.operations.push(pecos_qis_ffi::QuantumOp::H(q0).into());
-//! interface.operations.push(pecos_qis_ffi::QuantumOp::CX(q0, q1).into());
+//! interface.operations.push(QuantumOp::H(q0).into());
+//! interface.operations.push(QuantumOp::CX(q0, q1).into());
 //!
-//! // Build engine with native runtime
-//! let engine = qis_engine()
-//!     .runtime(native_runtime())
-//!     .program(interface)
-//!     .build()
-//!     .unwrap();
+//! // Create the builder (requires adding .runtime() and calling .build() to execute)
+//! let builder = qis_engine().with_interface(interface.clone());
 //!
-//! assert_eq!(engine.num_qubits(), 2);
+//! // Verify the interface structure
+//! assert_eq!(interface.allocated_qubits.len(), 2);
+//! assert_eq!(interface.operations.len(), 2);
 //! ```
 //!
-//! For Selene-based runtimes and interfaces (LLVM execution), see the
-//! `pecos-qis-selene` and `pecos-qis-jit` crates.
+//! For more on Selene-based runtimes and interfaces (LLVM execution), see the
+//! `pecos-qis-selene` crate.
 
 pub mod builder;
 pub mod ccengine;
@@ -99,7 +92,7 @@ use std::path::Path;
 /// # Parameters
 ///
 /// - `program_path`: Path to the QIS program file (.ll or .bc)
-/// - `runtime`: The QIS runtime to use (e.g., `NativeRuntime`, `SeleneRuntime`)
+/// - `runtime`: The QIS runtime to use (e.g., `SeleneRuntime` from pecos-qis-selene)
 ///
 /// # Returns
 ///
@@ -166,9 +159,9 @@ pub fn setup_qis_engine(
         Please use setup_qis_engine_with_runtime and provide an explicit runtime:\n\
         \n\
         use pecos_qis_core::setup_qis_engine_with_runtime;\n\
-        use pecos_qis_native::native_runtime;\n\
+        use pecos_qis_selene::selene_simple_runtime;\n\
         \n\
-        let engine = setup_qis_engine_with_runtime(path, native_runtime())?;"
+        let engine = setup_qis_engine_with_runtime(path, selene_simple_runtime()?)?;"
             .to_string(),
     ))
 }

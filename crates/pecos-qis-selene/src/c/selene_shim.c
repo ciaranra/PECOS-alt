@@ -15,6 +15,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <setjmp.h>
 
 // Selene API types (matching selene.h)
 typedef struct SeleneInstance {
@@ -89,8 +90,24 @@ extern int64_t __quantum__rt__result_allocate(void);
 
 selene_u64_result_t selene_qalloc(SeleneInstance *instance) {
     (void)instance;  // Unused - we use thread-local storage
+    fprintf(stderr, "[SHIM] selene_qalloc() called\n");
+    fflush(stderr);
     int64_t qubit_id = __quantum__rt__qubit_allocate();
-    return SUCCESS_VAL(selene_u64_result_t, (uint64_t)qubit_id);
+    fprintf(stderr, "[SHIM] __quantum__rt__qubit_allocate() returned: %ld\n", qubit_id);
+    fflush(stderr);
+
+    // Check if allocation failed (negative values indicate errors in some implementations)
+    if (qubit_id < 0) {
+        fprintf(stderr, "[SHIM] ERROR: Qubit allocation failed with id: %ld, returning error 100000\n", qubit_id);
+        fflush(stderr);
+        return (selene_u64_result_t){.error_code = 100000, .value = 0};
+    }
+
+    selene_u64_result_t result = SUCCESS_VAL(selene_u64_result_t, (uint64_t)qubit_id);
+    fprintf(stderr, "[SHIM] selene_qalloc() returning success with value: %lu, error_code: %u\n",
+            result.value, result.error_code);
+    fflush(stderr);
+    return result;
 }
 
 selene_void_result_t selene_qfree(SeleneInstance *instance, uint64_t q) {
@@ -271,7 +288,9 @@ selene_void_result_t selene_print_f64_array(SeleneInstance *instance, selene_str
 selene_void_result_t selene_print_panic(SeleneInstance *instance, selene_string_t message,
                                        uint32_t error_code) {
     (void)instance;
+    fprintf(stderr, "[SHIM] selene_print_panic() called with error_code=%u\n", error_code);
     fprintf(stderr, "PANIC [%u]: %.*s\n", error_code, (int)message.length, message.data);
+    fflush(stderr);
     return SUCCESS(selene_void_result_t);
 }
 
@@ -286,13 +305,20 @@ selene_void_result_t selene_dump_state(SeleneInstance *instance, selene_string_t
     return SUCCESS(selene_void_result_t);
 }
 
+__attribute__((visibility("default")))
 selene_void_result_t selene_set_tc(SeleneInstance *instance, uint64_t time_cursor) {
+    fprintf(stderr, "[SHIM] !!!!! selene_set_tc(%lu) called !!!!!\n", time_cursor);
+    fflush(stderr);
     (void)instance; (void)time_cursor;
     // No-op - time cursor not used
+    fprintf(stderr, "[SHIM] selene_set_tc returning SUCCESS\n");
+    fflush(stderr);
     return SUCCESS(selene_void_result_t);
 }
 
 selene_u64_result_t selene_get_tc(SeleneInstance *instance) {
+    fprintf(stderr, "[SHIM] selene_get_tc() called\n");
+    fflush(stderr);
     (void)instance;
     return SUCCESS_VAL(selene_u64_result_t, 0);
 }
@@ -380,4 +406,82 @@ selene_u64_result_t selene_custom_runtime_call(SeleneInstance *instance, uint64_
                                                const uint8_t *data, uint64_t data_length) {
     (void)instance; (void)tag; (void)data; (void)data_length;
     return SUCCESS_VAL(selene_u64_result_t, 0);
+}
+
+// =============================================================================
+// In-process execution support with setjmp/longjmp
+// =============================================================================
+
+// This is the jump buffer used by Helios's interface.c
+// We DEFINE it here (not extern) so it's available when program.so is loaded.
+// The program.so will have an `extern jmp_buf user_program_jmpbuf` declaration
+// that will resolve to this definition when loaded with RTLD_GLOBAL.
+jmp_buf user_program_jmpbuf;
+
+/**
+ * Wrapper function to safely call qmain with setjmp/longjmp support
+ *
+ * This function sets up the exception handling mechanism that Helios expects:
+ * 1. Calls setjmp to save the current stack state
+ * 2. Calls qmain(0) to execute the quantum program
+ * 3. If an error occurs and longjmp is called, we catch it and return the error code
+ *
+ * Returns: 0 on success, error code on failure
+ */
+typedef uint64_t (*qmain_fn_t)(uint64_t);
+
+uint64_t pecos_call_qmain_with_setjmp(qmain_fn_t qmain) {
+    fprintf(stderr, "[SHIM] Setting up setjmp before calling qmain...\n");
+    fflush(stderr);
+
+    // Initialize shot context to match what interface.c main() does
+    // This might be required for proper execution
+    static SeleneInstance dummy_instance;
+    fprintf(stderr, "[SHIM] Calling selene_on_shot_start(dummy, 0)...\n");
+    fflush(stderr);
+    selene_void_result_t start_result = selene_on_shot_start(&dummy_instance, 0);
+    if (start_result.error_code != 0) {
+        fprintf(stderr, "[SHIM] selene_on_shot_start failed with error: %u\n", start_result.error_code);
+        fflush(stderr);
+        return start_result.error_code;
+    }
+
+    int error_code = setjmp(user_program_jmpbuf);
+    if (error_code == 0) {
+        // Normal path - call qmain
+        fprintf(stderr, "[SHIM] setjmp complete, calling qmain(0)...\n");
+        fflush(stderr);
+        uint64_t result = qmain(0);
+        fprintf(stderr, "[SHIM] qmain returned successfully: %lu\n", result);
+        fflush(stderr);
+
+        // Clean up shot context
+        fprintf(stderr, "[SHIM] Calling selene_on_shot_end...\n");
+        fflush(stderr);
+        selene_void_result_t end_result = selene_on_shot_end(&dummy_instance);
+        if (end_result.error_code != 0) {
+            fprintf(stderr, "[SHIM] selene_on_shot_end failed with error: %u\n", end_result.error_code);
+        }
+
+        return result;
+    } else {
+        // longjmp was called - an error occurred
+        fprintf(stderr, "[SHIM] longjmp caught error code: %d (0x%X)\n", error_code, error_code);
+        fflush(stderr);
+
+        // Clean up even on error
+        selene_on_shot_end(&dummy_instance);
+
+        if (error_code < 1000) {
+            // Recoverable error - return 0 but log it
+            fprintf(stderr, "[SHIM] Recoverable error, continuing\n");
+            fflush(stderr);
+            return 0;
+        } else {
+            // Fatal error - return error code
+            fprintf(stderr, "[SHIM] Fatal error: %d\n", error_code);
+            fflush(stderr);
+            return (uint64_t)error_code;
+        }
+    }
 }

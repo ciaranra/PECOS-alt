@@ -6,7 +6,7 @@
 use libloading::{Library, Symbol};
 use log::{debug, info};
 use pecos_qis_core::runtime::{ClassicalState, QisRuntime, Result, RuntimeError, Shot};
-use pecos_qis_ffi::OperationCollector;
+use pecos_qis_ffi_types::OperationCollector;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -306,7 +306,7 @@ impl QisRuntime for QisSeleneLibraryRuntime {
         Ok(())
     }
 
-    fn execute_until_quantum(&mut self) -> Result<Option<Vec<pecos_qis_ffi::QuantumOp>>> {
+    fn execute_until_quantum(&mut self) -> Result<Option<Vec<pecos_qis_ffi_types::QuantumOp>>> {
         let handle = self
             .runtime_handle
             .as_ref()
@@ -506,7 +506,7 @@ impl QisRuntime for QisSeleneSimpleRuntime {
         self.inner.load_interface(interface)
     }
 
-    fn execute_until_quantum(&mut self) -> Result<Option<Vec<pecos_qis_ffi::QuantumOp>>> {
+    fn execute_until_quantum(&mut self) -> Result<Option<Vec<pecos_qis_ffi_types::QuantumOp>>> {
         self.inner.execute_until_quantum()
     }
 

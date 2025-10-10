@@ -23,11 +23,10 @@ env_logger.workspace = true
 log.workspace = true
 
 [features]
-default = ["qasm", "llvm", "phir", "jit"]
+default = ["qasm", "llvm", "phir", "selene"]
 qasm = ["pecos/qasm"]
 llvm = ["pecos/llvm"]
 phir = ["pecos/phir"]
-jit = ["pecos/jit"]
 selene = ["pecos/selene"]
 
 [dev-dependencies]

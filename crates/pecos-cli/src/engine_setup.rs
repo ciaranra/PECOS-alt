@@ -4,6 +4,8 @@ use pecos::DynamicEngineBuilder;
 use pecos::phir_json_engine;
 use pecos::prelude::*;
 use pecos::qis_engine;
+#[cfg(feature = "selene")]
+use pecos::{helios_interface_builder, selene_simple_runtime};
 use std::path::Path;
 
 /// Sets up a classical engine for the CLI based on the program type
@@ -12,7 +14,7 @@ use std::path::Path;
 pub fn setup_cli_engine(
     program_path: &Path,
     _shots: Option<usize>,
-    use_jit: bool,
+    _use_jit: bool,
 ) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     debug!("Setting up engine for path: {}", program_path.display());
 
@@ -36,37 +38,34 @@ pub fn setup_cli_engine(
         ProgramType::QIR => {
             debug!("Setting up QIR engine");
 
-            if use_jit {
-                // Explicit JIT interface requested
-                debug!("Using explicit JIT interface for QIR engine");
-                #[cfg(feature = "jit")]
-                {
-                    let qis_program = QisProgram::from_file(program_path)?;
+            #[cfg(all(feature = "llvm", feature = "selene"))]
+            {
+                let qis_program = QisProgram::from_file(program_path)?;
 
-                    let engine = qis_engine()
-                        .runtime(native_runtime())
-                        .interface(jit_interface_builder())
-                        .try_program(qis_program)?
-                        .build()?;
+                // Use Selene runtime and Helios interface (default and only option)
+                debug!("Using Selene runtime and Helios interface for QIR engine");
+                let selene_runtime = selene_simple_runtime()
+                    .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                let helios_builder = helios_interface_builder();
+                let engine = qis_engine()
+                    .runtime(selene_runtime)
+                    .interface(helios_builder)
+                    .try_program(qis_program)?
+                    .build()?;
 
-                    Ok(Box::new(engine) as Box<dyn ClassicalControlEngine>)
-                }
-                #[cfg(not(feature = "jit"))]
-                {
-                    Err(PecosError::Processing(
-                        "JIT interface not available. Please enable the 'jit' feature.".to_string(),
-                    ))
-                }
-            } else {
-                // Use default Selene interface and runtime
-                // This will use the Helios interface with Selene simple runtime
-                // Users can override by using --jit flag
-                Err(PecosError::Processing(
-                    "Default QIS execution requires Selene runtime.\n\
-                    \n\
-                    To use JIT interface instead, run with --jit flag:\n\
-                    pecos run --jit program.ll"
-                        .to_string(),
+                Ok(Box::new(engine))
+            }
+            #[cfg(all(feature = "llvm", not(feature = "selene")))]
+            {
+                Err(PecosError::Input(
+                    "Selene support is required for QIR programs but not compiled in.\n\
+                     Please rebuild with --features selene".to_string(),
+                ))
+            }
+            #[cfg(not(feature = "llvm"))]
+            {
+                Err(PecosError::Input(
+                    "LLVM support not compiled in".to_string(),
                 ))
             }
         }
@@ -86,7 +85,7 @@ pub fn setup_cli_engine(
 /// This function returns a `DynamicEngineBuilder` that can be used with `sim_builder`
 pub fn setup_cli_engine_builder(
     program_path: &Path,
-    use_jit: bool,
+    _use_jit: bool,
 ) -> Result<DynamicEngineBuilder, PecosError> {
     debug!(
         "Setting up engine builder for path: {}",
@@ -98,33 +97,28 @@ pub fn setup_cli_engine_builder(
     match program_type {
         ProgramType::QIR => {
             debug!("Setting up QIR engine builder");
-            #[cfg(feature = "llvm")]
+            #[cfg(all(feature = "llvm", feature = "selene"))]
             {
                 let qis_program = QisProgram::from_file(program_path)?;
 
-                let engine_builder = if use_jit {
-                    // Explicit JIT interface requested
-                    debug!("Using explicit JIT interface for QIR engine builder");
-                    #[cfg(feature = "jit")]
-                    {
-                        qis_engine()
-                            .runtime(native_runtime())
-                            .interface(jit_interface_builder())
-                            .try_program(qis_program.clone())?
-                    }
-                    #[cfg(not(feature = "jit"))]
-                    {
-                        return Err(PecosError::Processing(
-                            "JIT interface not available. Please enable the 'jit' feature."
-                                .to_string(),
-                        ));
-                    }
-                } else {
-                    // Use Selene interface (default) - fail with helpful message if not available
-                    qis_engine().try_program(qis_program)?
-                };
+                // Use Selene runtime and Helios interface (default and only option)
+                debug!("Using Selene runtime and Helios interface for QIR engine builder");
+                let selene_runtime = selene_simple_runtime()
+                    .map_err(|e| PecosError::Generic(format!("Failed to load Selene runtime: {e}")))?;
+                let helios_builder = helios_interface_builder();
+                let engine_builder = qis_engine()
+                    .runtime(selene_runtime)
+                    .interface(helios_builder)
+                    .try_program(qis_program)?;
 
                 Ok(DynamicEngineBuilder::new(engine_builder))
+            }
+            #[cfg(all(feature = "llvm", not(feature = "selene")))]
+            {
+                Err(PecosError::Input(
+                    "Selene support is required for QIR programs but not compiled in.\n\
+                     Please rebuild with --features selene".to_string(),
+                ))
             }
             #[cfg(not(feature = "llvm"))]
             {

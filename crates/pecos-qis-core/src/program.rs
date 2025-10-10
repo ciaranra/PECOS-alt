@@ -9,7 +9,7 @@
 
 use pecos_core::errors::PecosError;
 use pecos_programs::{HugrProgram, QisProgram};
-use pecos_qis_ffi::OperationCollector;
+use pecos_qis_ffi_types::OperationCollector;
 use std::process::Command;
 use tempfile::NamedTempFile;
 
@@ -41,8 +41,8 @@ pub enum ProgramType {
 
 /// Trait for different `QisInterface` implementation strategies
 ///
-/// This allows pluggable compilation strategies - JIT execution,
-/// Selene Helios compilation, or other future approaches.
+/// This allows pluggable compilation strategies - Selene Helios compilation
+/// or other future approaches.
 pub trait QisInterfaceProvider: Send + Sync {
     /// Get the interface (may involve compilation/linking)
     ///
@@ -206,12 +206,9 @@ impl QisSeleneHeliosInterface {
                     "Selene Helios interface cannot compile LLVM IR text directly.\n\
                      \n\
                      The Helios interface is designed for HUGR bytes and QIS bitcode formats.\n\
-                     For LLVM IR text, please use qis_jit_interface() instead of qis_selene_helios_interface().\n\
+                     For LLVM IR text, please convert to bitcode first or use a different interface.\n\
                      \n\
-                     Example:\n\
-                     engine = qis_engine()\n\
-                         .interface(qis_jit_interface())  // Use JIT for LLVM IR\n\
-                         .program(qis_program)".to_string()
+                     This is a deprecated code path - modern PECOS uses Selene for all QIS programs.".to_string()
                 ))
             }
         }
@@ -305,12 +302,11 @@ impl QisSeleneHeliosInterface {
         Err(PecosError::Generic(format!(
             "Selene Helios compilation failed. Unable to find Selene installation after trying: {}. \n\
              \n\
-             To use Helios interface, you need to:\n\
+             To use Selene Helios interface, you need to:\n\
              1. Install Selene (https://github.com/CQCL/selene)\n\
              2. Set SELENE_PATH environment variable to the Selene directory\n\
              \n\
-             Alternatively, use qis_jit_interface() instead of qis_selene_helios_interface(), \
-             which doesn't require Selene.",
+             Selene is the only supported interface for QIS programs in modern PECOS.",
             strategy_names.join(", ")
         )))
     }
@@ -588,7 +584,7 @@ impl IntoQisInterface for OperationCollector {
 
 /// Trait for building `QisInterface` instances from programs
 ///
-/// This trait allows different compilation strategies (JIT, Helios, etc.)
+/// This trait allows different compilation strategies (e.g., Helios)
 /// to be plugged into the `QisEngineBuilder` through the .`interface()` method.
 pub trait QisInterfaceBuilder: Send + Sync + dyn_clone::DynClone {
     /// Build a `QisInterface` from the given program using this builder's strategy
@@ -635,18 +631,19 @@ pub enum InterfaceChoice {
 
 /// Implement `IntoQisInterface` for `QisProgram`
 ///
-/// Users must explicitly choose an interface implementation from pecos-qis-jit or pecos-qis-selene.
+/// Users must explicitly specify runtime and interface using the builder API.
 impl IntoQisInterface for QisProgram {
     fn into_qis_interface(self) -> Result<OperationCollector, PecosError> {
         Err(PecosError::Processing(
             "No default QIS interface implementation available.\n\
-            Please explicitly specify an interface implementation:\n\n\
-            For JIT interface:\n\
-            use pecos_qis_jit::QisJitInterface;\n\
-            let interface = QisJitInterface::from_llvm_ir(program);\n\n\
-            For Selene Helios interface:\n\
-            use pecos_qis_selene::QisHeliosInterface;\n\
-            let interface = QisHeliosInterface::new();"
+            Please explicitly specify a runtime and interface when building the engine:\n\n\
+            use pecos::qis_engine;\n\
+            use pecos::{selene_simple_runtime, helios_interface_builder};\n\n\
+            let engine_builder = qis_engine()\n\
+                .runtime(selene_simple_runtime()?)\n\
+                .interface(helios_interface_builder())\n\
+                .try_program(qis_program)?;\n\n\
+            The Selene Helios interface is the reference implementation for QIS programs."
                 .to_string(),
         ))
     }
@@ -654,12 +651,18 @@ impl IntoQisInterface for QisProgram {
 
 /// Implement `IntoQisInterface` for HUGR bytes
 ///
-/// Users must explicitly choose an interface implementation.
+/// Users must explicitly specify a runtime and interface.
 impl IntoQisInterface for &[u8] {
     fn into_qis_interface(self) -> Result<OperationCollector, PecosError> {
         Err(PecosError::Processing(
             "No default interface implementation for HUGR bytes.\n\
-            Please use an explicit interface from pecos-qis-jit or pecos-qis-selene."
+            Please explicitly specify a runtime and interface when building the engine:\n\n\
+            use pecos::qis_engine;\n\
+            use pecos::{selene_simple_runtime, helios_interface_builder};\n\n\
+            let engine_builder = qis_engine()\n\
+                .runtime(selene_simple_runtime()?)\n\
+                .interface(helios_interface_builder())\n\
+                .try_program(hugr_program)?;"
                 .to_string(),
         ))
     }
@@ -670,7 +673,13 @@ impl IntoQisInterface for Vec<u8> {
     fn into_qis_interface(self) -> Result<OperationCollector, PecosError> {
         Err(PecosError::Processing(
             "No default interface implementation for HUGR bytes.\n\
-            Please use an explicit interface from pecos-qis-jit or pecos-qis-selene."
+            Please explicitly specify a runtime and interface when building the engine:\n\n\
+            use pecos::qis_engine;\n\
+            use pecos::{selene_simple_runtime, helios_interface_builder};\n\n\
+            let engine_builder = qis_engine()\n\
+                .runtime(selene_simple_runtime()?)\n\
+                .interface(helios_interface_builder())\n\
+                .try_program(hugr_program)?;"
                 .to_string(),
         ))
     }
@@ -678,12 +687,18 @@ impl IntoQisInterface for Vec<u8> {
 
 /// Implement `IntoQisInterface` for `HugrProgram`
 ///
-/// Users must explicitly choose an interface implementation.
+/// Users must explicitly specify a runtime and interface.
 impl IntoQisInterface for HugrProgram {
     fn into_qis_interface(self) -> Result<OperationCollector, PecosError> {
         Err(PecosError::Processing(
             "No default interface implementation for HUGR programs.\n\
-            Please use an explicit interface from pecos-qis-jit or pecos-qis-selene."
+            Please explicitly specify a runtime and interface when building the engine:\n\n\
+            use pecos::qis_engine;\n\
+            use pecos::{selene_simple_runtime, helios_interface_builder};\n\n\
+            let engine_builder = qis_engine()\n\
+                .runtime(selene_simple_runtime()?)\n\
+                .interface(helios_interface_builder())\n\
+                .try_program(hugr_program)?;"
                 .to_string(),
         ))
     }
@@ -739,7 +754,7 @@ impl From<OperationCollector> for QisEngineProgram {
     }
 }
 
-// Tests for program conversion are in the implementation crates (pecos-qis-jit, pecos-qis-selene, etc.)
+// Tests for program conversion are in the implementation crates (pecos-qis-selene, etc.)
 // since they require actual interface implementations.
 
 /// Compile HUGR bytes using Selene's compiler
@@ -757,7 +772,8 @@ fn compile_hugr_with_selene(hugr_bytes: &[u8]) -> Result<String, PecosError> {
                 To use Helios interface, ensure Selene is installed and available:\n\
                 1. Ensure Selene repository is at ../selene or ../../../selene\n\
                 2. Build Selene compilers: 'cargo build --release' in Selene directory\n\
-                3. Or use explicit JIT interface: qis_engine().interface(qis_jit_interface()).program()"
+                \n\
+                Selene is the only supported interface for QIS programs."
             ))
         })
 }
