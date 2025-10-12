@@ -1,12 +1,19 @@
+use log::info;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
+    // Initialize logger for build script
+    env_logger::init();
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     // Find or build libhelios_selene_interface.a
     find_or_build_helios_lib(&out_dir);
+    
+    // Export paths for Selene runtime libraries if they're built as dependencies
+    #[cfg(feature = "selene-runtimes")]
+    export_selene_runtime_paths();
 
     // Tell cargo to rerun this build script if pecos-qis-ffi changes
     println!("cargo:rerun-if-changed=../pecos-qis-ffi/src");
@@ -60,114 +67,66 @@ fn find_or_build_helios_lib(out_dir: &Path) {
         return;
     }
 
-    // Try to find Selene repository
-    let possible_paths = [
-        PathBuf::from("../../../selene"), // From crate directory
-        PathBuf::from("../selene"),       // From workspace root
-    ];
-
-    let selene_path = possible_paths.iter().find(|p| p.exists()).cloned();
-
-    if let Some(selene_path) = selene_path {
-        // Found Selene, look for pre-built library
-        let helios_path = selene_path.join("selene-ext/interfaces/helios_qis");
-        let prebuilt_paths = [
-            helios_path.join("c/build/libhelios_selene_interface.a"),
-            helios_path
-                .join("python/selene_helios_qis_plugin/_dist/lib/libhelios_selene_interface.a"),
-        ];
-
-        for prebuilt in &prebuilt_paths {
-            if prebuilt.exists() {
-                // Copy to our output directory
-                if std::fs::copy(prebuilt, &helios_lib).is_ok() {
-                    println!("cargo:rustc-env=HELIOS_LIB_PATH={}", helios_lib.display());
-                    // Also build runtime plugins while we're here
-                    build_runtime_plugins(&selene_path);
-                    return;
-                }
-            }
+    // Build from Cargo-downloaded Selene dependency
+    #[cfg(feature = "selene-runtimes")]
+    match build_helios_from_cargo_dependency(out_dir) {
+        Ok(()) => {
+            println!("cargo:rustc-env=HELIOS_LIB_PATH={}", helios_lib.display());
+            return;
+        }
+        Err(e) => {
+            panic!("Failed to build Helios interface from Selene dependency: {}", e);
         }
     }
 
-    // If we get here, fall back to building from vendored sources
-    build_helios_lib_from_vendor(out_dir);
+    #[cfg(not(feature = "selene-runtimes"))]
+    panic!("Failed to build Helios interface library. The selene-runtimes feature must be enabled.");
 }
 
-/// Build Selene runtime plugins (.so files) if the Selene repository is available
-fn build_runtime_plugins(selene_path: &Path) {
-    // List of runtime crates to build
-    let runtimes = [
-        ("selene-ext/runtimes/simple", "selene_simple_runtime"),
-        ("selene-ext/runtimes/soft_rz", "selene_soft_rz_runtime"),
-    ];
 
-    for (crate_path, lib_name) in &runtimes {
-        let full_path = selene_path.join(crate_path);
 
-        if !full_path.exists() {
-            println!(
-                "cargo:warning=Runtime crate not found: {}",
-                full_path.display()
-            );
-            continue;
-        }
-
-        // Check if .so already exists
-        let so_path = selene_path
-            .join("target/release")
-            .join(format!("lib{lib_name}.so"));
-        if so_path.exists() {
-            // Already built, skip
-            continue;
-        }
-
-        println!("cargo:warning=Building Selene runtime: {lib_name}");
-
-        // Build the runtime using cargo
-        let output = Command::new("cargo")
-            .arg("build")
-            .arg("--release")
-            .arg("--manifest-path")
-            .arg(full_path.join("Cargo.toml"))
-            .output();
-
-        match output {
-            Ok(output) if output.status.success() => {
-                println!("cargo:warning=Successfully built {lib_name}");
-
-                // The .so file should be in ../selene/target/release/
-                let so_path = selene_path
-                    .join("target/release")
-                    .join(format!("lib{lib_name}.so"));
-                if so_path.exists() {
-                    println!("cargo:warning=Runtime available at: {}", so_path.display());
-                } else {
-                    println!(
-                        "cargo:warning=Warning: Built {lib_name} but .so not found at expected location"
-                    );
-                }
-            }
-            Ok(output) => {
-                println!(
-                    "cargo:warning=Failed to build {}: {}",
-                    lib_name,
-                    String::from_utf8_lossy(&output.stderr)
-                );
-            }
-            Err(e) => {
-                println!("cargo:warning=Error running cargo for {lib_name}: {e}");
-            }
-        }
+/// Build Helios interface library from Cargo-downloaded Selene dependency
+#[cfg(feature = "selene-runtimes")]
+fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
+    use cargo_metadata::MetadataCommand;
+    
+    info!("Building Helios interface from Selene dependency");
+    
+    // Get cargo metadata to find Selene source
+    let metadata = MetadataCommand::new()
+        .exec()
+        .map_err(|e| format!("Failed to get cargo metadata: {}", e))?;
+    
+    // Find the selene-simple-runtime package (which depends on selene-core)
+    let selene_pkg = metadata.packages
+        .iter()
+        .find(|p| p.name == "selene-simple-runtime")
+        .ok_or_else(|| "Could not find selene-simple-runtime in cargo metadata".to_string())?;
+    
+    // Get the path to the Selene repository root
+    // The manifest path is something like .../selene-ext/runtimes/simple/Cargo.toml
+    // We need to go up three levels to get to the Selene root
+    let manifest_dir = selene_pkg.manifest_path.parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .ok_or_else(|| "Could not determine Selene root from manifest path".to_string())?;
+    
+    let selene_root = manifest_dir.as_std_path();
+    
+    // Build Helios interface from Selene source
+    let helios_path = selene_root.join("selene-ext/interfaces/helios_qis");
+    let interface_c = helios_path.join("c/src/interface.c");
+    let helios_include_dir = helios_path.join("c/include");
+    let selene_include_dir = selene_root.join("selene-sim/c/include");
+    
+    if !interface_c.exists() {
+        return Err(format!("Helios interface.c not found at: {}", interface_c.display()));
     }
-}
-
-fn build_helios_lib_from_vendor(out_dir: &Path) {
-    let vendor_dir = PathBuf::from("vendor/helios_qis");
-    let interface_c = vendor_dir.join("src/interface.c");
+    
     let interface_o = out_dir.join("interface.o");
     let helios_lib = out_dir.join("libhelios_selene_interface.a");
-
+    
     // Compile interface.c to object file
     let mut compile_cmd = Command::new("clang");
     compile_cmd
@@ -175,43 +134,116 @@ fn build_helios_lib_from_vendor(out_dir: &Path) {
         .arg("-fPIC")
         .arg("-O2")
         .arg("-std=c11")
-        .arg("-D_USE_MATH_DEFINES") // For M_PI on some platforms
+        .arg("-D_USE_MATH_DEFINES")
+        .arg("-DM_PI=3.14159265358979323846") // Define M_PI directly
         .arg("-DSELENE_LOG_LEVEL=0")
+        .arg("-Wno-macro-redefined") // Suppress the redefinition warning
         .arg("-I")
-        .arg(vendor_dir.join("include"))
+        .arg(&helios_include_dir)
+        .arg("-I")
+        .arg(&selene_include_dir)
         .arg("-o")
         .arg(&interface_o)
         .arg(&interface_c);
-
+    
     let output = compile_cmd
         .output()
-        .expect("Failed to execute clang for interface.c");
-
-    assert!(
-        output.status.success(),
-        "Failed to compile interface.c:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-
+        .map_err(|e| format!("Failed to execute clang: {}", e))?;
+    
+    if !output.status.success() {
+        return Err(format!(
+            "Failed to compile interface.c:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    
     // Create static library from object file
     let mut ar_cmd = Command::new("ar");
     ar_cmd.arg("rcs").arg(&helios_lib).arg(&interface_o);
+    
+    let output = ar_cmd.output()
+        .map_err(|e| format!("Failed to execute ar: {}", e))?;
+    
+    if !output.status.success() {
+        return Err(format!(
+            "Failed to create libhelios_selene_interface.a:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    
+    info!("Successfully built Helios interface from Selene dependency");
+    
+    // Tell cargo to recompile if Selene files change
+    println!("cargo:rerun-if-changed={}", interface_c.display());
+    
+    Ok(())
+}
 
-    let output = ar_cmd.output().expect("Failed to execute ar");
-
-    assert!(
-        output.status.success(),
-        "Failed to create libhelios_selene_interface.a:\nstdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    // Export the path for use in tests
-    println!("cargo:rustc-env=HELIOS_LIB_PATH={}", helios_lib.display());
-
-    // Tell cargo to recompile if vendored files change
-    println!("cargo:rerun-if-changed=vendor/helios_qis/src/interface.c");
-    println!("cargo:rerun-if-changed=vendor/helios_qis/include/helios_qis/interface.h");
-    println!("cargo:rerun-if-changed=vendor/helios_qis/include/selene/selene.h");
+/// Export environment variables for Selene runtime library paths
+#[cfg(feature = "selene-runtimes")]
+fn export_selene_runtime_paths() {
+    use cargo_metadata::MetadataCommand;
+    
+    // Get workspace metadata
+    let metadata = MetadataCommand::new()
+        .exec()
+        .expect("Failed to get cargo metadata");
+    
+    // Find the target directory
+    let target_dir = metadata.target_directory.as_std_path();
+    
+    // Determine the current build profile
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+    
+    // Look for runtime libraries in the current profile first, then fallback
+    let profiles = if profile == "release" {
+        vec!["release", "debug"]
+    } else {
+        vec!["debug", "release"]
+    };
+    
+    let runtime_names = ["selene_simple_runtime", "selene_soft_rz_runtime"];
+    
+    for runtime in &runtime_names {
+        let mut found = false;
+        for profile in &profiles {
+            if found {
+                break;
+            }
+            
+            // Check in deps directory first (where cargo puts cdylib dependencies)
+            let deps_path = target_dir.join(profile).join("deps");
+            if deps_path.exists() {
+                // Look for the library with any hash suffix
+                if let Ok(entries) = std::fs::read_dir(&deps_path) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+                            if filename.starts_with(&format!("lib{}", runtime)) && filename.ends_with(".so") {
+                                // Export the path as an environment variable
+                                let env_var = format!("PECOS_{}_PATH", runtime.to_uppercase().replace('-', "_"));
+                                println!("cargo:rustc-env={}={}", env_var, path.display());
+                                info!("Found {} at {}", runtime, path.display());
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Also check the standard location
+            if !found {
+                let lib_path = target_dir.join(profile).join(format!("lib{}.so", runtime));
+                if lib_path.exists() {
+                    let env_var = format!("PECOS_{}_PATH", runtime.to_uppercase().replace('-', "_"));
+                    println!("cargo:rustc-env={}={}", env_var, lib_path.display());
+                    info!("Found {} at {}", runtime, lib_path.display());
+                    found = true;
+                }
+            }
+        }
+    }
 }

@@ -1,5 +1,6 @@
 //! Build script for `QuEST` integration
 
+use log::{debug, info};
 use pecos_build_utils::{
     Result, download_cached, extract_archive, quest_download_info, report_cache_config,
 };
@@ -11,13 +12,9 @@ use std::process::Command;
 /// Detect CUDA installation using nvcc command
 /// Returns the CUDA installation path if found
 fn detect_cuda_path() -> Option<String> {
-    let verbose = env::var("PECOS_VERBOSE_BUILD").is_ok();
-
     // First check environment variables
     if let Ok(cuda_path) = env::var("CUDA_PATH") {
-        if verbose {
-            println!("cargo:warning=Found CUDA via CUDA_PATH: {cuda_path}");
-        }
+        info!("Found CUDA via CUDA_PATH: {cuda_path}");
         return Some(cuda_path);
     }
 
@@ -38,12 +35,10 @@ fn detect_cuda_path() -> Option<String> {
             if let Some(bin_dir) = path.parent()
                 && let Some(cuda_root) = bin_dir.parent()
             {
-                if verbose {
-                    println!(
-                        "cargo:warning=Found CUDA via nvcc in PATH: {}",
-                        cuda_root.display()
-                    );
-                }
+                info!(
+                    "Found CUDA via nvcc in PATH: {}",
+                    cuda_root.display()
+                );
                 return Some(cuda_root.to_string_lossy().to_string());
             }
         }
@@ -62,9 +57,7 @@ fn detect_cuda_path() -> Option<String> {
         "/usr/local/cuda-11.0", // Specific CUDA 11.0
     ] {
         if Path::new(path).exists() {
-            if verbose {
-                println!("cargo:warning=Found CUDA at standard path: {path}");
-            }
+            info!("Found CUDA at standard path: {path}");
             return Some((*path).to_string());
         }
     }
@@ -82,17 +75,13 @@ fn compile_cuda_files(
 ) -> Option<Vec<PathBuf>> {
     let mut object_files = Vec::new();
 
-    let verbose = env::var("PECOS_VERBOSE_BUILD").is_ok();
-
     // Construct path to nvcc using the detected CUDA installation
     let nvcc_path = Path::new(cuda_path).join("bin").join("nvcc");
 
-    if verbose {
-        println!(
-            "cargo:warning=Compiling GPU files with nvcc at: {}",
-            nvcc_path.display()
-        );
-    }
+    info!(
+        "Compiling GPU files with nvcc at: {}",
+        nvcc_path.display()
+    );
 
     for gpu_file in gpu_files {
         let file_stem = gpu_file.file_stem()?.to_str()?;
@@ -102,12 +91,10 @@ fn compile_cuda_files(
         let quest_src_dir = quest_dir.join("src");
 
         // Compile with nvcc
-        if verbose {
-            println!(
-                "cargo:warning=  Compiling: {}",
-                gpu_file.file_name()?.to_str()?
-            );
-        }
+        debug!(
+            "Compiling: {}",
+            gpu_file.file_name()?.to_str()?
+        );
         let output = Command::new(&nvcc_path)
             .arg("-c")
             .arg(gpu_file)
@@ -153,31 +140,25 @@ fn compile_cuda_files(
                 );
             }
 
-            if verbose {
-                // Write full error to a temp file for debugging
-                let error_file = "/tmp/nvcc_error.log";
-                if let Err(e) = fs::write(error_file, stderr_str.as_bytes()) {
-                    println!("cargo:warning=Failed to write error log: {e}");
-                } else {
-                    println!("cargo:warning=Full error written to {error_file}");
-                }
+            // Write full error to a temp file for debugging
+            let error_file = "/tmp/nvcc_error.log";
+            if let Err(e) = fs::write(error_file, stderr_str.as_bytes()) {
+                debug!("Failed to write error log: {e}");
+            } else {
+                debug!("Full error written to {error_file}");
             }
 
             return None;
         }
 
-        if verbose {
-            println!(
-                "cargo:warning=  Successfully compiled {}",
-                gpu_file.file_name()?.to_str()?
-            );
-        }
+        debug!(
+            "Successfully compiled {}",
+            gpu_file.file_name()?.to_str()?
+        );
         object_files.push(obj_file);
     }
 
-    if verbose {
-        println!("cargo:warning=Successfully compiled all GPU files");
-    }
+    info!("Successfully compiled all GPU files");
     Some(object_files)
 }
 
@@ -194,10 +175,7 @@ fn patch_quest_for_cuda13(quest_dir: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let verbose = env::var("PECOS_VERBOSE_BUILD").is_ok();
-    if verbose {
-        println!("cargo:warning=Patching QuEST for CUDA 13 compatibility...");
-    }
+    info!("Patching QuEST for CUDA 13 compatibility...");
 
     let content = fs::read_to_string(&thrust_file)?;
 
@@ -251,9 +229,7 @@ fn patch_quest_for_cuda13(quest_dir: &Path) -> Result<()> {
 
     fs::write(&thrust_file, patched)?;
 
-    if verbose {
-        println!("cargo:warning=Successfully patched gpu_thrust.cuh for CUDA 13");
-    }
+    info!("Successfully patched gpu_thrust.cuh for CUDA 13");
 
     Ok(())
 }
@@ -268,10 +244,7 @@ fn generate_quest_header(quest_dir: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let verbose = env::var("PECOS_VERBOSE_BUILD").is_ok();
-    if verbose {
-        println!("cargo:warning=Generating quest.h from template...");
-    }
+    info!("Generating quest.h from template...");
 
     let template = fs::read_to_string(&template_file)?;
 
@@ -325,9 +298,7 @@ fn generate_quest_header(quest_dir: &Path) -> Result<()> {
 
     fs::write(&output_file, quest_h)?;
 
-    if verbose {
-        println!("cargo:warning=Successfully generated quest.h");
-    }
+    info!("Successfully generated quest.h");
 
     Ok(())
 }
@@ -391,9 +362,7 @@ fn download_and_extract_quest(out_dir: &Path) -> Result<()> {
         generate_quest_header(&quest_dir)?;
     }
 
-    if std::env::var("PECOS_VERBOSE_BUILD").is_ok() {
-        println!("cargo:warning=QuEST source downloaded and extracted");
-    }
+    info!("QuEST source downloaded and extracted");
     Ok(())
 }
 
@@ -558,9 +527,7 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
             println!("cargo:rustc-link-lib=cudart");
             println!("cargo:rustc-link-lib=cublas");
 
-            if env::var("PECOS_VERBOSE_BUILD").is_ok() {
-                println!("cargo:warning=Using CUDA from: {cuda_path}");
-            }
+            info!("Using CUDA from: {cuda_path}");
         }
     } else {
         build

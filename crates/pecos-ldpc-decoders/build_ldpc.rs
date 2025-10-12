@@ -1,5 +1,6 @@
 //! Build script for LDPC decoder integration
 
+use log::info;
 use pecos_build_utils::{
     Result, download_cached, extract_archive, ldpc_download_info, report_cache_config,
 };
@@ -41,9 +42,7 @@ fn download_and_extract_ldpc(out_dir: &Path) -> Result<()> {
     let tar_gz = download_cached(&info)?;
     extract_archive(&tar_gz, out_dir, Some("ldpc"))?;
 
-    if std::env::var("PECOS_VERBOSE_BUILD").is_ok() {
-        println!("cargo:warning=LDPC source downloaded and extracted");
-    }
+    info!("LDPC source downloaded and extracted");
     Ok(())
 }
 
@@ -63,9 +62,7 @@ fn fix_header_guard_conflict(src_cpp_dir: &Path) -> Result<()> {
                 .replace("#ifndef UF2_H", "#ifndef UNION_FIND_H")
                 .replace("#define UF2_H", "#define UNION_FIND_H");
             fs::write(&union_find_path, fixed_content)?;
-            if std::env::var("PECOS_VERBOSE_BUILD").is_ok() {
-                println!("cargo:warning=Fixed header guard conflict in union_find.hpp");
-            }
+            info!("Fixed header guard conflict in union_find.hpp");
         }
     }
 
@@ -124,9 +121,7 @@ fn fix_mbp_iterate_methods(src_cpp_dir: &Path) -> Result<()> {
 
             fixed_content = new_lines.join("\n");
             fs::write(&mbp_path, fixed_content)?;
-            if std::env::var("PECOS_VERBOSE_BUILD").is_ok() {
-                println!("cargo:warning=Fixed iterate method names and syntax in mbp.hpp");
-            }
+            info!("Fixed iterate method names and syntax in mbp.hpp");
         }
     }
 
@@ -165,9 +160,7 @@ fn fix_msvc_compatibility(src_cpp_dir: &Path) -> Result<()> {
 
             let fixed_content = new_lines.join("\n");
             fs::write(&lsd_path, fixed_content)?;
-            if std::env::var("PECOS_VERBOSE_BUILD").is_ok() {
-                println!("cargo:warning=Fixed MSVC compatibility issues in lsd.hpp");
-            }
+            info!("Fixed MSVC compatibility issues in lsd.hpp");
         }
     }
 
