@@ -58,12 +58,15 @@ jobs:
           sudo apt-get update
           # Install LLVM 14 specifically
           sudo apt-get install -y llvm-14 clang-14
-          # Create symlinks for llc and clang
+          # Create symlinks for llc, clang, and llvm-as
           sudo update-alternatives --install /usr/bin/llc llc /usr/bin/llc-14 100
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 100
+          sudo update-alternatives --install /usr/bin/llvm-as llvm-as /usr/bin/llvm-as-14 100
           # Verify installation
           which llc
           llc --version
+          which llvm-as
+          llvm-as --version
 
       - name: Install rustfmt
         run: rustup component add rustfmt
@@ -108,39 +111,41 @@ jobs:
       - name: Run clippy without LLVM features
         run: |
           echo "Running clippy without LLVM features..."
-          # Test that the main pecos crate can be built without LLVM
-          cargo clippy -p pecos --all-targets --no-default-features -- -D warnings
+          # Use --manifest-path to avoid workspace resolution pulling in LLVM dependencies
 
-          # Test core crates individually to avoid feature unification issues
           echo "Testing pecos-core..."
-          cargo clippy -p pecos-core --all-targets -- -D warnings
+          cd crates/pecos-core && cargo clippy --all-targets -- -D warnings && cd ../..
 
           echo "Testing pecos-engines..."
-          cargo clippy -p pecos-engines --all-targets -- -D warnings
+          cd crates/pecos-engines && cargo clippy --all-targets -- -D warnings && cd ../..
 
           echo "Testing pecos-qsim..."
-          cargo clippy -p pecos-qsim --all-targets -- -D warnings
+          cd crates/pecos-qsim && cargo clippy --all-targets -- -D warnings && cd ../..
 
           echo "Testing pecos-programs..."
-          cargo clippy -p pecos-programs --all-targets -- -D warnings
+          cd crates/pecos-programs && cargo clippy --all-targets -- -D warnings && cd ../..
 
           echo "Testing pecos-rng..."
-          cargo clippy -p pecos-rng --all-targets -- -D warnings
+          cd crates/pecos-rng && cargo clippy --all-targets -- -D warnings && cd ../..
 
           echo "Testing pecos-qasm..."
-          cargo clippy -p pecos-qasm --all-targets -- -D warnings
+          cd crates/pecos-qasm && cargo clippy --all-targets -- -D warnings && cd ../..
 
           echo "Testing pecos-phir-json..."
-          cargo clippy -p pecos-phir-json --all-targets -- -D warnings
+          cd crates/pecos-phir-json && cargo clippy --all-targets -- -D warnings && cd ../..
 
           echo "Testing pecos-qis-ffi-types..."
-          cargo clippy -p pecos-qis-ffi-types --all-targets -- -D warnings
+          cd crates/pecos-qis-ffi-types && cargo clippy --all-targets -- -D warnings && cd ../..
+
+          # Test the main pecos crate without default features
+          echo "Testing pecos without default features..."
+          cd crates/pecos && cargo clippy --all-targets --no-default-features -- -D warnings && cd ../..
 
           # Note: Skipping crates that require LLVM:
           # - pecos-hugr-qis (HUGR to LLVM compiler)
           # - pecos-qis-core (has inkwell dependency)
           # - pecos-qis-selene (depends on pecos-qis-core with llvm feature)
-          # - pecos-phir (when hugr feature is enabled, depends on tket-qsystem)
+          # - pecos-phir (when hugr feature is enabled, depends on tket-qsystem which pulls in LLVM)
           echo "Successfully tested core crates without LLVM!"
 
   pre-commit:
@@ -200,12 +205,15 @@ jobs:
           sudo apt-get update
           # Install LLVM 14 specifically
           sudo apt-get install -y llvm-14 clang-14
-          # Create symlinks for llc and clang
+          # Create symlinks for llc, clang, and llvm-as
           sudo update-alternatives --install /usr/bin/llc llc /usr/bin/llc-14 100
           sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 100
+          sudo update-alternatives --install /usr/bin/llvm-as llvm-as /usr/bin/llvm-as-14 100
           # Verify installation
           which llc
           llc --version
+          which llvm-as
+          llvm-as --version
 
       - name: Install LLVM Tools (macOS)
         if: matrix.os == 'macos-latest'

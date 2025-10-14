@@ -102,13 +102,24 @@ jobs:
             # First, check what version of manylinux we're in
             if [ -f /etc/centos-release ]; then
               echo "CentOS-based manylinux detected"
-              # For manylinux2014 (CentOS 7)
+              # For manylinux2014 (CentOS 7) - use vault repos since CentOS 7 is EOL
+              # Update repo files to use vault
+              sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* || true
+              sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* || true
+
+              # Install development tools
               yum install -y centos-release-scl || true
+              # Also update SCL repos to use vault
+              if [ -f /etc/yum.repos.d/CentOS-SCLo-scl.repo ]; then
+                sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-SCLo-* || true
+                sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-SCLo-* || true
+              fi
+
               yum install -y devtoolset-11 || true
               # Install LLVM from SCL
               yum install -y llvm-toolset-7.0 || true
-              # Try to get a newer LLVM
-              yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm || true
+              # Try EPEL from vault
+              yum install -y https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/Packages/e/epel-release-7-14.noarch.rpm || true
               yum install -y llvm14-devel llvm14-static clang14 || true
             elif [ -f /etc/os-release ]; then
               # For newer manylinux versions
@@ -129,10 +140,9 @@ jobs:
               fi
             done
 
-            # Export for cargo to use
-            if [ -n "$LLVM_SYS_140_PREFIX" ]; then
-              echo "LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
-            fi
+            # Ensure LLVM_SYS_140_PREFIX is set to avoid unbound variable error
+            export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr}"
+            echo "LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
 
       - name: Restore README.md
         if: always()
