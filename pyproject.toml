@@ -18,7 +18,7 @@ members = [
 [dependency-groups]
 dev = [
     "maturin>=1.2,<2.0", # For building (should match build requirements)
-    "patchelf", # For setting rpath in shared libraries (fixes maturin warning)
+    "patchelf; platform_system != 'Windows'", # For setting rpath in shared libraries (Linux/macOS only)
     "setuptools>=62.6", # Build system
     "pre-commit", # Git hooks
     "black", # Code formatting

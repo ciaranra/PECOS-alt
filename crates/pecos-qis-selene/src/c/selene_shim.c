@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
+#include <inttypes.h>  // For portable format specifiers
 
 // Selene API types (matching selene.h)
 typedef struct SeleneInstance {
@@ -93,18 +94,18 @@ selene_u64_result_t selene_qalloc(SeleneInstance *instance) {
     fprintf(stderr, "[SHIM] selene_qalloc() called\n");
     fflush(stderr);
     int64_t qubit_id = __quantum__rt__qubit_allocate();
-    fprintf(stderr, "[SHIM] __quantum__rt__qubit_allocate() returned: %ld\n", qubit_id);
+    fprintf(stderr, "[SHIM] __quantum__rt__qubit_allocate() returned: %" PRId64 "\n", qubit_id);
     fflush(stderr);
 
     // Check if allocation failed (negative values indicate errors in some implementations)
     if (qubit_id < 0) {
-        fprintf(stderr, "[SHIM] ERROR: Qubit allocation failed with id: %ld, returning error 100000\n", qubit_id);
+        fprintf(stderr, "[SHIM] ERROR: Qubit allocation failed with id: %" PRId64 ", returning error 100000\n", qubit_id);
         fflush(stderr);
         return (selene_u64_result_t){.error_code = 100000, .value = 0};
     }
 
     selene_u64_result_t result = SUCCESS_VAL(selene_u64_result_t, (uint64_t)qubit_id);
-    fprintf(stderr, "[SHIM] selene_qalloc() returning success with value: %lu, error_code: %u\n",
+    fprintf(stderr, "[SHIM] selene_qalloc() returning success with value: %" PRIu64 ", error_code: %u\n",
             result.value, result.error_code);
     fflush(stderr);
     return result;
@@ -225,13 +226,13 @@ selene_void_result_t selene_print_bool(SeleneInstance *instance, selene_string_t
 
 selene_void_result_t selene_print_i64(SeleneInstance *instance, selene_string_t tag, int64_t value) {
     (void)instance;
-    printf("%.*s: %ld\n", (int)tag.length, tag.data, value);
+    printf("%.*s: %" PRId64 "\n", (int)tag.length, tag.data, value);
     return SUCCESS(selene_void_result_t);
 }
 
 selene_void_result_t selene_print_u64(SeleneInstance *instance, selene_string_t tag, uint64_t value) {
     (void)instance;
-    printf("%.*s: %lu\n", (int)tag.length, tag.data, value);
+    printf("%.*s: %" PRIu64 "\n", (int)tag.length, tag.data, value);
     return SUCCESS(selene_void_result_t);
 }
 
@@ -257,7 +258,7 @@ selene_void_result_t selene_print_i64_array(SeleneInstance *instance, selene_str
     (void)instance;
     printf("%.*s: [", (int)tag.length, tag.data);
     for (uint64_t i = 0; i < length; i++) {
-        printf("%ld%s", ptr[i], (i < length - 1) ? ", " : "");
+        printf("%" PRId64 "%s", ptr[i], (i < length - 1) ? ", " : "");
     }
     printf("]\n");
     return SUCCESS(selene_void_result_t);
@@ -268,7 +269,7 @@ selene_void_result_t selene_print_u64_array(SeleneInstance *instance, selene_str
     (void)instance;
     printf("%.*s: [", (int)tag.length, tag.data);
     for (uint64_t i = 0; i < length; i++) {
-        printf("%lu%s", ptr[i], (i < length - 1) ? ", " : "");
+        printf("%" PRIu64 "%s", ptr[i], (i < length - 1) ? ", " : "");
     }
     printf("]\n");
     return SUCCESS(selene_void_result_t);
@@ -307,7 +308,7 @@ selene_void_result_t selene_dump_state(SeleneInstance *instance, selene_string_t
 
 __attribute__((visibility("default")))
 selene_void_result_t selene_set_tc(SeleneInstance *instance, uint64_t time_cursor) {
-    fprintf(stderr, "[SHIM] !!!!! selene_set_tc(%lu) called !!!!!\n", time_cursor);
+    fprintf(stderr, "[SHIM] !!!!! selene_set_tc(%" PRIu64 ") called !!!!!\n", time_cursor);
     fflush(stderr);
     (void)instance; (void)time_cursor;
     // No-op - time cursor not used
@@ -452,7 +453,7 @@ uint64_t pecos_call_qmain_with_setjmp(qmain_fn_t qmain) {
         fprintf(stderr, "[SHIM] setjmp complete, calling qmain(0)...\n");
         fflush(stderr);
         uint64_t result = qmain(0);
-        fprintf(stderr, "[SHIM] qmain returned successfully: %lu\n", result);
+        fprintf(stderr, "[SHIM] qmain returned successfully: %" PRIu64 "\n", result);
         fflush(stderr);
 
         // Clean up shot context

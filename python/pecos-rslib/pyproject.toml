@@ -14,7 +14,7 @@ requires-python = ">= 3.8"
 license = "Apache-2.0"
 
 [build-system]
-requires = ["maturin[patchelf]>=1.2,<2.0"]
+requires = ["maturin>=1.2,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
@@ -25,7 +25,7 @@ manifest-path = "rust/Cargo.toml"
 
 [dependency-groups]
 dev = [
-    "patchelf",  # For setting rpath in shared libraries during development
+    "patchelf; platform_system != 'Windows'",  # For setting rpath in shared libraries during development (Linux/macOS only)
 ]
 
 [tool.uv.sources]

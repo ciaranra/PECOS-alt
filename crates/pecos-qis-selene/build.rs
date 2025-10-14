@@ -21,11 +21,23 @@ fn main() {
     // Then build our PECOS shim with undefined __quantum__* symbols
     // These will be resolved at runtime from libpecos_qis_ffi.so
     let source_file = PathBuf::from("src/c/selene_shim.c");
-    let output_file = out_dir.join("libpecos_selene.so");
+    let output_file = if cfg!(target_os = "macos") {
+        out_dir.join("libpecos_selene.dylib")
+    } else {
+        out_dir.join("libpecos_selene.so")
+    };
 
     // Build the C shim as a shared library with undefined __quantum__* symbols
     // These symbols will be resolved from libpecos_qis_ffi.so at runtime
-    let mut cmd = Command::new("clang");
+    // Use clang-14 if available (matches what's used in compilation)
+    let clang_cmd = if cfg!(target_os = "macos")
+        && Command::new("clang-14").arg("--version").output().is_ok()
+    {
+        "clang-14"
+    } else {
+        "clang"
+    };
+    let mut cmd = Command::new(clang_cmd);
     cmd.arg("-shared")
         .arg("-fPIC")
         .arg("-O2")
@@ -33,6 +45,12 @@ fn main() {
         .arg(&output_file)
         .arg(&source_file)
         .arg("-lm");
+
+    // On macOS, we need to allow undefined symbols
+    if cfg!(target_os = "macos") {
+        cmd.arg("-undefined");
+        cmd.arg("dynamic_lookup");
+    }
 
     // Add include paths if needed
     if let Ok(selene_include) = env::var("SELENE_INCLUDE_PATH") {
@@ -133,7 +151,15 @@ fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
     let helios_lib = out_dir.join("libhelios_selene_interface.a");
 
     // Compile interface.c to object file
-    let mut compile_cmd = Command::new("clang");
+    // Use clang-14 if available (matches what's used in CI)
+    let clang_cmd = if cfg!(target_os = "macos")
+        && Command::new("clang-14").arg("--version").output().is_ok()
+    {
+        "clang-14"
+    } else {
+        "clang"
+    };
+    let mut compile_cmd = Command::new(clang_cmd);
     compile_cmd
         .arg("-c")
         .arg("-fPIC")
@@ -228,9 +254,13 @@ fn export_selene_runtime_paths() {
                         let path = entry.path();
                         if let Some(filename) = path.file_name().and_then(|f| f.to_str())
                             && filename.starts_with(&format!("lib{runtime}"))
-                            && path
-                                .extension()
-                                .is_some_and(|ext| ext.eq_ignore_ascii_case("so"))
+                            && path.extension().is_some_and(|ext| {
+                                if cfg!(target_os = "macos") {
+                                    ext.eq_ignore_ascii_case("dylib")
+                                } else {
+                                    ext.eq_ignore_ascii_case("so")
+                                }
+                            })
                         {
                             // Export the path as an environment variable
                             let env_var =
@@ -246,7 +276,14 @@ fn export_selene_runtime_paths() {
 
             // Also check the standard location
             if !found {
-                let lib_path = target_dir.join(profile).join(format!("lib{runtime}.so"));
+                let lib_ext = if cfg!(target_os = "macos") {
+                    "dylib"
+                } else {
+                    "so"
+                };
+                let lib_path = target_dir
+                    .join(profile)
+                    .join(format!("lib{runtime}.{lib_ext}"));
                 if lib_path.exists() {
                     let env_var =
                         format!("PECOS_{}_PATH", runtime.to_uppercase().replace('-', "_"));

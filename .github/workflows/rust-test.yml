@@ -108,12 +108,18 @@ jobs:
       - name: Run clippy without LLVM features
         run: |
           echo "Running clippy without LLVM features..."
-          # Test building without LLVM to ensure optional LLVM support works
-          cargo clippy --workspace --all-targets --no-default-features -- -D warnings || true
-          # The main pecos crate can be built without LLVM
+          # Test that the main pecos crate can be built without LLVM
           cargo clippy -p pecos --all-targets --no-default-features -- -D warnings
-          # Test other core crates without LLVM
-          cargo clippy -p pecos-core -p pecos-engines -p pecos-qsim -p pecos-programs --all-targets --no-default-features -- -D warnings
+          # Test core crates that don't depend on LLVM
+          cargo clippy -p pecos-core -p pecos-engines -p pecos-qsim -p pecos-programs -p pecos-rng --all-targets -- -D warnings
+          # Test other crates that should work without LLVM
+          cargo clippy -p pecos-qasm -p pecos-phir-json -p pecos-qis-ffi-types --all-targets -- -D warnings
+          # Note: Skipping crates that require LLVM:
+          # - pecos-hugr-qis (HUGR to LLVM compiler)
+          # - pecos-qis-core (has inkwell dependency)
+          # - pecos-qis-selene (depends on pecos-qis-core with llvm feature)
+          # - pecos-phir (when hugr feature is enabled, depends on tket-qsystem)
+          echo "Successfully tested core crates without LLVM!"
 
   pre-commit:
     runs-on: ubuntu-latest

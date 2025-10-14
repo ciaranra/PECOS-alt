@@ -2586,13 +2586,13 @@ source = { editable = "python/pecos-rslib" }
 
 [package.dev-dependencies]
 dev = [
-    { name = "patchelf" },
+    { name = "patchelf", marker = "sys_platform != 'win32'" },
 ]
 
 [package.metadata]
 
 [package.metadata.requires-dev]
-dev = [{ name = "patchelf" }]
+dev = [{ name = "patchelf", marker = "sys_platform != 'win32'" }]
 
 [[package]]
 name = "pecos-workspace"
@@ -2613,7 +2613,7 @@ dev = [
     { name = "networkx", version = "3.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "patchelf" },
+    { name = "patchelf", marker = "sys_platform != 'win32'" },
     { name = "phir" },
     { name = "pre-commit" },
     { name = "ruff" },
@@ -2642,7 +2642,7 @@ dev = [
     { name = "mkdocstrings", extras = ["python"] },
     { name = "networkx", specifier = ">=2.1.0" },
     { name = "numpy", specifier = ">=1.15.0" },
-    { name = "patchelf" },
+    { name = "patchelf", marker = "sys_platform != 'win32'" },
     { name = "phir", specifier = ">=0.3.3" },
     { name = "pre-commit" },
     { name = "ruff" },

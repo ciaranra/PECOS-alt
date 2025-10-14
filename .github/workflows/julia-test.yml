@@ -205,6 +205,15 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
+        Write-Host "LLVM_SYS_140_PREFIX: $env:LLVM_SYS_140_PREFIX"
+        Write-Host "LLVM_PATH: $env:LLVM_PATH"
+
+        # Ensure LLVM environment variable is set for cargo
+        if ($env:LLVM_PATH) {
+          $env:LLVM_SYS_140_PREFIX = $env:LLVM_PATH
+          Write-Host "Set LLVM_SYS_140_PREFIX to: $env:LLVM_SYS_140_PREFIX"
+        }
+
         cd julia/pecos-julia-ffi
         cargo build --release
 
