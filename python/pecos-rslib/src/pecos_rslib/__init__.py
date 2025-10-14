@@ -75,51 +75,7 @@ except ImportError:
         )
 
 
-def compile_hugr_to_llvm_selene(hugr_bytes: bytes, output_path=None) -> str:
-    """Compile HUGR to LLVM IR using Selene's hugr-qis compiler.
-
-    Args:
-        hugr_bytes: HUGR program as bytes (JSON or envelope format)
-        output_path: Optional path to write LLVM IR to file
-
-    Returns:
-        LLVM IR as string
-
-    Raises:
-        ImportError: If Selene's compiler is not available
-        RuntimeError: If compilation fails
-    """
-    try:
-        from selene_hugr_qis_compiler import compile_to_llvm_ir
-    except ImportError:
-        raise ImportError(
-            "Selene's hugr-qis compiler is not available. "
-            "Install it with: pip install selene-hugr-qis-compiler"
-        ) from None
-
-    # Check if this is JSON (starts with '{') and needs to be converted to envelope format
-    if hugr_bytes.startswith(b"{"):
-        # This is JSON, but Selene expects the envelope format
-        # For now, we'll raise an informative error
-        raise RuntimeError(
-            "Selene's compiler expects HUGR envelope format (to_bytes()), not JSON format (to_json()). "
-            "Please use package.to_bytes() instead of package.to_json() when compiling with Selene."
-        )
-
-    # Selene's compiler returns LLVM IR string directly
-    llvm_ir = compile_to_llvm_ir(hugr_bytes)
-
-    # If output_path is provided, write to file
-    if output_path is not None:
-        from pathlib import Path
-
-        Path(output_path).write_text(llvm_ir)
-
-    return llvm_ir
-
-
-# Default to PECOS's Rust compiler which handles JSON format
-# Users can explicitly choose by importing compile_hugr_to_llvm_rust or compile_hugr_to_llvm_selene
+# Default to PECOS's Rust compiler
 compile_hugr_to_llvm = compile_hugr_to_llvm_rust
 
 

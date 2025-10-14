@@ -298,11 +298,11 @@ class TestComplexCircuits:
         assert "___rzz" in output
 
 
-class TestCompilerCompatibility:
-    """Test compatibility with Selene compiler."""
+class TestCompilerOutput:
+    """Test PECOS compiler output quality."""
 
-    def test_basic_gates_match_selene(self) -> None:
-        """Verify basic gates produce same number of operations as Selene."""
+    def test_basic_gates_compile_correctly(self) -> None:
+        """Verify basic gates compile to expected operations."""
 
         @guppy
         def simple() -> bool:
@@ -311,15 +311,18 @@ class TestCompilerCompatibility:
             return measure(q)
 
         hugr = simple.compile()
-        pecos_out = pecos_rslib.compile_hugr_to_llvm_rust(hugr.to_bytes())
-        selene_out = pecos_rslib.compile_hugr_to_llvm_selene(hugr.to_bytes())
+        output = pecos_rslib.compile_hugr_to_llvm_rust(hugr.to_bytes())
 
-        # Count operations
-        pecos_ops = pecos_out.count("tail call void @___")
-        selene_ops = selene_out.count("tail call void @___")
+        # Should have the expected quantum operations
+        assert "___qalloc" in output, "Should allocate qubit"
+        assert "___rxy" in output, "H gate is decomposed to RXY+RZ operations"
+        assert "___rz" in output, "H gate decomposition includes RZ"
+        assert "___lazy_measure" in output, "Should have measurement"
+        assert "___qfree" in output, "Should free qubit"
 
-        # Should have same number of quantum operations
-        assert abs(pecos_ops - selene_ops) <= 1  # Allow for minor differences
+        # Should have reasonable number of operations
+        operations = output.count("tail call void @___")
+        assert 3 <= operations <= 10, f"Expected 3-10 operations, got {operations}"
 
     def test_declarations_optimized(self) -> None:
         """Verify only used operations are declared."""

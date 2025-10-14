@@ -89,16 +89,13 @@ class TestVGates:
             return measure(q)
 
         hugr = simple_v.compile()
-        pecos_out = pecos_rslib.compile_hugr_to_llvm_rust(hugr.to_bytes())
+        output = pecos_rslib.compile_hugr_to_llvm_rust(hugr.to_bytes())
 
-        # Should declare and use RXY
-        assert "declare" in pecos_out
-        assert "___rxy" in pecos_out
-        assert "___lazy_measure" in pecos_out
-        assert "___qfree" in pecos_out
+        # V gate should be decomposed into RXY
+        assert "declare" in output
+        assert "___rxy" in output, "V gate should use RXY"
+        assert "___lazy_measure" in output, "Should have measurement"
+        assert "___qfree" in output, "Should free qubit"
 
-        # Test with Selene too
-        selene_out = pecos_rslib.compile_hugr_to_llvm_selene(hugr.to_bytes())
-
-        # Both should have the same operations
-        assert "___rxy" in selene_out
+        # Verify RXY is actually called
+        assert "tail call void @___rxy" in output, "RXY should be called for V gate"

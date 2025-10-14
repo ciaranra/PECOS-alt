@@ -13,14 +13,14 @@ use pyo3::prelude::*;
 ///
 /// Returns:
 ///     LLVM IR as a string
-#[pyfunction]
-pub fn compile_hugr_to_llvm(hugr_bytes: &[u8]) -> PyResult<String> {
+#[pyfunction(name = "compile_hugr_to_llvm")]
+pub fn py_compile_hugr_to_llvm(hugr_bytes: &[u8]) -> PyResult<String> {
     compile_hugr_bytes_to_string(hugr_bytes)
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
 }
 
 /// Register HUGR compilation functions with the Python module
 pub fn register_hugr_compilation_functions(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(compile_hugr_to_llvm, m)?)?;
+    m.add_function(wrap_pyfunction!(py_compile_hugr_to_llvm, m)?)?;
     Ok(())
 }

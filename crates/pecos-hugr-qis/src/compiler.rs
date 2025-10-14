@@ -1,19 +1,17 @@
 //! HUGR to QIS LLVM IR compiler
 //!
 //! This module provides HUGR to LLVM IR compilation that generates
-//! Selene QIS-compatible LLVM IR. It follows the same approach as
-//! Selene's hugr-qis compiler.
-
-// array module is declared in lib.rs
+//! Selene QIS-compatible LLVM IR. It matches the full functionality
+//! of tket2's qis-compiler but without Python bindings.
 
 use anyhow::{Result, anyhow};
 use pecos_core::errors::PecosError;
+use std::fs;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use itertools::Itertools;
-use tket::extension::rotation::ROTATION_EXTENSION;
-use tket::extension::{TKET_EXTENSION, TKET1_EXTENSION};
-use tket::hugr::extension::{ExtensionRegistry, prelude};
+use tket::hugr::envelope::EnvelopeConfig;
 #[allow(deprecated)]
 use tket::hugr::llvm::extension::int::IntCodegenExtension;
 use tket::hugr::llvm::inkwell::OptimizationLevel;
@@ -21,7 +19,7 @@ use tket::hugr::llvm::inkwell::context::Context;
 use tket::hugr::llvm::inkwell::module::Module;
 use tket::hugr::llvm::inkwell::passes::PassBuilderOptions;
 use tket::hugr::llvm::inkwell::targets::{
-    CodeModel, InitializationConfig, RelocMode, Target, TargetMachine,
+    CodeModel, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
 };
 use tket::hugr::llvm::utils::fat::FatExt as _;
 use tket::hugr::llvm::utils::inline_constant_functions;
@@ -31,110 +29,49 @@ use tket::hugr::llvm::{
     emit::{EmitHugr, Namer},
 };
 use tket::hugr::ops::DataflowParent;
-use tket::hugr::package::Package;
-use tket::hugr::std_extensions::arithmetic::{
-    conversions, float_ops, float_types, int_ops, int_types,
-};
-use tket::hugr::std_extensions::{collections, logic, ptr};
 use tket::hugr::{Hugr, HugrView, Node};
 use tket::llvm::rotation::RotationCodegenExtension;
 use tket_qsystem::QSystemPass;
-use tket_qsystem::extension::{futures as qsystem_futures, qsystem, result as qsystem_result};
 use tket_qsystem::llvm::array_utils::ArrayLowering;
 use tket_qsystem::llvm::futures::FuturesCodegenExtension;
 use tket_qsystem::llvm::{
     debug::DebugCodegenExtension, prelude::QISPreludeCodegen, qsystem::QSystemCodegenExtension,
     random::RandomCodegenExtension, result::ResultsCodegenExtension, utils::UtilsCodegenExtension,
 };
+use tracing::{Level, event, instrument};
+
+// Import read_hugr_envelope from utils module
+use crate::utils::read_hugr_envelope;
 
 const LLVM_MAIN: &str = "qmain";
 const METADATA: &[(&str, &[&str])] = &[("name", &["mainlib"])];
 
-/// Extension registry with all required extensions for HUGR compilation
-static REGISTRY: std::sync::LazyLock<ExtensionRegistry> = std::sync::LazyLock::new(|| {
-    ExtensionRegistry::new([
-        prelude::PRELUDE.to_owned(),
-        int_types::EXTENSION.to_owned(),
-        int_ops::EXTENSION.to_owned(),
-        float_types::EXTENSION.to_owned(),
-        float_ops::EXTENSION.to_owned(),
-        conversions::EXTENSION.to_owned(),
-        logic::EXTENSION.to_owned(),
-        ptr::EXTENSION.to_owned(),
-        collections::list::EXTENSION.to_owned(),
-        collections::array::EXTENSION.to_owned(),
-        collections::static_array::EXTENSION.to_owned(),
-        collections::value_array::EXTENSION.to_owned(),
-        qsystem_futures::EXTENSION.to_owned(),
-        qsystem_result::EXTENSION.to_owned(),
-        qsystem::EXTENSION.to_owned(),
-        ROTATION_EXTENSION.to_owned(),
-        TKET_EXTENSION.to_owned(),
-        TKET1_EXTENSION.to_owned(),
-        tket::extension::bool::BOOL_EXTENSION.to_owned(),
-        tket::extension::debug::DEBUG_EXTENSION.to_owned(),
-        tket_qsystem::extension::gpu::EXTENSION.to_owned(),
-        tket_qsystem::extension::wasm::EXTENSION.to_owned(),
-    ])
-});
+// Extension registry is defined in the parent module
 
-/// Read HUGR from bytes (handles both JSON and binary envelope formats)
-fn read_hugr_envelope(bytes: &[u8]) -> Result<Hugr> {
-    // Check if input is JSON format (starts with '{') vs binary envelope format
-    if bytes.is_empty() {
-        return Err(anyhow!("Empty HUGR input"));
-    }
+/// Compilation arguments
+#[derive(Debug, Clone)]
+pub struct CompileArgs {
+    /// Entry point symbol
+    pub entry: Option<String>,
+    /// LLVM module name
+    pub name: String,
+    /// Save HUGR to file
+    pub save_hugr: Option<PathBuf>,
+    /// Target triple (defaults to native)
+    pub target_triple: Option<String>,
+    /// Optimization level
+    pub opt_level: OptimizationLevel,
+}
 
-    // Check magic number for format detection
-    if bytes[0] == b'{' {
-        // JSON format - wrap it in a binary envelope so HUGR can load it
-        // This allows us to store human-readable JSON in git but still load it
-        let json_str =
-            std::str::from_utf8(bytes).map_err(|e| anyhow!("Invalid UTF-8 in JSON HUGR: {e}"))?;
-
-        // Create a binary envelope with JSON content
-        // The envelope format is: MAGIC_HEADER + JSON_CONTENT
-        // HUGR expects: "HUGRiHJv" (8 bytes) + format byte + compression byte + JSON
-        let mut envelope = Vec::new();
-
-        // Magic header for HUGR envelope
-        envelope.extend_from_slice(b"HUGRiHJv");
-
-        // Format byte: 0x3F (63) for JSON format (EnvelopeFormat::JSON)
-        envelope.push(0x3F);
-
-        // Compression byte: 0x40 (64) - this is what HUGR expects
-        envelope.push(0x40);
-
-        // Append the JSON content
-        envelope.extend_from_slice(json_str.as_bytes());
-
-        // Now load using the envelope
-        let mut cursor = std::io::Cursor::new(&envelope);
-        if let Ok(hugr) = Hugr::load(&mut cursor, Some(&REGISTRY)) {
-            Ok(hugr)
-        } else {
-            // If direct HUGR loading fails, try Package loading
-            let mut cursor = std::io::Cursor::new(&envelope);
-            match Package::load(&mut cursor, Some(&REGISTRY)) {
-                Ok(package) => {
-                    // Extract the main HUGR from the package
-                    if let Some(hugr) = package.modules.first() {
-                        Ok(hugr.clone())
-                    } else {
-                        Err(anyhow!("Package contains no HUGR modules"))
-                    }
-                }
-                Err(e) => Err(anyhow!("Failed to load JSON HUGR as envelope: {e}")),
-            }
+impl Default for CompileArgs {
+    fn default() -> Self {
+        Self {
+            entry: None,
+            name: "hugr".to_string(),
+            save_hugr: None,
+            target_triple: None,
+            opt_level: OptimizationLevel::Default,
         }
-    } else {
-        // Binary envelope format - use TKET's loading mechanism directly
-        let mut cursor = std::io::Cursor::new(bytes);
-        let hugr = Hugr::load(&mut cursor, Some(&REGISTRY))
-            .map_err(|e| anyhow!("Failed to load HUGR envelope: {e}"))?;
-
-        Ok(hugr)
     }
 }
 
@@ -207,6 +144,44 @@ fn get_entry_point_name(namer: &Namer, hugr: &impl HugrView<Node = Node>) -> Res
     Ok(namer.name_func(name, entry_point_node))
 }
 
+/// Generate LLVM module from HUGR
+fn get_hugr_llvm_module<'c>(
+    context: &'c Context,
+    namer: Rc<Namer>,
+    hugr: &Hugr,
+    module_name: &str,
+    exts: Rc<CodegenExtsMap<'static, Hugr>>,
+) -> Result<Module<'c>> {
+    let module = context.create_module(module_name);
+    let emit = EmitHugr::new(context, module, namer, exts);
+    Ok(emit
+        .emit_module(hugr.try_fat(hugr.module_root()).unwrap())?
+        .finish())
+}
+
+/// Given an LLVM context and hugr, compile to an LLVM module
+fn get_module_with_std_exts<'c>(
+    args: &CompileArgs,
+    context: &'c Context,
+    namer: Rc<Namer>,
+    hugr: &'c mut Hugr,
+) -> Result<Module<'c>> {
+    process_hugr(hugr)?;
+
+    if let Some(filename) = &args.save_hugr {
+        let file = fs::File::create(filename)?;
+        hugr.store(file, EnvelopeConfig::text())?;
+    }
+
+    get_hugr_llvm_module(
+        context,
+        namer,
+        hugr,
+        &args.name,
+        Rc::new(codegen_extensions()),
+    )
+}
+
 /// Wrap the HUGR entry point with setup/teardown calls
 fn wrap_main<'c>(
     ctx: &'c Context,
@@ -251,7 +226,13 @@ fn wrap_main<'c>(
 }
 
 /// Get the native target machine for LLVM
-fn get_native_target_machine(opt_level: OptimizationLevel) -> Result<TargetMachine> {
+///
+/// # Errors
+/// Returns an error if target machine creation fails.
+///
+/// # Panics
+/// Panics if native target initialization fails.
+pub fn get_native_target_machine(opt_level: OptimizationLevel) -> Result<TargetMachine> {
     let reloc_mode = RelocMode::PIC;
     let code_model = CodeModel::Default;
     Target::initialize_native(&InitializationConfig::default()).unwrap();
@@ -267,6 +248,30 @@ fn get_native_target_machine(opt_level: OptimizationLevel) -> Result<TargetMachi
             reloc_mode,
             code_model,
         )
+        .ok_or_else(|| anyhow!("Failed to create target machine"))
+}
+
+/// Get the target machine from triple
+///
+/// # Errors
+/// Returns an error if the target triple is invalid or target machine creation fails.
+pub fn get_target_machine_from_triple(
+    target_triple: &str,
+    opt_level: OptimizationLevel,
+) -> Result<TargetMachine> {
+    let reloc_mode = RelocMode::PIC;
+    let code_model = CodeModel::Default;
+    Target::initialize_all(&InitializationConfig::default());
+    let triple = TargetTriple::create(target_triple);
+    log::debug!("Using target triple: {triple}");
+
+    let target = Target::from_triple(&triple).map_err(|e| anyhow!("{e}"))?;
+    log::debug!("Using target: {:?}", target.get_name());
+    // Use the target name as CPU (matches tket2 behavior)
+    let cpu: String = target.get_name().to_string_lossy().to_string();
+
+    target
+        .create_target_machine(&triple, &cpu, "", opt_level, reloc_mode, code_model)
         .ok_or_else(|| anyhow!("Failed to create target machine"))
 }
 
@@ -289,47 +294,39 @@ fn optimize_module(
     Ok(())
 }
 
-/// Generate LLVM module from HUGR
-fn get_hugr_llvm_module<'c>(
-    context: &'c Context,
-    namer: Rc<Namer>,
-    hugr: &Hugr,
-    module_name: &str,
-    exts: Rc<CodegenExtsMap<'static, Hugr>>,
-) -> Result<Module<'c>> {
-    let module = context.create_module(module_name);
-    let emit = EmitHugr::new(context, module, namer, exts);
-    Ok(emit
-        .emit_module(hugr.try_fat(hugr.module_root()).unwrap())?
-        .finish())
-}
-
-/// Main compilation function
-fn compile_hugr<'c>(
-    hugr: &mut Hugr,
+/// Compile the given HUGR to an LLVM module
+/// This function is the primary entry point for the compiler
+#[instrument(skip(args, ctx, hugr), parent = None)]
+fn compile<'c, 'hugr: 'c>(
+    args: &CompileArgs,
     ctx: &'c Context,
-    module_name: &str,
-    opt_level: OptimizationLevel,
+    hugr: &'hugr mut Hugr,
 ) -> Result<Module<'c>> {
-    let target_machine = get_native_target_machine(opt_level)?;
+    event!(Level::DEBUG, "starting primary compilation");
     let namer = Rc::new(Namer::new("__hugr__.", true));
 
     // Find the entry point
     let hugr_entry = get_entry_point_name(&namer, hugr)?;
 
-    // Process the HUGR
-    process_hugr(hugr)?;
+    // The name of the entry point in the LLVM module
+    let module_entry = args.entry.as_ref().map_or(LLVM_MAIN, |x| x.as_ref());
 
-    // Generate LLVM module
-    let module =
-        get_hugr_llvm_module(ctx, namer, hugr, module_name, Rc::new(codegen_extensions()))?;
+    // Create a new LLVM module using hugr-llvm
+    let module = get_module_with_std_exts(args, ctx, namer, hugr)?;
+
+    // Get the target machine
+    let target_machine = if let Some(ref triple) = args.target_triple {
+        get_target_machine_from_triple(triple, args.opt_level)?
+    } else {
+        get_native_target_machine(args.opt_level)?
+    };
 
     // Set target-specific information
     module.set_triple(&target_machine.get_triple());
     module.set_data_layout(&target_machine.get_target_data().get_data_layout());
 
     // Wrap with setup/teardown
-    wrap_main(ctx, &module, &hugr_entry, LLVM_MAIN)?;
+    wrap_main(ctx, &module, &hugr_entry, module_entry)?;
 
     // Add metadata
     for (key, values) in METADATA {
@@ -344,7 +341,7 @@ fn compile_hugr<'c>(
     }
 
     // Optimize
-    optimize_module(&module, &target_machine, opt_level)?;
+    optimize_module(&module, &target_machine, args.opt_level)?;
 
     // Verify
     module
@@ -353,7 +350,7 @@ fn compile_hugr<'c>(
 
     // Ensure the EntryPoint attribute is properly applied
     // This is a workaround - re-add the attribute after optimization
-    if let Some(entry_fun) = module.get_function(LLVM_MAIN) {
+    if let Some(entry_fun) = module.get_function(module_entry) {
         entry_fun.add_attribute(
             tket::hugr::llvm::inkwell::attributes::AttributeLoc::Function,
             ctx.create_string_attribute("EntryPoint", ""),
@@ -370,6 +367,17 @@ fn compile_hugr<'c>(
 /// # Errors
 /// Returns an error if HUGR parsing, validation, or LLVM compilation fails.
 pub fn compile_hugr_bytes_to_string(hugr_bytes: &[u8]) -> Result<String, PecosError> {
+    compile_hugr_bytes_to_string_with_options(hugr_bytes, &CompileArgs::default())
+}
+
+/// Compile HUGR bytes to LLVM IR string with custom options
+///
+/// # Errors
+/// Returns an error if HUGR parsing, validation, or LLVM compilation fails.
+pub fn compile_hugr_bytes_to_string_with_options(
+    hugr_bytes: &[u8],
+    args: &CompileArgs,
+) -> Result<String, PecosError> {
     log::info!("Compiling HUGR to LLVM IR");
 
     // Read HUGR
@@ -380,7 +388,7 @@ pub fn compile_hugr_bytes_to_string(hugr_bytes: &[u8]) -> Result<String, PecosEr
     let context = Context::create();
 
     // Compile
-    let module = compile_hugr(&mut hugr, &context, "hugr", OptimizationLevel::Default)
+    let module = compile(args, &context, &mut hugr)
         .map_err(|e| PecosError::Generic(format!("Compilation failed: {e}")))?;
 
     // Get the module string
@@ -388,11 +396,14 @@ pub fn compile_hugr_bytes_to_string(hugr_bytes: &[u8]) -> Result<String, PecosEr
 
     // Workaround: Manually add the EntryPoint attribute if it's missing
     // This is needed because inkwell sometimes doesn't properly serialize string attributes
-    if !llvm_str.contains("\"EntryPoint\"") && llvm_str.contains("define i64 @qmain") {
-        // Find where qmain is defined and add an attribute reference
+    let entry_name = args.entry.as_ref().map_or(LLVM_MAIN, |x| x.as_ref());
+    if !llvm_str.contains("\"EntryPoint\"")
+        && llvm_str.contains(&format!("define i64 @{entry_name}"))
+    {
+        // Find where entry is defined and add an attribute reference
         llvm_str = llvm_str.replace(
-            "define i64 @qmain(i64 %0) local_unnamed_addr {",
-            "define i64 @qmain(i64 %0) local_unnamed_addr #1 {",
+            &format!("define i64 @{entry_name}(i64 %0) local_unnamed_addr {{"),
+            &format!("define i64 @{entry_name}(i64 %0) local_unnamed_addr #1 {{"),
         );
         // Add the attribute definition at the end
         if !llvm_str.contains("attributes #1") {
@@ -401,4 +412,60 @@ pub fn compile_hugr_bytes_to_string(hugr_bytes: &[u8]) -> Result<String, PecosEr
     }
 
     Ok(llvm_str)
+}
+
+/// Compile HUGR bytes to LLVM bitcode
+///
+/// # Errors
+/// Returns an error if HUGR parsing, validation, or LLVM compilation fails.
+pub fn compile_hugr_bytes_to_bitcode(hugr_bytes: &[u8]) -> Result<Vec<u8>, PecosError> {
+    compile_hugr_bytes_to_bitcode_with_options(hugr_bytes, &CompileArgs::default())
+}
+
+/// Get the optimization level for the given integer value
+///
+/// Maps integer values to LLVM optimization levels:
+/// - 0 -> None (O0)
+/// - 1 -> Less (O1)
+/// - 2 -> Default (O2)
+/// - 3 -> Aggressive (O3)
+///
+/// # Errors
+/// Returns an error if the optimization level is invalid (not 0-3)
+pub fn get_opt_level(opt_level: u32) -> Result<OptimizationLevel> {
+    match opt_level {
+        0 => Ok(OptimizationLevel::None),
+        1 => Ok(OptimizationLevel::Less),
+        2 => Ok(OptimizationLevel::Default),
+        3 => Ok(OptimizationLevel::Aggressive),
+        _ => Err(anyhow!(
+            "Invalid optimization level: {opt_level}. Must be 0-3"
+        )),
+    }
+}
+
+/// Compile HUGR bytes to LLVM bitcode with custom options
+///
+/// # Errors
+/// Returns an error if HUGR parsing, validation, or LLVM compilation fails.
+pub fn compile_hugr_bytes_to_bitcode_with_options(
+    hugr_bytes: &[u8],
+    args: &CompileArgs,
+) -> Result<Vec<u8>, PecosError> {
+    log::info!("Compiling HUGR to LLVM bitcode");
+
+    // Read HUGR
+    let mut hugr = read_hugr_envelope(hugr_bytes)
+        .map_err(|e| PecosError::Generic(format!("Failed to read HUGR: {e}")))?;
+
+    // Create LLVM context
+    let context = Context::create();
+
+    // Compile
+    let module = compile(args, &context, &mut hugr)
+        .map_err(|e| PecosError::Generic(format!("Compilation failed: {e}")))?;
+
+    // Write to memory buffer and get bitcode
+    let buffer = module.write_bitcode_to_memory();
+    Ok(buffer.as_slice().to_vec())
 }

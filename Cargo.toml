@@ -97,6 +97,7 @@ approx = "0.5"
 itertools = "0.14"
 inkwell = "0.6"
 bincode = "1.3"
+tracing = "0.1"
 
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
 pecos-programs = { version = "0.1.1", path = "crates/pecos-programs" }

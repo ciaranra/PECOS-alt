@@ -75,8 +75,8 @@ class TestCRzAngleArithmetic:
         rz_corrections = output.count("tail call void @___rz")
         assert rz_corrections >= 2, "Should have at least 2 RZ corrections"
 
-    def test_crz_selene_compatibility(self) -> None:
-        """Test CRz gate compatibility with Selene."""
+    def test_crz_decomposition(self) -> None:
+        """Test CRz gate decomposes correctly into RZZ and RZ operations."""
 
         @guppy
         def simple_crz() -> tuple[bool, bool]:
@@ -87,14 +87,17 @@ class TestCRzAngleArithmetic:
             return measure(q0), measure(q1)
 
         hugr = simple_crz.compile()
-        pecos_out = pecos_rslib.compile_hugr_to_llvm_rust(hugr.to_bytes())
-        selene_out = pecos_rslib.compile_hugr_to_llvm_selene(hugr.to_bytes())
+        output = pecos_rslib.compile_hugr_to_llvm_rust(hugr.to_bytes())
 
-        # Both should have the essential quantum operations
-        assert "___rzz" in pecos_out
-        assert "___rz" in pecos_out
-        assert "___rzz" in selene_out
-        assert "___rz" in selene_out
+        # Should decompose CRz into RZZ and RZ operations
+        assert "___rzz" in output, "CRz should use RZZ in its decomposition"
+        assert "___rz" in output, "CRz should use RZ corrections"
+
+        # Should also have the other expected quantum operations
+        assert "___rxy" in output, "Should have RXY (H gate is decomposed to RXY+RZ)"
+        assert "___lazy_measure" in output, "Should have measurement operations"
+        assert "___qalloc" in output, "Should allocate qubits"
+        assert "___qfree" in output, "Should free qubits"
 
     def test_crz_zero_angle(self) -> None:
         """Test CRz with zero angle (should be identity)."""

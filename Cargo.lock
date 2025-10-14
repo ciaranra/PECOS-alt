@@ -2680,8 +2680,10 @@ dependencies = [
  "itertools 0.14.0",
  "log",
  "pecos-core",
+ "serde_json",
  "tket",
  "tket-qsystem",
+ "tracing",
 ]
 
 [[package]]

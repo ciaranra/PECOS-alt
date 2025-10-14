@@ -14,6 +14,20 @@
 //!
 //! This prelude re-exports the HUGR compilation functionality.
 
-// Re-export compiler types and functions
-pub use crate::compiler::compile_hugr_bytes_to_string;
-pub use crate::{HugrCompiler, HugrCompilerConfig};
+// Re-export main compiler functions
+pub use crate::{
+    check_hugr, compile_hugr_bytes_to_bitcode, compile_hugr_bytes_to_bitcode_with_options,
+    compile_hugr_bytes_to_string, compile_hugr_bytes_to_string_with_options,
+    compile_hugr_to_bitcode, compile_hugr_to_llvm,
+};
+
+// Re-export types
+pub use crate::{CompileArgs, HugrCompiler, HugrCompilerConfig, OptimizationLevel};
+
+// Re-export helper functions
+pub use crate::{
+    get_native_target_machine, get_opt_level, get_target_machine_from_triple, read_hugr_envelope,
+};
+
+// Re-export common error type
+pub use pecos_core::errors::PecosError;

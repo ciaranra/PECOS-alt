@@ -94,19 +94,16 @@ class TestResetOperation:
             return measure(q)
 
         hugr = simple_reset.compile()
-        pecos_out = pecos_rslib.compile_hugr_to_llvm_rust(hugr.to_bytes())
+        output = pecos_rslib.compile_hugr_to_llvm_rust(hugr.to_bytes())
 
         # Should declare and use reset
-        assert "declare" in pecos_out
-        assert "___reset" in pecos_out
-        assert "___lazy_measure" in pecos_out
-        assert "___qfree" in pecos_out
+        assert "declare" in output
+        assert "___reset" in output, "Should have reset operation"
+        assert "___lazy_measure" in output, "Should have measurement"
+        assert "___qfree" in output, "Should free qubit"
 
-        # Test with Selene too
-        selene_out = pecos_rslib.compile_hugr_to_llvm_selene(hugr.to_bytes())
-
-        # Both should have reset operations
-        assert "___reset" in selene_out
+        # Verify reset is actually called
+        assert "tail call void @___reset" in output, "Reset should be called"
 
     def test_reset_in_circuit(self) -> None:
         """Test reset in a more complex circuit."""

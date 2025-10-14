@@ -10,7 +10,7 @@ fn main() {
 
     // Find or build libhelios_selene_interface.a
     find_or_build_helios_lib(&out_dir);
-    
+
     // Export paths for Selene runtime libraries if they're built as dependencies
     #[cfg(feature = "selene-runtimes")]
     export_selene_runtime_paths();
@@ -72,61 +72,66 @@ fn find_or_build_helios_lib(out_dir: &Path) {
     match build_helios_from_cargo_dependency(out_dir) {
         Ok(()) => {
             println!("cargo:rustc-env=HELIOS_LIB_PATH={}", helios_lib.display());
-            return;
         }
         Err(e) => {
-            panic!("Failed to build Helios interface from Selene dependency: {}", e);
+            panic!("Failed to build Helios interface from Selene dependency: {e}");
         }
     }
 
     #[cfg(not(feature = "selene-runtimes"))]
-    panic!("Failed to build Helios interface library. The selene-runtimes feature must be enabled.");
+    panic!(
+        "Failed to build Helios interface library. The selene-runtimes feature must be enabled."
+    );
 }
-
-
 
 /// Build Helios interface library from Cargo-downloaded Selene dependency
 #[cfg(feature = "selene-runtimes")]
 fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
     use cargo_metadata::MetadataCommand;
-    
+
     info!("Building Helios interface from Selene dependency");
-    
+
     // Get cargo metadata to find Selene source
     let metadata = MetadataCommand::new()
         .exec()
-        .map_err(|e| format!("Failed to get cargo metadata: {}", e))?;
-    
+        .map_err(|e| format!("Failed to get cargo metadata: {e}"))?;
+
     // Find the selene-simple-runtime package (which depends on selene-core)
-    let selene_pkg = metadata.packages
+    let selene_pkg = metadata
+        .packages
         .iter()
         .find(|p| p.name == "selene-simple-runtime")
         .ok_or_else(|| "Could not find selene-simple-runtime in cargo metadata".to_string())?;
-    
+
     // Get the path to the Selene repository root
     // The manifest path is something like .../selene-ext/runtimes/simple/Cargo.toml
     // We need to go up three levels to get to the Selene root
-    let manifest_dir = selene_pkg.manifest_path.parent()
+    let manifest_dir = selene_pkg
+        .manifest_path
+        .parent()
         .and_then(|p| p.parent())
         .and_then(|p| p.parent())
         .and_then(|p| p.parent())
         .ok_or_else(|| "Could not determine Selene root from manifest path".to_string())?;
-    
+
     let selene_root = manifest_dir.as_std_path();
-    
+
     // Build Helios interface from Selene source
     let helios_path = selene_root.join("selene-ext/interfaces/helios_qis");
     let interface_c = helios_path.join("c/src/interface.c");
     let helios_include_dir = helios_path.join("c/include");
     let selene_include_dir = selene_root.join("selene-sim/c/include");
-    
+
     if !interface_c.exists() {
-        return Err(format!("Helios interface.c not found at: {}", interface_c.display()));
+        return Err(format!(
+            "Helios interface.c not found at: {}",
+            interface_c.display()
+        ));
     }
-    
+
     let interface_o = out_dir.join("interface.o");
     let helios_lib = out_dir.join("libhelios_selene_interface.a");
-    
+
     // Compile interface.c to object file
     let mut compile_cmd = Command::new("clang");
     compile_cmd
@@ -145,11 +150,11 @@ fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
         .arg("-o")
         .arg(&interface_o)
         .arg(&interface_c);
-    
+
     let output = compile_cmd
         .output()
-        .map_err(|e| format!("Failed to execute clang: {}", e))?;
-    
+        .map_err(|e| format!("Failed to execute clang: {e}"))?;
+
     if !output.status.success() {
         return Err(format!(
             "Failed to compile interface.c:\nstdout: {}\nstderr: {}",
@@ -157,14 +162,15 @@ fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
             String::from_utf8_lossy(&output.stderr)
         ));
     }
-    
+
     // Create static library from object file
     let mut ar_cmd = Command::new("ar");
     ar_cmd.arg("rcs").arg(&helios_lib).arg(&interface_o);
-    
-    let output = ar_cmd.output()
-        .map_err(|e| format!("Failed to execute ar: {}", e))?;
-    
+
+    let output = ar_cmd
+        .output()
+        .map_err(|e| format!("Failed to execute ar: {e}"))?;
+
     if !output.status.success() {
         return Err(format!(
             "Failed to create libhelios_selene_interface.a:\nstdout: {}\nstderr: {}",
@@ -172,12 +178,12 @@ fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
             String::from_utf8_lossy(&output.stderr)
         ));
     }
-    
+
     info!("Successfully built Helios interface from Selene dependency");
-    
+
     // Tell cargo to recompile if Selene files change
     println!("cargo:rerun-if-changed={}", interface_c.display());
-    
+
     Ok(())
 }
 
@@ -185,34 +191,34 @@ fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
 #[cfg(feature = "selene-runtimes")]
 fn export_selene_runtime_paths() {
     use cargo_metadata::MetadataCommand;
-    
+
     // Get workspace metadata
     let metadata = MetadataCommand::new()
         .exec()
         .expect("Failed to get cargo metadata");
-    
+
     // Find the target directory
     let target_dir = metadata.target_directory.as_std_path();
-    
+
     // Determine the current build profile
     let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-    
+
     // Look for runtime libraries in the current profile first, then fallback
     let profiles = if profile == "release" {
         vec!["release", "debug"]
     } else {
         vec!["debug", "release"]
     };
-    
+
     let runtime_names = ["selene_simple_runtime", "selene_soft_rz_runtime"];
-    
+
     for runtime in &runtime_names {
         let mut found = false;
         for profile in &profiles {
             if found {
                 break;
             }
-            
+
             // Check in deps directory first (where cargo puts cdylib dependencies)
             let deps_path = target_dir.join(profile).join("deps");
             if deps_path.exists() {
@@ -220,25 +226,30 @@ fn export_selene_runtime_paths() {
                 if let Ok(entries) = std::fs::read_dir(&deps_path) {
                     for entry in entries.flatten() {
                         let path = entry.path();
-                        if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-                            if filename.starts_with(&format!("lib{}", runtime)) && filename.ends_with(".so") {
-                                // Export the path as an environment variable
-                                let env_var = format!("PECOS_{}_PATH", runtime.to_uppercase().replace('-', "_"));
-                                println!("cargo:rustc-env={}={}", env_var, path.display());
-                                info!("Found {} at {}", runtime, path.display());
-                                found = true;
-                                break;
-                            }
+                        if let Some(filename) = path.file_name().and_then(|f| f.to_str())
+                            && filename.starts_with(&format!("lib{runtime}"))
+                            && path
+                                .extension()
+                                .is_some_and(|ext| ext.eq_ignore_ascii_case("so"))
+                        {
+                            // Export the path as an environment variable
+                            let env_var =
+                                format!("PECOS_{}_PATH", runtime.to_uppercase().replace('-', "_"));
+                            println!("cargo:rustc-env={}={}", env_var, path.display());
+                            info!("Found {} at {}", runtime, path.display());
+                            found = true;
+                            break;
                         }
                     }
                 }
             }
-            
+
             // Also check the standard location
             if !found {
-                let lib_path = target_dir.join(profile).join(format!("lib{}.so", runtime));
+                let lib_path = target_dir.join(profile).join(format!("lib{runtime}.so"));
                 if lib_path.exists() {
-                    let env_var = format!("PECOS_{}_PATH", runtime.to_uppercase().replace('-', "_"));
+                    let env_var =
+                        format!("PECOS_{}_PATH", runtime.to_uppercase().replace('-', "_"));
                     println!("cargo:rustc-env={}={}", env_var, lib_path.display());
                     info!("Found {} at {}", runtime, lib_path.display());
                     found = true;

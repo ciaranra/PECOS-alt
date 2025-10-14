@@ -35,10 +35,7 @@ fn detect_cuda_path() -> Option<String> {
             if let Some(bin_dir) = path.parent()
                 && let Some(cuda_root) = bin_dir.parent()
             {
-                info!(
-                    "Found CUDA via nvcc in PATH: {}",
-                    cuda_root.display()
-                );
+                info!("Found CUDA via nvcc in PATH: {}", cuda_root.display());
                 return Some(cuda_root.to_string_lossy().to_string());
             }
         }
@@ -78,10 +75,7 @@ fn compile_cuda_files(
     // Construct path to nvcc using the detected CUDA installation
     let nvcc_path = Path::new(cuda_path).join("bin").join("nvcc");
 
-    info!(
-        "Compiling GPU files with nvcc at: {}",
-        nvcc_path.display()
-    );
+    info!("Compiling GPU files with nvcc at: {}", nvcc_path.display());
 
     for gpu_file in gpu_files {
         let file_stem = gpu_file.file_stem()?.to_str()?;
@@ -91,10 +85,7 @@ fn compile_cuda_files(
         let quest_src_dir = quest_dir.join("src");
 
         // Compile with nvcc
-        debug!(
-            "Compiling: {}",
-            gpu_file.file_name()?.to_str()?
-        );
+        debug!("Compiling: {}", gpu_file.file_name()?.to_str()?);
         let output = Command::new(&nvcc_path)
             .arg("-c")
             .arg(gpu_file)
@@ -151,10 +142,7 @@ fn compile_cuda_files(
             return None;
         }
 
-        debug!(
-            "Successfully compiled {}",
-            gpu_file.file_name()?.to_str()?
-        );
+        debug!("Successfully compiled {}", gpu_file.file_name()?.to_str()?);
         object_files.push(obj_file);
     }
 

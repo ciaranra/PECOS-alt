@@ -126,64 +126,79 @@ pub fn selene_soft_rz_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
 /// 3. Legacy paths (../selene) for compatibility
 fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchError> {
     // First check if we have a runtime path from the build script
-    if let Ok(built_runtime_path) = std::env::var(format!("PECOS_{}_PATH", lib_name.to_uppercase().replace('-', "_"))) {
+    if let Ok(built_runtime_path) = std::env::var(format!(
+        "PECOS_{}_PATH",
+        lib_name.to_uppercase().replace('-', "_")
+    )) {
         let path = PathBuf::from(built_runtime_path);
         if path.exists() {
             log::info!("Found Selene runtime from env var: {}", path.display());
             return Ok(path);
         }
     }
-    
+
     // Check if it was built in our OUT_DIR during compilation
     if let Ok(out_dir) = std::env::var("OUT_DIR") {
-        let runtime_path = PathBuf::from(&out_dir).join(format!("lib{}.so", lib_name));
+        let runtime_path = PathBuf::from(&out_dir).join(format!("lib{lib_name}.so"));
         if runtime_path.exists() {
-            log::info!("Found Selene runtime in OUT_DIR: {}", runtime_path.display());
+            log::info!(
+                "Found Selene runtime in OUT_DIR: {}",
+                runtime_path.display()
+            );
             return Ok(runtime_path);
         }
     }
-    
+
     // Check cargo target directory for the dependency-built libraries
     // This handles the case where Selene runtimes are built as Cargo dependencies
     let target_dir = find_cargo_target_dir();
     if let Some(target) = target_dir {
         // Prefer the profile we're currently running in
-        let current_profile = if cfg!(debug_assertions) { "debug" } else { "release" };
+        let current_profile = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        };
         let profiles = if current_profile == "release" {
             vec!["release", "debug"]
         } else {
             vec!["debug", "release"]
         };
-        
+
         for profile in &profiles {
             // Check deps directory where cargo puts cdylib dependencies
             let deps_dir = target.join(profile).join("deps");
-            if deps_dir.exists() {
-                if let Ok(entries) = std::fs::read_dir(&deps_dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-                            if filename.starts_with(&format!("lib{}", lib_name)) && filename.ends_with(".so") {
-                                log::info!("Found Selene runtime in cargo deps: {}", path.display());
-                                return Ok(path);
-                            }
-                        }
+            if deps_dir.exists()
+                && let Ok(entries) = std::fs::read_dir(&deps_dir)
+            {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(filename) = path.file_name().and_then(|f| f.to_str())
+                        && filename.starts_with(&format!("lib{lib_name}"))
+                        && path
+                            .extension()
+                            .is_some_and(|ext| ext.eq_ignore_ascii_case("so"))
+                    {
+                        log::info!("Found Selene runtime in cargo deps: {}", path.display());
+                        return Ok(path);
                     }
                 }
             }
-            
+
             // Also check standard location
-            let runtime_path = target.join(profile).join(format!("lib{}.so", lib_name));
+            let runtime_path = target.join(profile).join(format!("lib{lib_name}.so"));
             if runtime_path.exists() {
-                log::info!("Found Selene runtime in cargo target: {}", runtime_path.display());
+                log::info!(
+                    "Found Selene runtime in cargo target: {}",
+                    runtime_path.display()
+                );
                 return Ok(runtime_path);
             }
         }
     }
-    
+
     Err(RuntimeFetchError::InvalidPath(format!(
-        "Selene runtime {} not found. Make sure the selene-runtimes feature is enabled and the project is built.",
-        lib_name
+        "Selene runtime {lib_name} not found. Make sure the selene-runtimes feature is enabled and the project is built."
     )))
 }
 
@@ -193,7 +208,7 @@ fn find_cargo_target_dir() -> Option<PathBuf> {
     if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
         return Some(PathBuf::from(target_dir));
     }
-    
+
     // Otherwise look for target/ directory going up from current dir
     let mut current = std::env::current_dir().ok()?;
     loop {
@@ -205,7 +220,7 @@ fn find_cargo_target_dir() -> Option<PathBuf> {
             break;
         }
     }
-    
+
     None
 }
 
@@ -213,7 +228,7 @@ fn find_cargo_target_dir() -> Option<PathBuf> {
 ///
 /// Searches in order:
 /// 1. `PECOS_SELENE_DIR` environment variable
-/// 2. Current target/release or target/debug  
+/// 2. Current target/release or target/debug
 /// 3. Workspace target directory
 /// 4. System library paths
 #[must_use]
@@ -237,15 +252,18 @@ pub fn find_selene_runtime(name: &str) -> Option<PathBuf> {
 
         // Check deps directory
         let deps_path = PathBuf::from("target").join(profile).join("deps");
-        if deps_path.exists() {
-            if let Ok(entries) = std::fs::read_dir(&deps_path) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if let Some(file_name) = path.file_name().and_then(|f| f.to_str()) {
-                        if file_name.starts_with(&format!("libselene_{}", name)) && file_name.ends_with(".so") {
-                            return Some(path);
-                        }
-                    }
+        if deps_path.exists()
+            && let Ok(entries) = std::fs::read_dir(&deps_path)
+        {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(file_name) = path.file_name().and_then(|f| f.to_str())
+                    && file_name.starts_with(&format!("libselene_{name}"))
+                    && path
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("so"))
+                {
+                    return Some(path);
                 }
             }
         }

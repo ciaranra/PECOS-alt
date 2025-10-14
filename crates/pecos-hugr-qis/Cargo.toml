@@ -16,6 +16,8 @@ readme = "README.md"
 anyhow.workspace = true
 log.workspace = true
 itertools.workspace = true
+tracing.workspace = true
+serde_json.workspace = true
 
 # PECOS dependencies
 pecos-core = { workspace = true, features = ["anyhow"] }

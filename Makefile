@@ -95,13 +95,46 @@ docs-test-working:  ## Test only working code examples in documentation
 # Linting / formatting
 # --------------------
 
+# Detect CUDA availability for GPU features
+CUDA_AVAILABLE := $(shell command -v nvcc >/dev/null 2>&1 && echo "yes" || (test -n "$$CUDA_PATH" && echo "yes" || echo "no"))
+
+# Get all features for pecos package except gpu
+PECOS_FEATURES_NO_GPU := $(shell cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.packages[] | select(.name == "pecos") | .features | keys[] | select(. | IN("gpu") | not)' | tr '\n' ',' | sed 's/,$$//')
+
+# Get all features for pecos-quest package except gpu and cuda
+PECOS_QUEST_FEATURES_NO_GPU := $(shell cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.packages[] | select(.name == "pecos-quest") | .features | keys[] | select(. | IN("gpu", "cuda") | not)' | tr '\n' ',' | sed 's/,$$//')
+
+# When CUDA is not available, we check all packages with all their features except GPU features
+# This is done by checking packages separately
 .PHONY: check
-check:  ## Run cargo check with all features
-	cargo check --workspace --all-targets --all-features
+check:  ## Run cargo check (with GPU features only if CUDA available)
+	@if [ "$(CUDA_AVAILABLE)" = "no" ]; then \
+		echo "CUDA not detected - checking all features except GPU"; \
+		echo "Checking workspace packages (excluding those with GPU features)..."; \
+		cargo check --workspace --exclude pecos --exclude pecos-quest --all-targets --all-features; \
+		echo "Checking pecos with all features except gpu..."; \
+		cargo check -p pecos --all-targets --features "$(PECOS_FEATURES_NO_GPU)"; \
+		echo "Checking pecos-quest with all features except gpu/cuda..."; \
+		cargo check -p pecos-quest --all-targets --features "$(PECOS_QUEST_FEATURES_NO_GPU)"; \
+	else \
+		echo "CUDA detected - checking with all features"; \
+		cargo check --workspace --all-targets --all-features; \
+	fi
 
 .PHONY: clippy
-clippy:  ## Run cargo clippy with all features
-	cargo clippy --workspace --all-targets --all-features -- -D warnings
+clippy:  ## Run cargo clippy (with GPU features only if CUDA available)
+	@if [ "$(CUDA_AVAILABLE)" = "no" ]; then \
+		echo "CUDA not detected - running clippy on all features except GPU"; \
+		echo "Running clippy on workspace packages (excluding those with GPU features)..."; \
+		cargo clippy --workspace --exclude pecos --exclude pecos-quest --all-targets --all-features -- -D warnings; \
+		echo "Running clippy on pecos with all features except gpu..."; \
+		cargo clippy -p pecos --all-targets --features "$(PECOS_FEATURES_NO_GPU)" -- -D warnings; \
+		echo "Running clippy on pecos-quest with all features except gpu/cuda..."; \
+		cargo clippy -p pecos-quest --all-targets --features "$(PECOS_QUEST_FEATURES_NO_GPU)" -- -D warnings; \
+	else \
+		echo "CUDA detected - running clippy with all features"; \
+		cargo clippy --workspace --all-targets --all-features -- -D warnings; \
+	fi
 
 .PHONY: fmt
 fmt: ## Check Rust formatting (without fixing)
@@ -133,7 +166,18 @@ normalize-line-endings:  ## Normalize line endings according to .gitattributes
 lint-fix:  ## Fix all auto-fixable linting issues (Rust, Python, Julia)
 	@echo "Fixing Rust formatting..."
 	cargo fmt --all
-	cargo clippy --fix --workspace --all-targets --all-features --allow-staged --allow-dirty
+	@if [ "$(CUDA_AVAILABLE)" = "no" ]; then \
+		echo "CUDA not detected - running clippy fix on all features except GPU"; \
+		echo "Fixing workspace packages (excluding those with GPU features)..."; \
+		cargo clippy --fix --workspace --exclude pecos --exclude pecos-quest --all-targets --all-features --allow-staged --allow-dirty; \
+		echo "Fixing pecos with all features except gpu..."; \
+		cargo clippy --fix -p pecos --all-targets --features "$(PECOS_FEATURES_NO_GPU)" --allow-staged --allow-dirty; \
+		echo "Fixing pecos-quest with all features except gpu/cuda..."; \
+		cargo clippy --fix -p pecos-quest --all-targets --features "$(PECOS_QUEST_FEATURES_NO_GPU)" --allow-staged --allow-dirty; \
+	else \
+		echo "CUDA detected - running clippy fix with all features"; \
+		cargo clippy --fix --workspace --all-targets --all-features --allow-staged --allow-dirty; \
+	fi
 	@echo ""
 	@echo "Running pre-commit fixes..."
 	uv run pre-commit run --all-files || true
