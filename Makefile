@@ -26,10 +26,20 @@ installreqs: ## Install Python project requirements to root .venv
 
 # Building development environments
 # ---------------------------------
+
+# Helper to unset CONDA_PREFIX in a cross-platform way
+ifdef OS
+    # Windows
+    UNSET_CONDA = set "CONDA_PREFIX=" &&
+else
+    # Unix/Linux/macOS
+    UNSET_CONDA = unset CONDA_PREFIX &&
+endif
+
 .PHONY: build
 build: installreqs ## Compile and install for development
-	@unset CONDA_PREFIX && cd python/pecos-rslib/ && uv run maturin develop --uv
-	@unset CONDA_PREFIX && uv pip install -e "./python/quantum-pecos[all]"
+	@$(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv
+	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all]"
 	@if command -v julia >/dev/null 2>&1; then \
 		echo "Julia detected, building Julia FFI library..."; \
 		cd julia/pecos-julia-ffi && cargo build; \
@@ -40,13 +50,13 @@ build: installreqs ## Compile and install for development
 
 .PHONY: build-basic
 build-basic: installreqs ## Compile and install for development but do not include install extras
-	@unset CONDA_PREFIX && cd python/pecos-rslib/ && uv run maturin develop --uv
-	@unset CONDA_PREFIX && uv pip install -e ./python/quantum-pecos
+	@$(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv
+	@$(UNSET_CONDA) uv pip install -e ./python/quantum-pecos
 
 .PHONY: build-release
 build-release: installreqs ## Build a faster version of binaries
-	@unset CONDA_PREFIX && cd python/pecos-rslib/ && uv run maturin develop --uv --release
-	@unset CONDA_PREFIX && uv pip install -e "./python/quantum-pecos[all]"
+	@$(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv --release
+	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all]"
 	@if command -v julia >/dev/null 2>&1; then \
 		echo "Julia detected, building Julia FFI library (release)..."; \
 		cd julia/pecos-julia-ffi && cargo build --release; \
@@ -57,14 +67,14 @@ build-release: installreqs ## Build a faster version of binaries
 
 .PHONY: build-native
 build-native: installreqs ## Build a faster version of binaries with native CPU optimization
-	@unset CONDA_PREFIX && cd python/pecos-rslib/ && RUSTFLAGS='-C target-cpu=native' \
-	&& uv run maturin develop --uv --release
-	@unset CONDA_PREFIX && uv pip install -e "./python/quantum-pecos[all]"
+	@$(UNSET_CONDA) cd python/pecos-rslib/ && RUSTFLAGS='-C target-cpu=native' \
+	uv run maturin develop --uv --release
+	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all]"
 
 .PHONY: build-cuda
 build-cuda: installreqs ## Compile and install for development with CUDA support
-	@unset CONDA_PREFIX && cd python/pecos-rslib/ && uv run maturin develop --uv
-	@unset CONDA_PREFIX && uv pip install -e "./python/quantum-pecos[all,cuda]"
+	@$(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv
+	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all,cuda]"
 	@if command -v julia >/dev/null 2>&1; then \
 		echo "Julia detected, building Julia FFI library..."; \
 		cd julia/pecos-julia-ffi && cargo build; \

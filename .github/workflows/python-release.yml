@@ -97,6 +97,42 @@ jobs:
           working-directory: python/pecos-rslib
           target: ${{ matrix.architecture == 'aarch64' && (matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || 'aarch64-unknown-linux-gnu') || (matrix.os == 'macos-latest' && 'x86_64-apple-darwin' || '') }}
           manylinux: auto
+          before-script-linux: |
+            # Install LLVM 14 in manylinux container
+            # First, check what version of manylinux we're in
+            if [ -f /etc/centos-release ]; then
+              echo "CentOS-based manylinux detected"
+              # For manylinux2014 (CentOS 7)
+              yum install -y centos-release-scl || true
+              yum install -y devtoolset-11 || true
+              # Install LLVM from SCL
+              yum install -y llvm-toolset-7.0 || true
+              # Try to get a newer LLVM
+              yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm || true
+              yum install -y llvm14-devel llvm14-static clang14 || true
+            elif [ -f /etc/os-release ]; then
+              # For newer manylinux versions
+              source /etc/os-release
+              if [[ "$ID" == "almalinux" ]] || [[ "$ID" == "rocky" ]]; then
+                echo "AlmaLinux/Rocky Linux detected"
+                dnf install -y epel-release || true
+                dnf install -y llvm14-devel llvm14-static clang14 || true
+              fi
+            fi
+
+            # Try to find and set LLVM path
+            for llvm_path in /opt/rh/llvm-toolset-7.0/root/usr /usr/lib64/llvm14 /usr/lib/llvm-14 /usr; do
+              if [ -f "$llvm_path/bin/llvm-config" ] || [ -f "$llvm_path/bin/llvm-config-14" ]; then
+                echo "Found LLVM at $llvm_path"
+                export LLVM_SYS_140_PREFIX="$llvm_path"
+                break
+              fi
+            done
+
+            # Export for cargo to use
+            if [ -n "$LLVM_SYS_140_PREFIX" ]; then
+              echo "LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
+            fi
 
       - name: Restore README.md
         if: always()

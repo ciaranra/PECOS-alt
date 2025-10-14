@@ -88,6 +88,52 @@ jobs:
       - name: Set up Rust
         run: rustup show
 
+      - name: Install LLVM Tools (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          # Add LLVM 14 repository
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-14 main"
+          sudo apt-get update
+          # Install LLVM 14 specifically
+          sudo apt-get install -y llvm-14 clang-14
+          # Set environment variable for llvm-sys
+          echo "LLVM_SYS_140_PREFIX=/usr/lib/llvm-14" >> $GITHUB_ENV
+          # Verify installation
+          which llvm-config-14
+          llvm-config-14 --version
+
+      - name: Install LLVM Tools (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install llvm@14
+          echo "$(brew --prefix llvm@14)/bin" >> $GITHUB_PATH
+          echo "LLVM_SYS_140_PREFIX=$(brew --prefix llvm@14)" >> $GITHUB_ENV
+          # Make sure it's available in the current step too
+          export PATH="$(brew --prefix llvm@14)/bin:$PATH"
+          # Verify installation
+          which llc
+          llc --version
+
+      - name: Install LLVM Tools (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "14.0"
+          directory: ${{ runner.temp }}/llvm
+          env: false  # Don't set CC/CXX - we'll use MSVC for C++ compilation
+
+      - name: Setup LLVM Path (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Write-Host "Setting up LLVM..."
+          echo "LLVM_SYS_140_PREFIX=$env:LLVM_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Add LLVM to PATH
+          $llvmBinDir = Join-Path -Path $env:LLVM_PATH -ChildPath "bin"
+          echo "$llvmBinDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
       - name: Install Rust target
         run: |
           if [ "${{ matrix.architecture }}" = "aarch64" ]; then
@@ -115,6 +161,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          Write-Host "LLVM_SYS_140_PREFIX: $env:LLVM_SYS_140_PREFIX"
           cd julia/pecos-julia-ffi
           cargo build --release
 

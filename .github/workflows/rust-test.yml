@@ -110,10 +110,32 @@ jobs:
           echo "Running clippy without LLVM features..."
           # Test that the main pecos crate can be built without LLVM
           cargo clippy -p pecos --all-targets --no-default-features -- -D warnings
-          # Test core crates that don't depend on LLVM
-          cargo clippy -p pecos-core -p pecos-engines -p pecos-qsim -p pecos-programs -p pecos-rng --all-targets -- -D warnings
-          # Test other crates that should work without LLVM
-          cargo clippy -p pecos-qasm -p pecos-phir-json -p pecos-qis-ffi-types --all-targets -- -D warnings
+
+          # Test core crates individually to avoid feature unification issues
+          echo "Testing pecos-core..."
+          cargo clippy -p pecos-core --all-targets -- -D warnings
+
+          echo "Testing pecos-engines..."
+          cargo clippy -p pecos-engines --all-targets -- -D warnings
+
+          echo "Testing pecos-qsim..."
+          cargo clippy -p pecos-qsim --all-targets -- -D warnings
+
+          echo "Testing pecos-programs..."
+          cargo clippy -p pecos-programs --all-targets -- -D warnings
+
+          echo "Testing pecos-rng..."
+          cargo clippy -p pecos-rng --all-targets -- -D warnings
+
+          echo "Testing pecos-qasm..."
+          cargo clippy -p pecos-qasm --all-targets -- -D warnings
+
+          echo "Testing pecos-phir-json..."
+          cargo clippy -p pecos-phir-json --all-targets -- -D warnings
+
+          echo "Testing pecos-qis-ffi-types..."
+          cargo clippy -p pecos-qis-ffi-types --all-targets -- -D warnings
+
           # Note: Skipping crates that require LLVM:
           # - pecos-hugr-qis (HUGR to LLVM compiler)
           # - pecos-qis-core (has inkwell dependency)
