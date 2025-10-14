@@ -82,7 +82,7 @@ wat = "1"
 cc = "1"
 ron = "0.11"
 tket = "0.15"
-tket-qsystem = { version = "0.21", features = ["llvm"] }
+tket-qsystem = { version = "0.21", default-features = false }
 ndarray = "0.16"
 anyhow = "1"
 cxx = "1"

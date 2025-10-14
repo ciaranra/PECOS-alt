@@ -27,7 +27,8 @@ tket.workspace = true
 tket-qsystem.workspace = true
 
 [features]
-default = []
+default = ["llvm"]
+llvm = ["tket-qsystem/llvm"]
 
 [lints]
 workspace = true

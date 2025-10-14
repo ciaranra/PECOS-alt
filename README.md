@@ -22,7 +22,7 @@ calls to Wasm VMs, conditional branching, and more.
 - Fast Simulation: Leverages a fast stabilizer simulation algorithm.
 - Multi-language extensions: Core functionalities implemented via Rust for performance and safety. Additional add-ons
 and extension support in C/C++ via Cython.
-- LLVM IR Support: Execute LLVM Intermediate Representation programs for hybrid quantum/classical computing (requires LLVM version 14 with the 'llc' tool).
+- LLVM IR Support: Execute LLVM Intermediate Representation programs for hybrid quantum/classical computing. LLVM support is optional - PECOS can be built without LLVM by using `--no-default-features` when building the Rust crates. When LLVM is enabled (default), requires LLVM version 14.
 
 ## Getting Started
 

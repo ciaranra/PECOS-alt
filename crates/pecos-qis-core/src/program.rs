@@ -152,39 +152,58 @@ impl QisSeleneHeliosInterface {
     /// Create from LLVM IR text by converting to bitcode
     #[must_use]
     pub fn from_llvm_ir(llvm_ir: &str) -> Self {
-        // Convert LLVM IR text to bitcode using inkwell
-        use inkwell::context::Context;
-        use inkwell::targets::{InitializationConfig, Target};
+        #[cfg(feature = "llvm")]
+        {
+            // Convert LLVM IR text to bitcode using inkwell
+            use inkwell::context::Context;
+            use inkwell::targets::{InitializationConfig, Target};
 
-        // Initialize LLVM targets
-        Target::initialize_native(&InitializationConfig::default()).ok();
+            // Initialize LLVM targets
+            Target::initialize_native(&InitializationConfig::default()).ok();
 
-        let context = Context::create();
-        let bitcode = match context.create_module_from_ir(
-            inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
-                llvm_ir.as_bytes(),
-                "llvm_ir",
-            ),
-        ) {
-            Ok(module) => {
-                // Write module to bitcode
-                module.write_bitcode_to_memory().as_slice().to_vec()
-            }
-            Err(e) => {
-                log::error!("Failed to convert LLVM IR to bitcode: {e}");
-                // Store the IR text as-is and let Helios handle it
-                llvm_ir.as_bytes().to_vec()
-            }
-        };
+            let context = Context::create();
+            let bitcode = match context.create_module_from_ir(
+                inkwell::memory_buffer::MemoryBuffer::create_from_memory_range(
+                    llvm_ir.as_bytes(),
+                    "llvm_ir",
+                ),
+            ) {
+                Ok(module) => {
+                    // Write module to bitcode
+                    module.write_bitcode_to_memory().as_slice().to_vec()
+                }
+                Err(e) => {
+                    log::error!("Failed to convert LLVM IR to bitcode: {e}");
+                    // Store the IR text as-is and let Helios handle it
+                    llvm_ir.as_bytes().to_vec()
+                }
+            };
 
-        let mut interface = Self::from_bitcode(bitcode);
-        interface
-            .metadata
-            .insert("original_format".to_string(), "llvm_ir".to_string());
-        interface
-            .metadata
-            .insert("ir_size".to_string(), llvm_ir.len().to_string());
-        interface
+            let mut interface = Self::from_bitcode(bitcode);
+            interface
+                .metadata
+                .insert("original_format".to_string(), "llvm_ir".to_string());
+            interface
+                .metadata
+                .insert("ir_size".to_string(), llvm_ir.len().to_string());
+            interface
+        }
+
+        #[cfg(not(feature = "llvm"))]
+        {
+            // Without LLVM support, store the IR text as-is and let Helios handle it
+            let mut interface = Self::from_bitcode(llvm_ir.as_bytes().to_vec());
+            interface
+                .metadata
+                .insert("original_format".to_string(), "llvm_ir".to_string());
+            interface
+                .metadata
+                .insert("ir_size".to_string(), llvm_ir.len().to_string());
+            interface
+                .metadata
+                .insert("llvm_conversion".to_string(), "skipped".to_string());
+            interface
+        }
     }
 
     /// Compile the program using Selene Helios and convert to `QisInterface`

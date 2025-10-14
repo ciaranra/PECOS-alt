@@ -89,6 +89,7 @@ pub use pecos_programs::prelude::*;
 pub use pecos_rng::prelude::*;
 
 // Re-export HUGR compiler prelude
+#[cfg(feature = "llvm")]
 pub use pecos_hugr_qis::prelude::*;
 
 // Re-export PHIR-JSON prelude
