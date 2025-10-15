@@ -141,9 +141,48 @@ jobs:
           Write-Host "LLVM configuration completed"
           Write-Host "LLVM_SYS_140_PREFIX will be: $llvmPath"
 
+      - name: Setup cargo config for Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Write-Host "Setting up cargo config for Windows maturin build..."
+          $llvmPath = "${{ runner.temp }}\llvm"
+
+          # Create cargo config in project directory
+          cd python/pecos-rslib
+          New-Item -ItemType Directory -Force -Path .cargo | Out-Null
+
+          # Escape backslashes for TOML
+          $escapedPath = $llvmPath.Replace('\', '/')
+
+          # Write config
+          $configContent = "[env]`nLLVM_SYS_140_PREFIX = `"$escapedPath`""
+          $configContent | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8
+
+          # Also create in rust subdirectory
+          New-Item -ItemType Directory -Force -Path "rust\.cargo" | Out-Null
+          $configContent | Out-File -FilePath "rust\.cargo\config.toml" -Encoding UTF8
+
+          # Also create in user's cargo home directory as a fallback
+          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { "$env:USERPROFILE\.cargo" }
+          New-Item -ItemType Directory -Force -Path $cargoHome | Out-Null
+
+          # For user cargo config, append if file exists
+          if (Test-Path "$cargoHome\config.toml") {
+            "`n$configContent" | Out-File -FilePath "$cargoHome\config.toml" -Encoding UTF8 -Append
+          } else {
+            $configContent | Out-File -FilePath "$cargoHome\config.toml" -Encoding UTF8
+          }
+
+          Write-Host "Created cargo configs with LLVM_SYS_140_PREFIX=$escapedPath"
+          Write-Host "Contents of rust/.cargo/config.toml:"
+          Get-Content "rust\.cargo\config.toml"
+          cd ../..
+
       - name: Build wheel
         uses: PyO3/maturin-action@v1
         env:
+          # Pass LLVM path based on OS - Windows uses runner.temp/llvm, others use system paths
           LLVM_SYS_140_PREFIX: ${{ matrix.os == 'windows-latest' && format('{0}/llvm', runner.temp) || (matrix.os == 'macos-latest' && '/usr/local/opt/llvm@14' || '/usr') }}
         with:
           command: build
@@ -151,69 +190,38 @@ jobs:
           working-directory: python/pecos-rslib
           target: ${{ matrix.architecture == 'aarch64' && (matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || 'aarch64-unknown-linux-gnu') || (matrix.os == 'macos-latest' && 'x86_64-apple-darwin' || '') }}
           manylinux: auto
-          before-script-macos: |
-            # Set LLVM path for macOS builds
-            if [ -d "/usr/local/opt/llvm@14" ]; then
-              export LLVM_SYS_140_PREFIX="/usr/local/opt/llvm@14"
-            elif [ -d "/opt/homebrew/opt/llvm@14" ]; then
-              export LLVM_SYS_140_PREFIX="/opt/homebrew/opt/llvm@14"
-            else
-              echo "Warning: LLVM@14 not found in expected locations"
-              export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr/local/opt/llvm@14}"
-            fi
-            echo "LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
-
-            # For cross-compilation, ensure the environment variable is exported
-            export LLVM_SYS_140_PREFIX
-
-            # Create cargo config in the project directory
-            cd python/pecos-rslib
-            mkdir -p .cargo
-            echo "[env]" > .cargo/config.toml
-            echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> .cargo/config.toml
-
-            # Also create in rust subdirectory
-            mkdir -p rust/.cargo
-            echo "[env]" > rust/.cargo/config.toml
-            echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> rust/.cargo/config.toml
-
-            # Create build config for cross-compilation targets
-            echo "" >> rust/.cargo/config.toml
-            echo "[target.aarch64-apple-darwin]" >> rust/.cargo/config.toml
-            echo "llvm-config = \"${LLVM_SYS_140_PREFIX}/bin/llvm-config\"" >> rust/.cargo/config.toml
-            echo "" >> rust/.cargo/config.toml
-            echo "[target.x86_64-apple-darwin]" >> rust/.cargo/config.toml
-            echo "llvm-config = \"${LLVM_SYS_140_PREFIX}/bin/llvm-config\"" >> rust/.cargo/config.toml
-
-            echo "Cargo configs created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
-            cat rust/.cargo/config.toml
-            cd ../..
-          before-script-windows: |
-            Write-Host "Setting up cargo config for Windows..."
-            $llvmPath = "${{ runner.temp }}/llvm"
-            if ($env:LLVM_SYS_140_PREFIX) {
-              $llvmPath = $env:LLVM_SYS_140_PREFIX
-            }
-
-            # Create cargo config in project directory
-            cd python/pecos-rslib
-            New-Item -ItemType Directory -Force -Path .cargo | Out-Null
-
-            # Escape backslashes for TOML
-            $escapedPath = $llvmPath.Replace('\', '/')
-
-            # Write config
-            $configContent = "[env]`nLLVM_SYS_140_PREFIX = `"$escapedPath`""
-            $configContent | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8
-
-            # Also create in rust subdirectory
-            New-Item -ItemType Directory -Force -Path "rust\.cargo" | Out-Null
-            $configContent | Out-File -FilePath "rust\.cargo\config.toml" -Encoding UTF8
-
-            Write-Host "Created cargo configs with LLVM_SYS_140_PREFIX=$escapedPath"
-            Get-Content "rust\.cargo\config.toml"
-            cd ..\..
           before-script-linux: |
+            # For macOS builds (outside container)
+            if [[ "$RUNNER_OS" == "macOS" ]]; then
+              # Set LLVM path for macOS builds
+              if [ -d "/usr/local/opt/llvm@14" ]; then
+                export LLVM_SYS_140_PREFIX="/usr/local/opt/llvm@14"
+              elif [ -d "/opt/homebrew/opt/llvm@14" ]; then
+                export LLVM_SYS_140_PREFIX="/opt/homebrew/opt/llvm@14"
+              else
+                echo "Warning: LLVM@14 not found in expected locations"
+                export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr/local/opt/llvm@14}"
+              fi
+              echo "LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
+
+              # Create cargo config in the project directory
+              cd python/pecos-rslib
+              mkdir -p .cargo
+              echo "[env]" > .cargo/config.toml
+              echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> .cargo/config.toml
+
+              # Also create in rust subdirectory
+              mkdir -p rust/.cargo
+              echo "[env]" > rust/.cargo/config.toml
+              echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> rust/.cargo/config.toml
+
+              echo "Cargo configs created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
+              cat rust/.cargo/config.toml
+              cd ../..
+              return  # Exit early for macOS
+            fi
+
+            # For Linux builds (inside manylinux container)
             # Set default LLVM path to avoid unbound variable errors
             export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr}"
 

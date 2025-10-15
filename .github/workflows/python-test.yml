@@ -237,7 +237,15 @@ jobs:
           # Also create in user's cargo home directory as a fallback
           $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { "$env:USERPROFILE\.cargo" }
           New-Item -ItemType Directory -Force -Path $cargoHome | Out-Null
-          $configContent | Out-File -FilePath "$cargoHome\config.toml" -Encoding UTF8 -Append
+
+          # For user cargo config, we need to be careful not to overwrite existing content
+          if (Test-Path "$cargoHome\config.toml") {
+            # Add our content to existing file
+            "`n$configContent" | Out-File -FilePath "$cargoHome\config.toml" -Encoding UTF8 -Append
+          } else {
+            # Create new file
+            $configContent | Out-File -FilePath "$cargoHome\config.toml" -Encoding UTF8
+          }
 
           Write-Host "Created cargo configs with LLVM_SYS_140_PREFIX=$escapedLLVMPath"
           Write-Host "Root .cargo\config.toml:"
@@ -247,6 +255,13 @@ jobs:
           Write-Error "Could not find MSVC link.exe"
           exit 1
         }
+
+        # Ensure LLVM environment variable is exported for subprocess
+        [System.Environment]::SetEnvironmentVariable("LLVM_SYS_140_PREFIX", $env:LLVM_SYS_140_PREFIX, "User")
+        [System.Environment]::SetEnvironmentVariable("LLVM_SYS_140_PREFIX", $env:LLVM_SYS_140_PREFIX, "Process")
+
+        # Also set it as a regular environment variable one more time
+        $env:LLVM_SYS_140_PREFIX = $env:LLVM_SYS_140_PREFIX
 
         # Build and test
         make build
