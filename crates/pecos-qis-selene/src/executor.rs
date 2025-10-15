@@ -53,8 +53,16 @@ impl QisHeliosInterface {
         }
     }
 
-    /// Find the `libpecos_qis_ffi.so` library by searching common locations
+    /// Find the `libpecos_qis_ffi` library by searching common locations
     fn find_pecos_qis_lib() -> Result<PathBuf, InterfaceError> {
+        let lib_ext = if cfg!(target_os = "macos") {
+            "dylib"
+        } else if cfg!(target_os = "windows") {
+            "dll"
+        } else {
+            "so"
+        };
+
         let exe_dir = std::env::current_exe()
             .ok()
             .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
@@ -65,30 +73,41 @@ impl QisHeliosInterface {
             })?;
 
         let mut candidate_paths = vec![
-            exe_dir.join("libpecos_qis_ffi.so"),
-            exe_dir.join("deps/libpecos_qis_ffi.so"),
+            exe_dir.join(format!("libpecos_qis_ffi.{lib_ext}")),
+            exe_dir.join(format!("deps/libpecos_qis_ffi.{lib_ext}")),
         ];
 
         if let Some(parent) = exe_dir.parent() {
-            candidate_paths.push(parent.join("libpecos_qis_ffi.so"));
-            candidate_paths.push(parent.join("deps/libpecos_qis_ffi.so"));
+            candidate_paths.push(parent.join(format!("libpecos_qis_ffi.{lib_ext}")));
+            candidate_paths.push(parent.join(format!("deps/libpecos_qis_ffi.{lib_ext}")));
         }
 
         if let Ok(current_dir) = std::env::current_dir() {
-            candidate_paths.push(current_dir.join("target/debug/libpecos_qis_ffi.so"));
-            candidate_paths.push(current_dir.join("target/debug/deps/libpecos_qis_ffi.so"));
-            candidate_paths.push(current_dir.join("target/release/libpecos_qis_ffi.so"));
-            candidate_paths.push(current_dir.join("target/release/deps/libpecos_qis_ffi.so"));
+            candidate_paths
+                .push(current_dir.join(format!("target/debug/libpecos_qis_ffi.{lib_ext}")));
+            candidate_paths
+                .push(current_dir.join(format!("target/debug/deps/libpecos_qis_ffi.{lib_ext}")));
+            candidate_paths
+                .push(current_dir.join(format!("target/release/libpecos_qis_ffi.{lib_ext}")));
+            candidate_paths.push(
+                current_dir.join(format!("target/release/deps/libpecos_qis_ffi.{lib_ext}")),
+            );
 
             // Search up the directory tree for workspace root (when running from Python)
             let mut search_dir = current_dir.as_path();
             for _ in 0..5 {
                 // Search up to 5 levels
                 if let Some(parent) = search_dir.parent() {
-                    candidate_paths.push(parent.join("target/debug/libpecos_qis_ffi.so"));
-                    candidate_paths.push(parent.join("target/debug/deps/libpecos_qis_ffi.so"));
-                    candidate_paths.push(parent.join("target/release/libpecos_qis_ffi.so"));
-                    candidate_paths.push(parent.join("target/release/deps/libpecos_qis_ffi.so"));
+                    candidate_paths
+                        .push(parent.join(format!("target/debug/libpecos_qis_ffi.{lib_ext}")));
+                    candidate_paths.push(
+                        parent.join(format!("target/debug/deps/libpecos_qis_ffi.{lib_ext}")),
+                    );
+                    candidate_paths
+                        .push(parent.join(format!("target/release/libpecos_qis_ffi.{lib_ext}")));
+                    candidate_paths.push(
+                        parent.join(format!("target/release/deps/libpecos_qis_ffi.{lib_ext}")),
+                    );
                     search_dir = parent;
                 } else {
                     break;
@@ -101,7 +120,7 @@ impl QisHeliosInterface {
             .find(|p| p.exists())
             .ok_or_else(|| {
                 InterfaceError::ExecutionError(format!(
-                    "Failed to find libpecos_qis_ffi.so. Searched in: {candidate_paths:?}"
+                    "Failed to find libpecos_qis_ffi.{lib_ext}. Searched in: {candidate_paths:?}"
                 ))
             })
             .cloned()

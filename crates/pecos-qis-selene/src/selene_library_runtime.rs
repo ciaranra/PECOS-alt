@@ -164,7 +164,17 @@ impl QisSeleneLibraryRuntime {
         std::fs::create_dir_all(&build_dir)
             .map_err(|e| RuntimeError::FfiError(format!("Failed to create build dir: {e}")))?;
 
-        let so_path = build_dir.join(format!("selene_{}_runtime.so", config.runtime_type));
+        let lib_ext = if cfg!(target_os = "macos") {
+            "dylib"
+        } else if cfg!(target_os = "windows") {
+            "dll"
+        } else {
+            "so"
+        };
+        let so_path = build_dir.join(format!(
+            "selene_{}_runtime.{}",
+            config.runtime_type, lib_ext
+        ));
 
         // Check if already built
         if so_path.exists() {
@@ -180,10 +190,11 @@ impl QisSeleneLibraryRuntime {
             r#"
 cd "{selene_path}/selene-runtimes/{runtime_type}"
 make clean && make
-cp selene_{runtime_type}_runtime.so "{so_path}"
+cp selene_{runtime_type}_runtime.{lib_ext} "{so_path}"
 "#,
             selene_path = selene_path,
             runtime_type = config.runtime_type,
+            lib_ext = lib_ext,
             so_path = so_path.display()
         );
 

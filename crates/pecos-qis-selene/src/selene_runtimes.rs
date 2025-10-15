@@ -125,6 +125,14 @@ pub fn selene_soft_rz_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
 /// 2. Cargo target directory (when built as dependency)
 /// 3. Legacy paths (../selene) for compatibility
 fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchError> {
+    // Platform-specific library extension
+    let lib_ext = if cfg!(target_os = "macos") {
+        "dylib"
+    } else if cfg!(target_os = "windows") {
+        "dll"
+    } else {
+        "so"
+    };
     // First check if we have a runtime path from the build script
     if let Ok(built_runtime_path) = std::env::var(format!(
         "PECOS_{}_PATH",
@@ -139,7 +147,7 @@ fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchErro
 
     // Check if it was built in our OUT_DIR during compilation
     if let Ok(out_dir) = std::env::var("OUT_DIR") {
-        let runtime_path = PathBuf::from(&out_dir).join(format!("lib{lib_name}.so"));
+        let runtime_path = PathBuf::from(&out_dir).join(format!("lib{lib_name}.{lib_ext}"));
         if runtime_path.exists() {
             log::info!(
                 "Found Selene runtime in OUT_DIR: {}",
@@ -177,7 +185,7 @@ fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchErro
                         && filename.starts_with(&format!("lib{lib_name}"))
                         && path
                             .extension()
-                            .is_some_and(|ext| ext.eq_ignore_ascii_case("so"))
+                            .is_some_and(|ext| ext.eq_ignore_ascii_case(lib_ext))
                     {
                         log::info!("Found Selene runtime in cargo deps: {}", path.display());
                         return Ok(path);
@@ -186,7 +194,9 @@ fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchErro
             }
 
             // Also check standard location
-            let runtime_path = target.join(profile).join(format!("lib{lib_name}.so"));
+            let runtime_path = target
+                .join(profile)
+                .join(format!("lib{lib_name}.{lib_ext}"));
             if runtime_path.exists() {
                 log::info!(
                     "Found Selene runtime in cargo target: {}",
@@ -233,7 +243,15 @@ fn find_cargo_target_dir() -> Option<PathBuf> {
 /// 4. System library paths
 #[must_use]
 pub fn find_selene_runtime(name: &str) -> Option<PathBuf> {
-    let filename = format!("libselene_{name}.so");
+    // Platform-specific library extension
+    let lib_ext = if cfg!(target_os = "macos") {
+        "dylib"
+    } else if cfg!(target_os = "windows") {
+        "dll"
+    } else {
+        "so"
+    };
+    let filename = format!("libselene_{name}.{lib_ext}");
 
     // Check environment variable
     if let Ok(selene_dir) = std::env::var("PECOS_SELENE_DIR") {
@@ -261,7 +279,7 @@ pub fn find_selene_runtime(name: &str) -> Option<PathBuf> {
                     && file_name.starts_with(&format!("libselene_{name}"))
                     && path
                         .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("so"))
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case(lib_ext))
                 {
                     return Some(path);
                 }
