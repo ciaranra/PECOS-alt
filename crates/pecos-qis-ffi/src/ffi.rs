@@ -662,7 +662,7 @@ pub unsafe extern "C" fn teardown() -> i64 {
 /// # Panics
 /// This function intentionally panics to propagate errors from the quantum program.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn panic(code: i32, message: *const i8) {
+pub unsafe extern "C" fn panic(code: i32, message: *const std::ffi::c_char) {
     let msg = if message.is_null() {
         "Unknown error".to_string()
     } else {
@@ -684,7 +684,7 @@ pub unsafe extern "C" fn panic(code: i32, message: *const i8) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __quantum__rt__result_record_output(
     result_id: i64,
-    register_name: *const i8,
+    register_name: *const std::ffi::c_char,
 ) {
     // For now, this is a no-op since we're collecting operations rather than executing them
     // In a real implementation, this would record the measurement result to the specified register

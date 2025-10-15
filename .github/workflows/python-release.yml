@@ -117,11 +117,19 @@ jobs:
 
               # Install development tools
               yum install -y centos-release-scl || true
-              # Also update SCL repos to use vault
-              if [ -f /etc/yum.repos.d/CentOS-SCLo-scl.repo ]; then
-                sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-SCLo-* || true
-                sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-SCLo-* || true
-              fi
+
+              # Update all SCL repos to use vault after installing centos-release-scl
+              for repo in /etc/yum.repos.d/CentOS-SCLo-*.repo; do
+                if [ -f "$repo" ]; then
+                  echo "Updating $repo to use vault..."
+                  sed -i 's/mirrorlist/#mirrorlist/g' "$repo" || true
+                  sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' "$repo" || true
+                  sed -i 's|baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' "$repo" || true
+                fi
+              done
+
+              # Clear yum cache after repo changes
+              yum clean all || true
 
               yum install -y devtoolset-11 || true
               # Install LLVM from SCL

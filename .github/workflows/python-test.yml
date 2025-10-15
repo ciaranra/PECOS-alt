@@ -167,6 +167,16 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
+        # Ensure LLVM environment variable is available
+        Write-Host "LLVM_SYS_140_PREFIX: $env:LLVM_SYS_140_PREFIX"
+        Write-Host "LLVM_PATH: $env:LLVM_PATH"
+
+        # If LLVM_SYS_140_PREFIX is not set but LLVM_PATH is, use LLVM_PATH
+        if (-not $env:LLVM_SYS_140_PREFIX -and $env:LLVM_PATH) {
+          Write-Host "Setting LLVM_SYS_140_PREFIX from LLVM_PATH"
+          $env:LLVM_SYS_140_PREFIX = $env:LLVM_PATH
+        }
+
         # Find MSVC link.exe and create cargo config
         $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
         $vsPath = & $vsWhere -latest -property installationPath
@@ -180,10 +190,15 @@ jobs:
           # Create .cargo directory and config
           New-Item -ItemType Directory -Force -Path .cargo | Out-Null
 
-          # Create config with escaped path
+          # Create config with escaped path and LLVM environment variable
           $escapedPath = $linkPath.Replace('\', '/')
           "[target.x86_64-pc-windows-msvc]" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8
           "linker = `"$escapedPath`"" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
+
+          # Add LLVM environment variable to cargo config
+          "" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
+          "[env]" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
+          "LLVM_SYS_140_PREFIX = `"$env:LLVM_SYS_140_PREFIX`"" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
 
           Write-Host "Created .cargo\config.toml:"
           Get-Content .cargo\config.toml
