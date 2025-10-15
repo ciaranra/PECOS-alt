@@ -116,6 +116,28 @@ jobs:
           working-directory: python/pecos-rslib
           target: ${{ matrix.architecture == 'aarch64' && (matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || 'aarch64-unknown-linux-gnu') || (matrix.os == 'macos-latest' && 'x86_64-apple-darwin' || '') }}
           manylinux: auto
+          before-script-macos: |
+            # Set LLVM path for macOS builds
+            if [ -d "/usr/local/opt/llvm@14" ]; then
+              export LLVM_SYS_140_PREFIX="/usr/local/opt/llvm@14"
+            elif [ -d "/opt/homebrew/opt/llvm@14" ]; then
+              export LLVM_SYS_140_PREFIX="/opt/homebrew/opt/llvm@14"
+            else
+              echo "Warning: LLVM@14 not found in expected locations"
+              export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr/local/opt/llvm@14}"
+            fi
+            echo "LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
+
+            # For cross-compilation, ensure the environment variable is exported
+            export LLVM_SYS_140_PREFIX
+
+            # Create cargo config to pass through cross-compilation
+            mkdir -p ~/.cargo
+            echo "[env]" >> ~/.cargo/config.toml
+            echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> ~/.cargo/config.toml
+
+            echo "Cargo config created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
+            cat ~/.cargo/config.toml
           before-script-linux: |
             # Set default LLVM path to avoid unbound variable errors
             export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr}"

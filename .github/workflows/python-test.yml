@@ -95,7 +95,7 @@ jobs:
       with:
         version: "14.0"
         directory: ${{ runner.temp }}/llvm
-        env: false  # Don't set CC/CXX - we'll use MSVC for C++ compilation
+        env: true  # Set environment variables including LLVM_SYS_140_PREFIX
 
     - name: Setup LLVM Path (Windows)
       if: matrix.os == 'windows-latest'
@@ -108,6 +108,9 @@ jobs:
 
         # Set LLVM_SYS_140_PREFIX for llvm-sys crate
         "LLVM_SYS_140_PREFIX=$env:LLVM_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+        # Also ensure it's set in the current shell
+        $env:LLVM_SYS_140_PREFIX = $env:LLVM_PATH
 
         # Ensure we're using MSVC for C++ compilation, not LLVM clang
         Write-Host "Ensuring MSVC is used for C++ compilation..."
@@ -187,21 +190,28 @@ jobs:
         if ($linkPath) {
           Write-Host "Found MSVC link.exe at: $linkPath"
 
-          # Create .cargo directory and config
+          # Create .cargo directory and config in multiple locations
+          # Create in root
           New-Item -ItemType Directory -Force -Path .cargo | Out-Null
 
           # Create config with escaped path and LLVM environment variable
           $escapedPath = $linkPath.Replace('\', '/')
-          "[target.x86_64-pc-windows-msvc]" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8
-          "linker = `"$escapedPath`"" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
-
-          # Add LLVM environment variable to cargo config
           $escapedLLVMPath = $env:LLVM_SYS_140_PREFIX.Replace('\', '/')
-          "" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
-          "[env]" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
-          "LLVM_SYS_140_PREFIX = `"$escapedLLVMPath`"" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
 
-          Write-Host "Created .cargo\config.toml:"
+          $configContent = "[target.x86_64-pc-windows-msvc]`nlinker = `"$escapedPath`"`n`n[env]`nLLVM_SYS_140_PREFIX = `"$escapedLLVMPath`""
+
+          $configContent | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8
+
+          # Also create in pecos-rslib directory
+          New-Item -ItemType Directory -Force -Path "python\pecos-rslib\.cargo" | Out-Null
+          $configContent | Out-File -FilePath "python\pecos-rslib\.cargo\config.toml" -Encoding UTF8
+
+          # And in the rust subdirectory
+          New-Item -ItemType Directory -Force -Path "python\pecos-rslib\rust\.cargo" | Out-Null
+          $configContent | Out-File -FilePath "python\pecos-rslib\rust\.cargo\config.toml" -Encoding UTF8
+
+          Write-Host "Created cargo configs with LLVM_SYS_140_PREFIX=$escapedLLVMPath"
+          Write-Host "Root .cargo\config.toml:"
           Get-Content .cargo\config.toml
         } else {
           Write-Error "Could not find MSVC link.exe"

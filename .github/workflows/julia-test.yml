@@ -215,24 +215,26 @@ jobs:
           Write-Host "Set LLVM_SYS_140_PREFIX to: $env:LLVM_SYS_140_PREFIX"
         }
 
-        # Create cargo config with LLVM environment variable
-        $cargoDir = Join-Path -Path $env:USERPROFILE -ChildPath ".cargo"
-        New-Item -ItemType Directory -Force -Path $cargoDir | Out-Null
+        cd julia/pecos-julia-ffi
 
-        $configPath = Join-Path -Path $cargoDir -ChildPath "config.toml"
+        # Create local cargo config with LLVM environment variable
+        New-Item -ItemType Directory -Force -Path .cargo | Out-Null
 
         # Escape backslashes in the path for TOML
         $escapedPath = $env:LLVM_SYS_140_PREFIX.Replace('\', '/')
 
-        # Write to config file (overwrite, don't append)
+        # Write to config file
         $configContent = "[env]`nLLVM_SYS_140_PREFIX = `"$escapedPath`""
-        $configContent | Out-File -FilePath $configPath -Encoding UTF8
+        $configContent | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8
 
-        Write-Host "Created/updated cargo config at: $configPath"
+        Write-Host "Created cargo config at: .cargo\config.toml"
         Write-Host "Config contents:"
-        Get-Content $configPath
+        Get-Content .cargo\config.toml
 
-        cd julia/pecos-julia-ffi
+        # Also set the environment variable directly for cargo
+        $env:LLVM_SYS_140_PREFIX = $env:LLVM_SYS_140_PREFIX
+        Write-Host "LLVM_SYS_140_PREFIX is set to: $env:LLVM_SYS_140_PREFIX"
+
         cargo build --release
 
     - name: Build Rust FFI library (Unix)
