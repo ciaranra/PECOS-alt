@@ -148,6 +148,16 @@ jobs:
           Write-Host "Setting up cargo config for Windows maturin build..."
           $llvmPath = "${{ runner.temp }}\llvm"
 
+          # Verify LLVM installation
+          Write-Host "Checking LLVM installation at: $llvmPath"
+          if (Test-Path $llvmPath) {
+            Write-Host "LLVM directory found"
+            Get-ChildItem $llvmPath | Select-Object Name
+          } else {
+            Write-Error "LLVM directory not found at: $llvmPath"
+            exit 1
+          }
+
           # Create cargo config in project directory
           cd python/pecos-rslib
           New-Item -ItemType Directory -Force -Path .cargo | Out-Null
@@ -177,6 +187,10 @@ jobs:
           Write-Host "Created cargo configs with LLVM_SYS_140_PREFIX=$escapedPath"
           Write-Host "Contents of rust/.cargo/config.toml:"
           Get-Content "rust\.cargo\config.toml"
+
+          # Also ensure environment variable is exported
+          [System.Environment]::SetEnvironmentVariable("LLVM_SYS_140_PREFIX", $llvmPath, "Process")
+
           cd ../..
 
       - name: Build wheel
@@ -191,20 +205,18 @@ jobs:
           target: ${{ matrix.architecture == 'aarch64' && (matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || 'aarch64-unknown-linux-gnu') || (matrix.os == 'macos-latest' && 'x86_64-apple-darwin' || '') }}
           manylinux: auto
           before-script-linux: |
-            # For macOS builds (outside container)
-            if [[ "$RUNNER_OS" == "macOS" ]]; then
-              # Set LLVM path for macOS builds
-              if [ -d "/usr/local/opt/llvm@14" ]; then
-                export LLVM_SYS_140_PREFIX="/usr/local/opt/llvm@14"
-              elif [ -d "/opt/homebrew/opt/llvm@14" ]; then
-                export LLVM_SYS_140_PREFIX="/opt/homebrew/opt/llvm@14"
-              else
-                echo "Warning: LLVM@14 not found in expected locations"
-                export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr/local/opt/llvm@14}"
-              fi
-              echo "LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
+            # Check if we're in a manylinux container (Linux) or on macOS
+            if [[ -f /etc/os-release ]] || [[ -f /etc/centos-release ]]; then
+              # We're in a manylinux container - Linux build
+              echo "Linux/manylinux environment detected"
+            else
+              # Not in manylinux container - assume macOS
+              # For macOS, LLVM is already set up by the Install LLVM Tools step
+              # Just ensure the environment variable is available
+              echo "macOS environment detected"
+              echo "LLVM_SYS_140_PREFIX is already set to: $LLVM_SYS_140_PREFIX"
 
-              # Create cargo config in the project directory
+              # Create cargo config in the project directory to persist the environment variable
               cd python/pecos-rslib
               mkdir -p .cargo
               echo "[env]" > .cargo/config.toml
