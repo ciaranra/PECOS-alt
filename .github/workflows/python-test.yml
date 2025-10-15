@@ -180,6 +180,30 @@ jobs:
           $env:LLVM_SYS_140_PREFIX = $env:LLVM_PATH
         }
 
+        # Double check it's really set
+        if (-not $env:LLVM_SYS_140_PREFIX) {
+          Write-Error "LLVM_SYS_140_PREFIX is still not set!"
+          exit 1
+        }
+
+        # Export to GitHub env for make/maturin to use (in case it wasn't already)
+        "LLVM_SYS_140_PREFIX=$env:LLVM_SYS_140_PREFIX" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+        # Also ensure LLVM bin is in PATH
+        $llvmBinDir = Join-Path -Path $env:LLVM_SYS_140_PREFIX -ChildPath "bin"
+        if (Test-Path $llvmBinDir) {
+          "$llvmBinDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "Added LLVM bin to PATH: $llvmBinDir"
+        }
+
+        # Verify LLVM installation
+        Write-Host "Checking for llvm-config..."
+        Get-Command llvm-config -ErrorAction SilentlyContinue || Write-Host "llvm-config not found in PATH"
+
+        # List LLVM directory contents
+        Write-Host "LLVM directory contents:"
+        Get-ChildItem $env:LLVM_SYS_140_PREFIX -ErrorAction SilentlyContinue | Select-Object Name
+
         # Find MSVC link.exe and create cargo config
         $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
         $vsPath = & $vsWhere -latest -property installationPath
@@ -210,9 +234,15 @@ jobs:
           New-Item -ItemType Directory -Force -Path "python\pecos-rslib\rust\.cargo" | Out-Null
           $configContent | Out-File -FilePath "python\pecos-rslib\rust\.cargo\config.toml" -Encoding UTF8
 
+          # Also create in user's cargo home directory as a fallback
+          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { "$env:USERPROFILE\.cargo" }
+          New-Item -ItemType Directory -Force -Path $cargoHome | Out-Null
+          $configContent | Out-File -FilePath "$cargoHome\config.toml" -Encoding UTF8 -Append
+
           Write-Host "Created cargo configs with LLVM_SYS_140_PREFIX=$escapedLLVMPath"
           Write-Host "Root .cargo\config.toml:"
           Get-Content .cargo\config.toml
+          Write-Host "User cargo config appended to: $cargoHome\config.toml"
         } else {
           Write-Error "Could not find MSVC link.exe"
           exit 1
