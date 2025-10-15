@@ -196,9 +196,10 @@ jobs:
           "linker = `"$escapedPath`"" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
 
           # Add LLVM environment variable to cargo config
+          $escapedLLVMPath = $env:LLVM_SYS_140_PREFIX.Replace('\', '/')
           "" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
           "[env]" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
-          "LLVM_SYS_140_PREFIX = `"$env:LLVM_SYS_140_PREFIX`"" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
+          "LLVM_SYS_140_PREFIX = `"$escapedLLVMPath`"" | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8 -Append
 
           Write-Host "Created .cargo\config.toml:"
           Get-Content .cargo\config.toml

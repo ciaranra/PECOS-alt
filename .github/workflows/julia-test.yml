@@ -221,9 +221,12 @@ jobs:
 
         $configPath = Join-Path -Path $cargoDir -ChildPath "config.toml"
 
-        # Append to existing config or create new one
-        "[env]" | Out-File -FilePath $configPath -Encoding UTF8 -Append
-        "LLVM_SYS_140_PREFIX = `"$env:LLVM_SYS_140_PREFIX`"" | Out-File -FilePath $configPath -Encoding UTF8 -Append
+        # Escape backslashes in the path for TOML
+        $escapedPath = $env:LLVM_SYS_140_PREFIX.Replace('\', '/')
+
+        # Write to config file (overwrite, don't append)
+        $configContent = "[env]`nLLVM_SYS_140_PREFIX = `"$escapedPath`""
+        $configContent | Out-File -FilePath $configPath -Encoding UTF8
 
         Write-Host "Created/updated cargo config at: $configPath"
         Write-Host "Config contents:"
