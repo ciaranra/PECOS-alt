@@ -215,10 +215,21 @@ jobs:
           Write-Host "Set LLVM_SYS_140_PREFIX to: $env:LLVM_SYS_140_PREFIX"
         }
 
-        cd julia/pecos-julia-ffi
+        # Create cargo config with LLVM environment variable
+        $cargoDir = Join-Path -Path $env:USERPROFILE -ChildPath ".cargo"
+        New-Item -ItemType Directory -Force -Path $cargoDir | Out-Null
 
-        # Pass the environment variable explicitly to cargo
-        $env:LLVM_SYS_140_PREFIX = $env:LLVM_SYS_140_PREFIX
+        $configPath = Join-Path -Path $cargoDir -ChildPath "config.toml"
+
+        # Append to existing config or create new one
+        "[env]" | Out-File -FilePath $configPath -Encoding UTF8 -Append
+        "LLVM_SYS_140_PREFIX = `"$env:LLVM_SYS_140_PREFIX`"" | Out-File -FilePath $configPath -Encoding UTF8 -Append
+
+        Write-Host "Created/updated cargo config at: $configPath"
+        Write-Host "Config contents:"
+        Get-Content $configPath
+
+        cd julia/pecos-julia-ffi
         cargo build --release
 
     - name: Build Rust FFI library (Unix)

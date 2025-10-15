@@ -106,13 +106,17 @@ jobs:
           target: ${{ matrix.architecture == 'aarch64' && (matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || 'aarch64-unknown-linux-gnu') || (matrix.os == 'macos-latest' && 'x86_64-apple-darwin' || '') }}
           manylinux: auto
           before-script-linux: |
+            # Set default LLVM path to avoid unbound variable errors
+            export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr}"
+
             # Install LLVM 14 in manylinux container
             # First, check what version of manylinux we're in
             if [ -f /etc/centos-release ]; then
               echo "CentOS-based manylinux detected"
               # For manylinux2014 (CentOS 7) - use vault repos since CentOS 7 is EOL
               # Update repo files to use vault
-              sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* || true
+              sed -i 's/mirrorlist=#mirrorlist/g' /etc/yum.repos.d/CentOS-* 2>/dev/null || true
+              sed -i 's/mirrorlist=http/#mirrorlist=http/g' /etc/yum.repos.d/CentOS-* 2>/dev/null || true
               sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* || true
 
               # Install development tools
@@ -125,18 +129,30 @@ jobs:
                   sed -i 's/mirrorlist/#mirrorlist/g' "$repo" || true
                   sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' "$repo" || true
                   sed -i 's|baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' "$repo" || true
+                  # Also update buildlogs URLs
+                  sed -i 's|http://buildlogs.centos.org|http://vault.centos.org/centos/7|g' "$repo" || true
                 fi
               done
 
               # Clear yum cache after repo changes
               yum clean all || true
 
-              yum install -y devtoolset-11 || true
-              # Install LLVM from SCL
-              yum install -y llvm-toolset-7.0 || true
-              # Try EPEL from vault
-              yum install -y https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/Packages/e/epel-release-7-14.noarch.rpm || true
-              yum install -y llvm14-devel llvm14-static clang14 || true
+              # Skip SCL and go directly to EPEL for LLVM
+              # Install EPEL from vault
+              if ! rpm -q epel-release; then
+                yum install -y https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/Packages/e/epel-release-7-14.noarch.rpm || true
+              fi
+
+              # Update EPEL repo to use vault
+              if [ -f /etc/yum.repos.d/epel.repo ]; then
+                sed -i 's|metalink=|#metalink=|g' /etc/yum.repos.d/epel.repo || true
+                sed -i 's|#baseurl=http://download.fedoraproject.org/pub/epel|baseurl=https://archives.fedoraproject.org/pub/archive/epel|g' /etc/yum.repos.d/epel.repo || true
+              fi
+
+              # Try to install LLVM
+              yum install -y llvm7.0-devel llvm7.0-static clang7.0 || \
+              yum install -y llvm-devel llvm-static clang || \
+              echo "Could not install LLVM from packages"
             elif [ -f /etc/os-release ]; then
               # For newer manylinux versions
               source /etc/os-release
@@ -148,8 +164,8 @@ jobs:
             fi
 
             # Try to find and set LLVM path
-            for llvm_path in /opt/rh/llvm-toolset-7.0/root/usr /usr/lib64/llvm14 /usr/lib/llvm-14 /usr; do
-              if [ -f "$llvm_path/bin/llvm-config" ] || [ -f "$llvm_path/bin/llvm-config-14" ]; then
+            for llvm_path in /opt/rh/llvm-toolset-7.0/root/usr /usr/lib64/llvm7.0 /usr/lib64/llvm-7.0 /usr/lib/llvm-7.0 /usr/lib/llvm-7 /usr/lib64/llvm14 /usr/lib/llvm-14 /usr; do
+              if [ -f "$llvm_path/bin/llvm-config" ] || [ -f "$llvm_path/bin/llvm-config-14" ] || [ -f "$llvm_path/bin/llvm-config-7" ] || [ -f "$llvm_path/bin/llvm-config-7.0" ]; then
                 echo "Found LLVM at $llvm_path"
                 export LLVM_SYS_140_PREFIX="$llvm_path"
                 break
