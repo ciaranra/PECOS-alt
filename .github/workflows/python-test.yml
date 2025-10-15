@@ -99,6 +99,7 @@ jobs:
 
     - name: Setup LLVM Path (Windows)
       if: matrix.os == 'windows-latest'
+      shell: pwsh
       run: |
         Write-Host "Setting up LLVM in PATH..."
 
@@ -106,7 +107,7 @@ jobs:
         Write-Host "LLVM_PATH environment variable: $env:LLVM_PATH"
 
         # Set LLVM_SYS_140_PREFIX for llvm-sys crate
-        echo "LLVM_SYS_140_PREFIX=$env:LLVM_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "LLVM_SYS_140_PREFIX=$env:LLVM_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
         # Ensure we're using MSVC for C++ compilation, not LLVM clang
         Write-Host "Ensuring MSVC is used for C++ compilation..."
@@ -120,8 +121,8 @@ jobs:
         }
 
         # Clear these from GITHUB_ENV too
-        echo "CC=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        echo "CXX=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "CC=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "CXX=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
         # Add LLVM bin directory to PATH for this and subsequent steps
         $llvmBinDir = Join-Path -Path $env:LLVM_PATH -ChildPath "bin"
@@ -136,7 +137,7 @@ jobs:
           }
 
           # Add to PATH
-          echo "$llvmBinDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "$llvmBinDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $env:PATH = "$llvmBinDir;$env:PATH"
 
           # Verify llc is available
@@ -161,7 +162,6 @@ jobs:
           }
           exit 1
         }
-      shell: pwsh
 
     - name: Build and test PECOS (Windows)
       if: runner.os == 'Windows'

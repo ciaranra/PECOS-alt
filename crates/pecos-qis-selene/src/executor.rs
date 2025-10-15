@@ -89,9 +89,8 @@ impl QisHeliosInterface {
                 .push(current_dir.join(format!("target/debug/deps/libpecos_qis_ffi.{lib_ext}")));
             candidate_paths
                 .push(current_dir.join(format!("target/release/libpecos_qis_ffi.{lib_ext}")));
-            candidate_paths.push(
-                current_dir.join(format!("target/release/deps/libpecos_qis_ffi.{lib_ext}")),
-            );
+            candidate_paths
+                .push(current_dir.join(format!("target/release/deps/libpecos_qis_ffi.{lib_ext}")));
 
             // Search up the directory tree for workspace root (when running from Python)
             let mut search_dir = current_dir.as_path();
@@ -100,9 +99,8 @@ impl QisHeliosInterface {
                 if let Some(parent) = search_dir.parent() {
                     candidate_paths
                         .push(parent.join(format!("target/debug/libpecos_qis_ffi.{lib_ext}")));
-                    candidate_paths.push(
-                        parent.join(format!("target/debug/deps/libpecos_qis_ffi.{lib_ext}")),
-                    );
+                    candidate_paths
+                        .push(parent.join(format!("target/debug/deps/libpecos_qis_ffi.{lib_ext}")));
                     candidate_paths
                         .push(parent.join(format!("target/release/libpecos_qis_ffi.{lib_ext}")));
                     candidate_paths.push(

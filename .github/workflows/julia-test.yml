@@ -106,7 +106,7 @@ jobs:
         Write-Host "LLVM_PATH environment variable: $env:LLVM_PATH"
 
         # Set LLVM_SYS_140_PREFIX for llvm-sys crate
-        echo "LLVM_SYS_140_PREFIX=$env:LLVM_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "LLVM_SYS_140_PREFIX=$env:LLVM_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
         # Ensure we're using MSVC for C++ compilation, not LLVM clang
         Write-Host "Ensuring MSVC is used for C++ compilation..."
@@ -120,8 +120,8 @@ jobs:
         }
 
         # Clear these from GITHUB_ENV too
-        echo "CC=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        echo "CXX=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "CC=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "CXX=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
         # Add LLVM bin directory to PATH for this and subsequent steps
         $llvmBinDir = Join-Path -Path $env:LLVM_PATH -ChildPath "bin"
@@ -136,7 +136,7 @@ jobs:
           }
 
           # Add to PATH
-          echo "$llvmBinDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "$llvmBinDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $env:PATH = "$llvmBinDir;$env:PATH"
 
           # Verify llc is available
@@ -184,7 +184,7 @@ jobs:
               Write-Host "Found llc.exe at $llcPath, but it's not in PATH. Adding it now."
               $llvmBinDir = Join-Path -Path $env:LLVM_PATH -ChildPath "bin"
               $env:PATH = "$llvmBinDir;$env:PATH"
-              echo "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
             }
           }
         }
@@ -209,12 +209,16 @@ jobs:
         Write-Host "LLVM_PATH: $env:LLVM_PATH"
 
         # Ensure LLVM environment variable is set for cargo
-        if ($env:LLVM_PATH) {
+        if ($env:LLVM_PATH -and -not $env:LLVM_SYS_140_PREFIX) {
+          Write-Host "LLVM_SYS_140_PREFIX not set, using LLVM_PATH"
           $env:LLVM_SYS_140_PREFIX = $env:LLVM_PATH
           Write-Host "Set LLVM_SYS_140_PREFIX to: $env:LLVM_SYS_140_PREFIX"
         }
 
         cd julia/pecos-julia-ffi
+
+        # Pass the environment variable explicitly to cargo
+        $env:LLVM_SYS_140_PREFIX = $env:LLVM_SYS_140_PREFIX
         cargo build --release
 
     - name: Build Rust FFI library (Unix)

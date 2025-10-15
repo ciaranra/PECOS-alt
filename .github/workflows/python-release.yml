@@ -89,8 +89,16 @@ jobs:
             echo "No conflicting README.md found"
           fi
 
+      - name: Set LLVM environment for Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # Default LLVM path for Linux builds
+          echo "LLVM_SYS_140_PREFIX=/usr" >> $GITHUB_ENV
+
       - name: Build wheel
         uses: PyO3/maturin-action@v1
+        env:
+          LLVM_SYS_140_PREFIX: /usr
         with:
           command: build
           args: --release --out dist --interpreter python3.10 ${{ matrix.architecture == 'aarch64' && '--zig' || '' }}
@@ -140,9 +148,24 @@ jobs:
               fi
             done
 
-            # Ensure LLVM_SYS_140_PREFIX is set to avoid unbound variable error
-            export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr}"
+            # Ensure LLVM_SYS_140_PREFIX is set and exported
+            if [ -z "$LLVM_SYS_140_PREFIX" ]; then
+              export LLVM_SYS_140_PREFIX="/usr"
+            fi
             echo "LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
+
+            # Create cargo config directory if it doesn't exist
+            mkdir -p ~/.cargo
+
+            # Write the environment variable to cargo config
+            echo "[env]" >> ~/.cargo/config.toml
+            echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> ~/.cargo/config.toml
+
+            # Also ensure it's exported for the current session
+            export LLVM_SYS_140_PREFIX
+
+            echo "Cargo config created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
+            cat ~/.cargo/config.toml
 
       - name: Restore README.md
         if: always()
