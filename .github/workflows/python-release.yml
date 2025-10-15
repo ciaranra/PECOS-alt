@@ -131,13 +131,28 @@ jobs:
             # For cross-compilation, ensure the environment variable is exported
             export LLVM_SYS_140_PREFIX
 
-            # Create cargo config to pass through cross-compilation
-            mkdir -p ~/.cargo
-            echo "[env]" >> ~/.cargo/config.toml
-            echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> ~/.cargo/config.toml
+            # Create cargo config in the project directory
+            cd python/pecos-rslib
+            mkdir -p .cargo
+            echo "[env]" > .cargo/config.toml
+            echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> .cargo/config.toml
 
-            echo "Cargo config created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
-            cat ~/.cargo/config.toml
+            # Also create in rust subdirectory
+            mkdir -p rust/.cargo
+            echo "[env]" > rust/.cargo/config.toml
+            echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> rust/.cargo/config.toml
+
+            # Create build config for cross-compilation targets
+            echo "" >> rust/.cargo/config.toml
+            echo "[target.aarch64-apple-darwin]" >> rust/.cargo/config.toml
+            echo "llvm-config = \"${LLVM_SYS_140_PREFIX}/bin/llvm-config\"" >> rust/.cargo/config.toml
+            echo "" >> rust/.cargo/config.toml
+            echo "[target.x86_64-apple-darwin]" >> rust/.cargo/config.toml
+            echo "llvm-config = \"${LLVM_SYS_140_PREFIX}/bin/llvm-config\"" >> rust/.cargo/config.toml
+
+            echo "Cargo configs created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
+            cat rust/.cargo/config.toml
+            cd ../..
           before-script-linux: |
             # Set default LLVM path to avoid unbound variable errors
             export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr}"

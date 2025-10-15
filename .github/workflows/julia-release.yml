@@ -168,7 +168,29 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "LLVM_SYS_140_PREFIX: $env:LLVM_SYS_140_PREFIX"
+          Write-Host "LLVM_PATH: $env:LLVM_PATH"
+
+          # Ensure LLVM environment variable is set
+          if (-not $env:LLVM_SYS_140_PREFIX -and $env:LLVM_PATH) {
+            Write-Host "Setting LLVM_SYS_140_PREFIX from LLVM_PATH"
+            $env:LLVM_SYS_140_PREFIX = $env:LLVM_PATH
+          }
+
           cd julia/pecos-julia-ffi
+
+          # Create cargo config with LLVM environment
+          New-Item -ItemType Directory -Force -Path .cargo | Out-Null
+
+          # Escape backslashes in the path for TOML
+          $escapedPath = $env:LLVM_SYS_140_PREFIX.Replace('\', '/')
+
+          # Write config
+          $configContent = "[env]`nLLVM_SYS_140_PREFIX = `"$escapedPath`""
+          $configContent | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8
+
+          Write-Host "Created cargo config with LLVM_SYS_140_PREFIX=$escapedPath"
+          Get-Content .cargo\config.toml
+
           cargo build --release
 
           # Create artifact directory
