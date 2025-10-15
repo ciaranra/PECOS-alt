@@ -60,15 +60,23 @@ jobs:
   build_wheels_pecos_rslib:
     needs: check_pr_push
     if: needs.check_pr_push.result == 'success' && needs.check_pr_push.outputs.run == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        architecture: [ x86_64, aarch64 ]
-        exclude:
-          - os: windows-latest
+        include:
+          - os: ubuntu-latest
+            architecture: x86_64
+          - os: ubuntu-latest
             architecture: aarch64
+            # Use native ARM64 runner for aarch64 builds to avoid cross-compilation issues
+            runner: ubuntu-24.04-arm64
+          - os: macos-latest
+            architecture: x86_64
+          - os: macos-latest
+            architecture: aarch64
+          - os: windows-latest
+            architecture: x86_64
 
     steps:
       - uses: actions/checkout@v4
@@ -112,6 +120,7 @@ jobs:
         with:
           version: "14.0"
           directory: ${{ runner.temp }}/llvm
+          cached: true  # Use cached prebuilt binaries with full toolchain
           env: false  # Don't set CC/CXX - we'll use MSVC for C++ compilation
 
       - name: Setup LLVM Path (Windows)
@@ -197,9 +206,10 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter python3.10 ${{ matrix.architecture == 'aarch64' && '--zig' || '' }}
+          args: --release --out dist --interpreter python3.10
           working-directory: python/pecos-rslib
-          target: ${{ matrix.architecture == 'aarch64' && (matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || 'aarch64-unknown-linux-gnu') || (matrix.os == 'macos-latest' && 'x86_64-apple-darwin' || '') }}
+          # Native builds on all runners - no cross-compilation needed
+          target: ${{ matrix.os == 'macos-latest' && (matrix.architecture == 'aarch64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || '' }}
           manylinux: auto
           before-script-linux: |
             # Export LLVM environment variable if it's set in GITHUB_ENV

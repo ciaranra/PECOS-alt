@@ -95,6 +95,7 @@ jobs:
       with:
         version: "14.0"
         directory: ${{ runner.temp }}/llvm
+        cached: true  # Use cached prebuilt binaries with full toolchain
         env: true  # Set environment variables including LLVM_SYS_140_PREFIX
 
     - name: Setup LLVM Path (Windows)
