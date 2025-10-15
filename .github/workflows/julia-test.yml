@@ -95,7 +95,7 @@ jobs:
       with:
         version: "14.0"
         directory: ${{ runner.temp }}/llvm
-        cached: true  # Use cached prebuilt binaries with full toolchain
+        # Don't use cached: true as it may fail if no cache exists yet
 
     - name: Setup LLVM Path (Windows)
       if: matrix.os == 'windows-latest'
