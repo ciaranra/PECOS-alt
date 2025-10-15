@@ -286,10 +286,18 @@ impl QisHeliosInterface {
             helios_lib_path,
             so_file.path().display()
         );
+
+        // Use platform-specific export dynamic flag
+        let export_flag = if cfg!(target_os = "macos") {
+            "-Wl,-export_dynamic" // macOS ld flag (single dash)
+        } else {
+            "-Wl,--export-dynamic" // GNU ld flag (double dash)
+        };
+
         let output = Command::new("clang")
             .arg("-shared") // Create shared library instead of executable
             .arg("-fPIC") // Position independent code
-            .arg("-Wl,--export-dynamic") // Export all symbols including qmain
+            .arg(export_flag) // Export all symbols including qmain
             .arg("-o")
             .arg(so_file.path())
             .arg(&program_temp_path)
