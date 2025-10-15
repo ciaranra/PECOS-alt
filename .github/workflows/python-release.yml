@@ -195,9 +195,6 @@ jobs:
 
       - name: Build wheel
         uses: PyO3/maturin-action@v1
-        env:
-          # Pass LLVM path based on OS - Windows uses runner.temp/llvm, others use system paths
-          LLVM_SYS_140_PREFIX: ${{ matrix.os == 'windows-latest' && format('{0}/llvm', runner.temp) || (matrix.os == 'macos-latest' && '/usr/local/opt/llvm@14' || '/usr') }}
         with:
           command: build
           args: --release --out dist --interpreter python3.10 ${{ matrix.architecture == 'aarch64' && '--zig' || '' }}
@@ -205,16 +202,52 @@ jobs:
           target: ${{ matrix.architecture == 'aarch64' && (matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || 'aarch64-unknown-linux-gnu') || (matrix.os == 'macos-latest' && 'x86_64-apple-darwin' || '') }}
           manylinux: auto
           before-script-linux: |
+            # Export LLVM environment variable if it's set in GITHUB_ENV
+            if [ -n "${LLVM_SYS_140_PREFIX:-}" ]; then
+              export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX}"
+            fi
+
             # Check if we're in a manylinux container (Linux) or on macOS
             if [[ -f /etc/os-release ]] || [[ -f /etc/centos-release ]]; then
               # We're in a manylinux container - Linux build
               echo "Linux/manylinux environment detected"
+
+              # For Linux builds, set LLVM path if not already set
+              if [ -z "${LLVM_SYS_140_PREFIX:-}" ]; then
+                export LLVM_SYS_140_PREFIX="/usr"
+              fi
+              echo "Using LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
+
+              # Create cargo config to ensure the environment variable is available
+              mkdir -p ~/.cargo
+              mkdir -p python/pecos-rslib/.cargo
+              mkdir -p python/pecos-rslib/rust/.cargo
+
+              # Write config to multiple locations
+              for config_dir in ~/.cargo python/pecos-rslib/.cargo python/pecos-rslib/rust/.cargo; do
+                echo "[env]" > "$config_dir/config.toml"
+                echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> "$config_dir/config.toml"
+              done
+
+              echo "Cargo configs created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
             else
               # Not in manylinux container - assume macOS
-              # For macOS, LLVM is already set up by the Install LLVM Tools step
-              # Just ensure the environment variable is available
+              # For macOS, LLVM should be set up by the Install LLVM Tools step
               echo "macOS environment detected"
-              echo "LLVM_SYS_140_PREFIX is already set to: $LLVM_SYS_140_PREFIX"
+
+              # Find LLVM installation if not already set
+              if [ -z "${LLVM_SYS_140_PREFIX:-}" ]; then
+                if [ -d "/usr/local/opt/llvm@14" ]; then
+                  export LLVM_SYS_140_PREFIX="/usr/local/opt/llvm@14"
+                elif [ -d "/opt/homebrew/opt/llvm@14" ]; then
+                  export LLVM_SYS_140_PREFIX="/opt/homebrew/opt/llvm@14"
+                else
+                  echo "ERROR: Could not find LLVM installation"
+                  exit 1
+                fi
+              fi
+
+              echo "LLVM_SYS_140_PREFIX is set to: $LLVM_SYS_140_PREFIX"
 
               # Create cargo config in the project directory to persist the environment variable
               cd python/pecos-rslib
@@ -230,94 +263,7 @@ jobs:
               echo "Cargo configs created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
               cat rust/.cargo/config.toml
               cd ../..
-              return  # Exit early for macOS
             fi
-
-            # For Linux builds (inside manylinux container)
-            # Set default LLVM path to avoid unbound variable errors
-            export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX:-/usr}"
-
-            # Install LLVM 14 in manylinux container
-            # First, check what version of manylinux we're in
-            if [ -f /etc/centos-release ]; then
-              echo "CentOS-based manylinux detected"
-              # For manylinux2014 (CentOS 7) - use vault repos since CentOS 7 is EOL
-              # Update repo files to use vault
-              sed -i 's/mirrorlist=#mirrorlist/g' /etc/yum.repos.d/CentOS-* 2>/dev/null || true
-              sed -i 's/mirrorlist=http/#mirrorlist=http/g' /etc/yum.repos.d/CentOS-* 2>/dev/null || true
-              sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* || true
-
-              # Install development tools
-              yum install -y centos-release-scl || true
-
-              # Update all SCL repos to use vault after installing centos-release-scl
-              for repo in /etc/yum.repos.d/CentOS-SCLo-*.repo; do
-                if [ -f "$repo" ]; then
-                  echo "Updating $repo to use vault..."
-                  sed -i 's/mirrorlist/#mirrorlist/g' "$repo" || true
-                  sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' "$repo" || true
-                  sed -i 's|baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' "$repo" || true
-                  # Also update buildlogs URLs
-                  sed -i 's|http://buildlogs.centos.org|http://vault.centos.org/centos/7|g' "$repo" || true
-                fi
-              done
-
-              # Clear yum cache after repo changes
-              yum clean all || true
-
-              # Skip SCL and go directly to EPEL for LLVM
-              # Install EPEL from vault
-              if ! rpm -q epel-release; then
-                yum install -y https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/Packages/e/epel-release-7-14.noarch.rpm || true
-              fi
-
-              # Update EPEL repo to use vault
-              if [ -f /etc/yum.repos.d/epel.repo ]; then
-                sed -i 's|metalink=|#metalink=|g' /etc/yum.repos.d/epel.repo || true
-                sed -i 's|#baseurl=http://download.fedoraproject.org/pub/epel|baseurl=https://archives.fedoraproject.org/pub/archive/epel|g' /etc/yum.repos.d/epel.repo || true
-              fi
-
-              # Try to install LLVM
-              yum install -y llvm7.0-devel llvm7.0-static clang7.0 || \
-              yum install -y llvm-devel llvm-static clang || \
-              echo "Could not install LLVM from packages"
-            elif [ -f /etc/os-release ]; then
-              # For newer manylinux versions
-              source /etc/os-release
-              if [[ "$ID" == "almalinux" ]] || [[ "$ID" == "rocky" ]]; then
-                echo "AlmaLinux/Rocky Linux detected"
-                dnf install -y epel-release || true
-                dnf install -y llvm14-devel llvm14-static clang14 || true
-              fi
-            fi
-
-            # Try to find and set LLVM path
-            for llvm_path in /opt/rh/llvm-toolset-7.0/root/usr /usr/lib64/llvm7.0 /usr/lib64/llvm-7.0 /usr/lib/llvm-7.0 /usr/lib/llvm-7 /usr/lib64/llvm14 /usr/lib/llvm-14 /usr; do
-              if [ -f "$llvm_path/bin/llvm-config" ] || [ -f "$llvm_path/bin/llvm-config-14" ] || [ -f "$llvm_path/bin/llvm-config-7" ] || [ -f "$llvm_path/bin/llvm-config-7.0" ]; then
-                echo "Found LLVM at $llvm_path"
-                export LLVM_SYS_140_PREFIX="$llvm_path"
-                break
-              fi
-            done
-
-            # Ensure LLVM_SYS_140_PREFIX is set and exported
-            if [ -z "$LLVM_SYS_140_PREFIX" ]; then
-              export LLVM_SYS_140_PREFIX="/usr"
-            fi
-            echo "LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
-
-            # Create cargo config directory if it doesn't exist
-            mkdir -p ~/.cargo
-
-            # Write the environment variable to cargo config
-            echo "[env]" >> ~/.cargo/config.toml
-            echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> ~/.cargo/config.toml
-
-            # Also ensure it's exported for the current session
-            export LLVM_SYS_140_PREFIX
-
-            echo "Cargo config created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
-            cat ~/.cargo/config.toml
 
       - name: Restore README.md
         if: always()
