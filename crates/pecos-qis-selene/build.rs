@@ -32,7 +32,13 @@ fn main() {
     // Build the C shim as a shared library with undefined __quantum__* symbols
     // These symbols will be resolved from libpecos_qis_ffi.so at runtime
     // Use system clang (not LLVM clang from /tmp/llvm which lacks standard headers)
-    let mut cmd = Command::new("clang");
+    // On Unix-like systems, /usr/bin/clang is the system compiler
+    let clang_path = if cfg!(target_os = "windows") {
+        "clang"
+    } else {
+        "/usr/bin/clang"
+    };
+    let mut cmd = Command::new(clang_path);
     cmd.arg("-shared");
 
     // -fPIC is not supported (and not needed) on Windows MSVC
@@ -49,6 +55,11 @@ fn main() {
     if cfg!(target_os = "macos") {
         cmd.arg("-undefined");
         cmd.arg("dynamic_lookup");
+    }
+
+    // On Windows, allow undefined symbols using linker flags
+    if cfg!(target_os = "windows") {
+        cmd.arg("-Wl,/FORCE:UNRESOLVED");
     }
 
     // Add include paths if needed
@@ -151,7 +162,13 @@ fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
 
     // Compile interface.c to object file
     // Use system clang (not LLVM clang from /tmp/llvm which lacks standard headers)
-    let mut compile_cmd = Command::new("clang");
+    // On Unix-like systems, /usr/bin/clang is the system compiler
+    let clang_path = if cfg!(target_os = "windows") {
+        "clang"
+    } else {
+        "/usr/bin/clang"
+    };
+    let mut compile_cmd = Command::new(clang_path);
     compile_cmd.arg("-c");
 
     // -fPIC is not supported (and not needed) on Windows MSVC
