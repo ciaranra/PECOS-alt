@@ -77,7 +77,7 @@ pest = "2"
 pest_derive = "2"
 tempfile = "3"
 assert_cmd = "2"
-wasmtime = "37"
+wasmtime = { version = "37", default-features = false, features = ["cranelift", "runtime", "wat", "std"] }
 wat = "1"
 cc = "1"
 ron = "0.11"
