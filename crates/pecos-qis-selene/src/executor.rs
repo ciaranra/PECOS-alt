@@ -143,6 +143,7 @@ impl QisHeliosInterface {
     }
 
     /// Load a library with `RTLD_GLOBAL` and return both the global and lookup handles
+    #[cfg(unix)]
     fn load_library_with_rtld_global(
         path: &std::path::Path,
         error_msg: &str,
@@ -153,6 +154,28 @@ impl QisHeliosInterface {
                 libloading::os::unix::RTLD_LAZY | libloading::os::unix::RTLD_GLOBAL,
             )
             .map_err(|e| InterfaceError::ExecutionError(format!("{error_msg}: {e}")))?
+        };
+
+        let lib = unsafe {
+            Library::new(path)
+                .map_err(|e| InterfaceError::ExecutionError(format!("{error_msg} (lookup): {e}")))?
+        };
+
+        Ok((lib_global, lib))
+    }
+
+    /// Load a library on Windows (no RTLD_GLOBAL equivalent - symbols are searched in load order)
+    #[cfg(windows)]
+    fn load_library_with_rtld_global(
+        path: &std::path::Path,
+        error_msg: &str,
+    ) -> Result<(Library, Library), InterfaceError> {
+        // On Windows, there's no RTLD_GLOBAL flag. Symbols are automatically visible
+        // to subsequently loaded libraries through the normal DLL search mechanism.
+        // We load the library twice to maintain the same API as Unix.
+        let lib_global = unsafe {
+            Library::new(path)
+                .map_err(|e| InterfaceError::ExecutionError(format!("{error_msg}: {e}")))?
         };
 
         let lib = unsafe {

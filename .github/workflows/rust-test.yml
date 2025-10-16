@@ -193,7 +193,13 @@ jobs:
 
       - name: Run tests (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: cargo test --workspace
+        run: |
+          # On macOS, add LLVM lib directory to DYLD_LIBRARY_PATH for libunwind
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            export DYLD_LIBRARY_PATH="/tmp/llvm/lib:${DYLD_LIBRARY_PATH:-}"
+            echo "Set DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH"
+          fi
+          cargo test --workspace
 
       - name: Run tests (Windows)
         if: matrix.os == 'windows-latest'
