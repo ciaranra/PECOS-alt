@@ -38,13 +38,17 @@ fn main() {
         "clang"
     };
     let mut cmd = Command::new(clang_cmd);
-    cmd.arg("-shared")
-        .arg("-fPIC")
-        .arg("-O2")
-        .arg("-o")
-        .arg(&output_file)
-        .arg(&source_file)
-        .arg("-lm");
+    cmd.arg("-shared");
+
+    // -fPIC is not supported (and not needed) on Windows MSVC
+    #[cfg(not(target_os = "windows"))]
+    cmd.arg("-fPIC");
+
+    cmd.arg("-O2").arg("-o").arg(&output_file).arg(&source_file);
+
+    // -lm is not needed on Windows
+    #[cfg(not(target_os = "windows"))]
+    cmd.arg("-lm");
 
     // On macOS, we need to allow undefined symbols
     if cfg!(target_os = "macos") {
@@ -160,9 +164,13 @@ fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
         "clang"
     };
     let mut compile_cmd = Command::new(clang_cmd);
+    compile_cmd.arg("-c");
+
+    // -fPIC is not supported (and not needed) on Windows MSVC
+    #[cfg(not(target_os = "windows"))]
+    compile_cmd.arg("-fPIC");
+
     compile_cmd
-        .arg("-c")
-        .arg("-fPIC")
         .arg("-O2")
         .arg("-std=c11")
         .arg("-D_USE_MATH_DEFINES")

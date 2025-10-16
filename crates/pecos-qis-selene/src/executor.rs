@@ -287,24 +287,33 @@ impl QisHeliosInterface {
             so_file.path().display()
         );
 
-        // Use platform-specific export dynamic flag
-        let export_flag = if cfg!(target_os = "macos") {
-            "-Wl,-export_dynamic" // macOS ld flag (single dash)
-        } else {
-            "-Wl,--export-dynamic" // GNU ld flag (double dash)
-        };
-
-        let output = Command::new("clang")
+        // Build clang command with platform-specific flags
+        let mut clang_cmd = Command::new("clang");
+        clang_cmd
             .arg("-shared") // Create shared library instead of executable
-            .arg("-fPIC") // Position independent code
-            .arg(export_flag) // Export all symbols including qmain
             .arg("-o")
             .arg(so_file.path())
             .arg(&program_temp_path)
-            .arg(&helios_lib_path)
-            .arg("-lm")
-            .arg("-lpthread")
-            .arg("-ldl")
+            .arg(&helios_lib_path);
+
+        // Platform-specific flags
+        #[cfg(not(target_os = "windows"))]
+        {
+            // -fPIC is not supported on Windows MSVC (and not needed for DLLs)
+            clang_cmd.arg("-fPIC");
+
+            // Export dynamic flag differs by platform
+            if cfg!(target_os = "macos") {
+                clang_cmd.arg("-Wl,-export_dynamic"); // macOS ld flag (single dash)
+            } else {
+                clang_cmd.arg("-Wl,--export-dynamic"); // GNU ld flag (double dash)
+            }
+
+            // Unix-specific libraries
+            clang_cmd.arg("-lm").arg("-lpthread").arg("-ldl");
+        }
+
+        let output = clang_cmd
             .output()
             .map_err(|e| InterfaceError::LoadError(format!("Failed to run clang: {e}")))?;
 
