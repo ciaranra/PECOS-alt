@@ -128,18 +128,17 @@ jobs:
 
       - name: Install LLVM Tools (Windows)
         if: matrix.os == 'windows-latest'
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "14.0"
-          directory: ${{ runner.temp }}/llvm
-          env: true  # Set environment variables including LLVM_PATH
-
-      - name: Setup LLVM Path (Windows)
-        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          # Set LLVM_SYS_140_PREFIX for llvm-sys crate
-          "LLVM_SYS_140_PREFIX=$env:LLVM_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Download PLC-lang LLVM package which includes llvm-config.exe
+          curl -LO https://github.com/PLC-lang/llvm-package-windows/releases/download/v14.0.6/LLVM-14.0.6-win64.7z
+          # Extract to C:\LLVM
+          7z x LLVM-14.0.6-win64.7z "-oC:\LLVM" -y
+          # Set environment variables for llvm-sys and add to PATH
+          "LLVM_SYS_140_PREFIX=C:\LLVM" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "C:\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          # Verify installation
+          C:\LLVM\bin\llvm-config.exe --version
 
       - name: Install Rust target
         run: |
