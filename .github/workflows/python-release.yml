@@ -71,288 +71,30 @@ jobs:
             architecture: aarch64
             # Use native ARM64 runner for aarch64 builds to avoid cross-compilation issues
             runner: ubuntu-24.04-arm64
-          - os: macos-latest
-            architecture: x86_64
-          - os: macos-latest
+          - os: macos-14
             architecture: aarch64
-          - os: windows-latest
+          - os: macos-13
+            architecture: x86_64
+          - os: windows-2022
             architecture: x86_64
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha || github.sha }}
+          submodules: recursive
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.2.1
         with:
-          python-version: '3.10'
+          package-dir: python/pecos-rslib
+          output-dir: wheelhouse
 
-      - name: Remove conflicting README.md
-        run: |
-          if [ -f crates/pecos-python/README.md ]; then
-            mv crates/pecos-python/README.md crates/pecos-python/README.md.bak
-            echo "Moved conflicting README.md to README.md.bak"
-          else
-            echo "No conflicting README.md found"
-          fi
-
-      - name: Install LLVM Tools (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install llvm@14
-          echo "$(brew --prefix llvm@14)/bin" >> $GITHUB_PATH
-          echo "LLVM_SYS_140_PREFIX=$(brew --prefix llvm@14)" >> $GITHUB_ENV
-          # Verify installation
-          export PATH="$(brew --prefix llvm@14)/bin:$PATH"
-          which llc
-          llc --version
-
-      - name: Set LLVM environment for Linux
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          # Default LLVM path for Linux builds
-          echo "LLVM_SYS_140_PREFIX=/usr" >> $GITHUB_ENV
-
-      - name: Install LLVM Tools (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "14.0"
-          directory: ${{ runner.temp }}/llvm
-          # Don't use cached: true as it may fail if no cache exists yet
-          env: false  # Don't set CC/CXX - we'll use MSVC for C++ compilation
-
-      - name: Setup LLVM Path (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          Write-Host "Setting up LLVM..."
-
-          # Since we're using env: false, LLVM_PATH won't be set by the action
-          # We need to set it manually to the installation directory
-          $llvmPath = "${{ runner.temp }}/llvm"
-          Write-Host "Setting LLVM_PATH to: $llvmPath"
-          "LLVM_PATH=$llvmPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          $env:LLVM_PATH = $llvmPath
-
-          # Set LLVM_SYS_140_PREFIX for llvm-sys crate
-          "LLVM_SYS_140_PREFIX=$llvmPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-          # Add LLVM to PATH
-          $llvmBinDir = Join-Path -Path $env:LLVM_PATH -ChildPath "bin"
-          "$llvmBinDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-          # Clear CC/CXX to use MSVC
-          "CC=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "CXX=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-          Write-Host "LLVM configuration completed"
-          Write-Host "LLVM_SYS_140_PREFIX will be: $llvmPath"
-
-      - name: Setup cargo config for Windows
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          Write-Host "Setting up cargo config for Windows maturin build..."
-          $llvmPath = "${{ runner.temp }}\llvm"
-
-          # Verify LLVM installation
-          Write-Host "Checking LLVM installation at: $llvmPath"
-          if (Test-Path $llvmPath) {
-            Write-Host "LLVM directory found"
-            Get-ChildItem $llvmPath | Select-Object Name
-
-            # Check for critical LLVM files
-            Write-Host "`nChecking for LLVM binaries..."
-            $llvmBin = Join-Path -Path $llvmPath -ChildPath "bin"
-            if (Test-Path $llvmBin) {
-              Write-Host "Contents of bin directory:"
-              Get-ChildItem $llvmBin | Select-Object Name | Format-Table
-
-              # Check for llvm-config
-              $llvmConfig = Join-Path -Path $llvmBin -ChildPath "llvm-config.exe"
-              if (Test-Path $llvmConfig) {
-                Write-Host "llvm-config.exe found, testing..."
-                & $llvmConfig --version
-                & $llvmConfig --prefix
-              } else {
-                Write-Host "WARNING: llvm-config.exe not found in bin directory"
-              }
-            }
-
-            Write-Host "`nChecking for LLVM lib directory..."
-            $llvmLib = Join-Path -Path $llvmPath -ChildPath "lib"
-            if (Test-Path $llvmLib) {
-              Write-Host "lib directory exists, checking for .lib files..."
-              $libFiles = Get-ChildItem $llvmLib -Filter "*.lib" | Select-Object -First 5
-              if ($libFiles) {
-                Write-Host "Found .lib files:"
-                $libFiles | Select-Object Name
-              } else {
-                Write-Host "WARNING: No .lib files found"
-              }
-            }
-          } else {
-            Write-Error "LLVM directory not found at: $llvmPath"
-            exit 1
-          }
-
-          # Create cargo config in project directory
-          cd python/pecos-rslib
-          New-Item -ItemType Directory -Force -Path .cargo | Out-Null
-
-          # Escape backslashes for TOML
-          $escapedPath = $llvmPath.Replace('\', '/')
-
-          # Write config
-          $configContent = "[env]`nLLVM_SYS_140_PREFIX = `"$escapedPath`""
-          $configContent | Out-File -FilePath ".cargo\config.toml" -Encoding UTF8
-
-          # Also create in rust subdirectory
-          New-Item -ItemType Directory -Force -Path "rust\.cargo" | Out-Null
-          $configContent | Out-File -FilePath "rust\.cargo\config.toml" -Encoding UTF8
-
-          # Also create in user's cargo home directory as a fallback
-          $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { "$env:USERPROFILE\.cargo" }
-          New-Item -ItemType Directory -Force -Path $cargoHome | Out-Null
-
-          # For user cargo config, append if file exists
-          if (Test-Path "$cargoHome\config.toml") {
-            "`n$configContent" | Out-File -FilePath "$cargoHome\config.toml" -Encoding UTF8 -Append
-          } else {
-            $configContent | Out-File -FilePath "$cargoHome\config.toml" -Encoding UTF8
-          }
-
-          Write-Host "Created cargo configs with LLVM_SYS_140_PREFIX=$escapedPath"
-          Write-Host "Contents of rust/.cargo/config.toml:"
-          Get-Content "rust\.cargo\config.toml"
-
-          # Also ensure environment variable is exported
-          [System.Environment]::SetEnvironmentVariable("LLVM_SYS_140_PREFIX", $llvmPath, "Process")
-
-          cd ../..
-
-      - name: Build wheel
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --release --out dist --interpreter python3.10
-          working-directory: python/pecos-rslib
-          # Native builds on all runners - no cross-compilation needed
-          target: ${{ matrix.os == 'macos-latest' && (matrix.architecture == 'aarch64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || '' }}
-          manylinux: '2_28'
-          before-script-linux: |
-            # Export LLVM environment variable if it's set in GITHUB_ENV
-            if [ -n "${LLVM_SYS_140_PREFIX:-}" ]; then
-              export LLVM_SYS_140_PREFIX="${LLVM_SYS_140_PREFIX}"
-            fi
-
-            # Check if we're in a manylinux container (Linux) or on macOS
-            if [[ -f /etc/os-release ]] || [[ -f /etc/centos-release ]]; then
-              # We're in a manylinux container - Linux build
-              echo "Linux/manylinux environment detected"
-
-              # Install LLVM 14 (manylinux_2_28 is based on AlmaLinux 8)
-              # Check if yum is available (manylinux container)
-              if command -v yum &> /dev/null; then
-                echo "Installing LLVM 14 using yum..."
-                yum install -y llvm-devel llvm-static
-
-                # Verify LLVM installation
-                if command -v llvm-config &> /dev/null; then
-                  echo "LLVM installed successfully"
-                  llvm-config --version
-                  llvm-config --prefix
-                else
-                  echo "ERROR: LLVM installation failed"
-                  exit 1
-                fi
-              else
-                echo "yum not available - assuming LLVM is already present or will be provided by host"
-              fi
-
-              # For Linux builds, set LLVM path if not already set
-              if [ -z "${LLVM_SYS_140_PREFIX:-}" ]; then
-                export LLVM_SYS_140_PREFIX="/usr"
-              fi
-              echo "Using LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
-
-              # Create cargo config to ensure the environment variable is available
-              mkdir -p ~/.cargo
-              mkdir -p python/pecos-rslib/.cargo
-              mkdir -p python/pecos-rslib/rust/.cargo
-
-              # Write config to multiple locations
-              for config_dir in ~/.cargo python/pecos-rslib/.cargo python/pecos-rslib/rust/.cargo; do
-                echo "[env]" > "$config_dir/config.toml"
-                echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> "$config_dir/config.toml"
-              done
-
-              echo "Cargo configs created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
-            else
-              # Not in manylinux container - assume macOS
-              # For macOS, LLVM should be set up by the Install LLVM Tools step
-              echo "macOS environment detected"
-
-              # Find LLVM installation if not already set
-              if [ -z "${LLVM_SYS_140_PREFIX:-}" ]; then
-                if [ -d "/usr/local/opt/llvm@14" ]; then
-                  export LLVM_SYS_140_PREFIX="/usr/local/opt/llvm@14"
-                elif [ -d "/opt/homebrew/opt/llvm@14" ]; then
-                  export LLVM_SYS_140_PREFIX="/opt/homebrew/opt/llvm@14"
-                else
-                  echo "ERROR: Could not find LLVM installation"
-                  exit 1
-                fi
-              fi
-
-              echo "LLVM_SYS_140_PREFIX is set to: $LLVM_SYS_140_PREFIX"
-
-              # Create cargo config in the project directory to persist the environment variable
-              cd python/pecos-rslib
-              mkdir -p .cargo
-              echo "[env]" > .cargo/config.toml
-              echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> .cargo/config.toml
-
-              # Also create in rust subdirectory
-              mkdir -p rust/.cargo
-              echo "[env]" > rust/.cargo/config.toml
-              echo "LLVM_SYS_140_PREFIX = \"$LLVM_SYS_140_PREFIX\"" >> rust/.cargo/config.toml
-
-              echo "Cargo configs created with LLVM_SYS_140_PREFIX=$LLVM_SYS_140_PREFIX"
-              cat rust/.cargo/config.toml
-              cd ../..
-            fi
-
-      - name: Restore README.md
-        if: always()
-        run: |
-          if [ -f crates/pecos-python/README.md.bak ]; then
-            mv crates/pecos-python/README.md.bak crates/pecos-python/README.md
-            echo "Restored README.md from backup"
-          else
-            echo "No README.md backup found"
-          fi
-
-      - name: Test wheel is abi3
-        run: |
-          # Check that the wheel has abi3 tag
-          ls -la python/pecos-rslib/dist/
-          wheel_file=$(ls python/pecos-rslib/dist/*.whl)
-          echo "Built wheel: $wheel_file"
-          if [[ $wheel_file == *"abi3"* ]]; then
-            echo "Wheel has abi3 tag"
-          else
-            echo "ERROR: Wheel does not have abi3 tag!"
-            exit 1
-          fi
-
-      - name: Upload wheel
+      - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheel-pecos-rslib-${{ matrix.os }}-${{ matrix.architecture }}
-          path: python/pecos-rslib/dist/*.whl
+          path: ./wheelhouse/*.whl
 
   test_abi3_wheels:
     needs: build_wheels_pecos_rslib
@@ -369,13 +111,13 @@ jobs:
             os: ubuntu-latest
             architecture: x86_64
           - runner: windows-latest
-            os: windows-latest
+            os: windows-2022
             architecture: x86_64
           - runner: macos-13
-            os: macos-latest
+            os: macos-13
             architecture: x86_64
-          - runner: macos-latest
-            os: macos-latest
+          - runner: macos-14
+            os: macos-14
             architecture: aarch64
     steps:
       - uses: actions/checkout@v4
