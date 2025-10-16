@@ -21,10 +21,16 @@ log.workspace = true
 dyn-clone.workspace = true
 tempfile.workspace = true
 # LLVM JIT execution
-inkwell = { workspace = true, features = ["llvm14-0-force-dynamic"], optional = true }
-# Serialization for FFI
 rand.workspace = true
 rand_chacha.workspace = true
+
+# Platform-specific inkwell configuration
+# Windows requires static linking, Unix can use dynamic linking
+[target.'cfg(windows)'.dependencies]
+inkwell = { workspace = true, features = ["llvm14-0-force-static"], optional = true }
+
+[target.'cfg(not(windows))'.dependencies]
+inkwell = { workspace = true, features = ["llvm14-0-force-dynamic"], optional = true }
 
 [features]
 default = ["llvm"]
