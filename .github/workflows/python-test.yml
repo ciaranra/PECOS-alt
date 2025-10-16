@@ -176,9 +176,6 @@ jobs:
           export NUMEXPR_NUM_THREADS=1
           export OMP_NUM_THREADS=1
 
-          # Add LLVM lib directory to DYLD_LIBRARY_PATH for libunwind
-          export DYLD_LIBRARY_PATH="/tmp/llvm/lib:${DYLD_LIBRARY_PATH:-}"
-
           # Force matplotlib to use bundled libraries instead of system ones
           export MPLCONFIGDIR=$PWD/.matplotlib
           mkdir -p $MPLCONFIGDIR
