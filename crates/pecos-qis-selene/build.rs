@@ -31,15 +31,8 @@ fn main() {
 
     // Build the C shim as a shared library with undefined __quantum__* symbols
     // These symbols will be resolved from libpecos_qis_ffi.so at runtime
-    // Use clang-14 if available (matches what's used in compilation)
-    let clang_cmd = if cfg!(target_os = "macos")
-        && Command::new("clang-14").arg("--version").output().is_ok()
-    {
-        "clang-14"
-    } else {
-        "clang"
-    };
-    let mut cmd = Command::new(clang_cmd);
+    // Use system clang (not LLVM clang from /tmp/llvm which lacks standard headers)
+    let mut cmd = Command::new("clang");
     cmd.arg("-shared");
 
     // -fPIC is not supported (and not needed) on Windows MSVC
@@ -157,15 +150,8 @@ fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
     let helios_lib = out_dir.join("libhelios_selene_interface.a");
 
     // Compile interface.c to object file
-    // Use clang-14 if available (matches what's used in CI)
-    let clang_cmd = if cfg!(target_os = "macos")
-        && Command::new("clang-14").arg("--version").output().is_ok()
-    {
-        "clang-14"
-    } else {
-        "clang"
-    };
-    let mut compile_cmd = Command::new(clang_cmd);
+    // Use system clang (not LLVM clang from /tmp/llvm which lacks standard headers)
+    let mut compile_cmd = Command::new("clang");
     compile_cmd.arg("-c");
 
     // -fPIC is not supported (and not needed) on Windows MSVC
