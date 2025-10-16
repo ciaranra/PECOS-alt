@@ -162,6 +162,37 @@ jobs:
           if (Test-Path $llvmPath) {
             Write-Host "LLVM directory found"
             Get-ChildItem $llvmPath | Select-Object Name
+
+            # Check for critical LLVM files
+            Write-Host "`nChecking for LLVM binaries..."
+            $llvmBin = Join-Path -Path $llvmPath -ChildPath "bin"
+            if (Test-Path $llvmBin) {
+              Write-Host "Contents of bin directory:"
+              Get-ChildItem $llvmBin | Select-Object Name | Format-Table
+
+              # Check for llvm-config
+              $llvmConfig = Join-Path -Path $llvmBin -ChildPath "llvm-config.exe"
+              if (Test-Path $llvmConfig) {
+                Write-Host "llvm-config.exe found, testing..."
+                & $llvmConfig --version
+                & $llvmConfig --prefix
+              } else {
+                Write-Host "WARNING: llvm-config.exe not found in bin directory"
+              }
+            }
+
+            Write-Host "`nChecking for LLVM lib directory..."
+            $llvmLib = Join-Path -Path $llvmPath -ChildPath "lib"
+            if (Test-Path $llvmLib) {
+              Write-Host "lib directory exists, checking for .lib files..."
+              $libFiles = Get-ChildItem $llvmLib -Filter "*.lib" | Select-Object -First 5
+              if ($libFiles) {
+                Write-Host "Found .lib files:"
+                $libFiles | Select-Object Name
+              } else {
+                Write-Host "WARNING: No .lib files found"
+              }
+            }
           } else {
             Write-Error "LLVM directory not found at: $llvmPath"
             exit 1
