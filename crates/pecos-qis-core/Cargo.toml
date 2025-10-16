@@ -25,9 +25,9 @@ rand.workspace = true
 rand_chacha.workspace = true
 
 # Platform-specific inkwell configuration
-# Windows requires static linking, Unix can use dynamic linking
+# Use dynamic linking on all platforms for compatibility with prebuilt LLVM binaries
 [target.'cfg(windows)'.dependencies]
-inkwell = { workspace = true, features = ["llvm14-0-force-static"], optional = true }
+inkwell = { workspace = true, features = ["llvm14-0"], optional = true }
 
 [target.'cfg(not(windows))'.dependencies]
 inkwell = { workspace = true, features = ["llvm14-0-force-dynamic"], optional = true }

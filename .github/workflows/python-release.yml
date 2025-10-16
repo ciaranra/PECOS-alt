@@ -210,7 +210,7 @@ jobs:
           working-directory: python/pecos-rslib
           # Native builds on all runners - no cross-compilation needed
           target: ${{ matrix.os == 'macos-latest' && (matrix.architecture == 'aarch64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || '' }}
-          manylinux: auto
+          manylinux: '2_28'
           before-script-linux: |
             # Export LLVM environment variable if it's set in GITHUB_ENV
             if [ -n "${LLVM_SYS_140_PREFIX:-}" ]; then
@@ -221,6 +221,25 @@ jobs:
             if [[ -f /etc/os-release ]] || [[ -f /etc/centos-release ]]; then
               # We're in a manylinux container - Linux build
               echo "Linux/manylinux environment detected"
+
+              # Install LLVM 14 (manylinux_2_28 is based on AlmaLinux 8)
+              # Check if yum is available (manylinux container)
+              if command -v yum &> /dev/null; then
+                echo "Installing LLVM 14 using yum..."
+                yum install -y llvm-devel llvm-static
+
+                # Verify LLVM installation
+                if command -v llvm-config &> /dev/null; then
+                  echo "LLVM installed successfully"
+                  llvm-config --version
+                  llvm-config --prefix
+                else
+                  echo "ERROR: LLVM installation failed"
+                  exit 1
+                fi
+              else
+                echo "yum not available - assuming LLVM is already present or will be provided by host"
+              fi
 
               # For Linux builds, set LLVM path if not already set
               if [ -z "${LLVM_SYS_140_PREFIX:-}" ]; then
