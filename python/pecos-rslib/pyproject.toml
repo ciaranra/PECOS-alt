@@ -52,8 +52,8 @@ before-all = '''
     mkdir -p /tmp/llvm;
     if [ "$(uname -m)" = "x86_64" ];
     then
-        curl -LO https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-x86_64-linux-gnu-rhel-8.4.tar.xz;
-        tar xf clang+llvm-14.0.6-x86_64-linux-gnu-rhel-8.4.tar.xz -C /tmp/llvm --strip-components=1;
+        curl -LO https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-x86_64-linux-gnu-ubuntu-18.04.tar.xz;
+        tar xf clang+llvm-14.0.6-x86_64-linux-gnu-ubuntu-18.04.tar.xz -C /tmp/llvm --strip-components=1;
     else
         dnf install ncurses-compat-libs ncurses-devel -y;
         curl -LO https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-aarch64-linux-gnu.tar.xz;

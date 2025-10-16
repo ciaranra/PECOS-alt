@@ -16,6 +16,7 @@ runs:
         mkdir -p /tmp/llvm
         if [ "$(uname -m)" = "x86_64" ]; then
           echo "Installing LLVM 14.0.6 for x86_64..."
+          # Use ubuntu-18.04 build for better compatibility with various Linux distros
           curl -LO https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-x86_64-linux-gnu-ubuntu-18.04.tar.xz
           tar xf clang+llvm-14.0.6-x86_64-linux-gnu-ubuntu-18.04.tar.xz -C /tmp/llvm --strip-components=1
         else

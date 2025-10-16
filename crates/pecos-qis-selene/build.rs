@@ -19,10 +19,12 @@ fn main() {
     println!("cargo:rerun-if-changed=../pecos-qis-ffi/src");
 
     // Then build our PECOS shim with undefined __quantum__* symbols
-    // These will be resolved at runtime from libpecos_qis_ffi.so
+    // These will be resolved at runtime from libpecos_qis_ffi.so/.dylib/.dll
     let source_file = PathBuf::from("src/c/selene_shim.c");
     let output_file = if cfg!(target_os = "macos") {
         out_dir.join("libpecos_selene.dylib")
+    } else if cfg!(target_os = "windows") {
+        out_dir.join("pecos_selene.dll")
     } else {
         out_dir.join("libpecos_selene.so")
     };
@@ -261,10 +263,13 @@ fn export_selene_runtime_paths() {
                     for entry in entries.flatten() {
                         let path = entry.path();
                         if let Some(filename) = path.file_name().and_then(|f| f.to_str())
-                            && filename.starts_with(&format!("lib{runtime}"))
+                            && (filename.starts_with(&format!("lib{runtime}"))
+                                || filename.starts_with(runtime))
                             && path.extension().is_some_and(|ext| {
                                 if cfg!(target_os = "macos") {
                                     ext.eq_ignore_ascii_case("dylib")
+                                } else if cfg!(target_os = "windows") {
+                                    ext.eq_ignore_ascii_case("dll")
                                 } else {
                                     ext.eq_ignore_ascii_case("so")
                                 }
@@ -284,14 +289,16 @@ fn export_selene_runtime_paths() {
 
             // Also check the standard location
             if !found {
-                let lib_ext = if cfg!(target_os = "macos") {
-                    "dylib"
+                let (lib_prefix, lib_ext) = if cfg!(target_os = "macos") {
+                    ("lib", "dylib")
+                } else if cfg!(target_os = "windows") {
+                    ("", "dll")
                 } else {
-                    "so"
+                    ("lib", "so")
                 };
                 let lib_path = target_dir
                     .join(profile)
-                    .join(format!("lib{runtime}.{lib_ext}"));
+                    .join(format!("{lib_prefix}{runtime}.{lib_ext}"));
                 if lib_path.exists() {
                     let env_var =
                         format!("PECOS_{}_PATH", runtime.to_uppercase().replace('-', "_"));
