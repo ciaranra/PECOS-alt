@@ -1,0 +1,10 @@
+# Cargo configuration for pecos-rslib
+#
+# This configuration handles Windows-specific linker issues
+
+[target.x86_64-pc-windows-msvc]
+# Allow duplicate symbols on Windows to resolve JIT debugging symbol conflicts
+# Both wasmtime and llvm-sys define __jit_debug_descriptor and __jit_debug_register_code
+# These are GDB debugging symbols that allow debuggers to inspect JIT-compiled code
+# On Linux/macOS, the linker picks one definition, but Windows requires this flag
+rustflags = ["-C", "link-arg=/FORCE:MULTIPLE"]

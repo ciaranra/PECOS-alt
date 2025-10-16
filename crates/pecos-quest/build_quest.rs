@@ -561,4 +561,13 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
             println!("cargo:rustc-link-arg={}", obj.display());
         }
     }
+
+    // On macOS, explicitly link against the system C++ library
+    // This ensures libunwind is properly available at runtime
+    if std::env::var("TARGET")
+        .unwrap_or_default()
+        .contains("darwin")
+    {
+        println!("cargo:rustc-link-lib=dylib=c++");
+    }
 }

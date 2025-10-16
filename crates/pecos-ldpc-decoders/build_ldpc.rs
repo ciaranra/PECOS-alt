@@ -240,5 +240,11 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
 
     build.compile("ldpc-bridge");
 
+    // On macOS, explicitly link against the system C++ library
+    // This ensures libunwind is properly available at runtime
+    if env::var("TARGET").unwrap_or_default().contains("darwin") {
+        println!("cargo:rustc-link-lib=dylib=c++");
+    }
+
     Ok(())
 }

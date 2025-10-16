@@ -193,13 +193,7 @@ jobs:
 
       - name: Run tests (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: |
-          # On macOS, exclude benchmarks crate due to libunwind linking issues
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            cargo test --workspace --exclude benchmarks
-          else
-            cargo test --workspace
-          fi
+        run: cargo test --workspace
 
       - name: Run tests (Windows)
         if: matrix.os == 'windows-latest'
