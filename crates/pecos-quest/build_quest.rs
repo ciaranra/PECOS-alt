@@ -546,6 +546,19 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
     if cfg!(not(target_env = "msvc")) {
         // For GCC/Clang
         build.flag_if_supported("-fPIC"); // Position-independent code
+
+        // On macOS with C++20, force-include rust/cxx.h to ensure pointer_traits
+        // specializations are available before any standard library headers
+        if std::env::var("TARGET")
+            .unwrap_or_default()
+            .contains("darwin")
+        {
+            // Use -include to force rust/cxx.h to be included first
+            // This ensures pointer_traits specializations for rust::Slice::iterator
+            // are available before any C++20 standard library headers try to use them
+            let cxxbridge_include = format!("{}/cxxbridge/include", out_dir.display());
+            build.flag(format!("-include{cxxbridge_include}/rust/cxx.h"));
+        }
     } else {
         // For MSVC
         build
