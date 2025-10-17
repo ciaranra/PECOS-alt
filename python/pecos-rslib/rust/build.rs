@@ -11,6 +11,12 @@ fn main() {
         // This is needed because pecos-rslib depends on C++ simulator crates
         println!("cargo:rustc-link-lib=dylib=c++");
 
+        // Add rpath to find system C++ library at runtime
+        println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib");
+        println!(
+            "cargo:rustc-link-arg=-Wl,-rpath,/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"
+        );
+
         // Allow undefined symbols to be resolved at runtime
         // This prevents the linker from creating a dependency on libunwind.1.dylib
         // since libunwind is embedded in libc++ on modern macOS

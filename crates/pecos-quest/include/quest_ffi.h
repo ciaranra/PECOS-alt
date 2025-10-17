@@ -1,9 +1,13 @@
 #ifndef QUEST_FFI_H
 #define QUEST_FFI_H
 
-#include <memory>
 #include <cstdint>
+
+// Include rust/cxx.h before <memory> to ensure proper pointer_traits specializations
 #include "rust/cxx.h"
+
+// Now include <memory> - pointer_traits should already be specialized by cxx
+#include <memory>
 
 // Include CXX-generated structs
 #include "pecos-quest/src/bridge.rs.h"
