@@ -2,14 +2,23 @@
 //! Each simulator gets its own independent Qureg, but they share a global QuEST environment
 //! since QuEST only supports one environment per process.
 
+#pragma message("bridge.cpp: Starting includes")
+
+#pragma message("bridge.cpp: About to include quest_ffi.h")
 #include "quest_ffi.h"
+
+#pragma message("bridge.cpp: About to include quest.h")
 #include "quest.h"
 // Note: quest_ffi.h includes the cxx-generated header and rust/cxx.h before <memory>
+
+#pragma message("bridge.cpp: About to include standard library headers")
 #include <stdexcept>
 #include <vector>
 #include <cstring>
 #include <mutex>
 #include <atomic>
+
+#pragma message("bridge.cpp: Finished all includes")
 
 // Global singleton QuEST environment management
 // QuEST requires a single global environment, but Quregs are independent
