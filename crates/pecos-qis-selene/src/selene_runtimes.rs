@@ -118,12 +118,12 @@ pub fn selene_soft_rz_runtime() -> Result<SeleneRuntime, RuntimeFetchError> {
 // Other Selene plugins (error models, simulators, compilers) can still be loaded
 // using find_selene_runtime() or selene_runtime() with an explicit path.
 
-/// Find a Selene runtime that was built by the build script
+/// Find a Selene runtime that was built as a cargo dependency
 ///
-/// This looks for the runtime libraries in several locations:
-/// 1. Environment variable set by build script
-/// 2. Cargo target directory (when built as dependency)
-/// 3. Legacy paths (../selene) for compatibility
+/// This looks for the runtime libraries in the cargo target directory.
+/// We search at runtime rather than using build-time environment variables because
+/// the Selene runtimes are built as dependencies that may not exist when the build
+/// script runs.
 fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchError> {
     // Platform-specific library extension
     let lib_ext = if cfg!(target_os = "macos") {
@@ -133,29 +133,10 @@ fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchErro
     } else {
         "so"
     };
-    // First check if we have a runtime path from the build script
-    if let Ok(built_runtime_path) = std::env::var(format!(
-        "PECOS_{}_PATH",
-        lib_name.to_uppercase().replace('-', "_")
-    )) {
-        let path = PathBuf::from(built_runtime_path);
-        if path.exists() {
-            log::info!("Found Selene runtime from env var: {}", path.display());
-            return Ok(path);
-        }
-    }
 
-    // Check if it was built in our OUT_DIR during compilation
-    if let Ok(out_dir) = std::env::var("OUT_DIR") {
-        let runtime_path = PathBuf::from(&out_dir).join(format!("lib{lib_name}.{lib_ext}"));
-        if runtime_path.exists() {
-            log::info!(
-                "Found Selene runtime in OUT_DIR: {}",
-                runtime_path.display()
-            );
-            return Ok(runtime_path);
-        }
-    }
+    // Note: We don't check build-time environment variables here because they may be stale
+    // The build script runs before Selene runtime dependencies are built, so those env vars
+    // would point to non-existent paths. We rely solely on runtime detection instead.
 
     // Check cargo target directory for the dependency-built libraries
     // This handles the case where Selene runtimes are built as Cargo dependencies

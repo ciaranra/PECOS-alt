@@ -11,9 +11,9 @@ fn main() {
     // Find or build libhelios_selene_interface.a
     find_or_build_helios_lib(&out_dir);
 
-    // Export paths for Selene runtime libraries if they're built as dependencies
-    #[cfg(feature = "selene-runtimes")]
-    export_selene_runtime_paths();
+    // Note: We don't export Selene runtime paths as environment variables here because
+    // the Selene runtimes are dependencies that may not be built yet when this build
+    // script runs. Runtime detection is done at runtime instead (see selene_runtimes.rs).
 
     // Tell cargo to rerun this build script if pecos-qis-ffi changes
     println!("cargo:rerun-if-changed=../pecos-qis-ffi/src");
@@ -214,94 +214,6 @@ fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
     println!("cargo:rerun-if-changed={}", interface_c.display());
 
     Ok(())
-}
-
-/// Export environment variables for Selene runtime library paths
-#[cfg(feature = "selene-runtimes")]
-fn export_selene_runtime_paths() {
-    use cargo_metadata::MetadataCommand;
-
-    // Get workspace metadata
-    let metadata = MetadataCommand::new()
-        .exec()
-        .expect("Failed to get cargo metadata");
-
-    // Find the target directory
-    let target_dir = metadata.target_directory.as_std_path();
-
-    // Determine the current build profile
-    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-
-    // Look for runtime libraries in the current profile first, then fallback
-    let profiles = if profile == "release" {
-        vec!["release", "debug"]
-    } else {
-        vec!["debug", "release"]
-    };
-
-    let runtime_names = ["selene_simple_runtime", "selene_soft_rz_runtime"];
-
-    for runtime in &runtime_names {
-        let mut found = false;
-        for profile in &profiles {
-            if found {
-                break;
-            }
-
-            // Check in deps directory first (where cargo puts cdylib dependencies)
-            let deps_path = target_dir.join(profile).join("deps");
-            if deps_path.exists() {
-                // Look for the library with any hash suffix
-                if let Ok(entries) = std::fs::read_dir(&deps_path) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if let Some(filename) = path.file_name().and_then(|f| f.to_str())
-                            && (filename.starts_with(&format!("lib{runtime}"))
-                                || filename.starts_with(runtime))
-                            && path.extension().is_some_and(|ext| {
-                                if cfg!(target_os = "macos") {
-                                    ext.eq_ignore_ascii_case("dylib")
-                                } else if cfg!(target_os = "windows") {
-                                    ext.eq_ignore_ascii_case("dll")
-                                } else {
-                                    ext.eq_ignore_ascii_case("so")
-                                }
-                            })
-                        {
-                            // Export the path as an environment variable
-                            let env_var =
-                                format!("PECOS_{}_PATH", runtime.to_uppercase().replace('-', "_"));
-                            println!("cargo:rustc-env={}={}", env_var, path.display());
-                            info!("Found {} at {}", runtime, path.display());
-                            found = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Also check the standard location
-            if !found {
-                let (lib_prefix, lib_ext) = if cfg!(target_os = "macos") {
-                    ("lib", "dylib")
-                } else if cfg!(target_os = "windows") {
-                    ("", "dll")
-                } else {
-                    ("lib", "so")
-                };
-                let lib_path = target_dir
-                    .join(profile)
-                    .join(format!("{lib_prefix}{runtime}.{lib_ext}"));
-                if lib_path.exists() {
-                    let env_var =
-                        format!("PECOS_{}_PATH", runtime.to_uppercase().replace('-', "_"));
-                    println!("cargo:rustc-env={}={}", env_var, lib_path.display());
-                    info!("Found {} at {}", runtime, lib_path.display());
-                    found = true;
-                }
-            }
-        }
-    }
 }
 
 /// Find an available C compiler on the system
