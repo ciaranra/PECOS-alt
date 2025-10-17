@@ -31,14 +31,9 @@ fn main() {
 
     // Build the C shim as a shared library with undefined __quantum__* symbols
     // These symbols will be resolved from libpecos_qis_ffi.so at runtime
-    // Use system clang (not LLVM clang from /tmp/llvm which lacks standard headers)
-    // On Unix-like systems, /usr/bin/clang is the system compiler
-    let clang_path = if cfg!(target_os = "windows") {
-        "clang"
-    } else {
-        "/usr/bin/clang"
-    };
-    let mut cmd = Command::new(clang_path);
+    // Try to find an available C compiler (clang or gcc)
+    let compiler = find_c_compiler();
+    let mut cmd = Command::new(&compiler);
     cmd.arg("-shared");
 
     // -fPIC is not supported (and not needed) on Windows MSVC
@@ -161,14 +156,9 @@ fn build_helios_from_cargo_dependency(out_dir: &Path) -> Result<(), String> {
     let helios_lib = out_dir.join("libhelios_selene_interface.a");
 
     // Compile interface.c to object file
-    // Use system clang (not LLVM clang from /tmp/llvm which lacks standard headers)
-    // On Unix-like systems, /usr/bin/clang is the system compiler
-    let clang_path = if cfg!(target_os = "windows") {
-        "clang"
-    } else {
-        "/usr/bin/clang"
-    };
-    let mut compile_cmd = Command::new(clang_path);
+    // Try to find an available C compiler (clang or gcc)
+    let compiler = find_c_compiler();
+    let mut compile_cmd = Command::new(&compiler);
     compile_cmd.arg("-c");
 
     // -fPIC is not supported (and not needed) on Windows MSVC
@@ -312,4 +302,38 @@ fn export_selene_runtime_paths() {
             }
         }
     }
+}
+
+/// Find an available C compiler on the system
+///
+/// Tries to find clang or gcc, in that order of preference.
+/// On Windows, just tries "clang" which will be found in PATH if available.
+fn find_c_compiler() -> String {
+    if cfg!(target_os = "windows") {
+        // On Windows, try clang from PATH
+        if Command::new("clang").arg("--version").output().is_ok() {
+            return "clang".to_string();
+        }
+        // Fall back to cc which might be MSVC cl.exe
+        return "cc".to_string();
+    }
+
+    // On Unix-like systems, try various compilers in order
+    let compilers = vec![
+        "/usr/bin/clang",
+        "clang",
+        "/usr/bin/gcc",
+        "gcc",
+        "/usr/bin/cc",
+        "cc",
+    ];
+
+    for compiler in &compilers {
+        if Command::new(compiler).arg("--version").output().is_ok() {
+            return (*compiler).to_string();
+        }
+    }
+
+    // If nothing works, return "cc" and let it fail with a better error
+    "cc".to_string()
 }
