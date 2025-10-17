@@ -1,14 +1,13 @@
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
-    // On macOS, explicitly link against the system C++ library
-    // Use static linking to avoid libunwind.1.dylib runtime dependency issues
+    // On macOS, don't explicitly link C++ library
+    // Let the system handle it implicitly to avoid libunwind issues
+    // The C++ code will still link, but without creating hard dependencies
     if std::env::var("TARGET")
         .unwrap_or_default()
         .contains("darwin")
     {
-        // Link against system C++ library statically to avoid runtime dependencies
-        println!("cargo:rustc-link-lib=static=c++");
-        println!("cargo:rustc-link-lib=static=c++abi");
+        // No explicit C++ linking needed - system handles it implicitly
     }
 }

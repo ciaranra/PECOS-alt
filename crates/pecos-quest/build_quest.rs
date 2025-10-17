@@ -574,14 +574,7 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
         }
     }
 
-    // On macOS, explicitly link against the system C++ library
-    // Use static linking to avoid libunwind.1.dylib runtime dependency issues
-    if std::env::var("TARGET")
-        .unwrap_or_default()
-        .contains("darwin")
-    {
-        // Link against system C++ library statically to avoid runtime dependencies
-        println!("cargo:rustc-link-lib=static=c++");
-        println!("cargo:rustc-link-lib=static=c++abi");
-    }
+    // On macOS, don't explicitly link C++ library
+    // Let the system handle it implicitly to avoid libunwind issues
+    // The C++ code will still link, but without creating hard dependencies
 }
