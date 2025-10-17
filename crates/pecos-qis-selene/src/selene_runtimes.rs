@@ -163,7 +163,9 @@ fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchErro
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if let Some(filename) = path.file_name().and_then(|f| f.to_str())
-                        && filename.starts_with(&format!("lib{lib_name}"))
+                        // On Windows, libraries don't have "lib" prefix; on Unix they do
+                        && (filename.starts_with(&format!("lib{lib_name}"))
+                            || filename.starts_with(lib_name))
                         && path
                             .extension()
                             .is_some_and(|ext| ext.eq_ignore_ascii_case(lib_ext))
@@ -174,10 +176,15 @@ fn find_built_selene_runtime(lib_name: &str) -> Result<PathBuf, RuntimeFetchErro
                 }
             }
 
-            // Also check standard location
+            // Also check standard location - try both with and without "lib" prefix
+            let lib_prefix = if cfg!(target_os = "windows") {
+                ""
+            } else {
+                "lib"
+            };
             let runtime_path = target
                 .join(profile)
-                .join(format!("lib{lib_name}.{lib_ext}"));
+                .join(format!("{lib_prefix}{lib_name}.{lib_ext}"));
             if runtime_path.exists() {
                 log::info!(
                     "Found Selene runtime in cargo target: {}",
