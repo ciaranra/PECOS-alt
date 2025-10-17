@@ -525,7 +525,19 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
     }
 
     // Use C++20 standard (QuEST v4 uses designated initializers which require C++20)
-    build.std("c++20");
+    // However, on macOS there's a known issue with C++20 and cxx crate's pointer_traits
+    // specializations, so we use C++17 there (designated initializers are a GNU extension
+    // that works in C++17 with Clang)
+    if std::env::var("TARGET")
+        .unwrap_or_default()
+        .contains("darwin")
+    {
+        build.std("c++17");
+        // Enable GNU extensions to support designated initializers in C++17
+        build.flag_if_supported("-Wno-c++20-designator");
+    } else {
+        build.std("c++20");
+    }
 
     // Report ccache/sccache configuration
     report_cache_config();
@@ -546,19 +558,6 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
     if cfg!(not(target_env = "msvc")) {
         // For GCC/Clang
         build.flag_if_supported("-fPIC"); // Position-independent code
-
-        // On macOS with C++20, force-include rust/cxx.h to ensure pointer_traits
-        // specializations are available before any standard library headers
-        if std::env::var("TARGET")
-            .unwrap_or_default()
-            .contains("darwin")
-        {
-            // Use -include to force rust/cxx.h to be included first
-            // This ensures pointer_traits specializations for rust::Slice::iterator
-            // are available before any C++20 standard library headers try to use them
-            let cxxbridge_include = format!("{}/cxxbridge/include", out_dir.display());
-            build.flag(format!("-include{cxxbridge_include}/rust/cxx.h"));
-        }
     } else {
         // For MSVC
         build

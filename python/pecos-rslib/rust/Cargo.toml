@@ -20,8 +20,8 @@ doctest = false
 test = false
 
 [dependencies]
-# Use the pecos metacrate with all simulators and runtimes needed for Python bindings
-pecos = { workspace = true, features = ["all-simulators", "selene", "qasm", "phir"] }
+# Use the pecos metacrate which includes all simulators and runtimes by default
+pecos = { workspace = true }
 
 pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
 parking_lot.workspace = true
