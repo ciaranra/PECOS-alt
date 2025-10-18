@@ -189,11 +189,39 @@ jobs:
           arch: x64
 
       - name: Compile tests
-        run: cargo test --no-run
+        run: |
+          # On macOS, prevent Homebrew library paths from being used during linking
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            # CRITICAL: Prevent Homebrew library paths from being used during linking
+            # This fixes the "@rpath/libunwind.1.dylib" runtime error on macOS
+            # Reference: https://github.com/rust-lang/rust/issues/135372
+            unset LIBRARY_PATH
+            unset LD_LIBRARY_PATH
+            unset DYLD_LIBRARY_PATH
+            unset DYLD_FALLBACK_LIBRARY_PATH
+            unset PKG_CONFIG_PATH
+            export LIBRARY_PATH=/usr/lib
+          fi
+
+          cargo test --no-run
 
       - name: Run tests (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: cargo test --workspace
+        run: |
+          # On macOS, prevent Homebrew library paths from being used
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            # CRITICAL: Prevent Homebrew library paths from being used during linking
+            # This fixes the "@rpath/libunwind.1.dylib" runtime error on macOS
+            # Reference: https://github.com/rust-lang/rust/issues/135372
+            unset LIBRARY_PATH
+            unset LD_LIBRARY_PATH
+            unset DYLD_LIBRARY_PATH
+            unset DYLD_FALLBACK_LIBRARY_PATH
+            unset PKG_CONFIG_PATH
+            export LIBRARY_PATH=/usr/lib
+          fi
+
+          cargo test --workspace
 
       - name: Run tests (Windows)
         if: matrix.os == 'windows-latest'

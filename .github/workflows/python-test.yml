@@ -179,6 +179,27 @@ jobs:
           # Force matplotlib to use bundled libraries instead of system ones
           export MPLCONFIGDIR=$PWD/.matplotlib
           mkdir -p $MPLCONFIGDIR
+
+          # CRITICAL: Prevent Homebrew library paths from being used during linking
+          # This fixes the "@rpath/libunwind.1.dylib" runtime error on macOS
+          # Reference: https://github.com/rust-lang/rust/issues/135372
+          #
+          # The issue: When LIBRARY_PATH or similar environment variables include
+          # Homebrew paths (like /usr/local/lib or /opt/homebrew/lib), the linker
+          # finds Homebrew's libunwind and creates @rpath references that fail at runtime.
+          #
+          # The solution: Clear these variables so the linker ONLY uses system libraries
+          # from /usr/lib (which are in the dyld shared cache).
+          unset LIBRARY_PATH
+          unset LD_LIBRARY_PATH
+          unset DYLD_LIBRARY_PATH
+          unset DYLD_FALLBACK_LIBRARY_PATH
+
+          # Also prevent pkg-config from finding Homebrew packages
+          unset PKG_CONFIG_PATH
+
+          # Set explicit library path to ONLY include system directories
+          export LIBRARY_PATH=/usr/lib
         fi
 
         # Build and test

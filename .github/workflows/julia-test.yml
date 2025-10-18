@@ -83,6 +83,19 @@ jobs:
       if: runner.os != 'Windows'
       shell: bash
       run: |
+        # On macOS, prevent Homebrew library paths from being used during linking
+        if [[ "${{ runner.os }}" == "macOS" ]]; then
+          # CRITICAL: Prevent Homebrew library paths from being used during linking
+          # This fixes the "@rpath/libunwind.1.dylib" runtime error on macOS
+          # Reference: https://github.com/rust-lang/rust/issues/135372
+          unset LIBRARY_PATH
+          unset LD_LIBRARY_PATH
+          unset DYLD_LIBRARY_PATH
+          unset DYLD_FALLBACK_LIBRARY_PATH
+          unset PKG_CONFIG_PATH
+          export LIBRARY_PATH=/usr/lib
+        fi
+
         cd julia/pecos-julia-ffi
         cargo build --release
 
