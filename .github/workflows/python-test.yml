@@ -200,10 +200,51 @@ jobs:
 
           # Set explicit library path to ONLY include system directories
           export LIBRARY_PATH=/usr/lib
+
+          # DEBUG: Show what environment variables are set
+          echo "=== Environment variables that affect linking ==="
+          env | grep -E "LIBRARY|DYLD|PKG_CONFIG|HOMEBREW|PATH" | sort
+
+          # DEBUG: Check what libraries are in Homebrew paths
+          echo "=== Checking for libunwind in Homebrew locations ==="
+          ls -la /usr/local/lib/libunwind* 2>&1 || echo "No libunwind in /usr/local/lib"
+          ls -la /opt/homebrew/lib/libunwind* 2>&1 || echo "No libunwind in /opt/homebrew/lib"
+
+          # DEBUG: Check system libunwind
+          echo "=== System libunwind ==="
+          ls -la /usr/lib/system/libunwind* 2>&1 || echo "No libunwind in /usr/lib/system"
+          ls -la /usr/lib/libunwind* 2>&1 || echo "No libunwind in /usr/lib"
+
+          # DEBUG: Use -Z flag to exclude standard paths, then re-add only /usr/lib
+          # This prevents /usr/local/lib from being searched
+          export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-Wl,-Z -L native=/usr/lib"
+          echo "=== RUSTFLAGS set to: $RUSTFLAGS ==="
         fi
 
-        # Build and test
-        make build
+        # Build with verbose linking to see what's happening
+        echo "=== Starting build ==="
+        make build 2>&1 | tee /tmp/build.log
+
+        # After build, check if the extension has the bad reference
+        if [[ "${{ runner.os }}" == "macOS" ]]; then
+          echo "=== Checking built extension module ==="
+          EXT_MODULE=$(find python/pecos-rslib/src/pecos_rslib -name "_pecos_rslib*.so" | head -1)
+          if [ -n "$EXT_MODULE" ]; then
+            echo "Found: $EXT_MODULE"
+            echo "=== Dependencies of extension module ==="
+            otool -L "$EXT_MODULE"
+            echo "=== Checking for problematic @rpath reference ==="
+            if otool -L "$EXT_MODULE" | grep "@rpath/libunwind"; then
+              echo "ERROR: Still has @rpath/libunwind reference!"
+              echo "=== Searching build log for linker commands ==="
+              grep -i "linking\|libunwind\|-L" /tmp/build.log | tail -50
+              exit 1
+            else
+              echo "SUCCESS: No @rpath/libunwind reference found!"
+            fi
+          fi
+        fi
+
         make pytest-all
 
     - name: Run linting
