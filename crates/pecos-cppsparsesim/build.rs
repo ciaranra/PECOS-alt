@@ -43,10 +43,13 @@ fn main() {
 
     bridge.compile("cppsparsesim-bridge");
 
-    // On macOS, explicitly link against the system C++ library
-    // This ensures libunwind is properly available at runtime
+    // On macOS, explicitly link against the system C++ library with runtime search paths
+    // This ensures libc++ and libunwind are properly available at runtime
     if target.contains("darwin") {
         println!("cargo:rustc-link-lib=dylib=c++");
+        // Add system library paths to the runtime search path
+        println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib");
+        println!("cargo:rustc-link-arg=-Wl,-rpath,/Library/Developer/CommandLineTools/usr/lib");
     }
 
     // Tell cargo to rerun if source files change

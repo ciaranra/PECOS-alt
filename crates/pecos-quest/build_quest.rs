@@ -574,7 +574,15 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
         }
     }
 
-    // On macOS, don't explicitly link C++ library
-    // Let the system handle it implicitly to avoid libunwind issues
-    // The C++ code will still link, but without creating hard dependencies
+    // On macOS, explicitly link against the system C++ library with dynamic linking
+    // and configure the loader to search in standard system paths
+    if std::env::var("TARGET")
+        .unwrap_or_default()
+        .contains("darwin")
+    {
+        println!("cargo:rustc-link-lib=dylib=c++");
+        // Add system library paths to the runtime search path
+        println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib");
+        println!("cargo:rustc-link-arg=-Wl,-rpath,/Library/Developer/CommandLineTools/usr/lib");
+    }
 }
