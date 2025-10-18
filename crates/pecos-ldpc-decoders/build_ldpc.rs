@@ -229,6 +229,11 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
         build
             .flag("-w") // Suppress all warnings
             .flag_if_supported("-fopenmp"); // Enable OpenMP if available
+
+        // On macOS, use the -stdlib=libc++ flag to ensure proper C++ standard library linkage
+        if target.contains("darwin") {
+            build.flag("-stdlib=libc++");
+        }
     } else {
         // For MSVC
         build
@@ -240,13 +245,9 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
 
     build.compile("ldpc-bridge");
 
-    // On macOS, explicitly link against the system C++ library with runtime search paths
-    // This ensures libc++ and libunwind are properly available at runtime
-    if env::var("TARGET").unwrap_or_default().contains("darwin") {
-        println!("cargo:rustc-link-lib=dylib=c++");
-        // Add system library paths to the runtime search path
-        println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,/Library/Developer/CommandLineTools/usr/lib");
+    // On macOS, link against the system C++ library from dyld shared cache
+    if target.contains("darwin") {
+        println!("cargo:rustc-link-lib=c++");
     }
 
     Ok(())

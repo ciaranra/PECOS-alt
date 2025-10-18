@@ -41,15 +41,16 @@ fn main() {
         bridge.std("c++14");
     }
 
+    // On macOS, use the -stdlib=libc++ flag to ensure proper C++ standard library linkage
+    if target.contains("darwin") {
+        bridge.flag("-stdlib=libc++");
+    }
+
     bridge.compile("cppsparsesim-bridge");
 
-    // On macOS, explicitly link against the system C++ library with runtime search paths
-    // This ensures libc++ and libunwind are properly available at runtime
+    // On macOS, link against the system C++ library from dyld shared cache
     if target.contains("darwin") {
-        println!("cargo:rustc-link-lib=dylib=c++");
-        // Add system library paths to the runtime search path
-        println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,/Library/Developer/CommandLineTools/usr/lib");
+        println!("cargo:rustc-link-lib=c++");
     }
 
     // Tell cargo to rerun if source files change

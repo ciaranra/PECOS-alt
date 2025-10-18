@@ -33,6 +33,7 @@ fn main() {
         &qulacs_src,
         &out_dir,
         is_windows,
+        &target,
     );
 
     // Compile everything
@@ -43,13 +44,9 @@ fn main() {
         create_windows_boost_stub(&out_dir);
     }
 
-    // On macOS, explicitly link against the system C++ library with runtime search paths
-    // This ensures libc++ and libunwind are properly available at runtime
+    // On macOS, link against the system C++ library from dyld shared cache
     if target.contains("darwin") {
-        println!("cargo:rustc-link-lib=dylib=c++");
-        // Add system library paths to the runtime search path
-        println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,/Library/Developer/CommandLineTools/usr/lib");
+        println!("cargo:rustc-link-lib=c++");
     }
 }
 
@@ -169,6 +166,7 @@ fn configure_build(
     qulacs_src: &Path,
     out_dir: &Path,
     is_windows: bool,
+    target: &str,
 ) {
     // Include directories
     build.include(eigen_path);
@@ -196,6 +194,11 @@ fn configure_build(
         // Silence OpenMP pragma warnings since we intentionally don't use OpenMP
         // PECOS uses thread-level parallelism instead of OpenMP's internal parallelism
         build.flag_if_supported("-Wno-unknown-pragmas");
+
+        // On macOS, use the -stdlib=libc++ flag to ensure proper C++ standard library linkage
+        if target.contains("darwin") {
+            build.flag("-stdlib=libc++");
+        }
     }
 
     // Define preprocessor macros

@@ -565,6 +565,19 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
             .flag_if_supported("/Zc:__cplusplus"); // Report correct __cplusplus macro value
     }
 
+    // Platform-specific C++ library linking configuration
+    if cfg!(not(target_env = "msvc")) {
+        // On macOS, use the -stdlib=libc++ flag to ensure proper C++ standard library linkage
+        // This tells the linker to use the system libc++ from the dyld shared cache
+        // without creating problematic @rpath references
+        if std::env::var("TARGET")
+            .unwrap_or_default()
+            .contains("darwin")
+        {
+            build.flag("-stdlib=libc++");
+        }
+    }
+
     build.compile("quest-bridge");
 
     // Link GPU object files if they were compiled
@@ -574,15 +587,16 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
         }
     }
 
-    // On macOS, explicitly link against the system C++ library with dynamic linking
-    // and configure the loader to search in standard system paths
+    // On macOS, ensure the C++ standard library is linked correctly
+    // Use the system libc++ which is in the dyld shared cache (macOS Big Sur+)
+    // We rely on the compiler's default behavior rather than explicit cargo directives
+    // which can create problematic @rpath references
     if std::env::var("TARGET")
         .unwrap_or_default()
         .contains("darwin")
     {
-        println!("cargo:rustc-link-lib=dylib=c++");
-        // Add system library paths to the runtime search path
-        println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,/Library/Developer/CommandLineTools/usr/lib");
+        // Link against the system C++ library using absolute path to avoid @rpath issues
+        // The linker will find it in the dyld shared cache
+        println!("cargo:rustc-link-lib=c++");
     }
 }

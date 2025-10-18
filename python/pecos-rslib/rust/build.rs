@@ -7,8 +7,8 @@ fn main() {
     {
         pyo3_build_config::add_extension_module_link_args();
 
-        // Don't explicitly link C++ library - let the system handle it implicitly
-        // This avoids creating hard dependencies on libunwind.1.dylib
-        // The C++ code from pecos-quest will still link correctly
+        // Link against the system C++ library from dyld shared cache
+        // The -lc++ directive without dylib= prefix allows the linker to use the system library
+        println!("cargo:rustc-link-lib=c++");
     }
 }
