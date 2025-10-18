@@ -95,8 +95,6 @@ jobs:
           unset PKG_CONFIG_PATH
           export LIBRARY_PATH=/usr/lib
 
-          # Use -Z flag to exclude standard paths (which includes /usr/local/lib), then re-add /usr/lib
-          export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-Wl,-Z -L native=/usr/lib"
           echo "RUSTFLAGS: $RUSTFLAGS"
         fi
 

@@ -215,33 +215,88 @@ jobs:
           ls -la /usr/lib/system/libunwind* 2>&1 || echo "No libunwind in /usr/lib/system"
           ls -la /usr/lib/libunwind* 2>&1 || echo "No libunwind in /usr/lib"
 
-          # DEBUG: Use -Z flag to exclude standard paths, then re-add only /usr/lib
-          # This prevents /usr/local/lib from being searched
-          export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-Wl,-Z -L native=/usr/lib"
-          echo "=== RUSTFLAGS set to: $RUSTFLAGS ==="
+          # DEBUG: Check if LLVM itself has libunwind references
+          echo "=== Checking LLVM libraries for libunwind references ==="
+          echo "LLVM dylib files:"
+          ls -lh /tmp/llvm/lib/*.dylib 2>&1 | head -10 || echo "No dylib files found"
+
+          # Check ALL LLVM dylibs for libunwind references
+          echo ""
+          echo "Checking each LLVM library for libunwind:"
+          for lib in /tmp/llvm/lib/*.dylib; do
+            if [ -f "$lib" ]; then
+              libname=$(basename "$lib")
+              if otool -L "$lib" 2>/dev/null | grep -q "libunwind"; then
+                echo "  ⚠️  $libname HAS libunwind reference:"
+                otool -L "$lib" | grep libunwind
+              fi
+            fi
+          done
+          echo "Done checking LLVM libraries"
+
+          # Check what libc++ the system has
+          echo ""
+          echo "=== System C++ library ==="
+          ls -lh /usr/lib/libc++* 2>&1 | head -5 || echo "No libc++ in /usr/lib"
+
+          # Check if clang has any default library search paths configured
+          echo ""
+          echo "=== Clang default library search paths ==="
+          /tmp/llvm/bin/clang -Xlinker -v 2>&1 | grep -A 20 "Library search" || echo "Could not get search paths"
+
+          echo ""
+          echo "=== RUSTFLAGS: $RUSTFLAGS ==="
+          echo "=== LIBRARY_PATH: $LIBRARY_PATH ==="
         fi
 
-        # Build with verbose linking to see what's happening
+        # Build with verbose cargo output to see linker commands
+        echo ""
         echo "=== Starting build ==="
-        make build 2>&1 | tee /tmp/build.log
+        if [[ "${{ runner.os }}" == "macOS" ]]; then
+          # Enable verbose cargo output to see full linker commands
+          CARGO_LOG=cargo::core::compiler::fingerprint=info make build 2>&1 | tee /tmp/build.log
+        else
+          make build 2>&1 | tee /tmp/build.log
+        fi
 
         # After build, check if the extension has the bad reference
         if [[ "${{ runner.os }}" == "macOS" ]]; then
+          echo ""
           echo "=== Checking built extension module ==="
           EXT_MODULE=$(find python/pecos-rslib/src/pecos_rslib -name "_pecos_rslib*.so" | head -1)
           if [ -n "$EXT_MODULE" ]; then
             echo "Found: $EXT_MODULE"
-            echo "=== Dependencies of extension module ==="
+            echo ""
+            echo "=== ALL dependencies of extension module ==="
             otool -L "$EXT_MODULE"
+
+            echo ""
             echo "=== Checking for problematic @rpath reference ==="
             if otool -L "$EXT_MODULE" | grep "@rpath/libunwind"; then
-              echo "ERROR: Still has @rpath/libunwind reference!"
-              echo "=== Searching build log for linker commands ==="
-              grep -i "linking\|libunwind\|-L" /tmp/build.log | tail -50
+              echo "❌ ERROR: Still has @rpath/libunwind reference!"
+
+              echo ""
+              echo "=== Let's trace where this comes from ==="
+              echo "Dependencies that might be the source:"
+              otool -L "$EXT_MODULE" | grep -v "$EXT_MODULE" | grep "\.dylib" | while read -r line; do
+                dep=$(echo "$line" | awk '{print $1}')
+                if [ -f "$dep" ] || [ -L "$dep" ]; then
+                  echo ""
+                  echo "Checking $dep:"
+                  otool -L "$dep" 2>/dev/null | grep -i unwind || echo "  No libunwind reference"
+                fi
+              done
+
+              echo ""
+              echo "=== Last 100 lines of build log (looking for linking commands) ==="
+              tail -100 /tmp/build.log | grep -B 2 -A 2 "linking\|rustc.*cdylib\|-L"
+
               exit 1
             else
-              echo "SUCCESS: No @rpath/libunwind reference found!"
+              echo "✅ SUCCESS: No @rpath/libunwind reference found!"
             fi
+          else
+            echo "⚠️  WARNING: Could not find extension module to check"
           fi
         fi
 
