@@ -8,7 +8,9 @@ fn main() {
         pyo3_build_config::add_extension_module_link_args();
 
         // Link against the system C++ library from dyld shared cache
-        // The -lc++ directive without dylib= prefix allows the linker to use the system library
+        // Prioritize /usr/lib to prevent opportunistic linking to Homebrew's libunwind
+        println!("cargo:rustc-link-search=native=/usr/lib");
         println!("cargo:rustc-link-lib=c++");
+        println!("cargo:rustc-link-arg=-Wl,-search_paths_first");
     }
 }

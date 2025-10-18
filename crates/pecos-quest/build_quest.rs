@@ -575,6 +575,11 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
             .contains("darwin")
         {
             build.flag("-stdlib=libc++");
+
+            // Prevent opportunistic linking to Homebrew's libunwind (Xcode 15+ issue)
+            // Force use of system libraries only by excluding common Homebrew paths
+            build.flag("-L/usr/lib");
+            build.flag("-Wl,-search_paths_first");
         }
     }
 
@@ -595,8 +600,13 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
         .unwrap_or_default()
         .contains("darwin")
     {
-        // Link against the system C++ library using absolute path to avoid @rpath issues
-        // The linker will find it in the dyld shared cache
+        // Link against the system C++ library
+        // Use -L flag to prioritize system library paths over Homebrew
+        println!("cargo:rustc-link-search=native=/usr/lib");
         println!("cargo:rustc-link-lib=c++");
+
+        // Prevent Homebrew's libunwind from being opportunistically linked
+        // by ensuring system paths are searched first
+        println!("cargo:rustc-link-arg=-Wl,-search_paths_first");
     }
 }

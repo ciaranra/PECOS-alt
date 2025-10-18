@@ -233,6 +233,9 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
         // On macOS, use the -stdlib=libc++ flag to ensure proper C++ standard library linkage
         if target.contains("darwin") {
             build.flag("-stdlib=libc++");
+            // Prevent opportunistic linking to Homebrew's libunwind (Xcode 15+ issue)
+            build.flag("-L/usr/lib");
+            build.flag("-Wl,-search_paths_first");
         }
     } else {
         // For MSVC
@@ -247,7 +250,9 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
 
     // On macOS, link against the system C++ library from dyld shared cache
     if target.contains("darwin") {
+        println!("cargo:rustc-link-search=native=/usr/lib");
         println!("cargo:rustc-link-lib=c++");
+        println!("cargo:rustc-link-arg=-Wl,-search_paths_first");
     }
 
     Ok(())
