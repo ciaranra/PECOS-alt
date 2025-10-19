@@ -47,6 +47,20 @@ runs:
         fi
         curl -LO https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-$ARCH_PREFIX.tar.xz
         tar xf clang+llvm-14.0.6-$ARCH_PREFIX.tar.xz -C /tmp/llvm --strip-components=1
+
+        # FIX: LLVM 14.0.6 libunwind libraries have @rpath references to themselves
+        # This causes "Library not loaded: @rpath/libunwind.1.dylib" errors at runtime
+        # Fix by changing the install name to use the absolute path
+        echo "Fixing LLVM libunwind install names..."
+        for lib in /tmp/llvm/lib/libunwind*.dylib; do
+          if [ -f "$lib" ]; then
+            echo "  Fixing $(basename $lib)"
+            # Change the self-reference from @rpath/libunwind.1.dylib to the absolute path
+            install_name_tool -id "$lib" "$lib"
+          fi
+        done
+        echo "LLVM libunwind libraries fixed"
+
         echo "/tmp/llvm/bin" >> $GITHUB_PATH
         echo "LLVM_SYS_140_PREFIX=/tmp/llvm" >> $GITHUB_ENV
         echo "llvm-path=/tmp/llvm" >> $GITHUB_OUTPUT
