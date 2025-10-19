@@ -410,6 +410,18 @@ selene_u64_result_t selene_custom_runtime_call(SeleneInstance *instance, uint64_
 }
 
 // =============================================================================
+// Export macros for cross-platform DLL symbol visibility
+// =============================================================================
+
+// On Windows, we need __declspec(dllexport) to make symbols visible in DLLs
+// On Unix, we use __attribute__((visibility("default"))) with -fvisibility=hidden
+#ifdef _WIN32
+#define EXPORT_API __declspec(dllexport)
+#else
+#define EXPORT_API __attribute__((visibility("default")))
+#endif
+
+// =============================================================================
 // In-process execution support with setjmp/longjmp
 // =============================================================================
 
@@ -431,7 +443,7 @@ jmp_buf user_program_jmpbuf;
  */
 typedef uint64_t (*qmain_fn_t)(uint64_t);
 
-uint64_t pecos_call_qmain_with_setjmp(qmain_fn_t qmain) {
+EXPORT_API uint64_t pecos_call_qmain_with_setjmp(qmain_fn_t qmain) {
     fprintf(stderr, "[SHIM] Setting up setjmp before calling qmain...\n");
     fflush(stderr);
 
