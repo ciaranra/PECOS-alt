@@ -551,8 +551,9 @@ impl QisHeliosInterface {
         {
             // On Windows, link.exe created the DLL file, so we just use the path we reserved
             // We need to manually track this file for cleanup
-            // Drop the temp file handle we created earlier (it's already been deleted)
-            drop(so_file);
+            // Note: so_file is () on Windows (since we deleted the temp file before linking)
+            // so there's nothing to drop
+            let _ = so_file; // Silence unused variable warning
 
             eprintln!(
                 "[HELIOS] Windows: DLL created by link.exe at: {}",
