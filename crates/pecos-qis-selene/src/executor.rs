@@ -55,13 +55,20 @@ impl QisHeliosInterface {
 
     /// Find the `libpecos_qis_ffi` library by searching common locations
     fn find_pecos_qis_lib() -> Result<PathBuf, InterfaceError> {
-        let lib_ext = if cfg!(target_os = "macos") {
-            "dylib"
-        } else if cfg!(target_os = "windows") {
-            "dll"
+        // On Windows, Rust cdylibs don't use the "lib" prefix
+        // On Unix (Linux/macOS), they do use the "lib" prefix
+        let (lib_prefix, lib_ext) = if cfg!(target_os = "windows") {
+            ("", "dll")
+        } else if cfg!(target_os = "macos") {
+            ("lib", "dylib")
         } else {
-            "so"
+            ("lib", "so")
         };
+
+        let lib_name = format!("{lib_prefix}pecos_qis_ffi.{lib_ext}");
+
+        eprintln!("[HELIOS] Looking for QIS FFI library: {lib_name}");
+        eprintln!("[HELIOS] Platform: {}", std::env::consts::OS);
 
         let exe_dir = std::env::current_exe()
             .ok()
@@ -72,44 +79,60 @@ impl QisHeliosInterface {
                 )
             })?;
 
+        eprintln!("[HELIOS] Executable directory: {}", exe_dir.display());
+
         let mut candidate_paths = vec![
-            exe_dir.join(format!("libpecos_qis_ffi.{lib_ext}")),
-            exe_dir.join(format!("deps/libpecos_qis_ffi.{lib_ext}")),
+            exe_dir.join(&lib_name),
+            exe_dir.join(format!("deps/{lib_name}")),
         ];
 
         if let Some(parent) = exe_dir.parent() {
-            candidate_paths.push(parent.join(format!("libpecos_qis_ffi.{lib_ext}")));
-            candidate_paths.push(parent.join(format!("deps/libpecos_qis_ffi.{lib_ext}")));
+            candidate_paths.push(parent.join(&lib_name));
+            candidate_paths.push(parent.join(format!("deps/{lib_name}")));
         }
 
         if let Ok(current_dir) = std::env::current_dir() {
-            candidate_paths
-                .push(current_dir.join(format!("target/debug/libpecos_qis_ffi.{lib_ext}")));
-            candidate_paths
-                .push(current_dir.join(format!("target/debug/deps/libpecos_qis_ffi.{lib_ext}")));
-            candidate_paths
-                .push(current_dir.join(format!("target/release/libpecos_qis_ffi.{lib_ext}")));
-            candidate_paths
-                .push(current_dir.join(format!("target/release/deps/libpecos_qis_ffi.{lib_ext}")));
+            eprintln!("[HELIOS] Current directory: {}", current_dir.display());
+            candidate_paths.push(current_dir.join(format!("target/debug/{lib_name}")));
+            candidate_paths.push(current_dir.join(format!("target/debug/deps/{lib_name}")));
+            candidate_paths.push(current_dir.join(format!("target/release/{lib_name}")));
+            candidate_paths.push(current_dir.join(format!("target/release/deps/{lib_name}")));
 
             // Search up the directory tree for workspace root (when running from Python)
             let mut search_dir = current_dir.as_path();
             for _ in 0..5 {
                 // Search up to 5 levels
                 if let Some(parent) = search_dir.parent() {
-                    candidate_paths
-                        .push(parent.join(format!("target/debug/libpecos_qis_ffi.{lib_ext}")));
-                    candidate_paths
-                        .push(parent.join(format!("target/debug/deps/libpecos_qis_ffi.{lib_ext}")));
-                    candidate_paths
-                        .push(parent.join(format!("target/release/libpecos_qis_ffi.{lib_ext}")));
-                    candidate_paths.push(
-                        parent.join(format!("target/release/deps/libpecos_qis_ffi.{lib_ext}")),
-                    );
+                    candidate_paths.push(parent.join(format!("target/debug/{lib_name}")));
+                    candidate_paths.push(parent.join(format!("target/debug/deps/{lib_name}")));
+                    candidate_paths.push(parent.join(format!("target/release/{lib_name}")));
+                    candidate_paths.push(parent.join(format!("target/release/deps/{lib_name}")));
                     search_dir = parent;
                 } else {
                     break;
                 }
+            }
+        }
+
+        eprintln!(
+            "[HELIOS] Searching {} candidate paths...",
+            candidate_paths.len()
+        );
+
+        // Check each path and report which ones exist
+        let mut found_files = Vec::new();
+        for path in &candidate_paths {
+            if path.exists() {
+                eprintln!("[HELIOS] ✓ Found: {}", path.display());
+                found_files.push(path.clone());
+            }
+        }
+
+        if found_files.is_empty() {
+            eprintln!("[HELIOS] ✗ No matching files found!");
+            eprintln!("[HELIOS] Searched paths:");
+            for (i, path) in candidate_paths.iter().enumerate() {
+                eprintln!("[HELIOS]   {}: {}", i + 1, path.display());
             }
         }
 
@@ -118,7 +141,7 @@ impl QisHeliosInterface {
             .find(|p| p.exists())
             .ok_or_else(|| {
                 InterfaceError::ExecutionError(format!(
-                    "Failed to find libpecos_qis_ffi.{lib_ext}. Searched in: {candidate_paths:?}"
+                    "Failed to find {lib_name}. Searched in: {candidate_paths:?}"
                 ))
             })
             .cloned()
@@ -592,11 +615,19 @@ impl QisHeliosInterface {
 
         // Step 1: Find and load libpecos_qis_ffi.so with RTLD_GLOBAL
         // This provides the __quantum__* symbols for the shim to resolve
+        eprintln!("[HELIOS] === Step 1: Finding PECOS QIS FFI library ===");
         let pecos_qis_lib_path = Self::find_pecos_qis_lib()?;
+        eprintln!(
+            "[HELIOS] Successfully found QIS FFI library at: {}",
+            pecos_qis_lib_path.display()
+        );
+
+        eprintln!("[HELIOS] Loading QIS FFI library with RTLD_GLOBAL...");
         let (pecos_qis_lib_global, pecos_qis_lib) = Self::load_library_with_rtld_global(
             &pecos_qis_lib_path,
             "Failed to load PECOS QIS cdylib",
         )?;
+        eprintln!("[HELIOS] ✓ QIS FFI library loaded successfully!");
 
         // Step 2: Reset the QIS interface via the cdylib
         // IMPORTANT: We call the cdylib's version to ensure we're using the same thread-local
