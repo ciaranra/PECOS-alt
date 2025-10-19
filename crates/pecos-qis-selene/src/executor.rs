@@ -328,12 +328,27 @@ impl QisHeliosInterface {
             // Export dynamic flag differs by platform
             if cfg!(target_os = "macos") {
                 clang_cmd.arg("-Wl,-export_dynamic"); // macOS ld flag (single dash)
+
+                // On macOS, we need to specify the SDK path for LLVM clang to find system libraries
+                // This is required because LLVM's clang (unlike Apple's clang) doesn't automatically
+                // know where to find macOS system libraries in the dyld cache
+                // Use xcrun to get the SDK path
+                if let Ok(output) = Command::new("xcrun").args(["--show-sdk-path"]).output()
+                    && output.status.success()
+                        && let Ok(sdk_path) = String::from_utf8(output.stdout) {
+                            let sdk_path = sdk_path.trim();
+                            clang_cmd.arg("-isysroot");
+                            clang_cmd.arg(sdk_path);
+                        }
+
+                // macOS provides math functions through libSystem - don't link -lm separately
+                // On macOS Big Sur+, libm.dylib doesn't exist as a separate file - it's in the dyld cache
+                clang_cmd.arg("-lpthread").arg("-ldl");
             } else {
                 clang_cmd.arg("-Wl,--export-dynamic"); // GNU ld flag (double dash)
+                // Unix-specific libraries (Linux needs -lm explicitly)
+                clang_cmd.arg("-lm").arg("-lpthread").arg("-ldl");
             }
-
-            // Unix-specific libraries
-            clang_cmd.arg("-lm").arg("-lpthread").arg("-ldl");
         }
 
         let output = clang_cmd
