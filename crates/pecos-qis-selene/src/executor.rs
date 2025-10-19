@@ -706,20 +706,33 @@ impl QisInterface for QisHeliosInterface {
         program_bytes: &[u8],
         format: ProgramFormat,
     ) -> Result<(), InterfaceError> {
+        eprintln!("[HELIOS/EXECUTOR] ========== load_program() called ==========");
+        eprintln!(
+            "[HELIOS/EXECUTOR] Program bytes length: {}",
+            program_bytes.len()
+        );
+        eprintln!("[HELIOS/EXECUTOR] Program format: {format:?}");
+
         // Check if Helios can handle this format
         match format {
             ProgramFormat::QisBitcode | ProgramFormat::LlvmBitcode | ProgramFormat::LlvmIrText => {
+                eprintln!("[HELIOS/EXECUTOR] Format is compatible, storing program...");
                 self.program = program_bytes.to_vec();
                 self.format = format;
 
+                eprintln!("[HELIOS/EXECUTOR] About to call create_shared_library()...");
                 // Create the shared library by linking
                 self.create_shared_library()?;
+                eprintln!("[HELIOS/EXECUTOR] create_shared_library() completed successfully");
 
                 Ok(())
             }
-            ProgramFormat::HugrBytes => Err(InterfaceError::InvalidFormat(
-                "Helios interface requires HUGR to be compiled to LLVM first".to_string(),
-            )),
+            ProgramFormat::HugrBytes => {
+                eprintln!("[HELIOS/EXECUTOR] ERROR: HUGR bytes format not supported");
+                Err(InterfaceError::InvalidFormat(
+                    "Helios interface requires HUGR to be compiled to LLVM first".to_string(),
+                ))
+            }
         }
     }
 

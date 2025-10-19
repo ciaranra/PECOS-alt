@@ -139,20 +139,32 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
         })
     } else if let Ok(hugr_prog) = program.extract::<PyHugrProgram>(py) {
         // Compile HUGR to LLVM first
+        eprintln!("[SIM.RS] ========== HUGR program detected ==========");
+        eprintln!("[SIM.RS] HUGR bytes length: {}", hugr_prog.inner.hugr.len());
         log::debug!("HUGR program detected, compiling to LLVM");
 
         // Compile HUGR to LLVM IR
+        eprintln!("[SIM.RS] About to call compile_hugr_bytes_to_string()...");
         let llvm_ir = compile_hugr_bytes_to_string(&hugr_prog.inner.hugr).map_err(|e| {
+            eprintln!("[SIM.RS] HUGR compilation FAILED: {e}");
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
                 "HUGR compilation failed: {e}"
             ))
         })?;
+        eprintln!(
+            "[SIM.RS] HUGR compilation succeeded, LLVM IR length: {}",
+            llvm_ir.len()
+        );
 
         // Create QIS program from the compiled LLVM IR
+        eprintln!("[SIM.RS] Creating QisProgram from LLVM IR...");
         let qis_prog = QisProgram::from_string(llvm_ir);
+        eprintln!("[SIM.RS] QisProgram created successfully");
 
         // Get Selene simple runtime
+        eprintln!("[SIM.RS] Getting Selene simple runtime...");
         let selene_runtime = selene_simple_runtime().map_err(|e| {
+            eprintln!("[SIM.RS] Selene simple runtime FAILED: {e}");
             PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
                 "Selene simple runtime not available: {e}\n\
                     \n\
@@ -161,17 +173,24 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
                     cd ../selene && cargo build --release"
             ))
         })?;
+        eprintln!("[SIM.RS] Selene simple runtime created successfully");
 
         // Use QIS control engine with Helios interface
+        eprintln!("[SIM.RS] Creating QIS engine builder...");
+        eprintln!("[SIM.RS] Adding runtime to engine...");
+        eprintln!("[SIM.RS] Adding Helios interface to engine...");
+        eprintln!("[SIM.RS] About to call try_program() for HUGR...");
         let engine_builder = pecos::qis_engine()
             .runtime(selene_runtime)
             .interface(helios_interface_builder())
             .try_program(qis_prog)
             .map_err(|e| {
+                eprintln!("[SIM.RS] try_program() for HUGR FAILED: {e}");
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
                     "Failed to load compiled HUGR program: {e}"
                 ))
             })?;
+        eprintln!("[SIM.RS] try_program() for HUGR completed successfully");
 
         Ok(PySimBuilder {
             inner: SimBuilderInner::QisControl(PyQisControlSimBuilder {
