@@ -221,6 +221,66 @@ impl QisHeliosInterface {
         Ok((qmain_fn, call_with_setjmp))
     }
 
+    /// Add platform-specific linker flags to the clang command
+    fn add_platform_linker_flags(clang_cmd: &mut Command) {
+        // Platform-specific flags
+        #[cfg(not(target_os = "windows"))]
+        {
+            // -fPIC is not supported on Windows MSVC (and not needed for DLLs)
+            clang_cmd.arg("-fPIC");
+
+            // Export dynamic flag differs by platform
+            if cfg!(target_os = "macos") {
+                // macOS ld flags:
+                // - export_dynamic: Make all symbols visible for dlopen
+                // - undefined dynamic_lookup: Allow undefined symbols (resolved at runtime via RTLD_GLOBAL)
+                eprintln!("[HELIOS] Adding macOS-specific linker flags...");
+                clang_cmd.arg("-Wl,-export_dynamic");
+                clang_cmd.arg("-Wl,-undefined,dynamic_lookup");
+
+                // On macOS, we need to specify the SDK path for LLVM clang to find system libraries
+                // This is required because LLVM's clang (unlike Apple's clang) doesn't automatically
+                // know where to find macOS system libraries in the dyld cache
+                // Use xcrun to get the SDK path
+                eprintln!("[HELIOS] Running xcrun --show-sdk-path...");
+                match Command::new("xcrun").args(["--show-sdk-path"]).output() {
+                    Ok(output) => {
+                        if output.status.success() {
+                            if let Ok(sdk_path) = String::from_utf8(output.stdout) {
+                                let sdk_path = sdk_path.trim();
+                                eprintln!("[HELIOS] SDK path: {sdk_path}");
+                                clang_cmd.arg("-isysroot");
+                                clang_cmd.arg(sdk_path);
+                            } else {
+                                eprintln!("[HELIOS] WARNING: xcrun output was not valid UTF-8");
+                            }
+                        } else {
+                            eprintln!(
+                                "[HELIOS] WARNING: xcrun failed with status: {}",
+                                output.status
+                            );
+                            eprintln!(
+                                "[HELIOS] stderr: {}",
+                                String::from_utf8_lossy(&output.stderr)
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[HELIOS] WARNING: Failed to run xcrun: {e}");
+                    }
+                }
+
+                // macOS provides math functions through libSystem - don't link -lm separately
+                // On macOS Big Sur+, libm.dylib doesn't exist as a separate file - it's in the dyld cache
+                clang_cmd.arg("-lpthread").arg("-ldl");
+            } else {
+                clang_cmd.arg("-Wl,--export-dynamic"); // GNU ld flag (double dash)
+                // Unix-specific libraries (Linux needs -lm explicitly)
+                clang_cmd.arg("-lm").arg("-lpthread").arg("-ldl");
+            }
+        }
+    }
+
     /// Link the program with Helios interface to create a shared library
     fn create_shared_library(&mut self) -> Result<PathBuf, InterfaceError> {
         // Get the Helios library path from environment, or use compile-time default
@@ -319,37 +379,11 @@ impl QisHeliosInterface {
             .arg(&program_temp_path)
             .arg(&helios_lib_path);
 
-        // Platform-specific flags
-        #[cfg(not(target_os = "windows"))]
-        {
-            // -fPIC is not supported on Windows MSVC (and not needed for DLLs)
-            clang_cmd.arg("-fPIC");
+        // Add platform-specific linker flags
+        Self::add_platform_linker_flags(&mut clang_cmd);
 
-            // Export dynamic flag differs by platform
-            if cfg!(target_os = "macos") {
-                clang_cmd.arg("-Wl,-export_dynamic"); // macOS ld flag (single dash)
-
-                // On macOS, we need to specify the SDK path for LLVM clang to find system libraries
-                // This is required because LLVM's clang (unlike Apple's clang) doesn't automatically
-                // know where to find macOS system libraries in the dyld cache
-                // Use xcrun to get the SDK path
-                if let Ok(output) = Command::new("xcrun").args(["--show-sdk-path"]).output()
-                    && output.status.success()
-                        && let Ok(sdk_path) = String::from_utf8(output.stdout) {
-                            let sdk_path = sdk_path.trim();
-                            clang_cmd.arg("-isysroot");
-                            clang_cmd.arg(sdk_path);
-                        }
-
-                // macOS provides math functions through libSystem - don't link -lm separately
-                // On macOS Big Sur+, libm.dylib doesn't exist as a separate file - it's in the dyld cache
-                clang_cmd.arg("-lpthread").arg("-ldl");
-            } else {
-                clang_cmd.arg("-Wl,--export-dynamic"); // GNU ld flag (double dash)
-                // Unix-specific libraries (Linux needs -lm explicitly)
-                clang_cmd.arg("-lm").arg("-lpthread").arg("-ldl");
-            }
-        }
+        // Debug: Print the full clang command
+        eprintln!("[HELIOS] Full clang command: {clang_cmd:?}");
 
         let output = clang_cmd
             .output()
@@ -358,6 +392,15 @@ impl QisHeliosInterface {
         eprintln!("[HELIOS] clang subprocess completed!");
 
         if !output.status.success() {
+            eprintln!("[HELIOS] Linking FAILED!");
+            eprintln!(
+                "[HELIOS] stderr: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            eprintln!(
+                "[HELIOS] stdout: {}",
+                String::from_utf8_lossy(&output.stdout)
+            );
             return Err(InterfaceError::LoadError(format!(
                 "Linking failed: {}",
                 String::from_utf8_lossy(&output.stderr)
