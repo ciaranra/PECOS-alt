@@ -435,37 +435,24 @@ impl QisHeliosInterface {
                 so_path_for_clang.display()
             );
 
-            // Get the path to our PECOS selene shim library
-            // On Windows, the shim provides the selene_* symbols that libhelios needs
-            eprintln!("[HELIOS] Windows: Looking for Selene shim library...");
-            let shim_path = crate::shim::get_shim_library_path().ok_or_else(|| {
-                InterfaceError::LoadError(
-                    "PECOS selene shim library not found - build script may have failed"
-                        .to_string(),
-                )
-            })?;
-
-            eprintln!(
-                "[HELIOS] Windows: Found Selene shim at: {}",
-                shim_path.display()
-            );
-            eprintln!("[HELIOS] Windows: Shim file exists: {}", shim_path.exists());
-            if let Ok(metadata) = std::fs::metadata(&shim_path) {
-                eprintln!("[HELIOS] Windows: Shim file size: {} bytes", metadata.len());
-            }
-
+            // On Windows, we create the DLL with undefined selene_* symbols
+            // These will be resolved at runtime when we load pecos_selene.dll with LoadLibrary
+            // We use /FORCE:UNRESOLVED to allow undefined symbols
             clang_cmd
                 .arg("-shared") // Create shared library instead of executable
                 .arg("-o")
                 .arg(&so_path_for_clang)
                 .arg(&program_temp_path)
                 .arg(&helios_lib_path)
-                .arg(&shim_path); // Link with the Selene shim to resolve selene_* symbols
+                .arg("-Wl,/FORCE:UNRESOLVED"); // Allow undefined symbols (they'll be resolved at runtime)
 
             // Add verbose output to see what clang is doing
             clang_cmd.arg("-v");
 
             eprintln!("[HELIOS] Added -v flag for verbose linker output");
+            eprintln!(
+                "[HELIOS] Windows: Using /FORCE:UNRESOLVED to allow undefined selene_* symbols"
+            );
         }
 
         #[cfg(not(target_os = "windows"))]
