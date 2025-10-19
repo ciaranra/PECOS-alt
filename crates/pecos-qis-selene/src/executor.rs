@@ -362,12 +362,53 @@ impl QisHeliosInterface {
             ".so"
         };
         eprintln!("[HELIOS] Creating shared library temp file with suffix {lib_suffix}...");
-        let so_file = NamedTempFile::with_suffix(lib_suffix).map_err(|e| {
-            InterfaceError::LoadError(format!("Failed to create library file: {e}"))
-        })?;
+
+        // IMPORTANT: On Windows, we need to get a temp path but NOT create the file yet
+        // because MSVC's link.exe wants to create the DLL file itself
+        #[cfg(target_os = "windows")]
+        let (so_file, so_path_for_clang) = {
+            use tempfile::Builder;
+            // Create a temp file to reserve the name, then immediately close and delete it
+            let temp = Builder::new().suffix(lib_suffix).tempfile().map_err(|e| {
+                InterfaceError::LoadError(format!("Failed to create temp file: {e}"))
+            })?;
+
+            // Get the path before the file is deleted
+            let path = temp.path().to_path_buf();
+            eprintln!(
+                "[HELIOS] Windows: Reserved temp path (will be deleted): {}",
+                path.display()
+            );
+            eprintln!(
+                "[HELIOS] Windows: File exists before drop: {}",
+                path.exists()
+            );
+
+            // Drop temp explicitly to delete the file
+            drop(temp);
+
+            eprintln!(
+                "[HELIOS] Windows: File exists after drop: {}",
+                path.exists()
+            );
+            eprintln!("[HELIOS] Windows: Path is ready for link.exe to create DLL");
+
+            // We keep the path but the file is deleted - link.exe will create it
+            ((), path)
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let (so_file, so_path_for_clang) = {
+            let temp = NamedTempFile::with_suffix(lib_suffix).map_err(|e| {
+                InterfaceError::LoadError(format!("Failed to create library file: {e}"))
+            })?;
+            let path = temp.path().to_path_buf();
+            (temp, path)
+        };
+
         eprintln!(
-            "[HELIOS] Created library temp file: {}",
-            so_file.path().display()
+            "[HELIOS] Temp library path: {}",
+            so_path_for_clang.display()
         );
 
         // Link using clang to create a shared library:
@@ -380,7 +421,7 @@ impl QisHeliosInterface {
             "[HELIOS] Linking: {} + {} -> {}",
             program_temp_path.display(),
             helios_lib_path,
-            so_file.path().display()
+            so_path_for_clang.display()
         );
 
         // Build clang command with platform-specific flags
@@ -389,19 +430,15 @@ impl QisHeliosInterface {
         // On Windows, we need to be more careful with paths and flags
         #[cfg(target_os = "windows")]
         {
-            // Convert temp path to absolute canonical path to avoid short filename issues
-            eprintln!("[HELIOS] Windows: Converting DLL path to canonical form...");
-            let dll_path = so_file.path();
-            eprintln!("[HELIOS] Original DLL path: {}", dll_path.display());
-
-            // Get the absolute path
-            let dll_path_str = dll_path.to_string_lossy().to_string();
-            eprintln!("[HELIOS] DLL path string: {dll_path_str}");
+            eprintln!(
+                "[HELIOS] Windows: Using DLL path: {}",
+                so_path_for_clang.display()
+            );
 
             clang_cmd
                 .arg("-shared") // Create shared library instead of executable
                 .arg("-o")
-                .arg(&dll_path_str) // Use string representation
+                .arg(&so_path_for_clang)
                 .arg(&program_temp_path)
                 .arg(&helios_lib_path);
 
@@ -416,7 +453,7 @@ impl QisHeliosInterface {
             clang_cmd
                 .arg("-shared") // Create shared library instead of executable
                 .arg("-o")
-                .arg(so_file.path())
+                .arg(&so_path_for_clang)
                 .arg(&program_temp_path)
                 .arg(&helios_lib_path);
         }
@@ -449,13 +486,51 @@ impl QisHeliosInterface {
             )));
         }
 
-        // Keep the temporary files alive by storing the TempPaths
-        let so_temp_path = so_file.into_temp_path();
-        let so_path = so_temp_path.to_path_buf();
+        // Verify the DLL/SO file was created
+        eprintln!("[HELIOS] Linking succeeded!");
+        eprintln!(
+            "[HELIOS] Checking if output file exists: {}",
+            so_path_for_clang.display()
+        );
+        if so_path_for_clang.exists() {
+            if let Ok(metadata) = std::fs::metadata(&so_path_for_clang) {
+                eprintln!("[HELIOS] Output file size: {} bytes", metadata.len());
+            }
+        } else {
+            eprintln!("[HELIOS] WARNING: Output file does not exist after successful link!");
+        }
 
-        // Store both the program bitcode and the .so file to keep them alive
-        self.temp_files.push(program_temp_path);
-        self.temp_files.push(so_temp_path);
+        // Keep the temporary files alive by storing the TempPaths
+        #[cfg(target_os = "windows")]
+        {
+            // On Windows, link.exe created the DLL file, so we just use the path we reserved
+            // We need to manually track this file for cleanup
+            // Drop the temp file handle we created earlier (it's already been deleted)
+            drop(so_file);
+
+            eprintln!(
+                "[HELIOS] Windows: DLL created by link.exe at: {}",
+                so_path_for_clang.display()
+            );
+
+            // Store the program bitcode temp path
+            self.temp_files.push(program_temp_path);
+
+            // We'll store the DLL path directly since it was created by link.exe
+            // Note: This file won't be auto-deleted, but that's okay for temp testing
+            // In production, we'd want to use a proper temp file wrapper
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            let so_temp_path = so_file.into_temp_path();
+
+            // Store both the program bitcode and the .so file to keep them alive
+            self.temp_files.push(program_temp_path);
+            self.temp_files.push(so_temp_path);
+        }
+
+        let so_path = so_path_for_clang.clone();
 
         self.executable_path = Some(so_path.clone());
 
