@@ -435,12 +435,32 @@ impl QisHeliosInterface {
                 so_path_for_clang.display()
             );
 
+            // Get the path to our PECOS selene shim library
+            // On Windows, the shim provides the selene_* symbols that libhelios needs
+            eprintln!("[HELIOS] Windows: Looking for Selene shim library...");
+            let shim_path = crate::shim::get_shim_library_path().ok_or_else(|| {
+                InterfaceError::LoadError(
+                    "PECOS selene shim library not found - build script may have failed"
+                        .to_string(),
+                )
+            })?;
+
+            eprintln!(
+                "[HELIOS] Windows: Found Selene shim at: {}",
+                shim_path.display()
+            );
+            eprintln!("[HELIOS] Windows: Shim file exists: {}", shim_path.exists());
+            if let Ok(metadata) = std::fs::metadata(&shim_path) {
+                eprintln!("[HELIOS] Windows: Shim file size: {} bytes", metadata.len());
+            }
+
             clang_cmd
                 .arg("-shared") // Create shared library instead of executable
                 .arg("-o")
                 .arg(&so_path_for_clang)
                 .arg(&program_temp_path)
-                .arg(&helios_lib_path);
+                .arg(&helios_lib_path)
+                .arg(&shim_path); // Link with the Selene shim to resolve selene_* symbols
 
             // Add verbose output to see what clang is doing
             clang_cmd.arg("-v");
@@ -480,6 +500,22 @@ impl QisHeliosInterface {
                 "[HELIOS] stdout: {}",
                 String::from_utf8_lossy(&output.stdout)
             );
+
+            // On Windows, check if we're still getting LNK2019 errors for selene_* symbols
+            #[cfg(target_os = "windows")]
+            {
+                let stderr_str = String::from_utf8_lossy(&output.stderr);
+                if stderr_str.contains("LNK2019") {
+                    eprintln!("[HELIOS] ====== LNK2019 UNRESOLVED SYMBOL ERRORS DETECTED ======");
+                    for line in stderr_str.lines() {
+                        if line.contains("LNK2019") || line.contains("unresolved external symbol") {
+                            eprintln!("[HELIOS]   {}", line);
+                        }
+                    }
+                    eprintln!("[HELIOS] ======================================================");
+                }
+            }
+
             return Err(InterfaceError::LoadError(format!(
                 "Linking failed: {}",
                 String::from_utf8_lossy(&output.stderr)
