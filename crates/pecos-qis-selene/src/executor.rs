@@ -223,9 +223,14 @@ impl QisHeliosInterface {
 
     /// Add platform-specific linker flags to the clang command
     fn add_platform_linker_flags(clang_cmd: &mut Command) {
-        // Platform-specific flags
-        #[cfg(not(target_os = "windows"))]
-        {
+        if cfg!(target_os = "windows") {
+            // Windows-specific flags
+            eprintln!("[HELIOS] Adding Windows-specific linker flags...");
+            // On Windows, clang uses MSVC's linker (link.exe) or lld-link
+            // The -shared flag is enough for basic DLL creation
+            // Undefined symbols are allowed by default on Windows - they'll be resolved at load time
+        } else {
+            // Unix-like platforms (Linux, macOS)
             // -fPIC is not supported on Windows MSVC (and not needed for DLLs)
             clang_cmd.arg("-fPIC");
 
@@ -274,6 +279,7 @@ impl QisHeliosInterface {
                 // On macOS Big Sur+, libm.dylib doesn't exist as a separate file - it's in the dyld cache
                 clang_cmd.arg("-lpthread").arg("-ldl");
             } else {
+                // Linux
                 clang_cmd.arg("-Wl,--export-dynamic"); // GNU ld flag (double dash)
                 // Unix-specific libraries (Linux needs -lm explicitly)
                 clang_cmd.arg("-lm").arg("-lpthread").arg("-ldl");
@@ -282,6 +288,7 @@ impl QisHeliosInterface {
     }
 
     /// Link the program with Helios interface to create a shared library
+    #[allow(clippy::too_many_lines)]
     fn create_shared_library(&mut self) -> Result<PathBuf, InterfaceError> {
         // Get the Helios library path from environment, or use compile-time default
         let helios_lib_path = std::env::var("HELIOS_LIB_PATH").unwrap_or_else(|_| {
@@ -348,18 +355,24 @@ impl QisHeliosInterface {
             }
         };
 
-        // Create shared library path (.so)
-        eprintln!("[HELIOS] Creating .so temp file...");
-        let so_file = NamedTempFile::with_suffix(".so")
-            .map_err(|e| InterfaceError::LoadError(format!("Failed to create .so file: {e}")))?;
+        // Create shared library path with platform-appropriate extension
+        let lib_suffix = if cfg!(target_os = "windows") {
+            ".dll"
+        } else {
+            ".so"
+        };
+        eprintln!("[HELIOS] Creating shared library temp file with suffix {lib_suffix}...");
+        let so_file = NamedTempFile::with_suffix(lib_suffix).map_err(|e| {
+            InterfaceError::LoadError(format!("Failed to create library file: {e}"))
+        })?;
         eprintln!(
-            "[HELIOS] Created .so temp file: {}",
+            "[HELIOS] Created library temp file: {}",
             so_file.path().display()
         );
 
         // Link using clang to create a shared library:
-        // program.bc + libhelios.a → program.so
-        // The resulting .so will:
+        // program.bc + libhelios.a → program.so/.dll
+        // The resulting shared library will:
         // - Export qmain symbol
         // - Have undefined selene_* symbols (to be resolved by our shim at runtime)
         eprintln!("[HELIOS] About to spawn clang subprocess for linking...");
