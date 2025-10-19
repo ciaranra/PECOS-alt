@@ -385,12 +385,41 @@ impl QisHeliosInterface {
 
         // Build clang command with platform-specific flags
         let mut clang_cmd = Command::new("clang");
-        clang_cmd
-            .arg("-shared") // Create shared library instead of executable
-            .arg("-o")
-            .arg(so_file.path())
-            .arg(&program_temp_path)
-            .arg(&helios_lib_path);
+
+        // On Windows, we need to be more careful with paths and flags
+        #[cfg(target_os = "windows")]
+        {
+            // Convert temp path to absolute canonical path to avoid short filename issues
+            eprintln!("[HELIOS] Windows: Converting DLL path to canonical form...");
+            let dll_path = so_file.path();
+            eprintln!("[HELIOS] Original DLL path: {}", dll_path.display());
+
+            // Get the absolute path
+            let dll_path_str = dll_path.to_string_lossy().to_string();
+            eprintln!("[HELIOS] DLL path string: {dll_path_str}");
+
+            clang_cmd
+                .arg("-shared") // Create shared library instead of executable
+                .arg("-o")
+                .arg(&dll_path_str) // Use string representation
+                .arg(&program_temp_path)
+                .arg(&helios_lib_path);
+
+            // Add verbose output to see what clang is doing
+            clang_cmd.arg("-v");
+
+            eprintln!("[HELIOS] Added -v flag for verbose linker output");
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            clang_cmd
+                .arg("-shared") // Create shared library instead of executable
+                .arg("-o")
+                .arg(so_file.path())
+                .arg(&program_temp_path)
+                .arg(&helios_lib_path);
+        }
 
         // Add platform-specific linker flags
         Self::add_platform_linker_flags(&mut clang_cmd);
