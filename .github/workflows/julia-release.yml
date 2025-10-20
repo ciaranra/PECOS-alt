@@ -142,7 +142,7 @@ jobs:
           mkdir -p ../../artifacts
 
           # Copy the built library
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+          if [[ "${{ matrix.os }}" == macos-* ]]; then
             cp $target_dir/libpecos_julia.dylib ../../artifacts/
           else
             cp $target_dir/libpecos_julia.so ../../artifacts/

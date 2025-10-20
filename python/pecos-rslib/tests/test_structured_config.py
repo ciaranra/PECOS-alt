@@ -97,7 +97,7 @@ class TestDirectMethodChaining:
         # Create builder with specific config
         noise = depolarizing_noise().with_seed(42).with_uniform_probability(0.1)
 
-        results = sim(prog).noise(noise).run(1000).to_dict()
+        results = sim(prog).seed(42).noise(noise).run(1000).to_dict()
 
         # Should see some errors with 10% error rate
         zeros = sum(1 for val in results["c"] if val == 0)
