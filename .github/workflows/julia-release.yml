@@ -79,8 +79,7 @@ jobs:
             architecture: x86_64
           - os: ubuntu-latest
             architecture: aarch64
-            # Use native ARM64 runner for aarch64 builds to avoid cross-compilation issues
-            runner: ubuntu-24.04-arm64
+            runner: ubuntu-latest
           - os: macos-latest
             architecture: x86_64
             runner: macos-13  # Intel Mac for x86_64
