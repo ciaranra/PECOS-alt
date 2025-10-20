@@ -189,6 +189,13 @@ fn configure_build(
         // Windows needs these for proper linking
         build.define("_WINDOWS", None);
         build.define("NOMINMAX", None);
+
+        // Fix MSVC compiler crash with Eigen templates
+        build.flag("/bigobj"); // Allow larger object files
+        build.flag("/EHsc"); // Enable exception handling
+
+        // Use standard optimization level - /bigobj should prevent compiler crashes
+        build.opt_level(2); // Maximize speed optimization (/O2)
     } else {
         build.flag_if_supported("-std=c++14");
         build.flag_if_supported("-O3");

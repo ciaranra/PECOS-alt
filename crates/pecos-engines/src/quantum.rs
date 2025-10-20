@@ -491,7 +491,7 @@ impl SparseStabEngine {
 
     fn process_two_qubit_gate(&mut self, gate_type: GateType, qubits: &[QubitId]) {
         // Verify even number of qubits for all two-qubit gates
-        if qubits.len() % 2 != 0 {
+        if !qubits.len().is_multiple_of(2) {
             log::warn!(
                 "{:?} gate requires even number of qubits, got {} - skipping",
                 gate_type,

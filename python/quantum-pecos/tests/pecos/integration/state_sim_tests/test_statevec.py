@@ -420,6 +420,7 @@ def test_hybrid_engine_no_noise(simulator: str) -> None:
     results = sim.run(
         program=program,
         shots=n_shots,
+        seed=42,
     )
 
     register = "c" if "c" in results else "m"
