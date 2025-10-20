@@ -184,7 +184,7 @@ jobs:
             os: windows-latest
             architecture: x86_64
           - runner: macos-13
-            os: macos-latest
+            os: macos-13
             architecture: x86_64
           - runner: macos-latest
             os: macos-latest
