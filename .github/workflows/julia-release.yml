@@ -83,7 +83,7 @@ jobs:
           - os: macos-latest
             architecture: x86_64
             runner: macos-13  # Intel Mac for x86_64
-          - os: macos-latest
+          - os: macos-13
             architecture: aarch64
             runner: macos-latest  # ARM64 Mac
           - os: windows-latest
