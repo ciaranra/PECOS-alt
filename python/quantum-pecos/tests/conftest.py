@@ -14,13 +14,12 @@
 # Check if llvmlite is available
 import importlib.util
 
-import pytest
-
 # Configure matplotlib to use non-interactive backend for tests
 # This must be done before importing matplotlib.pyplot to avoid GUI backend issues on Windows
-import matplotlib
+import matplotlib as mpl
+import pytest
 
-matplotlib.use("Agg")
+mpl.use("Agg")
 
 HAS_LLVMLITE = importlib.util.find_spec("llvmlite") is not None
 

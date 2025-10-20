@@ -15,13 +15,13 @@ def test_runtime_library_finding() -> None:
     system = platform.system()
     if system == "Windows":
         lib_extensions = ["selene_simple_runtime.dll"]
-        lib_prefix = ""
     elif system == "Darwin":  # macOS
-        lib_extensions = ["libselene_simple_runtime.dylib", "libselene_simple_runtime.so"]
-        lib_prefix = "lib"
+        lib_extensions = [
+            "libselene_simple_runtime.dylib",
+            "libselene_simple_runtime.so",
+        ]
     else:  # Linux and others
         lib_extensions = ["libselene_simple_runtime.so"]
-        lib_prefix = "lib"
 
     # This test should ideally test a library finder function/class
     # For now, we'll test that if we find a library, it's actually loadable
@@ -49,13 +49,17 @@ def test_runtime_library_finding() -> None:
         if system == "Windows":
             # Windows cache location
             cache_dir = Path.home() / ".cache/pecos-decoders/selene"
-            for ext in lib_extensions:
-                possible_paths.append(cache_dir / ext)
+            possible_paths.extend(cache_dir / ext for ext in lib_extensions)
         else:
             # Unix-like systems
-            for ext in lib_extensions:
-                possible_paths.append(Path.home() / ".cache/pecos-decoders/selene" / ext)
-                possible_paths.append(Path("/usr/local/lib") / ext)
+            possible_paths.extend(
+                path
+                for ext in lib_extensions
+                for path in [
+                    Path.home() / ".cache/pecos-decoders/selene" / ext,
+                    Path("/usr/local/lib") / ext,
+                ]
+            )
 
         # Add venv paths
         venv = os.environ.get("VIRTUAL_ENV")
@@ -86,7 +90,9 @@ def test_runtime_library_finding() -> None:
                 lib_dir = venv_path / "lib"
                 if lib_dir.exists():
                     for ext in lib_extensions:
-                        plugin_pattern = f"**/selene_simple_runtime_plugin/_dist/lib/{ext}"
+                        plugin_pattern = (
+                            f"**/selene_simple_runtime_plugin/_dist/lib/{ext}"
+                        )
                         possible_paths.extend(lib_dir.glob(plugin_pattern))
 
                 site_packages_dirs = [venv_path / "lib"]

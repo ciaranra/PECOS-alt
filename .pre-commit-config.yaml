@@ -8,7 +8,11 @@ repos:
         exclude: |
           (?x)^(
             python/quantum-pecos/docs/reference/_autosummary/|
-            .*\.rs$
+            .*\.rs$|
+            crates/.*/LICENSE$|
+            python/.*/LICENSE$|
+            python/quantum-pecos/NOTICE$|
+            python/quantum-pecos/README\.md$
           )
       - id: check-toml
       - id: check-yaml
