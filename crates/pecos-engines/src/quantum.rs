@@ -183,6 +183,12 @@ impl Engine for StateVecEngine {
                     }
                 }
                 GateType::CX => {
+                    if cmd.qubits.len() % 2 != 0 {
+                        return Err(quantum_error(format!(
+                            "CX gate requires even number of qubits, got {}",
+                            cmd.qubits.len()
+                        )));
+                    }
                     for qubits in cmd.qubits.chunks_exact(2) {
                         debug!(
                             "Processing CX gate with control {:?} and target {:?}",
@@ -193,6 +199,15 @@ impl Engine for StateVecEngine {
                     }
                 }
                 GateType::RZZ => {
+                    if cmd.qubits.len() % 2 != 0 {
+                        return Err(quantum_error(format!(
+                            "RZZ gate requires even number of qubits, got {}",
+                            cmd.qubits.len()
+                        )));
+                    }
+                    if cmd.params.is_empty() {
+                        return Err(quantum_error("RZZ gate requires at least one parameter"));
+                    }
                     for qubits in cmd.qubits.chunks_exact(2) {
                         debug!(
                             "Processing RZZ gate on qubits {:?} and {:?}",
@@ -202,6 +217,12 @@ impl Engine for StateVecEngine {
                     }
                 }
                 GateType::SZZ => {
+                    if cmd.qubits.len() % 2 != 0 {
+                        return Err(quantum_error(format!(
+                            "SZZ gate requires even number of qubits, got {}",
+                            cmd.qubits.len()
+                        )));
+                    }
                     for qubits in cmd.qubits.chunks_exact(2) {
                         debug!(
                             "Processing SZZ gate on qubits {:?} and {:?}",
@@ -212,6 +233,12 @@ impl Engine for StateVecEngine {
                     }
                 }
                 GateType::SZZdg => {
+                    if cmd.qubits.len() % 2 != 0 {
+                        return Err(quantum_error(format!(
+                            "SZZdg gate requires even number of qubits, got {}",
+                            cmd.qubits.len()
+                        )));
+                    }
                     for qubits in cmd.qubits.chunks_exact(2) {
                         debug!(
                             "Processing SZZdg gate on qubits {:?} and {:?}",
@@ -463,6 +490,16 @@ impl SparseStabEngine {
     }
 
     fn process_two_qubit_gate(&mut self, gate_type: GateType, qubits: &[QubitId]) {
+        // Verify even number of qubits for all two-qubit gates
+        if qubits.len() % 2 != 0 {
+            log::warn!(
+                "{:?} gate requires even number of qubits, got {} - skipping",
+                gate_type,
+                qubits.len()
+            );
+            return;
+        }
+
         match gate_type {
             GateType::CX => {
                 for qubits in qubits.chunks_exact(2) {
