@@ -63,16 +63,24 @@ typedef struct {
 // These will be provided by the Rust pecos-qis-interface crate
 // =============================================================================
 
+// On Windows, functions imported from DLLs need __declspec(dllimport)
+// On Unix, no special declaration is needed
+#ifdef _WIN32
+#define IMPORT_API __declspec(dllimport)
+#else
+#define IMPORT_API
+#endif
+
 // These functions are implemented in pecos-qis-interface/src/ffi.rs
 // and exported with #[unsafe(no_mangle)]
-extern int64_t __quantum__rt__qubit_allocate(void);
-extern void __quantum__rt__qubit_release(int64_t qubit);
-extern void __quantum__qis__rxy__body(double theta, double phi, int64_t qubit);
-extern void __quantum__qis__rz__body(double theta, int64_t qubit);
-extern void __quantum__qis__rzz__body(double theta, int64_t qubit1, int64_t qubit2);
-extern void __quantum__qis__reset__body(int64_t qubit);
-extern int32_t __quantum__qis__m__body(int64_t qubit, int64_t result);
-extern int64_t __quantum__rt__result_allocate(void);
+IMPORT_API extern int64_t __quantum__rt__qubit_allocate(void);
+IMPORT_API extern void __quantum__rt__qubit_release(int64_t qubit);
+IMPORT_API extern void __quantum__qis__rxy__body(double theta, double phi, int64_t qubit);
+IMPORT_API extern void __quantum__qis__rz__body(double theta, int64_t qubit);
+IMPORT_API extern void __quantum__qis__rzz__body(double theta, int64_t qubit1, int64_t qubit2);
+IMPORT_API extern void __quantum__qis__reset__body(int64_t qubit);
+IMPORT_API extern int32_t __quantum__qis__m__body(int64_t qubit, int64_t result);
+IMPORT_API extern int64_t __quantum__rt__result_allocate(void);
 
 // Note: For lazy measurement and future operations, we need special handling
 // since PECOS doesn't have native support yet. For now, we'll use placeholders.
@@ -138,7 +146,7 @@ EXPORT_API selene_void_result_t selene_rxy(SeleneInstance *instance, uint64_t q,
     // Note: pecos-qis-interface uses r1xy which takes (theta, phi, qubit)
     // We need to check the signature - looking at ffi.rs it's:
     // pub unsafe extern "C" fn __quantum__qis__r1xy__body(theta: f64, phi: f64, qubit: i64)
-    extern void __quantum__qis__r1xy__body(double theta, double phi, int64_t qubit);
+    IMPORT_API extern void __quantum__qis__r1xy__body(double theta, double phi, int64_t qubit);
     __quantum__qis__r1xy__body(theta, phi, (int64_t)q);
     return SUCCESS(selene_void_result_t);
 }
@@ -196,7 +204,7 @@ EXPORT_API selene_bool_result_t selene_future_read_bool(SeleneInstance *instance
     (void)instance;
     // Read the measurement result
     // We need a function to retrieve stored results
-    extern int32_t __quantum__rt__result_get_one(int64_t result);
+    IMPORT_API extern int32_t __quantum__rt__result_get_one(int64_t result);
     int32_t value = __quantum__rt__result_get_one((int64_t)r);
     return (selene_bool_result_t){.error_code = 0, .value = (bool)value};
 }
@@ -204,7 +212,7 @@ EXPORT_API selene_bool_result_t selene_future_read_bool(SeleneInstance *instance
 EXPORT_API selene_u64_result_t selene_future_read_u64(SeleneInstance *instance, uint64_t r) {
     (void)instance;
     // For now, treat as bool and convert to u64
-    extern int32_t __quantum__rt__result_get_one(int64_t result);
+    IMPORT_API extern int32_t __quantum__rt__result_get_one(int64_t result);
     int32_t value = __quantum__rt__result_get_one((int64_t)r);
     return SUCCESS_VAL(selene_u64_result_t, (uint64_t)value);
 }
@@ -231,7 +239,7 @@ EXPORT_API selene_void_result_t selene_print_bool(SeleneInstance *instance, sele
     (void)instance;
     // Use the print_bool FFI function if available
     // Signature: pub unsafe extern "C" fn print_bool(label_ptr: *const u8, label_len: i64, value: bool)
-    extern void print_bool(const uint8_t *label_ptr, int64_t label_len, bool value);
+    IMPORT_API extern void print_bool(const uint8_t *label_ptr, int64_t label_len, bool value);
     print_bool((const uint8_t*)tag.data, (int64_t)tag.length, value);
     return SUCCESS(selene_void_result_t);
 }

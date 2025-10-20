@@ -118,7 +118,10 @@ pecos = "0.x.x"  # Replace with the latest version
 - **LLVM version 14**: Required for LLVM IR execution support
   - Linux: `sudo apt install llvm-14`
   - macOS: `brew install llvm@14`
-  - Windows: Download LLVM 14.x installer from [LLVM releases](https://releases.llvm.org/download.html#14.0.0)
+  - Windows:
+    - For development builds, use the included setup script: `.\scripts\setup_llvm.ps1`
+    - This will extract the bundled LLVM 14.0.6 and configure the build and test environment
+    - Alternatively, download LLVM 14.x installer from [LLVM releases](https://releases.llvm.org/download.html#14.0.0)
 
   **Note**: Only LLVM version 14.x is compatible. LLVM 15 or later versions will not work with PECOS's LLVM runtime implementation.
 

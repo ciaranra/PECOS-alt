@@ -73,7 +73,7 @@ bytemuck = {  version = "1", features = ["derive"] }
 bitflags = "2"
 dyn-clone = "1"
 regex = "1"
-pest = "2"
+pest = "2"  # Note: 2.8.2 has Windows alignment issues, fixed in 2.8.3+
 pest_derive = "2"
 tempfile = "3"
 assert_cmd = "2"

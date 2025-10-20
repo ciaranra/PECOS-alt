@@ -350,7 +350,27 @@ impl QisHeliosInterface {
                 })?;
 
                 eprintln!("[HELIOS] About to spawn llvm-as subprocess...");
-                let output = Command::new("llvm-as")
+
+                // Try to find llvm-as: first check LLVM_SYS_140_PREFIX, then fall back to PATH
+                let llvm_as_cmd = std::env::var("LLVM_SYS_140_PREFIX")
+                    .ok()
+                    .and_then(|prefix| {
+                        let mut path = PathBuf::from(prefix);
+                        path.push("bin");
+                        path.push(if cfg!(windows) { "llvm-as.exe" } else { "llvm-as" });
+                        if path.exists() {
+                            eprintln!("[HELIOS] Using llvm-as from LLVM_SYS_140_PREFIX: {}", path.display());
+                            Some(path)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| {
+                        eprintln!("[HELIOS] Using llvm-as from PATH");
+                        PathBuf::from("llvm-as")
+                    });
+
+                let output = Command::new(&llvm_as_cmd)
                     .arg("-o")
                     .arg(bitcode_file.path())
                     .arg(&ir_path)
@@ -377,6 +397,154 @@ impl QisHeliosInterface {
                 ));
             }
         };
+
+        // On Windows, check if we need to add a qmain wrapper for programs that only have main
+        #[cfg(target_os = "windows")]
+        let program_temp_path = {
+            // Use llvm-nm to check which symbols exist in the bitcode
+            let llvm_nm_cmd = std::env::var("LLVM_SYS_140_PREFIX")
+                .ok()
+                .and_then(|prefix| {
+                    let mut path = PathBuf::from(prefix);
+                    path.push("bin");
+                    path.push("llvm-nm.exe");
+                    if path.exists() {
+                        Some(path)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| PathBuf::from("llvm-nm"));
+
+            let nm_output = Command::new(&llvm_nm_cmd)
+                .arg(&program_temp_path)
+                .output()
+                .map_err(|e| {
+                    InterfaceError::LoadError(format!("Failed to run llvm-nm: {e}"))
+                })?;
+
+            if !nm_output.status.success() {
+                return Err(InterfaceError::LoadError(format!(
+                    "llvm-nm failed: {}",
+                    String::from_utf8_lossy(&nm_output.stderr)
+                )));
+            }
+
+            let nm_output_str = String::from_utf8_lossy(&nm_output.stdout);
+            let has_qmain = nm_output_str.lines().any(|line| {
+                line.contains(" T ") && line.contains("qmain")
+            });
+            let has_main = nm_output_str.lines().any(|line| {
+                line.contains(" T ") && (line.contains(" main") || line.ends_with(" main"))
+            });
+
+            eprintln!("[HELIOS] Symbol check: has_qmain={}, has_main={}", has_qmain, has_main);
+
+            // If we have qmain or neither, use the original bitcode
+            if has_qmain || !has_main {
+                program_temp_path
+            } else {
+                // We have main but not qmain - create a wrapper
+                eprintln!("[HELIOS] Creating qmain wrapper for program with only @main");
+
+                // Create wrapper LLVM IR that calls main
+                let wrapper_ir = r#"
+; Wrapper to provide qmain entry point for programs with only @main
+declare void @main()
+
+define i64 @qmain(i64 %arg) {
+entry:
+  call void @main()
+  ret i64 0
+}
+"#;
+
+                // Write wrapper IR to temp file
+                let wrapper_ir_file = NamedTempFile::with_suffix(".ll").map_err(|e| {
+                    InterfaceError::LoadError(format!("Failed to create wrapper IR file: {e}"))
+                })?;
+                std::fs::write(wrapper_ir_file.path(), wrapper_ir).map_err(|e| {
+                    InterfaceError::LoadError(format!("Failed to write wrapper IR: {e}"))
+                })?;
+
+                // Compile wrapper IR to bitcode
+                let wrapper_bc_file = NamedTempFile::with_suffix(".bc").map_err(|e| {
+                    InterfaceError::LoadError(format!("Failed to create wrapper BC file: {e}"))
+                })?;
+
+                let llvm_as_cmd = std::env::var("LLVM_SYS_140_PREFIX")
+                    .ok()
+                    .and_then(|prefix| {
+                        let mut path = PathBuf::from(prefix);
+                        path.push("bin");
+                        path.push("llvm-as.exe");
+                        if path.exists() {
+                            Some(path)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| PathBuf::from("llvm-as"));
+
+                let as_output = Command::new(&llvm_as_cmd)
+                    .arg("-o")
+                    .arg(wrapper_bc_file.path())
+                    .arg(wrapper_ir_file.path())
+                    .output()
+                    .map_err(|e| {
+                        InterfaceError::LoadError(format!("Failed to run llvm-as on wrapper: {e}"))
+                    })?;
+
+                if !as_output.status.success() {
+                    return Err(InterfaceError::LoadError(format!(
+                        "llvm-as on wrapper failed: {}",
+                        String::from_utf8_lossy(&as_output.stderr)
+                    )));
+                }
+
+                // Link original bitcode with wrapper using llvm-link
+                let linked_bc_file = NamedTempFile::with_suffix(".bc").map_err(|e| {
+                    InterfaceError::LoadError(format!("Failed to create linked BC file: {e}"))
+                })?;
+
+                let llvm_link_cmd = std::env::var("LLVM_SYS_140_PREFIX")
+                    .ok()
+                    .and_then(|prefix| {
+                        let mut path = PathBuf::from(prefix);
+                        path.push("bin");
+                        path.push("llvm-link.exe");
+                        if path.exists() {
+                            Some(path)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| PathBuf::from("llvm-link"));
+
+                let link_output = Command::new(&llvm_link_cmd)
+                    .arg("-o")
+                    .arg(linked_bc_file.path())
+                    .arg(&program_temp_path)
+                    .arg(wrapper_bc_file.path())
+                    .output()
+                    .map_err(|e| {
+                        InterfaceError::LoadError(format!("Failed to run llvm-link: {e}"))
+                    })?;
+
+                if !link_output.status.success() {
+                    return Err(InterfaceError::LoadError(format!(
+                        "llvm-link failed: {}",
+                        String::from_utf8_lossy(&link_output.stderr)
+                    )));
+                }
+
+                eprintln!("[HELIOS] Successfully created qmain wrapper");
+                linked_bc_file.into_temp_path()
+            }
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let program_temp_path = program_temp_path;
 
         // Create shared library path with platform-appropriate extension
         let lib_suffix = if cfg!(target_os = "windows") {
@@ -448,7 +616,26 @@ impl QisHeliosInterface {
         );
 
         // Build clang command with platform-specific flags
-        let mut clang_cmd = Command::new("clang");
+        // Try to find clang: first check LLVM_SYS_140_PREFIX, then fall back to PATH
+        let clang_cmd_path = std::env::var("LLVM_SYS_140_PREFIX")
+            .ok()
+            .and_then(|prefix| {
+                let mut path = PathBuf::from(prefix);
+                path.push("bin");
+                path.push(if cfg!(windows) { "clang.exe" } else { "clang" });
+                if path.exists() {
+                    eprintln!("[HELIOS] Using clang from LLVM_SYS_140_PREFIX: {}", path.display());
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| {
+                eprintln!("[HELIOS] Using clang from PATH");
+                PathBuf::from("clang")
+            });
+
+        let mut clang_cmd = Command::new(&clang_cmd_path);
 
         // On Windows, we need to be more careful with paths and flags
         #[cfg(target_os = "windows")]
@@ -458,23 +645,49 @@ impl QisHeliosInterface {
                 so_path_for_clang.display()
             );
 
-            // On Windows, we create the DLL with undefined selene_* symbols
-            // These will be resolved at runtime when we load pecos_selene.dll with LoadLibrary
-            // We use /FORCE:UNRESOLVED to allow undefined symbols
+            // On Windows, we need to link against both import libraries (.lib files)
+            // to populate the import table for selene_* and __quantum__* symbols
+
+            // Get the selene shim import library path (set by build.rs)
+            let shim_lib_path = std::env::var("PECOS_SELENE_SHIM_LIB")
+                .ok()
+                .or_else(|| option_env!("PECOS_SELENE_SHIM_LIB").map(String::from))
+                .ok_or_else(|| {
+                    InterfaceError::LoadError(
+                        "PECOS selene shim import library not found - build script may have failed to generate it".to_string(),
+                    )
+                })?;
+
+            // Find the pecos_qis_ffi.dll.lib import library
+            let pecos_qis_lib_path = Self::find_pecos_qis_lib()?;
+            let qis_ffi_import_lib = pecos_qis_lib_path
+                .with_extension("dll.lib");
+
+            if !qis_ffi_import_lib.exists() {
+                return Err(InterfaceError::LoadError(format!(
+                    "PECOS QIS FFI import library not found at: {} - Rust should have created this",
+                    qis_ffi_import_lib.display()
+                )));
+            }
+
+            eprintln!("[HELIOS] Windows: Linking against selene shim import library: {}", shim_lib_path);
+            eprintln!("[HELIOS] Windows: Linking against QIS FFI import library: {}", qis_ffi_import_lib.display());
+
             clang_cmd
                 .arg("-shared") // Create shared library instead of executable
                 .arg("-o")
                 .arg(&so_path_for_clang)
                 .arg(&program_temp_path)
-                .arg(&helios_lib_path)
-                .arg("-Wl,/FORCE:UNRESOLVED"); // Allow undefined symbols (they'll be resolved at runtime)
-
-            // Add verbose output to see what clang is doing
-            clang_cmd.arg("-v");
-
-            eprintln!("[HELIOS] Added -v flag for verbose linker output");
+                .arg(&qis_ffi_import_lib) // Link QIS FFI import library for setup/teardown/___* symbols
+                .arg(&shim_lib_path) // Link against selene shim import library to resolve selene_* symbols
+                // NOTE: On Windows, DO NOT link helios_lib_path - it conflicts with DLL symbols
+                // The static library contains stub implementations that we replace with DLL versions
+                .arg("-Wl,/EXPORT:qmain"); // Export qmain symbol for GetProcAddress
             eprintln!(
-                "[HELIOS] Windows: Using /FORCE:UNRESOLVED to allow undefined selene_* symbols"
+                "[HELIOS] Windows: Linking against selene shim import library to resolve selene_* symbols"
+            );
+            eprintln!(
+                "[HELIOS] Windows: Exporting qmain entry point (auto-wrapped from main if needed)"
             );
         }
 

@@ -4,6 +4,14 @@
 PYTHON := $(shell which python 2>/dev/null || which python3 2>/dev/null)
 SHELL=bash
 
+# Set LLVM path for Windows development builds (only if llvm/ directory exists)
+ifdef OS
+    # Windows - check if local LLVM exists and set path
+    ifneq ($(wildcard llvm/bin/llvm-config.exe),)
+        export LLVM_SYS_140_PREFIX := $(CURDIR)/llvm
+    endif
+endif
+
 # Requirements
 # ------------
 
@@ -27,18 +35,30 @@ installreqs: ## Install Python project requirements to root .venv
 # Building development environments
 # ---------------------------------
 
-# Helper to unset CONDA_PREFIX in a cross-platform way
+# Helper to unset CONDA_PREFIX and set LLVM path in a cross-platform way
 ifdef OS
-    # Windows
+    # Windows (running in Git Bash/MSYS)
     UNSET_CONDA = set "CONDA_PREFIX=" &&
+    # Set LLVM path if local installation exists
+    ifneq ($(wildcard llvm/bin/llvm-config.exe),)
+        SET_LLVM = set "LLVM_SYS_140_PREFIX=$(CURDIR)/llvm" &&
+        # Add LLVM bin to PATH for runtime tools (llvm-as, etc.)
+        # Use colon separator - Git Bash uses Unix-style paths internally
+        ADD_LLVM_TO_PATH = export PATH="$(CURDIR)/llvm/bin:$$PATH" &&
+    else
+        SET_LLVM =
+        ADD_LLVM_TO_PATH =
+    endif
 else
     # Unix/Linux/macOS
     UNSET_CONDA = unset CONDA_PREFIX &&
+    SET_LLVM =
+    ADD_LLVM_TO_PATH =
 endif
 
 .PHONY: build
 build: installreqs ## Compile and install for development
-	@$(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv
+	@$(UNSET_CONDA) $(SET_LLVM) cd python/pecos-rslib/ && uv run maturin develop --uv
 	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all]"
 	@if command -v julia >/dev/null 2>&1; then \
 		echo "Julia detected, building Julia FFI library..."; \
@@ -50,12 +70,12 @@ build: installreqs ## Compile and install for development
 
 .PHONY: build-basic
 build-basic: installreqs ## Compile and install for development but do not include install extras
-	@$(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv
+	@$(UNSET_CONDA) $(SET_LLVM) cd python/pecos-rslib/ && uv run maturin develop --uv
 	@$(UNSET_CONDA) uv pip install -e ./python/quantum-pecos
 
 .PHONY: build-release
 build-release: installreqs ## Build a faster version of binaries
-	@$(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv --release
+	@$(UNSET_CONDA) $(SET_LLVM) cd python/pecos-rslib/ && uv run maturin develop --uv --release
 	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all]"
 	@if command -v julia >/dev/null 2>&1; then \
 		echo "Julia detected, building Julia FFI library (release)..."; \
@@ -67,13 +87,13 @@ build-release: installreqs ## Build a faster version of binaries
 
 .PHONY: build-native
 build-native: installreqs ## Build a faster version of binaries with native CPU optimization
-	@$(UNSET_CONDA) cd python/pecos-rslib/ && RUSTFLAGS='-C target-cpu=native' \
+	@$(UNSET_CONDA) $(SET_LLVM) cd python/pecos-rslib/ && RUSTFLAGS='-C target-cpu=native' \
 	uv run maturin develop --uv --release
 	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all]"
 
 .PHONY: build-cuda
 build-cuda: installreqs ## Compile and install for development with CUDA support
-	@$(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv
+	@$(UNSET_CONDA) $(SET_LLVM) cd python/pecos-rslib/ && uv run maturin develop --uv
 	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all,cuda]"
 	@if command -v julia >/dev/null 2>&1; then \
 		echo "Julia detected, building Julia FFI library..."; \
@@ -108,11 +128,11 @@ docs-test-working:  ## Test only working code examples in documentation
 # Detect CUDA availability for GPU features
 CUDA_AVAILABLE := $(shell command -v nvcc >/dev/null 2>&1 && echo "yes" || (test -n "$$CUDA_PATH" && echo "yes" || echo "no"))
 
-# Get all features for pecos package except gpu
-PECOS_FEATURES_NO_GPU := $(shell cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.packages[] | select(.name == "pecos") | .features | keys[] | select(. | IN("gpu") | not)' | tr '\n' ',' | sed 's/,$$//')
+# Get all features for pecos package except gpu (lazy evaluation - only computed when used)
+PECOS_FEATURES_NO_GPU = $(shell cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.packages[] | select(.name == "pecos") | .features | keys[] | select(. | IN("gpu") | not)' | tr '\n' ',' | sed 's/,$$//' 2>/dev/null)
 
-# Get all features for pecos-quest package except gpu and cuda
-PECOS_QUEST_FEATURES_NO_GPU := $(shell cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.packages[] | select(.name == "pecos-quest") | .features | keys[] | select(. | IN("gpu", "cuda") | not)' | tr '\n' ',' | sed 's/,$$//')
+# Get all features for pecos-quest package except gpu and cuda (lazy evaluation - only computed when used)
+PECOS_QUEST_FEATURES_NO_GPU = $(shell cargo metadata --no-deps --format-version 1 2>/dev/null | jq -r '.packages[] | select(.name == "pecos-quest") | .features | keys[] | select(. | IN("gpu", "cuda") | not)' | tr '\n' ',' | sed 's/,$$//' 2>/dev/null)
 
 # When CUDA is not available, we check all packages with all their features except GPU features
 # This is done by checking packages separately
@@ -155,7 +175,7 @@ fmt-fix: ## Fix Rust formatting issues
 	cargo fmt --all
 
 .PHONY: lint
-lint: check fmt clippy  ## Run all quality checks / linting / reformatting (check only)
+lint: fmt clippy  ## Run all quality checks / linting / reformatting (check only)
 	uv run pre-commit run --all-files
 	@if command -v julia >/dev/null 2>&1; then \
 		echo "Julia detected, running Julia formatting check and linting..."; \
@@ -208,13 +228,13 @@ lint-fix:  ## Fix all auto-fixable linting issues (Rust, Python, Julia)
 
 .PHONY: rstest
 rstest:  ## Run Rust tests
-	cargo test --workspace --release
+	@$(ADD_LLVM_TO_PATH) cargo test --workspace --release
 
 .PHONY: rstest-all
 rstest-all:  ## Run Rust tests with all features except GPU
-	cargo test --workspace --exclude pecos-quest --exclude pecos-decoders
-	cargo test -p pecos-quest
-	cargo test -p pecos-decoders --all-features
+	@$(ADD_LLVM_TO_PATH) cargo test --workspace --exclude pecos-quest --exclude pecos-decoders
+	@$(ADD_LLVM_TO_PATH) cargo test -p pecos-quest
+	@$(ADD_LLVM_TO_PATH) cargo test -p pecos-decoders --all-features
 
 # Decoder-specific commands
 # -------------------------
@@ -234,7 +254,7 @@ build-decoder: ## Build specific decoder. Usage: make build-decoder DECODER=ldpc
 
 .PHONY: test-decoders
 test-decoders: ## Test all decoder crates
-	cargo test --package pecos-decoders --all-features
+	@$(ADD_LLVM_TO_PATH) cargo test --package pecos-decoders --all-features
 
 .PHONY: test-decoder
 test-decoder: ## Test specific decoder. Usage: make test-decoder DECODER=ldpc
@@ -242,7 +262,7 @@ test-decoder: ## Test specific decoder. Usage: make test-decoder DECODER=ldpc
 		echo "Error: DECODER not specified. Usage: make test-decoder DECODER=ldpc"; \
 		exit 1; \
 	fi
-	cargo test --package pecos-decoders --features $(DECODER)
+	@$(ADD_LLVM_TO_PATH) cargo test --package pecos-decoders --features $(DECODER)
 
 .PHONY: decoder-info
 decoder-info: ## Show available decoders and their features
@@ -278,18 +298,18 @@ decoder-cache-clean: ## Clean decoder download cache
 
 .PHONY: pytest
 pytest:  ## Run tests on the Python package (not including optional dependencies). ASSUMES: previous build command
-	uv run pytest ./python/quantum-pecos/tests/ --doctest-modules -m "not optional_dependency"
-	uv run pytest ./python/pecos-rslib/tests/
-	uv run pytest ./python/slr-tests/ -m "not optional_dependency"
+	@$(ADD_LLVM_TO_PATH) uv run pytest ./python/quantum-pecos/tests/ --doctest-modules -m "not optional_dependency"
+	@$(ADD_LLVM_TO_PATH) uv run pytest ./python/pecos-rslib/tests/
+	@$(ADD_LLVM_TO_PATH) uv run pytest ./python/slr-tests/ -m "not optional_dependency"
 
 .PHONY: pytest-dep
 pytest-dep: ## Run tests on the Python package only for optional dependencies. ASSUMES: previous build command
-	uv run pytest ./python/quantum-pecos/tests/ --doctest-modules -m optional_dependency
+	@$(ADD_LLVM_TO_PATH) uv run pytest ./python/quantum-pecos/tests/ --doctest-modules -m optional_dependency
 
 .PHONY: pytest-all
 pytest-all: ## Run all tests on the Python package ASSUMES: previous build command
-	uv run pytest ./python/quantum-pecos/tests/ -m ""
-	uv run pytest ./python/pecos-rslib/tests/
+	@$(ADD_LLVM_TO_PATH) uv run pytest ./python/quantum-pecos/tests/ -m ""
+	@$(ADD_LLVM_TO_PATH) uv run pytest ./python/pecos-rslib/tests/
 
 # .PHONY: pytest-doc
 # pydoctest:  ## Run doctests with pytest. ASSUMES: A build command was ran previously. ASSUMES: previous build command
@@ -414,7 +434,12 @@ julia-lint: julia-build ## Run Aqua.jl quality checks on Julia code
 .PHONY: clean
 clean:  ## Clean up caches and build artifacts
 ifeq ($(OS),Windows_NT)
-	-@powershell -Command "exit 0" > NUL 2>&1 && $(MAKE) clean-windows-ps || $(MAKE) clean-windows-cmd
+	# Check if Unix commands are available (from Git Bash, MSYS2, etc. in PATH)
+	@if command -v rm >/dev/null 2>&1 && command -v /usr/bin/find >/dev/null 2>&1; then \
+		$(MAKE) clean-unix; \
+	else \
+		powershell -Command "exit 0" > NUL 2>&1 && $(MAKE) clean-windows-ps || $(MAKE) clean-windows-cmd; \
+	fi
 else
 	$(MAKE) clean-unix
 endif
@@ -423,26 +448,26 @@ endif
 clean-unix:
 	@rm -rf *.egg-info
 	@rm -rf dist
-	@find . -type d -name "build" -exec rm -rf {} +
+	@/usr/bin/find . -type d -name "build" -exec rm -rf {} + 2>/dev/null || true
 	@rm -rf python/docs/_build
 	@rm -rf site
-	@find . -type d -name ".pytest_cache" -exec rm -rf {} +
-	@find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} +
+	@/usr/bin/find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	@/usr/bin/find . -type d -name ".ipynb_checkpoints" -exec rm -rf {} + 2>/dev/null || true
 	@rm -rf .ruff_cache/
-	@find . -type d -name ".hypothesis" -exec rm -rf {} +
-	@find . -type d -name "junit" -exec rm -rf {} +
-	@find python -name "*.so" -delete
-	@find python -name "*.pyd" -delete
+	@/usr/bin/find . -type d -name ".hypothesis" -exec rm -rf {} + 2>/dev/null || true
+	@/usr/bin/find . -type d -name "junit" -exec rm -rf {} + 2>/dev/null || true
+	@/usr/bin/find python -name "*.so" -delete 2>/dev/null || true
+	@/usr/bin/find python -name "*.pyd" -delete 2>/dev/null || true
 	@# Clean all target directories in crates (in case they were built independently)
-	@find crates -type d -name "target" -exec rm -rf {} +
-	@find python -type d -name "target" -exec rm -rf {} +
+	@/usr/bin/find crates -type d -name "target" -exec rm -rf {} + 2>/dev/null || true
+	@/usr/bin/find python -type d -name "target" -exec rm -rf {} + 2>/dev/null || true
 	@# Clean Julia artifacts
 	@rm -rf julia/PECOS.jl/Manifest.toml
 	@rm -rf julia/PECOS.jl/dev/PECOS_julia_jll/Manifest.toml
 	@rm -rf julia/PECOS.jl/dev/PECOS_julia_jll/src/Manifest.toml
-	@find julia -name "*.jl.*.cov" -delete
-	@find julia -name "*.jl.cov" -delete
-	@find julia -name "*.jl.mem" -delete
+	@/usr/bin/find julia -name "*.jl.*.cov" -delete 2>/dev/null || true
+	@/usr/bin/find julia -name "*.jl.cov" -delete 2>/dev/null || true
+	@/usr/bin/find julia -name "*.jl.mem" -delete 2>/dev/null || true
 	@# Clean the root workspace target directory
 	@cargo clean
 

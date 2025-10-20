@@ -207,41 +207,41 @@ class TestLLVMSimulation:
 
     def test_sim_api_with_llvm_bell_state(self) -> None:
         """Test sim API with Bell state in LLVM IR."""
-        # Bell state in QIR format
+        # Bell state in QIS format - uses i64 qubit indices (not QIR opaque pointers)
+        # This is the format PECOS actually supports (from HUGR compilation)
         llvm_ir = """
-        %Qubit = type opaque
-        %Result = type opaque
+        ; ModuleID = 'bell_state'
 
-        declare void @__quantum__qis__h__body(%Qubit*)
-        declare void @__quantum__qis__cnot__body(%Qubit*, %Qubit*)
-        declare %Result* @__quantum__qis__mz__body(%Qubit*)
-        declare %Qubit* @__quantum__rt__qubit_allocate_array(i64)
-        declare void @__quantum__rt__qubit_release_array(%Qubit*)
-        declare void @__quantum__rt__result_record_output(%Result*, i8*)
+        declare void @__quantum__qis__h__body(i64)
+        declare void @__quantum__qis__cnot__body(i64, i64)
+        declare i1 @__quantum__qis__mz__body(i64)
+        declare void @__quantum__rt__result_record_output(i64, i8*)
 
         @0 = internal constant [3 x i8] c"c0\\00"
         @1 = internal constant [3 x i8] c"c1\\00"
 
-        define void @bell_state() #0 {
+        define void @main() #0 {
         entry:
-            %qubits = call %Qubit* @__quantum__rt__qubit_allocate_array(i64 2)
-            %q0 = getelementptr %Qubit, %Qubit* %qubits, i64 0
-            %q1 = getelementptr %Qubit, %Qubit* %qubits, i64 1
+            ; Apply H to qubit 0
+            call void @__quantum__qis__h__body(i64 0)
 
-            call void @__quantum__qis__h__body(%Qubit* %q0)
-            call void @__quantum__qis__cnot__body(%Qubit* %q0, %Qubit* %q1)
+            ; Apply CNOT(0, 1)
+            call void @__quantum__qis__cnot__body(i64 0, i64 1)
 
-            %r0 = alloca %Result
-            %r1 = alloca %Result
-            call void @__quantum__qis__mz__body(%Qubit* %q0, %Result* %r0)
-            call void @__quantum__qis__mz__body(%Qubit* %q1, %Result* %r1)
+            ; Measure both qubits
+            %m0 = call i1 @__quantum__qis__mz__body(i64 0)
+            %m1 = call i1 @__quantum__qis__mz__body(i64 1)
 
-            call void @__quantum__rt__result_record_output(%Result* %r0,
+            ; Convert i1 to i64 for result recording
+            %r0 = zext i1 %m0 to i64
+            %r1 = zext i1 %m1 to i64
+
+            ; Record results
+            call void @__quantum__rt__result_record_output(i64 %r0,
                 i8* getelementptr inbounds ([3 x i8], [3 x i8]* @0, i32 0, i32 0))
-            call void @__quantum__rt__result_record_output(%Result* %r1,
+            call void @__quantum__rt__result_record_output(i64 %r1,
                 i8* getelementptr inbounds ([3 x i8], [3 x i8]* @1, i32 0, i32 0))
 
-            call void @__quantum__rt__qubit_release_array(%Qubit* %qubits)
             ret void
         }
 

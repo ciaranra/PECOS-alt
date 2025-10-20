@@ -167,6 +167,57 @@ fn fix_msvc_compatibility(src_cpp_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+fn fix_uninitialized_pointers(src_cpp_dir: &Path) -> Result<()> {
+    // Fix uninitialized pointer bug in osd.hpp
+    // The LuDecomposition pointer is not initialized, but the destructor always tries to delete it
+    // When osd_method == OSD_OFF, osd_setup() returns early without initializing LuDecomposition
+    // This causes heap corruption when the destructor tries to delete uninitialized memory
+    // Issue exists in commit 31cf9f33872f32579af1efbe1e84552d42b03ea8
+    let osd_path = src_cpp_dir.join("osd.hpp");
+
+    if osd_path.exists() {
+        let mut content = fs::read_to_string(&osd_path)?;
+        let mut modified = false;
+
+        // Fix 1: Initialize LuDecomposition pointer
+        if content.contains("RowReduce<ldpc::bp::BpEntry>* LuDecomposition;")
+            && !content.contains("LuDecomposition = nullptr")
+        {
+            content = content.replace(
+                "ldpc::gf2sparse_linalg::RowReduce<ldpc::bp::BpEntry>* LuDecomposition;",
+                "ldpc::gf2sparse_linalg::RowReduce<ldpc::bp::BpEntry>* LuDecomposition = nullptr;",
+            );
+
+            content = content.replace(
+                "~OsdDecoder(){\n            delete this->LuDecomposition;\n        };",
+                "~OsdDecoder(){\n            if (this->LuDecomposition) delete this->LuDecomposition;\n        };",
+            );
+            modified = true;
+            info!("Fixed uninitialized pointer bug in osd.hpp");
+        }
+
+        // Fix 2: Fix buffer overflow in COMBINATION_SWEEP when osd_order > k
+        // The code loops i,j from 0 to osd_order but accesses candidate[i] and candidate[j]
+        // where candidate has size k. When osd_order > k, this is out of bounds.
+        if content.contains("for(int i = 0; i<this->osd_order;i++){")
+            && !content.contains("// PECOS FIX: clamp to k")
+        {
+            content = content.replace(
+                "            if(this->osd_method == COMBINATION_SWEEP){\n                for(int i=0; i<k; i++) {\n                    std::vector<uint8_t> osd_candidate;\n                    osd_candidate.resize(k,0);\n                    osd_candidate[i]=1; \n                    this->osd_candidate_strings.push_back(osd_candidate);\n                }\n\n                for(int i = 0; i<this->osd_order;i++){\n                    for(int j = 0; j<this->osd_order; j++){",
+                "            if(this->osd_method == COMBINATION_SWEEP){\n                for(int i=0; i<k; i++) {\n                    std::vector<uint8_t> osd_candidate;\n                    osd_candidate.resize(k,0);\n                    osd_candidate[i]=1; \n                    this->osd_candidate_strings.push_back(osd_candidate);\n                }\n\n                // PECOS FIX: clamp to k to prevent buffer overflow when osd_order > k\n                int max_order = (this->osd_order < k) ? this->osd_order : k;\n                for(int i = 0; i<max_order;i++){\n                    for(int j = 0; j<max_order; j++){",
+            );
+            modified = true;
+            info!("Fixed buffer overflow in OSD COMBINATION_SWEEP");
+        }
+
+        if modified {
+            fs::write(&osd_path, content)?;
+        }
+    }
+
+    Ok(())
+}
+
 fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
     let src_cpp_dir = ldpc_dir.join("src_cpp");
     let include_dir = ldpc_dir.join("include");
@@ -180,6 +231,9 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
     // Fix MSVC compatibility issues
     fix_msvc_compatibility(&src_cpp_dir)?;
 
+    // Fix uninitialized pointers that cause heap corruption on Windows
+    fix_uninitialized_pointers(&src_cpp_dir)?;
+
     // Build the cxx bridge first to generate headers
     let mut build = cxx_build::bridge("src/bridge.rs");
     build
@@ -188,7 +242,8 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
         .include(&include_dir)
         .include(include_dir.join("robin_map"))
         .include(include_dir.join("rapidcsv"))
-        .include("include");
+        .include("include")
+        .warnings(false); // Disable cxx's default warning flags so we can set our own
 
     // Use C++17 when available, fall back to C++14 for older compilers
     // This helps with cross-compilation where older toolchains may not fully support C++17
@@ -241,9 +296,17 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
         // For MSVC
         build
             .flag("/W0") // Warning level 0 (no warnings)
-            .flag_if_supported("/openmp") // Enable OpenMP if available
+            // NOTE: OpenMP disabled on Windows to avoid CRT issues - can cause heap corruption
+            // when combined with dynamic CRT (/MD) in multi-threaded scenarios
+            // .flag_if_supported("/openmp") // Enable OpenMP if available
             .flag_if_supported("/permissive-") // Enable standards-compliant C++ parsing
             .flag_if_supported("/Zc:__cplusplus"); // Report correct __cplusplus macro value
+
+        // CRITICAL: Use the same CRT as Rust/cxx to avoid heap corruption on Windows
+        // Dependencies like cxx are always built with release CRT (/MD) even in debug builds
+        // We must match this to avoid heap corruption when memory crosses DLL boundaries
+        // Always use /MD (release CRT) to match dependencies
+        build.flag("/MD"); // Dynamic CRT, release version (matches cxx and other deps)
     }
 
     build.compile("ldpc-bridge");

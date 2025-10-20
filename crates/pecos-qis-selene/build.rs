@@ -52,9 +52,23 @@ fn main() {
         cmd.arg("dynamic_lookup");
     }
 
-    // On Windows, allow undefined symbols using linker flags
+    // On Windows, link against pecos_qis_ffi import library instead of allowing undefined symbols
     if cfg!(target_os = "windows") {
-        cmd.arg("-Wl,/FORCE:UNRESOLVED");
+        // Find the pecos-qis-ffi import library in the target directory
+        let target_dir = env::var("OUT_DIR")
+            .map(|d| PathBuf::from(d).parent().unwrap().parent().unwrap().parent().unwrap().to_path_buf())
+            .expect("OUT_DIR not set");
+
+        let qis_ffi_lib = target_dir.join("deps").join("pecos_qis_ffi.dll.lib");
+
+        if qis_ffi_lib.exists() {
+            println!("cargo:warning=Linking shim against QIS FFI import library: {}", qis_ffi_lib.display());
+            cmd.arg(qis_ffi_lib.to_str().unwrap());
+        } else {
+            println!("cargo:warning=QIS FFI import library not found at {}, symbols may not resolve", qis_ffi_lib.display());
+            // Fall back to allowing unresolved symbols
+            cmd.arg("-Wl,/FORCE:UNRESOLVED");
+        }
     }
 
     // Add include paths if needed
@@ -70,6 +84,112 @@ fn main() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+
+    // On Windows, we need to create an import library (.lib) so that
+    // MSVC's linker can link against the DLL
+    #[cfg(target_os = "windows")]
+    {
+        let import_lib = out_dir.join("pecos_selene.lib");
+        let def_file = out_dir.join("pecos_selene.def");
+
+        // Create a .def file listing all exported selene_* functions
+        let def_content = r#"LIBRARY pecos_selene.dll
+EXPORTS
+    selene_qalloc
+    selene_qfree
+    selene_rxy
+    selene_rz
+    selene_rzz
+    selene_qubit_reset
+    selene_qubit_measure
+    selene_qubit_lazy_measure
+    selene_qubit_lazy_measure_leaked
+    selene_future_read_bool
+    selene_future_read_u64
+    selene_refcount_increment
+    selene_refcount_decrement
+    selene_print_bool
+    selene_print_i64
+    selene_print_u64
+    selene_print_f64
+    selene_print_bool_array
+    selene_print_i64_array
+    selene_print_u64_array
+    selene_print_f64_array
+    selene_print_panic
+    selene_dump_state
+    selene_set_tc
+    selene_get_tc
+    selene_get_current_shot
+    selene_local_barrier
+    selene_global_barrier
+    selene_shot_count
+    selene_on_shot_start
+    selene_on_shot_end
+    selene_load_config
+    selene_exit
+    selene_print_exit
+    selene_random_seed
+    selene_random_advance
+    selene_random_u32
+    selene_random_u32_bounded
+    selene_random_f64
+    selene_custom_runtime_call
+    pecos_call_qmain_with_setjmp
+"#;
+
+        std::fs::write(&def_file, def_content)
+            .expect("Failed to write .def file");
+
+        // Try to use llvm-dlltool (from LLVM) or dlltool (from MinGW) to generate import library
+        // First try llvm-dlltool which should be available with our LLVM installation
+        let dlltool_result = if let Ok(llvm_prefix) = env::var("LLVM_SYS_140_PREFIX") {
+            let llvm_dlltool = PathBuf::from(llvm_prefix).join("bin").join("llvm-dlltool.exe");
+            if llvm_dlltool.exists() {
+                Command::new(&llvm_dlltool)
+                    .arg("-m")
+                    .arg("i386:x86-64")
+                    .arg("-d")  // Use -d for .def file input
+                    .arg(&def_file)
+                    .arg("-l")
+                    .arg(&import_lib)
+                    .output()
+            } else {
+                Err(std::io::Error::new(std::io::ErrorKind::NotFound, "llvm-dlltool not found"))
+            }
+        } else {
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "LLVM_SYS_140_PREFIX not set"))
+        };
+
+        // If llvm-dlltool failed, try regular dlltool (from MinGW/MSYS2)
+        let dlltool_result = dlltool_result.or_else(|_| {
+            Command::new("dlltool")
+                .arg("-m")
+                .arg("i386:x86-64")
+                .arg("-d")  // Use -d for .def file input
+                .arg(&def_file)
+                .arg("-l")
+                .arg(&import_lib)
+                .output()
+        });
+
+        if let Ok(output) = dlltool_result {
+            if output.status.success() {
+                println!("Generated import library: {}", import_lib.display());
+                // Set environment variable for the import library path
+                println!(
+                    "cargo:rustc-env=PECOS_SELENE_SHIM_LIB={}",
+                    import_lib.display()
+                );
+            } else {
+                println!("cargo:warning=Failed to generate import library with dlltool");
+                println!("cargo:warning=stderr: {}", String::from_utf8_lossy(&output.stderr));
+            }
+        } else {
+            println!("cargo:warning=Could not find llvm-dlltool or dlltool to generate import library");
+            println!("cargo:warning=Linking against the shim may fail on Windows");
+        }
+    }
 
     // Set environment variable so Rust code can find the shim
     println!(
