@@ -670,7 +670,7 @@ fn convert_to_py_commands(py: Python<'_>, commands: &Py<PyAny>) -> PyResult<Vec<
         return Ok(Vec::new());
     }
 
-    let py_list = commands.downcast_bound::<PyList>(py)?;
+    let py_list = commands.cast_bound::<PyList>(py)?;
     let mut result = Vec::with_capacity(py_list.len());
 
     for py_cmd in py_list.iter() {
@@ -930,7 +930,7 @@ impl ClassicalEngine for PhirJsonEngine {
             }
 
             // Convert to list
-            let py_list = match raw_commands.downcast_bound::<PyList>(py) {
+            let py_list = match raw_commands.cast_bound::<PyList>(py) {
                 Ok(list) => list,
                 Err(e) => return Err(to_pecos_error(e)),
             };

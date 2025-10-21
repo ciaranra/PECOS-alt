@@ -1,23 +1,16 @@
 #ifndef QUEST_FFI_H
 #define QUEST_FFI_H
 
-#pragma message("quest_ffi.h: Starting includes")
-
 #include <cstdint>
 
-#pragma message("quest_ffi.h: About to include rust/cxx.h")
 // Include rust/cxx.h before <memory> to ensure proper pointer_traits specializations
 #include "rust/cxx.h"
 
-#pragma message("quest_ffi.h: About to include <memory>")
 // Now include <memory> - pointer_traits should already be specialized by cxx
 #include <memory>
 
-#pragma message("quest_ffi.h: About to include bridge.rs.h")
 // Include CXX-generated structs
 #include "pecos-quest/src/bridge.rs.h"
-
-#pragma message("quest_ffi.h: Finished all includes")
 
 // Simple functions that work with pointers to opaque handles
 // The handles will be managed by the C++ implementation

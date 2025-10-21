@@ -22,7 +22,6 @@ pecos-engines.workspace = true
 pecos-programs.workspace = true
 pecos-qasm.workspace = true
 pecos-phir-json.workspace = true
-# pecos-qis-sim removed - using pecos-qis-core instead
 pecos-qis-ffi-types.workspace = true
 pecos-qis-core.workspace = true
 pecos-qis-selene = { workspace = true, optional = true }

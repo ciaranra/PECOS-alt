@@ -4,7 +4,9 @@
 //! and later executed by a runtime.
 
 /// High-level quantum operations that include both QIS and control flow
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode,
+)]
 pub enum Operation {
     /// Quantum gate operation
     Quantum(QuantumOp),
@@ -23,7 +25,9 @@ pub enum Operation {
 }
 
 /// Quantum operations that can be executed
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, bincode::Encode, bincode::Decode,
+)]
 pub enum QuantumOp {
     // Single-qubit gates
     H(usize),

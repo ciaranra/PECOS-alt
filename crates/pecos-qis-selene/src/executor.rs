@@ -3,6 +3,7 @@
 //! This module implements the `QisInterface` trait for Selene's Helios compiler.
 
 use libloading::{Library, Symbol};
+use log::{debug, error, info, warn};
 use pecos_qis_core::qis_interface::{InterfaceError, ProgramFormat, QisInterface};
 use pecos_qis_ffi_types::OperationCollector;
 use std::collections::BTreeMap;
@@ -67,8 +68,10 @@ impl QisHeliosInterface {
 
         let lib_name = format!("{lib_prefix}pecos_qis_ffi.{lib_ext}");
 
-        eprintln!("[HELIOS] Looking for QIS FFI library: {lib_name}");
-        eprintln!("[HELIOS] Platform: {}", std::env::consts::OS);
+        debug!(
+            "Looking for QIS FFI library: {lib_name} on {}",
+            std::env::consts::OS
+        );
 
         let exe_dir = std::env::current_exe()
             .ok()
@@ -79,7 +82,7 @@ impl QisHeliosInterface {
                 )
             })?;
 
-        eprintln!("[HELIOS] Executable directory: {}", exe_dir.display());
+        debug!("Executable directory: {}", exe_dir.display());
 
         let mut candidate_paths = vec![
             exe_dir.join(&lib_name),
@@ -92,7 +95,7 @@ impl QisHeliosInterface {
         }
 
         if let Ok(current_dir) = std::env::current_dir() {
-            eprintln!("[HELIOS] Current directory: {}", current_dir.display());
+            debug!("Current directory: {}", current_dir.display());
             candidate_paths.push(current_dir.join(format!("target/debug/{lib_name}")));
             candidate_paths.push(current_dir.join(format!("target/debug/deps/{lib_name}")));
             candidate_paths.push(current_dir.join(format!("target/release/{lib_name}")));
@@ -114,25 +117,22 @@ impl QisHeliosInterface {
             }
         }
 
-        eprintln!(
-            "[HELIOS] Searching {} candidate paths...",
-            candidate_paths.len()
-        );
+        debug!("Searching {} candidate paths...", candidate_paths.len());
 
         // Check each path and report which ones exist
         let mut found_files = Vec::new();
         for path in &candidate_paths {
             if path.exists() {
-                eprintln!("[HELIOS] ✓ Found: {}", path.display());
+                debug!("Found library: {}", path.display());
                 found_files.push(path.clone());
             }
         }
 
         if found_files.is_empty() {
-            eprintln!("[HELIOS] ✗ No matching files found!");
-            eprintln!("[HELIOS] Searched paths:");
+            warn!("No matching files found!");
+            warn!("Searched paths:");
             for (i, path) in candidate_paths.iter().enumerate() {
-                eprintln!("[HELIOS]   {}: {}", i + 1, path.display());
+                warn!("  {}: {}", i + 1, path.display());
             }
         }
 
@@ -248,7 +248,7 @@ impl QisHeliosInterface {
     fn add_platform_linker_flags(clang_cmd: &mut Command) {
         if cfg!(target_os = "windows") {
             // Windows-specific flags
-            eprintln!("[HELIOS] Adding Windows-specific linker flags...");
+            debug!("Adding Windows-specific linker flags...");
             // On Windows, clang uses MSVC's linker (link.exe) or lld-link
             // The -shared flag is enough for basic DLL creation
             // Undefined symbols are allowed by default on Windows - they'll be resolved at load time
@@ -262,7 +262,7 @@ impl QisHeliosInterface {
                 // macOS ld flags:
                 // - export_dynamic: Make all symbols visible for dlopen
                 // - undefined dynamic_lookup: Allow undefined symbols (resolved at runtime via RTLD_GLOBAL)
-                eprintln!("[HELIOS] Adding macOS-specific linker flags...");
+                debug!("Adding macOS-specific linker flags...");
                 clang_cmd.arg("-Wl,-export_dynamic");
                 clang_cmd.arg("-Wl,-undefined,dynamic_lookup");
 
@@ -270,31 +270,25 @@ impl QisHeliosInterface {
                 // This is required because LLVM's clang (unlike Apple's clang) doesn't automatically
                 // know where to find macOS system libraries in the dyld cache
                 // Use xcrun to get the SDK path
-                eprintln!("[HELIOS] Running xcrun --show-sdk-path...");
+                debug!("Running xcrun --show-sdk-path...");
                 match Command::new("xcrun").args(["--show-sdk-path"]).output() {
                     Ok(output) => {
                         if output.status.success() {
                             if let Ok(sdk_path) = String::from_utf8(output.stdout) {
                                 let sdk_path = sdk_path.trim();
-                                eprintln!("[HELIOS] SDK path: {sdk_path}");
+                                debug!("SDK path: {sdk_path}");
                                 clang_cmd.arg("-isysroot");
                                 clang_cmd.arg(sdk_path);
                             } else {
-                                eprintln!("[HELIOS] WARNING: xcrun output was not valid UTF-8");
+                                warn!("xcrun output was not valid UTF-8");
                             }
                         } else {
-                            eprintln!(
-                                "[HELIOS] WARNING: xcrun failed with status: {}",
-                                output.status
-                            );
-                            eprintln!(
-                                "[HELIOS] stderr: {}",
-                                String::from_utf8_lossy(&output.stderr)
-                            );
+                            warn!("xcrun failed with status: {}", output.status);
+                            warn!("xcrun stderr: {}", String::from_utf8_lossy(&output.stderr));
                         }
                     }
                     Err(e) => {
-                        eprintln!("[HELIOS] WARNING: Failed to run xcrun: {e}");
+                        warn!("Failed to run xcrun: {e}");
                     }
                 }
 
@@ -334,7 +328,7 @@ impl QisHeliosInterface {
                 program_file.into_temp_path()
             }
             ProgramFormat::LlvmIrText => {
-                eprintln!("[HELIOS] Converting LLVM IR text to bitcode using llvm-as...");
+                debug!("Converting LLVM IR text to bitcode using llvm-as...");
                 // Convert text to bitcode using llvm-as
                 program_file.write_all(&self.program).map_err(|e| {
                     InterfaceError::LoadError(format!("Failed to write LLVM IR: {e}"))
@@ -349,8 +343,6 @@ impl QisHeliosInterface {
                     InterfaceError::LoadError(format!("Failed to create bitcode file: {e}"))
                 })?;
 
-                eprintln!("[HELIOS] About to spawn llvm-as subprocess...");
-
                 // Try to find llvm-as: first check LLVM_SYS_140_PREFIX, then fall back to PATH
                 let llvm_as_cmd = std::env::var("LLVM_SYS_140_PREFIX")
                     .ok()
@@ -363,17 +355,14 @@ impl QisHeliosInterface {
                             "llvm-as"
                         });
                         if path.exists() {
-                            eprintln!(
-                                "[HELIOS] Using llvm-as from LLVM_SYS_140_PREFIX: {}",
-                                path.display()
-                            );
+                            debug!("Using llvm-as from LLVM_SYS_140_PREFIX: {}", path.display());
                             Some(path)
                         } else {
                             None
                         }
                     })
                     .unwrap_or_else(|| {
-                        eprintln!("[HELIOS] Using llvm-as from PATH");
+                        debug!("Using llvm-as from PATH");
                         PathBuf::from("llvm-as")
                     });
 
@@ -385,8 +374,6 @@ impl QisHeliosInterface {
                     .map_err(|e| {
                         InterfaceError::LoadError(format!("Failed to run llvm-as: {e}"))
                     })?;
-
-                eprintln!("[HELIOS] llvm-as subprocess completed!");
 
                 if !output.status.success() {
                     return Err(InterfaceError::LoadError(format!(
@@ -439,14 +426,14 @@ impl QisHeliosInterface {
                 line.contains(" T ") && (line.contains(" main") || line.ends_with(" main"))
             });
 
-            eprintln!("[HELIOS] Symbol check: qmain_found={qmain_found}, main_found={main_found}");
+            debug!("Symbol check: qmain_found={qmain_found}, main_found={main_found}");
 
             // If we have qmain or neither, use the original bitcode
             if qmain_found || !main_found {
                 program_temp_path
             } else {
                 // We have main but not qmain - create a wrapper
-                eprintln!("[HELIOS] Creating qmain wrapper for program with only @main");
+                debug!("Creating qmain wrapper for program with only @main");
 
                 // Create wrapper LLVM IR that calls main
                 let wrapper_ir = r"
@@ -531,7 +518,7 @@ entry:
                     )));
                 }
 
-                eprintln!("[HELIOS] Successfully created qmain wrapper");
+                debug!("Successfully created qmain wrapper");
                 linked_bc_file.into_temp_path()
             }
         };
@@ -545,7 +532,7 @@ entry:
         } else {
             ".so"
         };
-        eprintln!("[HELIOS] Creating shared library temp file with suffix {lib_suffix}...");
+        debug!("Creating shared library temp file with suffix {lib_suffix}...");
 
         // IMPORTANT: On Windows, we need to get a temp path but NOT create the file yet
         // because MSVC's link.exe wants to create the DLL file itself
@@ -559,23 +546,16 @@ entry:
 
             // Get the path before the file is deleted
             let path = temp.path().to_path_buf();
-            eprintln!(
-                "[HELIOS] Windows: Reserved temp path (will be deleted): {}",
+            debug!(
+                "Windows: Reserved temp path (will be deleted): {}",
                 path.display()
             );
-            eprintln!(
-                "[HELIOS] Windows: File exists before drop: {}",
-                path.exists()
-            );
+            debug!("Windows: File exists before drop: {}", path.exists());
 
             // Drop temp explicitly to delete the file
             drop(temp);
 
-            eprintln!(
-                "[HELIOS] Windows: File exists after drop: {}",
-                path.exists()
-            );
-            eprintln!("[HELIOS] Windows: Path is ready for link.exe to create DLL");
+            debug!("Windows: File exists after drop: {}", path.exists());
 
             // We keep the path but the file is deleted - link.exe will create it
             ((), path)
@@ -590,19 +570,15 @@ entry:
             (temp, path)
         };
 
-        eprintln!(
-            "[HELIOS] Temp library path: {}",
-            so_path_for_clang.display()
-        );
+        debug!("Temp library path: {}", so_path_for_clang.display());
 
         // Link using clang to create a shared library:
         // program.bc + libhelios.a → program.so/.dll
         // The resulting shared library will:
         // - Export qmain symbol
         // - Have undefined selene_* symbols (to be resolved by our shim at runtime)
-        eprintln!("[HELIOS] About to spawn clang subprocess for linking...");
-        eprintln!(
-            "[HELIOS] Linking: {} + {} -> {}",
+        debug!(
+            "Linking: {} + {} -> {}",
             program_temp_path.display(),
             helios_lib_path,
             so_path_for_clang.display()
@@ -617,17 +593,14 @@ entry:
                 path.push("bin");
                 path.push(if cfg!(windows) { "clang.exe" } else { "clang" });
                 if path.exists() {
-                    eprintln!(
-                        "[HELIOS] Using clang from LLVM_SYS_140_PREFIX: {}",
-                        path.display()
-                    );
+                    debug!("Using clang from LLVM_SYS_140_PREFIX: {}", path.display());
                     Some(path)
                 } else {
                     None
                 }
             })
             .unwrap_or_else(|| {
-                eprintln!("[HELIOS] Using clang from PATH");
+                debug!("Using clang from PATH");
                 PathBuf::from("clang")
             });
 
@@ -636,10 +609,7 @@ entry:
         // On Windows, we need to be more careful with paths and flags
         #[cfg(target_os = "windows")]
         {
-            eprintln!(
-                "[HELIOS] Windows: Using DLL path: {}",
-                so_path_for_clang.display()
-            );
+            debug!("Windows: Using DLL path: {}", so_path_for_clang.display());
 
             // On Windows, we need to link against both import libraries (.lib files)
             // to populate the import table for selene_* and __quantum__* symbols
@@ -665,11 +635,9 @@ entry:
                 )));
             }
 
-            eprintln!(
-                "[HELIOS] Windows: Linking against selene shim import library: {shim_lib_path}"
-            );
-            eprintln!(
-                "[HELIOS] Windows: Linking against QIS FFI import library: {}",
+            debug!("Windows: Linking against selene shim import library: {shim_lib_path}");
+            debug!(
+                "Windows: Linking against QIS FFI import library: {}",
                 qis_ffi_import_lib.display()
             );
 
@@ -683,12 +651,10 @@ entry:
                 // NOTE: On Windows, DO NOT link helios_lib_path - it conflicts with DLL symbols
                 // The static library contains stub implementations that we replace with DLL versions
                 .arg("-Wl,/EXPORT:qmain"); // Export qmain symbol for GetProcAddress
-            eprintln!(
-                "[HELIOS] Windows: Linking against selene shim import library to resolve selene_* symbols"
+            debug!(
+                "Windows: Linking against selene shim import library to resolve selene_* symbols"
             );
-            eprintln!(
-                "[HELIOS] Windows: Exporting qmain entry point (auto-wrapped from main if needed)"
-            );
+            debug!("Windows: Exporting qmain entry point (auto-wrapped from main if needed)");
         }
 
         #[cfg(not(target_os = "windows"))]
@@ -705,37 +671,28 @@ entry:
         Self::add_platform_linker_flags(&mut clang_cmd);
 
         // Debug: Print the full clang command
-        eprintln!("[HELIOS] Full clang command: {clang_cmd:?}");
+        debug!("Full clang command: {clang_cmd:?}");
 
         let output = clang_cmd
             .output()
             .map_err(|e| InterfaceError::LoadError(format!("Failed to run clang: {e}")))?;
 
-        eprintln!("[HELIOS] clang subprocess completed!");
-
         if !output.status.success() {
-            eprintln!("[HELIOS] Linking FAILED!");
-            eprintln!(
-                "[HELIOS] stderr: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            eprintln!(
-                "[HELIOS] stdout: {}",
-                String::from_utf8_lossy(&output.stdout)
-            );
+            error!("Linking FAILED!");
+            debug!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+            debug!("stdout: {}", String::from_utf8_lossy(&output.stdout));
 
             // On Windows, check if we're still getting LNK2019 errors for selene_* symbols
             #[cfg(target_os = "windows")]
             {
                 let stderr_str = String::from_utf8_lossy(&output.stderr);
                 if stderr_str.contains("LNK2019") {
-                    eprintln!("[HELIOS] ====== LNK2019 UNRESOLVED SYMBOL ERRORS DETECTED ======");
+                    error!("LNK2019 UNRESOLVED SYMBOL ERRORS DETECTED");
                     for line in stderr_str.lines() {
                         if line.contains("LNK2019") || line.contains("unresolved external symbol") {
-                            eprintln!("[HELIOS]   {line}");
+                            error!("  {line}");
                         }
                     }
-                    eprintln!("[HELIOS] ======================================================");
                 }
             }
 
@@ -746,17 +703,17 @@ entry:
         }
 
         // Verify the DLL/SO file was created
-        eprintln!("[HELIOS] Linking succeeded!");
-        eprintln!(
-            "[HELIOS] Checking if output file exists: {}",
+        info!("Linking succeeded!");
+        debug!(
+            "Checking if output file exists: {}",
             so_path_for_clang.display()
         );
         if so_path_for_clang.exists() {
             if let Ok(metadata) = std::fs::metadata(&so_path_for_clang) {
-                eprintln!("[HELIOS] Output file size: {} bytes", metadata.len());
+                debug!("Output file size: {} bytes", metadata.len());
             }
         } else {
-            eprintln!("[HELIOS] WARNING: Output file does not exist after successful link!");
+            warn!("Output file does not exist after successful link!");
         }
 
         // Keep the temporary files alive by storing the TempPaths
@@ -768,8 +725,8 @@ entry:
             // so there's nothing to drop
             let () = so_file; // Silence unused variable warning
 
-            eprintln!(
-                "[HELIOS] Windows: DLL created by link.exe at: {}",
+            debug!(
+                "Windows: DLL created by link.exe at: {}",
                 so_path_for_clang.display()
             );
 
@@ -829,19 +786,19 @@ entry:
 
         // Step 1: Find and load libpecos_qis_ffi.so with RTLD_GLOBAL
         // This provides the __quantum__* symbols for the shim to resolve
-        eprintln!("[HELIOS] === Step 1: Finding PECOS QIS FFI library ===");
+        debug!("Finding PECOS QIS FFI library");
         let pecos_qis_lib_path = Self::find_pecos_qis_lib()?;
-        eprintln!(
-            "[HELIOS] Successfully found QIS FFI library at: {}",
+        debug!(
+            "Successfully found QIS FFI library at: {}",
             pecos_qis_lib_path.display()
         );
 
-        eprintln!("[HELIOS] Loading QIS FFI library with RTLD_GLOBAL...");
+        debug!("Loading QIS FFI library with RTLD_GLOBAL...");
         let (pecos_qis_lib_global, pecos_qis_lib) = Self::load_library_with_rtld_global(
             &pecos_qis_lib_path,
             "Failed to load PECOS QIS cdylib",
         )?;
-        eprintln!("[HELIOS] ✓ QIS FFI library loaded successfully!");
+        debug!("QIS FFI library loaded successfully!");
 
         // Step 2: Reset the QIS interface via the cdylib
         // IMPORTANT: We call the cdylib's version to ensure we're using the same thread-local
@@ -862,7 +819,7 @@ entry:
 
         // Step 4: Load the program.so with RTLD_GLOBAL so it can resolve selene_* symbols
         // It will find selene_* symbols from our shim (loaded with RTLD_GLOBAL above)
-        eprintln!("[HELIOS] Loading program.so with RTLD_GLOBAL...");
+        debug!("Loading program.so with RTLD_GLOBAL...");
         let (program_lib_global, program_lib) =
             Self::load_library_with_rtld_global(so_path, "Failed to load program library")?;
 
@@ -881,14 +838,13 @@ entry:
         // If an error occurs:
         //   → longjmp(user_program_jmpbuf, error_code) [jumps back to setjmp]
         //   → wrapper catches error and returns error code
-        eprintln!("[HELIOS] About to call qmain via setjmp wrapper...");
         let result = unsafe { call_with_setjmp(*qmain_fn) };
         if result != 0 {
             return Err(InterfaceError::ExecutionError(format!(
                 "qmain returned error code: {result}"
             )));
         }
-        eprintln!("[HELIOS] qmain executed successfully!");
+        info!("qmain executed successfully!");
 
         // Step 7: Collect the operations from thread-local storage via the cdylib
         // IMPORTANT: We call the cdylib's version to get the operations from the same
@@ -919,29 +875,24 @@ impl QisInterface for QisHeliosInterface {
         program_bytes: &[u8],
         format: ProgramFormat,
     ) -> Result<(), InterfaceError> {
-        eprintln!("[HELIOS/EXECUTOR] ========== load_program() called ==========");
-        eprintln!(
-            "[HELIOS/EXECUTOR] Program bytes length: {}",
-            program_bytes.len()
-        );
-        eprintln!("[HELIOS/EXECUTOR] Program format: {format:?}");
+        debug!("load_program() called");
+        debug!("Program bytes length: {}", program_bytes.len());
+        debug!("Program format: {format:?}");
 
         // Check if Helios can handle this format
         match format {
             ProgramFormat::QisBitcode | ProgramFormat::LlvmBitcode | ProgramFormat::LlvmIrText => {
-                eprintln!("[HELIOS/EXECUTOR] Format is compatible, storing program...");
+                debug!("Format is compatible, storing program...");
                 self.program = program_bytes.to_vec();
                 self.format = format;
 
-                eprintln!("[HELIOS/EXECUTOR] About to call create_shared_library()...");
                 // Create the shared library by linking
                 self.create_shared_library()?;
-                eprintln!("[HELIOS/EXECUTOR] create_shared_library() completed successfully");
 
                 Ok(())
             }
             ProgramFormat::HugrBytes => {
-                eprintln!("[HELIOS/EXECUTOR] ERROR: HUGR bytes format not supported");
+                error!("HUGR bytes format not supported");
                 Err(InterfaceError::InvalidFormat(
                     "Helios interface requires HUGR to be compiled to LLVM first".to_string(),
                 ))

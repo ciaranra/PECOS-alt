@@ -104,7 +104,7 @@ impl PyPauliProp {
         for (key, value) in paulis.iter() {
             let key_str: String = key.extract()?;
 
-            if let Ok(py_set) = value.downcast::<PySet>() {
+            if let Ok(py_set) = value.cast::<PySet>() {
                 let mut vec_set = VecSet::new();
                 for item in py_set.iter() {
                     let qubit: usize = item.extract()?;

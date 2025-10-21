@@ -217,7 +217,7 @@ EXPORTS
 
     if let Ok(output) = dlltool_result {
         if output.status.success() {
-            println!("Generated import library: {}", import_lib.display());
+            info!("Generated import library: {}", import_lib.display());
             // Set environment variable for the import library path
             println!(
                 "cargo:rustc-env=PECOS_SELENE_SHIM_LIB={}",

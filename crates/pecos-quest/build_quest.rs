@@ -461,7 +461,7 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
         if let Some(obj_files) =
             compile_cuda_files(cuda_path.as_ref().unwrap(), &gpu_files, quest_dir, out_dir)
         {
-            println!("cargo:warning=GPU compilation successful - QuEST built with CUDA support");
+            info!("GPU compilation successful - QuEST built with CUDA support");
             Some(obj_files)
         } else {
             eprintln!("\nERROR: GPU feature enabled but GPU compilation failed");

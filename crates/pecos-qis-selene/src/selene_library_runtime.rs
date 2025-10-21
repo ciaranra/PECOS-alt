@@ -295,7 +295,7 @@ impl QisRuntime for QisSeleneLibraryRuntime {
             .handle;
 
         // Serialize interface using bincode for efficient FFI transfer
-        let interface_bytes = bincode::serialize(&interface)
+        let interface_bytes = bincode::encode_to_vec(&interface, bincode::config::standard())
             .map_err(|e| RuntimeError::FfiError(format!("Failed to serialize interface: {e}")))?;
 
         let load_fn: Symbol<LoadInterfaceFn> = unsafe {
@@ -355,9 +355,10 @@ impl QisRuntime for QisSeleneLibraryRuntime {
             .handle;
 
         // Serialize measurements using bincode for efficient FFI transfer
-        let measurements_bytes = bincode::serialize(&measurements).map_err(|e| {
-            RuntimeError::FfiError(format!("Failed to serialize measurements: {e}"))
-        })?;
+        let measurements_bytes = bincode::encode_to_vec(&measurements, bincode::config::standard())
+            .map_err(|e| {
+                RuntimeError::FfiError(format!("Failed to serialize measurements: {e}"))
+            })?;
 
         let provide_fn: Symbol<ProvideResultsFn> = unsafe {
             self.library

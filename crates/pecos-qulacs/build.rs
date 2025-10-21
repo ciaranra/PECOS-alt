@@ -1,3 +1,4 @@
+use log::warn;
 use pecos_build_utils::{
     boost_download_info, download_cached, eigen_download_info, extract_archive,
     qulacs_download_info,
@@ -6,6 +7,9 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 fn main() {
+    // Initialize logger for build script
+    env_logger::init();
+
     setup_rerun_conditions();
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -102,7 +106,7 @@ fn add_qulacs_source_files(build: &mut cc::Build, qulacs_src: &Path) {
         if path.exists() {
             build.file(path);
         } else {
-            eprintln!("Warning: Skipping missing file: cppsim/{file}");
+            warn!("Skipping missing file: cppsim/{file}");
         }
     }
 
@@ -156,7 +160,7 @@ fn add_qulacs_source_files(build: &mut cc::Build, qulacs_src: &Path) {
         if path.exists() {
             build.file(path);
         } else {
-            eprintln!("Warning: Skipping missing file: csim/{file}");
+            warn!("Skipping missing file: csim/{file}");
         }
     }
 }
