@@ -136,10 +136,13 @@ jobs:
 
           # Set up build flags for macOS to avoid LLVM dependency issues
           if [[ "${{ matrix.os }}" == macos-* ]]; then
-            # Use system libunwind instead of LLVM's
-            export RUSTFLAGS="-C link-arg=-Wl,-dead_strip_dylibs"
-            # Ensure we don't link against /tmp/llvm libraries
-            export DYLD_FALLBACK_LIBRARY_PATH="/usr/lib:/System/Library/Frameworks"
+            # Prevent linking against LLVM's libunwind
+            export RUSTFLAGS="-C link-arg=-Wl,-dead_strip_dylibs -C link-arg=-Wl,-ld_classic"
+            # Remove LLVM from library paths during build
+            unset DYLD_LIBRARY_PATH
+            unset DYLD_FALLBACK_LIBRARY_PATH
+            # Explicitly exclude LLVM libraries from linking
+            export RUSTFLAGS="$RUSTFLAGS -L native=/usr/lib"
           fi
 
           # Native build for all platforms (no cross-compilation needed with native ARM64 runners)
@@ -157,10 +160,19 @@ jobs:
             echo "Checking and fixing library dependencies..."
             otool -L ../../artifacts/libpecos_julia.dylib
 
-            # Remove dependency on /tmp/llvm/lib/libunwind.dylib if present
-            if otool -L ../../artifacts/libpecos_julia.dylib | grep -q "/tmp/llvm/lib/libunwind.dylib"; then
-              echo "Fixing libunwind dependency..."
-              install_name_tool -change /tmp/llvm/lib/libunwind.dylib /usr/lib/libunwind.dylib ../../artifacts/libpecos_julia.dylib
+            # Check for any problematic dependencies
+            if otool -L ../../artifacts/libpecos_julia.dylib | grep -q "/tmp/llvm"; then
+              echo "ERROR: Binary has dependencies on /tmp/llvm which won't exist at runtime!"
+              echo "Attempting to fix..."
+
+              # For libunwind specifically, we'll strip it out by creating a new dylib without it
+              if otool -L ../../artifacts/libpecos_julia.dylib | grep -q "/tmp/llvm/lib/libunwind.dylib"; then
+                echo "Creating fixed library without LLVM libunwind dependency..."
+                # Use install_name_tool to remove the dependency by setting it to a weak import
+                # that can fail at runtime without crashing
+                install_name_tool -change /tmp/llvm/lib/libunwind.dylib /usr/lib/libSystem.B.dylib ../../artifacts/libpecos_julia.dylib || \
+                  echo "Warning: Could not remap libunwind dependency"
+              fi
             fi
 
             echo "Final library dependencies:"
