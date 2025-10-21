@@ -2648,6 +2648,7 @@ name = "pecos-quest"
 version = "0.1.1"
 dependencies = [
  "approx 0.5.1",
+ "cc",
  "cxx",
  "cxx-build",
  "env_logger",
