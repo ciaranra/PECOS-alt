@@ -134,6 +134,14 @@ jobs:
         run: |
           cd julia/pecos-julia-ffi
 
+          # Set up build flags for macOS to avoid LLVM dependency issues
+          if [[ "${{ matrix.os }}" == macos-* ]]; then
+            # Use system libunwind instead of LLVM's
+            export RUSTFLAGS="-C link-arg=-Wl,-dead_strip_dylibs"
+            # Ensure we don't link against /tmp/llvm libraries
+            export DYLD_FALLBACK_LIBRARY_PATH="/usr/lib:/System/Library/Frameworks"
+          fi
+
           # Native build for all platforms (no cross-compilation needed with native ARM64 runners)
           cargo build --release
           target_dir="../../target/release"
@@ -144,6 +152,19 @@ jobs:
           # Copy the built library
           if [[ "${{ matrix.os }}" == macos-* ]]; then
             cp $target_dir/libpecos_julia.dylib ../../artifacts/
+
+            # Fix any remaining LLVM dependencies
+            echo "Checking and fixing library dependencies..."
+            otool -L ../../artifacts/libpecos_julia.dylib
+
+            # Remove dependency on /tmp/llvm/lib/libunwind.dylib if present
+            if otool -L ../../artifacts/libpecos_julia.dylib | grep -q "/tmp/llvm/lib/libunwind.dylib"; then
+              echo "Fixing libunwind dependency..."
+              install_name_tool -change /tmp/llvm/lib/libunwind.dylib /usr/lib/libunwind.dylib ../../artifacts/libpecos_julia.dylib
+            fi
+
+            echo "Final library dependencies:"
+            otool -L ../../artifacts/libpecos_julia.dylib
           else
             cp $target_dir/libpecos_julia.so ../../artifacts/
           fi
