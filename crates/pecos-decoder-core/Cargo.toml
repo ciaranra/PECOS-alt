@@ -15,11 +15,6 @@ description = "Core traits and utilities for PECOS decoders"
 ndarray.workspace = true
 thiserror.workspace = true
 anyhow.workspace = true
-log.workspace = true
-
-[features]
-default = []
-testing = []
 
 [lints]
 workspace = true

@@ -11,7 +11,5 @@ keywords.workspace = true
 categories.workspace = true
 description = "Random number generators for PECOS quantum computing simulations"
 
-[dependencies]
-
 [lints]
 workspace = true

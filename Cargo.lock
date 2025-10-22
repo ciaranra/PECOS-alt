@@ -2447,7 +2447,6 @@ name = "pecos-decoder-core"
 version = "0.1.1"
 dependencies = [
  "anyhow",
- "log",
  "ndarray",
  "thiserror 2.0.17",
 ]

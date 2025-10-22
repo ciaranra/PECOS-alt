@@ -29,8 +29,5 @@ pecos-build-utils.workspace = true
 log.workspace = true
 env_logger.workspace = true
 
-[lib]
-name = "pecos_qulacs"
-
 [lints]
 workspace = true

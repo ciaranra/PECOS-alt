@@ -37,8 +37,5 @@ env_logger.workspace = true
 [dev-dependencies]
 approx.workspace = true
 
-[lib]
-name = "pecos_quest"
-
 [lints]
 workspace = true

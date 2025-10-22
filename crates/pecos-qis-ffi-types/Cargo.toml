@@ -12,7 +12,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [lib]
-# Just an rlib - no FFI functions, just data structures
+# Just a rlib - no FFI functions, just data structures
 crate-type = ["rlib"]
 
 [dependencies]

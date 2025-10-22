@@ -20,11 +20,10 @@ pecos-programs.workspace = true
 log.workspace = true
 dyn-clone.workspace = true
 tempfile.workspace = true
-# LLVM JIT execution
 rand.workspace = true
 rand_chacha.workspace = true
 
-# Inkwell configuration - use default linking strategy (matches CQCL approach)
+# Inkwell configuration - use default linking strategy (matches TKET approach)
 [dependencies.inkwell]
 workspace = true
 features = ["llvm14-0"]
