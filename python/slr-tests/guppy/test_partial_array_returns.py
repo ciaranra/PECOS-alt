@@ -157,7 +157,7 @@ def test_no_return_when_all_consumed() -> None:
 def test_qec_pattern_with_partial_returns() -> None:
     """Test realistic QEC pattern using partial returns."""
 
-    class StabilzerRound(Block):
+    class StabilizerRound(Block):
         """Perform one round of stabilizer measurements."""
 
         def __init__(self, data: QReg, ancilla: QReg, syndrome: CReg) -> None:
@@ -189,9 +189,9 @@ def test_qec_pattern_with_partial_returns() -> None:
         syndrome2 := CReg("syndrome2", 2),
         final := CReg("final", 3),
         # First round
-        StabilzerRound(data, ancilla, syndrome1),
+        StabilizerRound(data, ancilla, syndrome1),
         # Second round
-        StabilzerRound(data, ancilla, syndrome2),
+        StabilizerRound(data, ancilla, syndrome2),
         # Final measurement
         Measure(data) > final,
     )
@@ -199,7 +199,7 @@ def test_qec_pattern_with_partial_returns() -> None:
     guppy = SlrConverter(prog).guppy()
 
     # Function should be generated
-    assert "stabilzer_round" in guppy
+    assert "stabilizer_round" in guppy
     # Function parameters should include data array
     assert "data: array[quantum.qubit, 3]" in guppy
 
@@ -208,4 +208,4 @@ def test_qec_pattern_with_partial_returns() -> None:
     assert "return data" in guppy
 
     # Main should capture returned data
-    assert "data = test_partial_array_returns_stabilzer_round(ancilla, data" in guppy
+    assert "data = test_partial_array_returns_stabilizer_round(ancilla, data" in guppy

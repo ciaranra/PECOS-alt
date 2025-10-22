@@ -169,7 +169,7 @@ class IRBuilder:
                 # Check if building this function added more pending functions
                 # Add any new pending functions, avoiding duplicates
                 for new_func in self.pending_functions:
-                    new_block, new_name, new_sig = new_func
+                    _new_block, new_name, _new_sig = new_func
                     # Check if this function is already built or pending
                     already_pending = any(
                         f[1] == new_name for f in all_pending if len(f) >= 2
@@ -322,10 +322,10 @@ class IRBuilder:
         # Handle different formats of func_info
         if len(func_info) == 3:
             # New format from IR builder: (block, func_name, signature)
-            sample_block, func_name, block_signature = func_info
+            sample_block, func_name, _block_signature = func_info
         elif len(func_info) == 4:
             # Old format: (block_key, func_name, sample_block, block_name)
-            block_key, func_name, sample_block, block_name = func_info
+            _block_key, func_name, sample_block, _block_name = func_info
         else:
             return None
 
@@ -3957,35 +3957,34 @@ class IRBuilder:
                                         self.current_block.statements.append(
                                             ExpressionStatement(discard_stmt),
                                         )
-                        else:
-                            # Regular pre-allocated array
-                            if var_name not in cleaned_up_arrays:
-                                self.current_block.statements.append(
-                                    Comment(f"Discard {var.sym}"),
-                                )
+                        # Regular pre-allocated array
+                        elif var_name not in cleaned_up_arrays:
+                            self.current_block.statements.append(
+                                Comment(f"Discard {var.sym}"),
+                            )
 
-                                # Use quantum.discard_array() for the whole array
-                                array_ref = VariableRef(var_name)
-                                stmt = FunctionCall(
-                                    func_name="quantum.discard_array",
-                                    args=[array_ref],
-                                )
+                            # Use quantum.discard_array() for the whole array
+                            array_ref = VariableRef(var_name)
+                            stmt = FunctionCall(
+                                func_name="quantum.discard_array",
+                                args=[array_ref],
+                            )
 
-                                # Create expression statement wrapper
-                                class ExpressionStatement(Statement):
-                                    def __init__(self, expr):
-                                        self.expr = expr
+                            # Create expression statement wrapper
+                            class ExpressionStatement(Statement):
+                                def __init__(self, expr):
+                                    self.expr = expr
 
-                                    def analyze(self, context):
-                                        self.expr.analyze(context)
+                                def analyze(self, context):
+                                    self.expr.analyze(context)
 
-                                    def render(self, context):
-                                        return self.expr.render(context)
+                                def render(self, context):
+                                    return self.expr.render(context)
 
-                                self.current_block.statements.append(
-                                    ExpressionStatement(stmt),
-                                )
-                                cleaned_up_arrays.add(var_name)
+                            self.current_block.statements.append(
+                                ExpressionStatement(stmt),
+                            )
+                            cleaned_up_arrays.add(var_name)
 
     def _check_has_element_operations(self, block, var_name: str) -> bool:
         """Check if a block has element-wise operations on a variable.

@@ -12,7 +12,9 @@
 
 use crate::Engine;
 use crate::byte_message::ByteMessage;
-use crate::engine_system::{ClassicalEngine, ControlEngine, EngineStage, HybridEngine};
+use crate::engine_system::{
+    ClassicalControlEngine, ClassicalEngine, ControlEngine, EngineStage, HybridEngine,
+};
 use crate::hybrid::HybridEngineBuilder;
 use crate::noise::NoiseModel;
 use crate::quantum::{QuantumEngine, StateVecEngine};
@@ -23,7 +25,10 @@ use pecos_core::rng::RngManageable;
 use pecos_core::rng::rng_manageable::derive_seed;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::{
+    ThreadPoolBuilder,
+    iter::{IntoParallelIterator, ParallelIterator},
+};
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -80,14 +85,15 @@ use super::builder::MonteCarloEngineBuilder;
 ///
 /// // This would run the simulation but we won't actually run it in the doctest
 /// # let num_shots = 10; // Using a small number for the doctest
-/// # let num_workers = 1; // Using a single worker for the doctest
-/// # let _results = engine.run(num_shots, num_workers);
+/// # let _results = engine.run(num_shots);
 /// ```
 pub struct MonteCarloEngine {
     /// Template `HybridEngine` that is cloned for each worker
     pub hybrid_engine_template: HybridEngine,
     /// Random number generator for seed generation
     pub rng: ChaCha8Rng,
+    /// Default number of worker threads
+    pub default_workers: usize,
 }
 
 impl MonteCarloEngine {
@@ -140,7 +146,7 @@ impl MonteCarloEngine {
     /// let mut engine = MonteCarloEngine::new_with_defaults(classical_engine);
     /// ```
     #[must_use]
-    pub fn new_with_defaults(classical_engine: Box<dyn ClassicalEngine>) -> Self {
+    pub fn new_with_defaults(classical_engine: Box<dyn ClassicalControlEngine>) -> Self {
         // Use the builder pattern
         let num_qubits = classical_engine.num_qubits();
         Self::builder()
@@ -178,7 +184,10 @@ impl MonteCarloEngine {
     ///     .build();
     /// ```
     #[must_use]
-    pub fn new_with_depolarizing_noise(classical_engine: Box<dyn ClassicalEngine>, p: f64) -> Self {
+    pub fn new_with_depolarizing_noise(
+        classical_engine: Box<dyn ClassicalControlEngine>,
+        p: f64,
+    ) -> Self {
         // Use the builder pattern
         Self::builder()
             .with_classical_engine(classical_engine)
@@ -224,8 +233,33 @@ impl MonteCarloEngine {
     ///
     /// # Panics
     /// - If `num_shots` is zero.
+    pub fn run(&mut self, num_shots: usize) -> Result<ShotVec, PecosError> {
+        self.run_with_workers(num_shots, self.default_workers)
+    }
+
+    /// Run the Monte Carlo simulation with a specified number of worker threads.
+    ///
+    /// This method runs the simulation with the specified number of shots and worker threads,
+    /// overriding the default worker count configured during construction.
+    ///
+    /// # Arguments
+    /// * `num_shots` - The number of shots to run
+    /// * `num_workers` - The number of parallel worker threads to use
+    ///
+    /// # Returns
+    /// Aggregated results from all shots.
+    ///
+    /// # Errors
+    /// Returns a `PecosError` if any part of the simulation fails.
+    ///
+    /// # Panics
+    /// - If `num_shots` is zero.
     /// - If `num_workers` is zero.
-    pub fn run(&mut self, num_shots: usize, num_workers: usize) -> Result<ShotVec, PecosError> {
+    pub fn run_with_workers(
+        &mut self,
+        num_shots: usize,
+        num_workers: usize,
+    ) -> Result<ShotVec, PecosError> {
         assert!(num_shots > 0, "num_shots cannot be zero");
         assert!(num_workers > 0, "num_workers cannot be zero");
 
@@ -240,10 +274,22 @@ impl MonteCarloEngine {
         let shots_per_worker = distribute_shots(num_shots, num_workers);
         let base_seed = self.rng.next_u64();
 
-        // Run shots in parallel across workers
-        (0..num_workers)
-            .into_par_iter()
-            .map(|worker_idx| {
+        // Create a dedicated thread pool for this simulation to avoid contention
+        // with global Rayon thread pool when multiple simulations run concurrently.
+        // CRITICAL: For QIR operations, we need to ensure each test gets its own
+        // isolated thread pool to prevent TLS conflicts during library cleanup.
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(num_workers)
+            .thread_name(|index| format!("pecos-mc-worker-{index}"))
+            .build()
+            .map_err(|e| PecosError::Processing(format!("Failed to create thread pool: {e}")))?;
+
+        // Run shots in parallel across workers using dedicated thread pool
+        // CRITICAL: Use install() to ensure all work completes before thread pool cleanup
+        let parallel_result = thread_pool.install(|| {
+            (0..num_workers)
+                .into_par_iter()
+                .map(|worker_idx| {
                 let shots_this_worker = shots_per_worker[worker_idx];
                 if shots_this_worker == 0 {
                     return Ok(());
@@ -266,7 +312,30 @@ impl MonteCarloEngine {
 
                 for shot_idx in 0..shots_this_worker {
                     engine.reset()?;
-                    let shot_result = engine.run_shot()?;
+
+                    // Catch panics during shot execution and convert to PecosError
+                    let shot_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        engine.run_shot()
+                    }));
+
+                    let shot_result = match shot_result {
+                        Ok(Ok(result)) => result,
+                        Ok(Err(e)) => return Err(e),
+                        Err(panic_payload) => {
+                            // Convert panic to PecosError
+                            let panic_msg = if let Some(s) = panic_payload.downcast_ref::<String>() {
+                                s.clone()
+                            } else if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                                (*s).to_string()
+                            } else {
+                                "Unknown panic occurred during shot execution".to_string()
+                            };
+
+                            return Err(PecosError::Processing(format!(
+                                "Shot execution failed: {panic_msg}"
+                            )));
+                        }
+                    };
 
                     // Store with worker/shot indices for deterministic ordering
                     results_vec
@@ -276,8 +345,16 @@ impl MonteCarloEngine {
                 }
 
                 Ok(())
-            })
-            .collect::<Result<Vec<()>, PecosError>>()?;
+                })
+                .collect::<Result<Vec<()>, PecosError>>()
+        });
+
+        // Handle the parallel execution result
+        parallel_result?;
+
+        // CRITICAL: Explicitly drop the thread pool to ensure clean shutdown
+        // This helps prevent TLS issues during test cleanup
+        drop(thread_pool);
 
         // Ensure deterministic ordering of results
         let mut results = results_vec.lock().unwrap();
@@ -312,7 +389,7 @@ impl MonteCarloEngine {
     /// This function will return a `PecosError` if:
     /// - There is an error during the execution of the simulation.
     pub fn run_with_engines(
-        classical_engine: Box<dyn ClassicalEngine>,
+        classical_engine: Box<dyn ClassicalControlEngine>,
         noise_model: Box<dyn NoiseModel>,
         quantum_engine: Box<dyn QuantumEngine>,
         num_shots: usize,
@@ -360,7 +437,7 @@ impl MonteCarloEngine {
             engine.set_seed(s)?;
         }
 
-        engine.run(num_shots, num_workers)
+        engine.run_with_workers(num_shots, num_workers)
     }
 
     /// Static method to run a simulation with a classical engine and any noise model.
@@ -382,14 +459,62 @@ impl MonteCarloEngine {
     /// # Errors
     /// Returns a `PecosError` if any part of the simulation fails.
     pub fn run_with_noise_model(
-        classical_engine: Box<dyn ClassicalEngine>,
+        classical_engine: Box<dyn ClassicalControlEngine>,
         noise_model: Box<dyn NoiseModel>,
         num_shots: usize,
         num_workers: usize,
         seed: Option<u64>,
     ) -> Result<ShotVec, PecosError> {
         // Create a hybrid engine with the state vector quantum engine
-        let quantum_engine = Box::new(StateVecEngine::new(classical_engine.num_qubits()));
+        let num_qubits = classical_engine.num_qubits();
+        debug!(
+            "MonteCarloEngine::run_with_noise_model: Creating StateVecEngine with {num_qubits} qubits"
+        );
+        let quantum_engine = Box::new(StateVecEngine::new(num_qubits));
+        let mut hybrid_engine = HybridEngineBuilder::new()
+            .with_classical_engine(classical_engine)
+            .with_quantum_engine(quantum_engine)
+            .with_noise_model(noise_model)
+            .build();
+
+        // Set seed if provided
+        if let Some(s) = seed {
+            hybrid_engine.set_seed(s)?;
+        }
+
+        Self::run_with_hybrid_engine(hybrid_engine, num_shots, num_workers, seed)
+    }
+
+    /// Static method to run a simulation with a classical engine, noise model, and max qubits.
+    ///
+    /// This method allows specifying the maximum number of qubits for the quantum engine,
+    /// which is necessary for programs with dynamic qubit allocation in loops.
+    ///
+    /// # Parameters
+    /// - `classical_engine`: The classical engine to use.
+    /// - `noise_model`: The noise model to apply during simulation.
+    /// - `num_qubits`: Number of qubits for the quantum engine (also sets allocation limit).
+    /// - `num_shots`: The total number of circuit executions to perform.
+    /// - `num_workers`: The number of worker threads to use for parallel execution.
+    /// - `seed`: Optional seed for deterministic behavior.
+    ///
+    /// # Returns
+    /// Aggregated results from all shots.
+    ///
+    /// # Errors
+    /// Returns a `PecosError` if any part of the simulation fails.
+    pub fn run_with_noise_model_and_max_qubits(
+        classical_engine: Box<dyn ClassicalControlEngine>,
+        noise_model: Box<dyn NoiseModel>,
+        num_qubits: usize,
+        num_shots: usize,
+        num_workers: usize,
+        seed: Option<u64>,
+    ) -> Result<ShotVec, PecosError> {
+        debug!(
+            "MonteCarloEngine::run_with_noise_model_and_max_qubits: Creating StateVecEngine with {num_qubits} qubits"
+        );
+        let quantum_engine = Box::new(StateVecEngine::new(num_qubits));
         let mut hybrid_engine = HybridEngineBuilder::new()
             .with_classical_engine(classical_engine)
             .with_quantum_engine(quantum_engine)
@@ -456,6 +581,7 @@ impl Clone for MonteCarloEngine {
         Self {
             hybrid_engine_template: self.hybrid_engine_template.clone(),
             rng: self.rng.clone(),
+            default_workers: self.default_workers,
         }
     }
 }

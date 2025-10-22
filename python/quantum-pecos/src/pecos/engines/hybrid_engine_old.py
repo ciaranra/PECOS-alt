@@ -347,13 +347,13 @@ class HybridEngine:
                     raise
 
                 sym = None
-                indx = None
+                index = None
                 if params.get("var"):
-                    sym, indx = params.get("var")
+                    sym, index = params.get("var")
                 elif params.get("var_output"):
-                    sym, indx = params.get("var_output")[location]
+                    sym, index = params.get("var_output")[location]
 
                 if sym:
                     if not result:
                         result = 0
-                    output[sym][indx] = result
+                    output[sym][index] = result

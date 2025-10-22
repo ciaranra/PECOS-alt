@@ -2,13 +2,13 @@ use crate::GateType;
 use crate::noise::{
     GeneralNoiseModel, NoiseRng, SingleQubitWeightedSampler, TwoQubitWeightedSampler,
 };
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Builder for creating general noise models
 #[derive(Debug, Clone)]
 pub struct GeneralNoiseModelBuilder {
     // global params
-    noiseless_gates: Option<HashSet<GateType>>,
+    noiseless_gates: Option<BTreeSet<GateType>>,
     seed: Option<u64>,
     scale: Option<f64>,
     leakage_scale: Option<f64>,
@@ -260,7 +260,7 @@ impl GeneralNoiseModelBuilder {
     #[must_use]
     pub fn with_noiseless_gate(mut self, gate_type: GateType) -> Self {
         if self.noiseless_gates.is_none() {
-            self.noiseless_gates = Some(HashSet::new());
+            self.noiseless_gates = Some(BTreeSet::new());
         }
 
         if let Some(ref mut gates) = self.noiseless_gates {
@@ -778,5 +778,11 @@ impl GeneralNoiseModelBuilder {
 
         model.p_idle_linear_rate = model.p_idle_linear_rate * scale * idle_scale;
         model.p2_idle = Self::validate_probability(model.p2_idle * scale * idle_scale);
+    }
+}
+
+impl crate::noise::IntoNoiseModel for GeneralNoiseModelBuilder {
+    fn into_noise_model(self) -> Box<dyn crate::noise::NoiseModel> {
+        Box::new(self.build())
     }
 }

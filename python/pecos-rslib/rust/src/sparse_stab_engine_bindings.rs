@@ -1,4 +1,5 @@
 // Copyright 2025 The PECOS Developers
+use pecos::prelude::*;
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.You may obtain a copy of the License at
@@ -12,7 +13,6 @@
 
 use crate::byte_message_bindings::PyByteMessage;
 use crate::engine_bindings::{PyEngineCommon, PyEngineWrapper, PyQuantumEngineWrapper};
-use pecos::prelude::SparseStabEngine;
 use pyo3::prelude::*;
 
 /// Python wrapper for Rust `SparseStabEngine` to execute `ByteMessage` circuits with Clifford gates
@@ -69,7 +69,7 @@ impl PySparseStabEngine {
         message: &PyByteMessage,
         shots: Option<usize>,
         py: Python<'_>,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Py<PyAny>> {
         self.py_run_circuit_with_shots(message, shots, py)
     }
 

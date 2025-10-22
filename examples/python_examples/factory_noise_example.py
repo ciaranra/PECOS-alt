@@ -7,7 +7,8 @@ quantum noise models from dictionary/JSON configurations.
 
 from collections import Counter
 
-from pecos.rslib import GeneralNoiseFactory, create_noise_from_json, qasm_sim
+from pecos.rslib import GeneralNoiseFactory, create_noise_from_json, qasm_engine
+from pecos.rslib.programs import QasmProgram
 
 
 def basic_factory_example() -> None:
@@ -41,10 +42,17 @@ def basic_factory_example() -> None:
     noise = factory.create_from_dict(config)
 
     # Run simulation
-    results = qasm_sim(qasm).noise(noise).run(1000)
+    results = (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .noise(noise)
+        .run(1000)
+    )
+    results_dict = results.to_dict()
 
     # Analyze results
-    counts = Counter(results["c"])
+    counts = Counter(results_dict["c"])
     print(f"Bell state results: {dict(counts)}")
     print("Expected: mostly 0 (|00>) and 3 (|11>) with some errors")
 
@@ -277,9 +285,16 @@ def advanced_noise_example() -> None:
     }
 
     noise = factory.create_from_dict(config)
-    results = qasm_sim(qasm).noise(noise).run(1000)
+    results = (
+        qasm_engine()
+        .program(QasmProgram.from_string(qasm))
+        .to_sim()
+        .noise(noise)
+        .run(1000)
+    )
+    results_dict = results.to_dict()
 
-    counts = Counter(results["c"])
+    counts = Counter(results_dict["c"])
     print("GHZ state results (top 5):")
     for state, count in counts.most_common(5):
         binary = format(state, "04b")

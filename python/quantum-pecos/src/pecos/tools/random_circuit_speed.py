@@ -66,12 +66,13 @@ def random_circuit_speed(
 
     circ_sim = TimingRunner()
     for qc in circuits:
+        circuit_to_run = qc
         if converter is not None:
-            qc = converter(qc)  # noqa: PLW2901 - apply conversion function
+            circuit_to_run = converter(qc)
 
         state = state_sim(num_qubits)
         circ_sim.reset_time()
-        meas = circ_sim.run(state, qc)
+        meas = circ_sim.run(state, circuit_to_run)
         times.append(circ_sim.total_time)
         measurements.append(meas)
 

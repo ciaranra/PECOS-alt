@@ -92,7 +92,7 @@ use pecos_core::QubitId;
 use pecos_core::errors::PecosError;
 use rand_chacha::ChaCha8Rng;
 use std::any::Any;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 
 /// General noise model implementation that includes parameterized error channels for various quantum operations
 ///
@@ -110,7 +110,7 @@ pub struct GeneralNoiseModel {
     ///
     /// Gates in this set may be those that are implemented in software rather than
     /// with physical operations, so no noise should be applied to them.
-    noiseless_gates: HashSet<GateType>,
+    noiseless_gates: BTreeSet<GateType>,
 
     /// Scale leakage events to be completely depolarizing events instead.
     ///
@@ -321,7 +321,7 @@ pub struct GeneralNoiseModel {
     ///
     /// Tracks which qubits have leaked out of the computational subspace and are
     /// therefore not affected by computational gates but might still affect measurements.
-    leaked_qubits: HashSet<usize>,
+    leaked_qubits: BTreeSet<usize>,
 
     /// Random number generator for stochastic noise processes
     rng: NoiseRng<ChaCha8Rng>,
@@ -1095,9 +1095,21 @@ impl GeneralNoiseModel {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```rust
+    /// use pecos_engines::noise::GeneralNoiseModel;
+    ///
+    /// // Create a noise model for testing leakage
     /// let mut noise_model = GeneralNoiseModel::default();
-    /// noise_model.mark_as_leaked(0); // Mark qubit 0 as leaked
+    ///
+    /// // Mark qubit 0 as leaked - useful for testing leakage-aware algorithms
+    /// noise_model.mark_as_leaked(0);
+    ///
+    /// // Mark multiple qubits as leaked for batch testing
+    /// noise_model.mark_as_leaked(1);
+    /// noise_model.mark_as_leaked(3);
+    ///
+    /// // The noise model now tracks these qubits as leaked
+    /// // This affects how noise operations are applied during simulation
     /// ```
     pub fn mark_as_leaked(&mut self, qubit: usize) {
         // TODO: see if some of the mark_as_leaked needs to move to self.leak()

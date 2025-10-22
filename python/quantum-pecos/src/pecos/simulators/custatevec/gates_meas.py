@@ -24,7 +24,7 @@ import numpy as np
 if TYPE_CHECKING:
     from pecos.simulators.custatevec.state import CuStateVec
     from pecos.typing import SimulatorGateParams
-from cuquantum import custatevec as cusv
+from cuquantum.bindings import custatevec as cusv
 
 
 def meas_z(state: CuStateVec, qubit: int, **_params: SimulatorGateParams) -> int:

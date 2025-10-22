@@ -179,25 +179,24 @@ class AllocationOptimizer:
                     # Check if used across multiple scopes
                     if len(self.scope_stack) > 1:
                         usage.used_in_multiple_scopes = True
-            else:
-                # Full array usage - mark all elements as used
-                if array_name in self.qubit_usage:
-                    for idx in self.qubit_usage[array_name]:
-                        usage = self.qubit_usage[array_name][idx]
-                        if usage.first_use_line == float("inf"):
-                            usage.first_use_line = self.current_line
-                        usage.last_use_line = self.current_line
+            # Full array usage - mark all elements as used
+            elif array_name in self.qubit_usage:
+                for idx in self.qubit_usage[array_name]:
+                    usage = self.qubit_usage[array_name][idx]
+                    if usage.first_use_line == float("inf"):
+                        usage.first_use_line = self.current_line
+                    usage.last_use_line = self.current_line
 
-                        # Track scope usage for each element
-                        current_scope = self.scope_stack[-1]
-                        if current_scope == "loop":
-                            usage.uses_in_loops.add(self.current_line)
-                        elif current_scope in ["if", "else"]:
-                            usage.uses_in_conditionals.add(self.current_line)
+                    # Track scope usage for each element
+                    current_scope = self.scope_stack[-1]
+                    if current_scope == "loop":
+                        usage.uses_in_loops.add(self.current_line)
+                    elif current_scope in ["if", "else"]:
+                        usage.uses_in_conditionals.add(self.current_line)
 
-                        # Check if used across multiple scopes
-                        if len(self.scope_stack) > 1:
-                            usage.used_in_multiple_scopes = True
+                    # Check if used across multiple scopes
+                    if len(self.scope_stack) > 1:
+                        usage.used_in_multiple_scopes = True
 
     def _record_qubit_consumption(self, qarg) -> None:
         """Record that a qubit is being consumed (measured)."""

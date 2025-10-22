@@ -71,9 +71,12 @@ Some simulators from `pecos.simulators` require external packages:
 
 - **QuEST**: Installed with the Python package `pyquest` via `pip install .[all]`. For 32-bit float point precision, follow the installation instructions [here](https://github.com/rrmeister/pyQuEST/tree/develop).
 
-- **CuStateVec**: Requires a Linux machine with an NVIDIA GPU. Installation via conda is recommended, as discussed [here](https://docs.nvidia.com/cuda/cuquantum/latest/getting_started/getting_started.html#installing-cuquantum).
+- **CuStateVec** and **MPS** (GPU simulators): Require NVIDIA GPU, CUDA Toolkit 13/12, and additional Python packages. See the comprehensive [CUDA Setup Guide](cuda-setup.md) for detailed installation instructions.
 
-- **MPS**: Uses `pytket-cutensornet` and can be installed via `pip install .[cuda]`. These simulators use NVIDIA GPUs and cuQuantum. Follow the instructions for `CuStateVec` above to install cuQuantum.
+    Quick install (after installing CUDA Toolkit):
+    ```bash
+    uv pip install quantum-pecos[cuda]
+    ```
 
 ## Verification
 

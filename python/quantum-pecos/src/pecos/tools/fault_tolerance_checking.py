@@ -37,7 +37,7 @@ def find_pauli_fault(
     wt: int,
     fail_func: Callable,
     num_qubits: int | None = None,
-    simulator: str = "stabilizer",  # noqa: ARG001
+    _simulator: str = "stabilizer",
     *,
     verbose: bool = True,
     failure_break: bool = True,
@@ -119,12 +119,13 @@ def get_all_spacetime(
     for gates, tick, _ in qcirc.iter_ticks():
         for sym, locations, metadata in gates.items():
             for loc in locations:
+                loc_tuple = loc
                 if isinstance(loc, int):
-                    loc = (loc,)  # noqa: PLW2901 - normalize int to tuple
+                    loc_tuple = (loc,)
 
                 yield {
                     "tick": tick,
-                    "location": loc,
+                    "location": loc_tuple,
                     "before": sym.startswith("meas"),
                     "symbol": sym,
                     "metadata": metadata,

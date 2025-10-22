@@ -116,10 +116,10 @@ def fault_tolerance_check(qecc: QECCProtocol, decoder: Decoder) -> None:
     spacetime = set(product(list(range(num_ticks)), qudits))
     for xs, zs in gen_pauli_errors(spacetime, max_errors=t):
         state = SparseSimPy(num_qudits)
-        xs = list(xs)  # noqa: PLW2901 - convert generator to list
-        zs = list(zs)  # noqa: PLW2901 - convert generator to list
+        xs_list = list(xs)
+        zs_list = list(zs)
 
-        err_dict = form_errors(xs, zs)
+        err_dict = form_errors(xs_list, zs_list)
 
         sign = _apply_err_spacetime(
             state,

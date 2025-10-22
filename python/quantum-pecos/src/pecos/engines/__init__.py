@@ -1,6 +1,8 @@
 """Execution engines for PECOS.
 
 This package provides various execution engines for quantum simulations.
+
+Note: Selene Bridge Plugin is now located in pecos.simulators.selene_bridge
 """
 
 # Copyright 2022 The PECOS Developers

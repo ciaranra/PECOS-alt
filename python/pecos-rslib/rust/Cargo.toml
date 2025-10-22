@@ -1,4 +1,3 @@
-# PECOS/python/pecos-rslib/rust/Cargo.toml
 [package]
 name = "pecos-rslib"
 version.workspace = true
@@ -20,25 +19,19 @@ doctest = false
 # Skip unit tests as well - all testing should be done through Python
 test = false
 
-[features]
-default = ["wasm"]
-wasm = []
-
 [dependencies]
-pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
+# Use the pecos metacrate which includes all simulators and runtimes by default
 pecos = { workspace = true }
-pecos-core = { workspace = true }
-pecos-qasm = { workspace = true, features = ["wasm"] }
-pecos-engines = { workspace = true }
-pecos-qsim = { workspace = true }
-pecos-cppsparsesim = { path = "../../../crates/pecos-cppsparsesim" }
-pecos-quest = { path = "../../../crates/pecos-quest", features = ["cpu"] }
-pecos-qulacs = { path = "../../../crates/pecos-qulacs" }
-parking_lot = { workspace = true}
-serde_json = { workspace = true }
+
+pyo3 = { workspace=true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
+parking_lot.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+log.workspace = true
+libc.workspace = true
+
+[build-dependencies]
+pyo3-build-config.workspace = true
 
 [lints]
 workspace = true
-
-[build-dependencies]
-pyo3-build-config = { workspace = true }

@@ -1,12 +1,12 @@
 use assert_cmd::prelude::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
 
 /// Extract register keys from JSON output
 /// Handles the new columnar format: {"c": [3, 0, ...]}
 fn get_keys(json_output: &str) -> Vec<String> {
-    let mut keys = std::collections::HashSet::new();
+    let mut keys = std::collections::BTreeSet::new();
 
     // Parse the JSON - expecting an object with register names as keys
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output)
@@ -27,7 +27,7 @@ fn get_keys(json_output: &str) -> Vec<String> {
 /// Extract measurement results from JSON output
 /// Handles the new columnar format: {"c": [3, 0, ...]}
 fn get_values(json_output: &str) -> Vec<String> {
-    let mut register_values: HashMap<String, Vec<String>> = HashMap::new();
+    let mut register_values: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     // Parse the JSON - expecting an object with register names as keys
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output)
@@ -57,7 +57,7 @@ fn get_values(json_output: &str) -> Vec<String> {
 #[test]
 fn test_seed_produces_consistent_results() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let test_file = manifest_dir.join("../../examples/phir/bell.json");
+    let test_file = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     // Run multiple times with seed 42, forcing JSON format
     let seed_42_run1 = Command::cargo_bin("pecos")?

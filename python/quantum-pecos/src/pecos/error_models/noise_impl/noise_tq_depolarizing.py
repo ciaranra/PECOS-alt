@@ -18,7 +18,7 @@ two-qubit gate operations like CNOT and CZ gates.
 
 import numpy as np
 
-from pecos.reps.pypmir.op_types import QOp
+from pecos.reps.pyphir.op_types import QOp
 
 
 def noise_tq_depolarizing(op: QOp, p: float, noise_dict: dict) -> list[QOp] | None:

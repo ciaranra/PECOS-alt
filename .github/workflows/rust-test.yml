@@ -49,6 +49,9 @@ jobs:
         with:
           save-if: ${{ github.ref_name == 'master' || github.ref_name == 'development' || github.ref_name == 'dev' }}
 
+      - name: Setup LLVM 14.0.6
+        uses: ./.github/actions/setup-llvm
+
       - name: Install rustfmt
         run: rustup component add rustfmt
 
@@ -60,6 +63,74 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+  rust-lint-no-llvm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (for local testing)
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.cargo/bin:$PATH"
+
+      - name: Set up Rust
+        run: rustup override set stable && rustup update
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref_name == 'master' || github.ref_name == 'development' || github.ref_name == 'dev' }}
+
+      - name: Install rustfmt
+        run: rustup component add rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Install clippy
+        run: rustup component add clippy
+
+      - name: Run clippy without LLVM features
+        run: |
+          echo "Running clippy without LLVM features..."
+          # Use --manifest-path to avoid workspace resolution pulling in LLVM dependencies
+
+          echo "Testing pecos-core..."
+          cd crates/pecos-core && cargo clippy --all-targets -- -D warnings && cd ../..
+
+          echo "Testing pecos-engines..."
+          cd crates/pecos-engines && cargo clippy --all-targets -- -D warnings && cd ../..
+
+          echo "Testing pecos-qsim..."
+          cd crates/pecos-qsim && cargo clippy --all-targets -- -D warnings && cd ../..
+
+          echo "Testing pecos-programs..."
+          cd crates/pecos-programs && cargo clippy --all-targets -- -D warnings && cd ../..
+
+          echo "Testing pecos-rng..."
+          cd crates/pecos-rng && cargo clippy --all-targets -- -D warnings && cd ../..
+
+          echo "Testing pecos-qasm..."
+          cd crates/pecos-qasm && cargo clippy --all-targets -- -D warnings && cd ../..
+
+          echo "Testing pecos-phir-json..."
+          cd crates/pecos-phir-json && cargo clippy --all-targets -- -D warnings && cd ../..
+
+          echo "Testing pecos-qis-ffi-types..."
+          cd crates/pecos-qis-ffi-types && cargo clippy --all-targets -- -D warnings && cd ../..
+
+          # Test the main pecos crate without default features
+          echo "Testing pecos without default features..."
+          cd crates/pecos && cargo clippy --all-targets --no-default-features -- -D warnings && cd ../..
+
+          # Note: Skipping crates that require LLVM:
+          # - pecos-hugr-qis (HUGR to LLVM compiler)
+          # - pecos-qis-core (has inkwell dependency)
+          # - pecos-qis-selene (depends on pecos-qis-core with llvm feature)
+          # - pecos-phir (when hugr feature is enabled, depends on tket-qsystem which pulls in LLVM)
+          echo "Successfully tested core crates without LLVM!"
 
   pre-commit:
     runs-on: ubuntu-latest
@@ -108,128 +179,8 @@ jobs:
         with:
           save-if: ${{ github.ref_name == 'master' || github.ref_name == 'development' || github.ref_name == 'dev' }}
 
-      - name: Install LLVM Tools (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          # Add LLVM 14 repository
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-14 main"
-          sudo apt-get update
-          # Install LLVM 14 specifically
-          sudo apt-get install -y llvm-14 clang-14
-          # Create symlinks for llc and clang
-          sudo update-alternatives --install /usr/bin/llc llc /usr/bin/llc-14 100
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-14 100
-          # Verify installation
-          which llc
-          llc --version
-
-      - name: Install LLVM Tools (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install llvm@14
-          echo "$(brew --prefix llvm@14)/bin" >> $GITHUB_PATH
-          # Make sure it's available in the current step too
-          export PATH="$(brew --prefix llvm@14)/bin:$PATH"
-          which llc
-          llc --version
-
-      - name: Install LLVM Tools (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "14.0"
-          directory: ${{ runner.temp }}/llvm
-          env: false  # Don't set CC/CXX - we'll use MSVC for C++ compilation
-
-      - name: Setup LLVM Path (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          Write-Host "Setting up LLVM in PATH..."
-
-          # Display LLVM_PATH environment variable set by the action
-          Write-Host "LLVM_PATH environment variable: $env:LLVM_PATH"
-
-          # Ensure we're using MSVC for C++ compilation, not LLVM clang
-          Write-Host "Ensuring MSVC is used for C++ compilation..."
-          if (Test-Path env:CC) {
-            Write-Host "Removing CC environment variable (was: $env:CC)"
-            Remove-Item Env:CC -ErrorAction SilentlyContinue
-          }
-          if (Test-Path env:CXX) {
-            Write-Host "Removing CXX environment variable (was: $env:CXX)"
-            Remove-Item Env:CXX -ErrorAction SilentlyContinue
-          }
-
-          # Clear these from GITHUB_ENV too
-          echo "CC=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "CXX=" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-          # Add LLVM bin directory to PATH for this and subsequent steps
-          $llvmBinDir = Join-Path -Path $env:LLVM_PATH -ChildPath "bin"
-
-          # Verify the directory exists
-          if (Test-Path -Path $llvmBinDir) {
-            Write-Host "LLVM bin directory exists at $llvmBinDir"
-            # List contents to verify what's available
-            Write-Host "LLVM bin directory contents:"
-            Get-ChildItem -Path $llvmBinDir | Select-Object -First 10 | ForEach-Object {
-              Write-Host "  $($_.Name)"
-            }
-
-            # Add to PATH
-            echo "$llvmBinDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-            $env:PATH = "$llvmBinDir;$env:PATH"
-
-            # Verify llc is available
-            $llcPath = Join-Path -Path $llvmBinDir -ChildPath "llc.exe"
-            if (Test-Path -Path $llcPath) {
-              Write-Host "Found llc.exe at $llcPath"
-              Write-Host "Testing llc.exe:"
-              & "$llcPath" --version
-            } else {
-              Write-Host "WARNING: llc.exe not found at $llcPath"
-              # Display all exe files to help diagnose what might be available
-              Write-Host "Available executables in bin directory:"
-              Get-ChildItem -Path $llvmBinDir -Filter "*.exe" | ForEach-Object {
-                Write-Host "  $($_.Name)"
-              }
-            }
-          } else {
-            Write-Host "ERROR: LLVM bin directory does not exist at $llvmBinDir"
-            Write-Host "LLVM_PATH contents:"
-            Get-ChildItem -Path $env:LLVM_PATH | ForEach-Object {
-              Write-Host "  $($_.Name)"
-            }
-            exit 1
-          }
-
-      - name: Verify LLVM PATH (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          Write-Host "PATH environment variable:"
-          $env:PATH -split ';' | ForEach-Object { Write-Host "  $_" }
-
-          Write-Host "Checking for llc command:"
-          try {
-            $llcCommand = Get-Command llc -ErrorAction Stop
-            Write-Host "Found llc at location $($llcCommand.Source)"
-            & $llcCommand.Source --version
-          } catch {
-            Write-Host "llc command not found in PATH. This may cause tests to fail."
-
-            # Look for llc.exe in LLVM_PATH
-            if ($env:LLVM_PATH) {
-              $llcPath = Join-Path -Path $env:LLVM_PATH -ChildPath "bin\llc.exe"
-              if (Test-Path -Path $llcPath) {
-                Write-Host "Found llc.exe at $llcPath, but it's not in PATH. Adding it now."
-                $llvmBinDir = Join-Path -Path $env:LLVM_PATH -ChildPath "bin"
-                $env:PATH = "$llvmBinDir;$env:PATH"
-                echo "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-              }
-            }
-          }
+      - name: Setup LLVM 14.0.6
+        uses: ./.github/actions/setup-llvm
 
       - name: Set up Visual Studio environment on Windows
         if: matrix.os == 'windows-latest'
@@ -237,11 +188,44 @@ jobs:
         with:
           arch: x64
 
-      - name: Compile tests
+      - name: Compile tests (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          # CRITICAL: Prevent Homebrew library paths from being used during linking
+          # This fixes the "@rpath/libunwind.1.dylib" runtime error on macOS
+          # Reference: https://github.com/rust-lang/rust/issues/135372
+          unset LIBRARY_PATH
+          unset LD_LIBRARY_PATH
+          unset DYLD_LIBRARY_PATH
+          unset DYLD_FALLBACK_LIBRARY_PATH
+          unset PKG_CONFIG_PATH
+          export LIBRARY_PATH=/usr/lib
+
+          echo "RUSTFLAGS: $RUSTFLAGS"
+
+          cargo test --no-run
+
+      - name: Compile tests (Linux/Windows)
+        if: matrix.os != 'macos-latest'
         run: cargo test --no-run
 
-      - name: Run tests (Linux/macOS)
-        if: matrix.os != 'windows-latest'
+      - name: Run tests (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          # CRITICAL: Prevent Homebrew library paths from being used during linking
+          # This fixes the "@rpath/libunwind.1.dylib" runtime error on macOS
+          # Reference: https://github.com/rust-lang/rust/issues/135372
+          unset LIBRARY_PATH
+          unset LD_LIBRARY_PATH
+          unset DYLD_LIBRARY_PATH
+          unset DYLD_FALLBACK_LIBRARY_PATH
+          unset PKG_CONFIG_PATH
+          export LIBRARY_PATH=/usr/lib
+
+          cargo test --workspace
+
+      - name: Run tests (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: cargo test --workspace
 
       - name: Run tests (Windows)

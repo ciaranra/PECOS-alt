@@ -40,8 +40,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from pecos.protocols import MachineProtocol
-    from pecos.reps.pypmir.block_types import SeqBlock
-    from pecos.reps.pypmir.op_types import QOp
+    from pecos.reps.pyphir.block_types import SeqBlock
+    from pecos.reps.pyphir.op_types import QOp
 
 two_qubit_paulis = {
     "IX",
@@ -143,7 +143,7 @@ class GenericErrorModel:
     def process(
         self,
         qops: list[QOp],
-        call_back: Callable | None = None,  # noqa: ARG002
+        _call_back: Callable | None = None,
     ) -> list[QOp | SeqBlock]:
         """Process quantum operations and apply generic errors.
 

@@ -1,4 +1,5 @@
 // Copyright 2025 The PECOS Developers
+use pecos::prelude::*;
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.You may obtain a copy of the License at
@@ -10,8 +11,6 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use pecos_core::{Set, VecSet};
-use pecos_qsim::{CliffordGateable, QuantumSimulator, StdPauliProp};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PySet};
 use std::collections::BTreeMap;
@@ -105,7 +104,7 @@ impl PyPauliProp {
         for (key, value) in paulis.iter() {
             let key_str: String = key.extract()?;
 
-            if let Ok(py_set) = value.downcast::<PySet>() {
+            if let Ok(py_set) = value.cast::<PySet>() {
                 let mut vec_set = VecSet::new();
                 for item in py_set.iter() {
                     let qubit: usize = item.extract()?;
@@ -221,7 +220,7 @@ impl PyPauliProp {
     }
 
     /// Get all faults as a dictionary (compatible with Python `PauliFaultProp`)
-    pub fn get_faults(&self, py: Python<'_>) -> PyResult<PyObject> {
+    pub fn get_faults(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let dict = PyDict::new(py);
 
         // Get X-only qubits

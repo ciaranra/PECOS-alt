@@ -490,7 +490,7 @@ class ParamGateCollection:
 
     def items(
         self,
-        tick: None = None,  # noqa: ARG002
+        _tick: None = None,
     ) -> Iterator[tuple[str, set[Location], JSONDict]]:
         """Generator to return a dictionary-like iter."""
         for gate_symbol, gate_list in self.symbols.items():

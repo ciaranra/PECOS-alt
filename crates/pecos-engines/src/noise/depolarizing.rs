@@ -136,6 +136,8 @@ impl DepolarizingNoiseModel {
                 | GateType::H
                 | GateType::T
                 | GateType::Tdg
+                | GateType::RX
+                | GateType::RY
                 | GateType::R1XY
                 | GateType::U => {
                     NoiseUtils::add_gate_to_builder(&mut builder, gate);
@@ -430,7 +432,7 @@ impl DepolarizingNoiseModelBuilder {
     /// A `DepolarizingNoiseModel` instance
     ///
     /// # Panics
-    /// Panics if any probabilities are not set or are not between 0 and 1.
+    /// Panics if any probabilities are not between 0 and 1.
     #[must_use]
     pub fn build(self) -> DepolarizingNoiseModel {
         let p_prep = self.p_prep.expect("Preparation probability must be set");
@@ -448,6 +450,12 @@ impl DepolarizingNoiseModelBuilder {
         }
 
         noise
+    }
+}
+
+impl crate::noise::IntoNoiseModel for DepolarizingNoiseModelBuilder {
+    fn into_noise_model(self) -> Box<dyn crate::noise::NoiseModel> {
+        Box::new(self.build())
     }
 }
 

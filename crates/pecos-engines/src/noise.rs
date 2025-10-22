@@ -77,7 +77,16 @@ pub trait NoiseModel:
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
-// Register the NoiseModel trait with dyn_clone
+/// Trait for types that can be converted into a noise model
+///
+/// This trait enables lazy evaluation by storing a closure that builds
+/// the noise model when needed.
+pub trait IntoNoiseModel: Send + Sync {
+    /// Convert into a boxed noise model
+    fn into_noise_model(self) -> Box<dyn NoiseModel>;
+}
+
+// Register traits with dyn_clone
 dyn_clone::clone_trait_object!(NoiseModel);
 
 /// Base implementation for noise models

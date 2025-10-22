@@ -31,9 +31,6 @@ def test_short_lived_ancilla_optimization() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("Optimized code with short-lived ancilla:")
-    print(code)
-
     # Check for optimization comments
     assert "Optimization Report" in code
     # Should have optimization analysis
@@ -62,9 +59,6 @@ def test_reused_ancilla_no_optimization() -> None:
     gen = IRGuppyGenerator()
     gen.generate_block(prog)
     code = gen.get_output()
-
-    print("\\nCode with reused ancilla (no optimization):")
-    print(code)
 
     # Should not optimize reused qubits
     assert "reused after consumption" in code.lower() or "pre_allocate" in code
@@ -98,9 +92,6 @@ def test_mixed_allocation_strategy() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\\nMixed allocation strategy:")
-    print(code)
-
     # Should have optimization report
     assert "Optimization Report" in code
 
@@ -123,9 +114,6 @@ def test_conditional_scope_prevents_optimization() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\\nConditional scope (prevents optimization):")
-    print(code)
-
     # Should have some optimization (though may not prevent all)
     assert "Optimization Report" in code
 
@@ -147,9 +135,6 @@ def test_loop_scope_prevents_optimization() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\\nLoop scope (prevents optimization):")
-    print(code)
-
     # Should have optimization report
     assert "Optimization Report" in code
 
@@ -170,9 +155,6 @@ def test_optimization_report_generation() -> None:
     gen = IRGuppyGenerator()
     gen.generate_block(prog)
     code = gen.get_output()
-
-    print("\\nOptimization report example:")
-    print(code)
 
     # Should have detailed optimization report
     assert "=== Qubit Allocation Optimization Report ===" in code
@@ -196,19 +178,5 @@ def test_never_used_qubits() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\\nNever-used qubits detection:")
-    print(code)
-
     # Should detect unused qubits
     assert "never used" in code.lower() or "unused" in code.lower()
-
-
-if __name__ == "__main__":
-    test_short_lived_ancilla_optimization()
-    test_reused_ancilla_no_optimization()
-    test_mixed_allocation_strategy()
-    test_conditional_scope_prevents_optimization()
-    test_loop_scope_prevents_optimization()
-    test_optimization_report_generation()
-    test_never_used_qubits()
-    print("\\nAll allocation optimization tests completed!")

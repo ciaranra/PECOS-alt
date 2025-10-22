@@ -305,23 +305,27 @@ PECOS provides different engines optimized for different types of circuits:
 === "Rust"
 
     ```rust
+    use pecos_engines::{sparse_stabilizer, state_vector};
+
     // Sparse stabilizer (default, efficient for Clifford circuits)
-    QuantumEngineType::SparseStabilizer
+    .qubits(num_qubits)
+    .quantum(sparse_stabilizer())
 
     // State vector (for non-Clifford circuits)
-    QuantumEngineType::StateVector
+    .qubits(num_qubits)
+    .quantum(state_vector())
     ```
 
 === "Python"
 
     ```python
-    from pecos.rslib import QuantumEngine
+    from pecos_rslib import quantum, qasm_engine
 
     # Sparse stabilizer (default, efficient for Clifford circuits)
-    QuantumEngine.SparseStabilizer
+    engine = qasm_engine().qubits(num_qubits).quantum(quantum.sparse_stabilizer())
 
     # State vector (for non-Clifford circuits)
-    QuantumEngine.StateVector
+    engine = qasm_engine().qubits(num_qubits).quantum(quantum.state_vector())
     ```
 
 ## Understanding Your Results

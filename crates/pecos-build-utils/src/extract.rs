@@ -5,6 +5,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Extract a tar.gz or tar.bz2 archive and emit rerun-if-changed for all extracted files
+///
+/// # Errors
+///
+/// Returns an error if extraction fails or the expected directory is not found
 pub fn extract_archive(
     data: &[u8],
     out_dir: &Path,
@@ -30,15 +34,26 @@ pub fn extract_archive(
     };
 
     // Extract to temporary directory first
-    let temp_dir = out_dir.join(format!("extract_temp_{}", std::process::id()));
+    // On Windows, use a shorter path to avoid MAX_PATH issues with deeply nested archives like Boost
+    let temp_dir = if cfg!(windows) {
+        // Use Windows temp directory with a short name to minimize path length
+        let temp_root = std::env::temp_dir();
+        temp_root.join(format!("p{}", std::process::id()))
+    } else {
+        out_dir.join(format!("extract_temp_{}", std::process::id()))
+    };
     fs::create_dir_all(&temp_dir)?;
+
+    // Configure archive for Windows compatibility
+    archive.set_preserve_permissions(false);
+    archive.set_unpack_xattrs(false);
     archive.unpack(&temp_dir)?;
 
     // Find the extracted directory
     let entries = fs::read_dir(&temp_dir)?;
     let extracted_dir = entries
-        .filter_map(|e| e.ok())
-        .find(|e| e.file_type().ok().map(|t| t.is_dir()).unwrap_or(false))
+        .filter_map(std::result::Result::ok)
+        .find(|e| e.file_type().ok().is_some_and(|t| t.is_dir()))
         .ok_or_else(|| BuildError::Archive("No directory found in archive".to_string()))?
         .path();
 
@@ -50,8 +65,37 @@ pub fn extract_archive(
         fs::remove_dir_all(&final_dir)?;
     }
 
-    fs::rename(extracted_dir, &final_dir)?;
-    fs::remove_dir_all(&temp_dir)?;
+    // On Windows, use copy instead of rename to avoid path length issues
+    // fs::rename can fail when destination path is too long on Windows
+    #[cfg(windows)]
+    {
+        copy_dir_all(&extracted_dir, &final_dir)?;
+        fs::remove_dir_all(&temp_dir)?;
+    }
+
+    #[cfg(not(windows))]
+    {
+        fs::rename(extracted_dir, &final_dir)?;
+        fs::remove_dir_all(&temp_dir)?;
+    }
 
     Ok(final_dir)
+}
+
+/// Recursively copy a directory and all its contents
+#[cfg(windows)]
+fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if entry.file_type()?.is_dir() {
+            copy_dir_all(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
 }

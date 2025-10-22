@@ -20,8 +20,5 @@ default = []
 ldpc = ["dep:pecos-ldpc-decoders"]
 all = ["ldpc"]
 
-[lib]
-name = "pecos_decoders"
-
 [lints]
 workspace = true

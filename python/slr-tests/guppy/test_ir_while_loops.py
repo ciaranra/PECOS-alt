@@ -26,9 +26,6 @@ def test_ir_while_loop_basic() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("IR-generated code with While loop:")
-    print(code)
-
     # Check that while loop is generated
     assert "while " in code
     assert "# Apply operation in loop" in code
@@ -56,9 +53,6 @@ def test_ir_while_loop_with_quantum() -> None:
     gen = IRGuppyGenerator()
     gen.generate_block(prog)
     code = gen.get_output()
-
-    print("\nIR-generated code with While loop and quantum operations:")
-    print(code)
 
     # Check structure
     assert "while " in code
@@ -90,9 +84,6 @@ def test_ir_nested_while_loops() -> None:
     gen = IRGuppyGenerator()
     gen.generate_block(prog)
     code = gen.get_output()
-
-    print("\nIR-generated code with nested While loops:")
-    print(code)
 
     # Check for nested structure
     assert code.count("while ") >= 2  # At least 2 while statements
@@ -138,9 +129,6 @@ def test_ir_for_loop_placeholder() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nIR-generated code with For loop (placeholder):")
-    print(code)
-
     # For loops should now be properly implemented
     assert "for i in range(0, 3):" in code
 
@@ -171,20 +159,7 @@ def test_while_loop_quantum_resource_handling() -> None:
     gen.generate_block(prog)
     code = gen.get_output()
 
-    print("\nIR-generated code with quantum resources in While loop:")
-    print(code)
-
     # Check that measurements are properly handled
     assert "while " in code
     assert "quantum.measure(ancilla[0])" in code or "quantum.measure(ancilla_0)" in code
     assert "quantum.measure_array(q)" in code
-
-
-if __name__ == "__main__":
-    test_ir_while_loop_basic()
-    test_ir_while_loop_with_quantum()
-    test_ir_nested_while_loops()
-    test_ir_while_error_in_qasm()
-    test_ir_for_loop_placeholder()
-    test_while_loop_quantum_resource_handling()
-    print("\nAll While loop tests completed!")

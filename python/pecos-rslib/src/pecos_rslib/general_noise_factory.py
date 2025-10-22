@@ -5,11 +5,16 @@ allowing general noise models to be constructed from dictionaries or JSON while
 maintaining type safety and validation.
 """
 
-from typing import Dict, Any, Callable, Optional
 import json
+import logging
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
+
 from pecos_rslib import GeneralNoiseModelBuilder
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -17,12 +22,14 @@ class MethodMapping:
     """Defines how a config key maps to a builder method."""
 
     method_name: str
-    converter: Optional[Callable[[Any], Any]] = None
+    converter: Callable[[Any], Any] | None = None
     description: str = ""
     apply_to_list: bool = False  # If True, apply method to each item in list
 
     def apply(
-        self, builder: GeneralNoiseModelBuilder, value: Any
+        self,
+        builder: GeneralNoiseModelBuilder,
+        value: Any,
     ) -> GeneralNoiseModelBuilder:
         """Apply this mapping to the builder with the given value."""
         method = getattr(builder, self.method_name)
@@ -33,11 +40,18 @@ class MethodMapping:
                 converted_item = self.converter(item) if self.converter else item
                 builder = method(converted_item)
             return builder
-        else:
-            # Normal single-value application
-            if self.converter:
-                value = self.converter(value)
-            return method(value)
+        # Normal single-value application
+        if self.converter:
+            value = self.converter(value)
+
+        # Special handling for methods that expect unpacked tuples
+        if self.method_name == "with_p2_angle_params" and isinstance(
+            value,
+            (tuple, list),
+        ):
+            # Unpack the tuple/list as separate arguments
+            return method(*value)
+        return method(value)
 
 
 class GeneralNoiseFactory:
@@ -58,7 +72,7 @@ class GeneralNoiseFactory:
         ... }
         >>> factory = GeneralNoiseFactory()
         >>> builder = factory.create_from_dict(config)
-        >>> sim = qasm_sim(qasm).noise(builder).build()
+        >>> results = sim(program).classical(engine).noise(builder).run(1000)
     """
 
     # Standard parameter mappings - extracted as class constant for clarity
@@ -67,17 +81,25 @@ class GeneralNoiseFactory:
         "seed": MethodMapping("with_seed", int, "Random seed for reproducibility"),
         "scale": MethodMapping("with_scale", float, "Global error rate scaling factor"),
         "leakage_scale": MethodMapping(
-            "with_leakage_scale", float, "Leakage vs depolarizing ratio (0-1)"
+            "with_leakage_scale",
+            float,
+            "Leakage vs depolarizing ratio (0-1)",
         ),
         "emission_scale": MethodMapping(
-            "with_emission_scale", float, "Spontaneous emission scaling"
+            "with_emission_scale",
+            float,
+            "Spontaneous emission scaling",
         ),
         "seepage_prob": MethodMapping(
-            "with_seepage_prob", float, "Global seepage probability for leaked qubits"
+            "with_seepage_prob",
+            float,
+            "Global seepage probability for leaked qubits",
         ),
         # Single noiseless gate (string -> with_noiseless_gate)
         "noiseless_gate": MethodMapping(
-            "with_noiseless_gate", str, "Single gate to make noiseless"
+            "with_noiseless_gate",
+            str,
+            "Single gate to make noiseless",
         ),
         # Multiple noiseless gates (list -> multiple with_noiseless_gate calls)
         "noiseless_gates": MethodMapping(
@@ -88,19 +110,29 @@ class GeneralNoiseFactory:
         ),
         # Idle noise parameters
         "p_idle_coherent": MethodMapping(
-            "with_p_idle_coherent", bool, "Use coherent vs incoherent dephasing"
+            "with_p_idle_coherent",
+            bool,
+            "Use coherent vs incoherent dephasing",
         ),
         "p_idle_linear_rate": MethodMapping(
-            "with_p_idle_linear_rate", float, "Idle noise linear rate"
+            "with_p_idle_linear_rate",
+            float,
+            "Idle noise linear rate",
         ),
         "p_idle_average_linear_rate": MethodMapping(
-            "with_average_p_idle_linear_rate", float, "Average idle noise linear rate"
+            "with_average_p_idle_linear_rate",
+            float,
+            "Average idle noise linear rate",
         ),
         "p_idle_linear_model": MethodMapping(
-            "with_p_idle_linear_model", dict, "Idle noise Pauli distribution"
+            "with_p_idle_linear_model",
+            dict,
+            "Idle noise Pauli distribution",
         ),
         "p_idle_quadratic_rate": MethodMapping(
-            "with_p_idle_quadratic_rate", float, "Idle noise quadratic rate"
+            "with_p_idle_quadratic_rate",
+            float,
+            "Idle noise quadratic rate",
         ),
         "p_idle_average_quadratic_rate": MethodMapping(
             "with_average_p_idle_quadratic_rate",
@@ -113,39 +145,61 @@ class GeneralNoiseFactory:
             "Coherent to incoherent conversion factor",
         ),
         "idle_scale": MethodMapping(
-            "with_idle_scale", float, "Idle noise scaling factor"
+            "with_idle_scale",
+            float,
+            "Idle noise scaling factor",
         ),
         # State preparation
         "p_prep": MethodMapping(
-            "with_prep_probability", float, "State preparation error probability"
+            "with_prep_probability",
+            float,
+            "State preparation error probability",
         ),
         "p_prep_leak_ratio": MethodMapping(
-            "with_prep_leak_ratio", float, "Fraction of prep errors that leak"
+            "with_prep_leak_ratio",
+            float,
+            "Fraction of prep errors that leak",
         ),
         "p_prep_crosstalk": MethodMapping(
-            "with_p_prep_crosstalk", float, "Preparation crosstalk probability"
+            "with_p_prep_crosstalk",
+            float,
+            "Preparation crosstalk probability",
         ),
         "prep_scale": MethodMapping(
-            "with_prep_scale", float, "Preparation error scaling factor"
+            "with_prep_scale",
+            float,
+            "Preparation error scaling factor",
         ),
         "p_prep_crosstalk_scale": MethodMapping(
-            "with_p_prep_crosstalk_scale", float, "Preparation crosstalk scaling"
+            "with_p_prep_crosstalk_scale",
+            float,
+            "Preparation crosstalk scaling",
         ),
         # Single-qubit gates
         "p1": MethodMapping(
-            "with_p1_probability", float, "Single-qubit gate error probability"
+            "with_p1_probability",
+            float,
+            "Single-qubit gate error probability",
         ),
         "p1_average": MethodMapping(
-            "with_average_p1_probability", float, "Average single-qubit error"
+            "with_average_p1_probability",
+            float,
+            "Average single-qubit error",
         ),
         "p1_emission_ratio": MethodMapping(
-            "with_p1_emission_ratio", float, "Fraction that are emission errors"
+            "with_p1_emission_ratio",
+            float,
+            "Fraction that are emission errors",
         ),
         "p1_emission_model": MethodMapping(
-            "with_p1_emission_model", dict, "Single-qubit emission error distribution"
+            "with_p1_emission_model",
+            dict,
+            "Single-qubit emission error distribution",
         ),
         "p1_seepage_prob": MethodMapping(
-            "with_p1_seepage_prob", float, "Probability of seeping leaked qubits"
+            "with_p1_seepage_prob",
+            float,
+            "Probability of seeping leaked qubits",
         ),
         "p1_pauli_model": MethodMapping(
             "with_p1_pauli_model",
@@ -153,38 +207,60 @@ class GeneralNoiseFactory:
             "Pauli error distribution for single-qubit gates",
         ),
         "p1_scale": MethodMapping(
-            "with_p1_scale", float, "Single-qubit error scaling factor"
+            "with_p1_scale",
+            float,
+            "Single-qubit error scaling factor",
         ),
         # Two-qubit gates
         "p2": MethodMapping(
-            "with_p2_probability", float, "Two-qubit gate error probability"
+            "with_p2_probability",
+            float,
+            "Two-qubit gate error probability",
         ),
         "p2_average": MethodMapping(
-            "with_average_p2_probability", float, "Average two-qubit error"
+            "with_average_p2_probability",
+            float,
+            "Average two-qubit error",
         ),
         "p2_angle_params": MethodMapping(
-            "with_p2_angle_params", tuple, "RZZ angle-dependent error params (a,b,c,d)"
+            "with_p2_angle_params",
+            tuple,
+            "RZZ angle-dependent error params (a,b,c,d)",
         ),
         "p2_angle_power": MethodMapping(
-            "with_p2_angle_power", float, "Power parameter for angle-dependent errors"
+            "with_p2_angle_power",
+            float,
+            "Power parameter for angle-dependent errors",
         ),
         "p2_emission_ratio": MethodMapping(
-            "with_p2_emission_ratio", float, "Fraction that are emission errors"
+            "with_p2_emission_ratio",
+            float,
+            "Fraction that are emission errors",
         ),
         "p2_emission_model": MethodMapping(
-            "with_p2_emission_model", dict, "Two-qubit emission error distribution"
+            "with_p2_emission_model",
+            dict,
+            "Two-qubit emission error distribution",
         ),
         "p2_seepage_prob": MethodMapping(
-            "with_p2_seepage_prob", float, "Probability of seeping leaked qubits"
+            "with_p2_seepage_prob",
+            float,
+            "Probability of seeping leaked qubits",
         ),
         "p2_pauli_model": MethodMapping(
-            "with_p2_pauli_model", dict, "Pauli error distribution for two-qubit gates"
+            "with_p2_pauli_model",
+            dict,
+            "Pauli error distribution for two-qubit gates",
         ),
         "p2_idle": MethodMapping(
-            "with_p2_idle", float, "Idle noise after two-qubit gates"
+            "with_p2_idle",
+            float,
+            "Idle noise after two-qubit gates",
         ),
         "p2_scale": MethodMapping(
-            "with_p2_scale", float, "Two-qubit error scaling factor"
+            "with_p2_scale",
+            float,
+            "Two-qubit error scaling factor",
         ),
         # Measurement
         "p_meas": MethodMapping(
@@ -193,23 +269,33 @@ class GeneralNoiseFactory:
             "Symmetric measurement error (sets both 0->1 and 1->0)",
         ),
         "p_meas_0": MethodMapping(
-            "with_meas_0_probability", float, "Probability of 0->1 measurement flip"
+            "with_meas_0_probability",
+            float,
+            "Probability of 0->1 measurement flip",
         ),
         "p_meas_1": MethodMapping(
-            "with_meas_1_probability", float, "Probability of 1->0 measurement flip"
+            "with_meas_1_probability",
+            float,
+            "Probability of 1->0 measurement flip",
         ),
         "p_meas_crosstalk": MethodMapping(
-            "with_p_meas_crosstalk", float, "Measurement crosstalk probability"
+            "with_p_meas_crosstalk",
+            float,
+            "Measurement crosstalk probability",
         ),
         "meas_scale": MethodMapping(
-            "with_meas_scale", float, "Measurement error scaling factor"
+            "with_meas_scale",
+            float,
+            "Measurement error scaling factor",
         ),
         "p_meas_crosstalk_scale": MethodMapping(
-            "with_p_meas_crosstalk_scale", float, "Measurement crosstalk scaling"
+            "with_p_meas_crosstalk_scale",
+            float,
+            "Measurement crosstalk scaling",
         ),
     }
 
-    def __init__(self, use_defaults: bool = True):
+    def __init__(self, *, use_defaults: bool = True) -> None:
         """Initialize the factory with optional default mappings.
 
         Args:
@@ -220,17 +306,17 @@ class GeneralNoiseFactory:
             self.mappings = dict(self._STANDARD_MAPPINGS)
             self._default_mappings = dict(self._STANDARD_MAPPINGS)
         else:
-            self.mappings: Dict[str, MethodMapping] = {}
-            self._default_mappings: Dict[str, MethodMapping] = {}
+            self.mappings: dict[str, MethodMapping] = {}
+            self._default_mappings: dict[str, MethodMapping] = {}
 
         # Default values to apply if not specified by user
-        self.defaults: Dict[str, Any] = {}
+        self.defaults: dict[str, Any] = {}
 
     def add_mapping(
         self,
         key: str,
         method_name: str,
-        converter: Optional[Callable] = None,
+        converter: Callable | None = None,
         description: str = "",
     ) -> None:
         """Add or update a configuration key mapping.
@@ -284,7 +370,11 @@ class GeneralNoiseFactory:
         self.defaults[key] = value
 
     def create_from_dict(
-        self, config: Dict[str, Any], strict: bool = True, apply_defaults: bool = True
+        self,
+        config: dict[str, Any],
+        *,
+        strict: bool = True,
+        apply_defaults: bool = True,
     ) -> GeneralNoiseModelBuilder:
         """Create a GeneralNoiseModelBuilder from a configuration dictionary.
 
@@ -316,14 +406,13 @@ class GeneralNoiseFactory:
             if unknown_keys:
                 raise ValueError(
                     f"Unknown configuration keys: {unknown_keys}. "
-                    f"Valid keys are: {sorted(self.mappings.keys())}"
+                    f"Valid keys are: {sorted(self.mappings.keys())}",
                 )
 
         # Apply user configuration
         for key, value in config.items():
-            if key not in self.mappings:
-                if not strict:
-                    continue  # Skip unknown keys in non-strict mode
+            if key not in self.mappings and not strict:
+                continue  # Skip unknown keys in non-strict mode
 
             mapping = self.mappings[key]
 
@@ -331,11 +420,32 @@ class GeneralNoiseFactory:
             try:
                 builder = mapping.apply(builder, value)
             except Exception as e:
+                # Convert PanicException to ValueError with proper message
+                error_msg = str(e)
+                if "PanicException" in type(e).__name__ or "panicked" in error_msg:
+                    # Extract the meaningful part of the panic message
+                    if "must be between 0 and 1" in error_msg:
+                        raise ValueError(
+                            f"Error applying '{key}': Probability must be between 0 and 1",
+                        ) from e
+                    if "must be non-negative" in error_msg:
+                        raise ValueError(
+                            f"Error applying '{key}': Value must be non-negative",
+                        ) from e
+                    if "must be positive" in error_msg:
+                        raise ValueError(
+                            f"Error applying '{key}': Value must be positive",
+                        ) from e
+                    raise ValueError(f"Error applying '{key}': {error_msg}") from e
                 raise ValueError(f"Error applying '{key}': {e}") from e
 
         return builder
 
-    def create_from_json(self, json_str: str, **kwargs) -> GeneralNoiseModelBuilder:
+    def create_from_json(
+        self,
+        json_str: str,
+        **kwargs: Any,
+    ) -> GeneralNoiseModelBuilder:
         """Create a GeneralNoiseModelBuilder from a JSON string.
 
         Args:
@@ -348,7 +458,7 @@ class GeneralNoiseFactory:
         config = json.loads(json_str)
         return self.create_from_dict(config, **kwargs)
 
-    def get_available_keys(self) -> Dict[str, str]:
+    def get_available_keys(self) -> dict[str, str]:
         """Get all available configuration keys with descriptions.
 
         Returns:
@@ -356,7 +466,7 @@ class GeneralNoiseFactory:
         """
         return {key: mapping.description for key, mapping in self.mappings.items()}
 
-    def validate_config(self, config: Dict[str, Any]) -> Dict[str, str]:
+    def validate_config(self, config: dict[str, Any]) -> dict[str, str]:
         """Validate a configuration dictionary without creating a builder.
 
         Args:
@@ -379,12 +489,12 @@ class GeneralNoiseFactory:
                 try:
                     mapping = self.mappings[key]
                     mapping.apply(test_builder, value)
-                except Exception as e:
+                except (ValueError, TypeError, AttributeError) as e:
                     errors[key] = str(e)
 
         return errors
 
-    def show_mappings(self, show_descriptions: bool = True) -> None:
+    def show_mappings(self, *, show_descriptions: bool = True) -> None:
         """Display the current parameter mappings in a readable format.
 
         Args:
@@ -395,7 +505,7 @@ class GeneralNoiseFactory:
 
         if show_descriptions:
             print(
-                f"{'Configuration Key':<20} → {'Builder Method':<35} {'Description':<30}"
+                f"{'Configuration Key':<20} → {'Builder Method':<35} {'Description':<30}",
             )
             print("-" * 80)
             for key, mapping in sorted(self.mappings.items()):
@@ -410,7 +520,7 @@ class GeneralNoiseFactory:
                     else " "
                 )
                 print(
-                    f"{marker}{key:<19} → {mapping.method_name:<35} {mapping.description[:30]}"
+                    f"{marker}{key:<19} → {mapping.method_name:<35} {mapping.description[:30]}",
                 )
         else:
             print(f"{'Configuration Key':<20} → {'Builder Method':<35}")
@@ -482,7 +592,8 @@ def _get_default_factory() -> GeneralNoiseFactory:
 
 
 def create_noise_from_dict(
-    config: Dict[str, Any], **kwargs
+    config: dict[str, Any],
+    **kwargs: Any,
 ) -> GeneralNoiseModelBuilder:
     """Convenience function to create noise model from dict using default factory.
 
@@ -497,12 +608,12 @@ def create_noise_from_dict(
         >>> noise = create_noise_from_dict(
         ...     {"seed": 42, "p1": 0.001, "p2": 0.01, "scale": 1.2}
         ... )
-        >>> sim = qasm_sim(qasm).noise(noise).run(1000)
+        >>> results = sim(program).classical(engine).noise(noise).run(1000)
     """
     return _get_default_factory().create_from_dict(config, **kwargs)
 
 
-def create_noise_from_json(json_str: str, **kwargs) -> GeneralNoiseModelBuilder:
+def create_noise_from_json(json_str: str, **kwargs: Any) -> GeneralNoiseModelBuilder:
     """Convenience function to create noise model from JSON using default factory.
 
     Args:
@@ -519,7 +630,7 @@ def create_noise_from_json(json_str: str, **kwargs) -> GeneralNoiseModelBuilder:
 class IonTrapNoiseFactory(GeneralNoiseFactory):
     """Specialized factory for ion trap noise models with appropriate defaults."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
         # Ion trap specific defaults

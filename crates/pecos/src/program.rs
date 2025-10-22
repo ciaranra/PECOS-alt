@@ -1,9 +1,8 @@
 use log::debug;
 use pecos_core::errors::PecosError;
-use pecos_engines::ClassicalEngine;
-use pecos_phir::setup_phir_engine;
+use pecos_engines::ClassicalControlEngine;
+use pecos_phir_json::setup_phir_json_engine;
 use pecos_qasm::setup_qasm_engine;
-use pecos_qir::setup_qir_engine;
 use std::path::{Path, PathBuf};
 
 /// Represents the types of programs that PECOS can execute
@@ -40,9 +39,14 @@ pub enum ProgramType {
 ///   conform to a supported format (e.g., invalid JSON format for PHIR or
 ///   unsupported file extension).
 pub fn detect_program_type(path: &Path) -> Result<ProgramType, PecosError> {
+    // Check if it ends with .phir.json
+    if path.to_str().is_some_and(|s| s.ends_with(".phir.json")) {
+        return Ok(ProgramType::PHIR);
+    }
+
     match path.extension().and_then(|ext| ext.to_str()) {
         Some("json") => {
-            // Read JSON and verify format
+            // Read JSON and verify format for backward compatibility
             let content = std::fs::read_to_string(path).map_err(PecosError::IO)?;
             let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
                 PecosError::Input(format!(
@@ -61,7 +65,7 @@ pub fn detect_program_type(path: &Path) -> Result<ProgramType, PecosError> {
         Some("ll") => Ok(ProgramType::QIR),
         Some("qasm") => Ok(ProgramType::QASM),
         _ => Err(PecosError::Input(format!(
-            "Failed to detect program type: Unsupported file extension '{}'. Expected file extensions: .ll (QIR), .json (PHIR), or .qasm (QASM).",
+            "Failed to detect program type: Unsupported file extension '{}'. Expected file extensions: .ll (QIR), .phir.json (PHIR-JSON), .json (PHIR-JSON with format check), or .qasm (QASM).",
             path.extension()
                 .and_then(|ext| ext.to_str())
                 .unwrap_or("none")
@@ -144,7 +148,7 @@ pub fn setup_engine_for_program(
     program_type: ProgramType,
     program_path: &Path,
     seed: Option<u64>,
-) -> Result<Box<dyn ClassicalEngine>, PecosError> {
+) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
     debug!(
         "Setting up engine for {:?} program: {}",
         program_type,
@@ -152,8 +156,29 @@ pub fn setup_engine_for_program(
     );
 
     match program_type {
-        ProgramType::QIR => setup_qir_engine(program_path, None),
-        ProgramType::PHIR => setup_phir_engine(program_path),
+        ProgramType::QIR => {
+            // Default requires Selene runtime
+            // Users should use explicit builder API if they want a different runtime
+            Err(PecosError::Processing(
+                "QIS program execution requires explicit runtime selection.\n\
+                \n\
+                Please use the builder API with Selene or Native runtime:\n\
+                \n\
+                use pecos_qis_core::{{qis_engine, setup_qis_engine_with_runtime}};\n\
+                use pecos_qis_selene::selene_simple_runtime;\n\
+                \n\
+                // Option 1: Use setup function\n\
+                let engine = setup_qis_engine_with_runtime(path, selene_simple_runtime()?);\n\
+                \n\
+                // Option 2: Use builder\n\
+                let engine = qis_engine()\n\
+                    .runtime(selene_simple_runtime()?)\n\
+                    .program(program)\n\
+                    .build()?;"
+                    .to_string(),
+            ))
+        }
+        ProgramType::PHIR => setup_phir_json_engine(program_path),
         ProgramType::QASM => setup_qasm_engine(program_path, seed),
     }
 }

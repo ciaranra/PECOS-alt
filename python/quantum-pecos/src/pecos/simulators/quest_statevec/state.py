@@ -92,11 +92,12 @@ class QuestStateVec:
                     params["angles"] = (params["angle"],)
 
                 # Convert list to tuple if needed (for Rust bindings compatibility)
+                loc_to_use = location
                 if isinstance(location, list):
-                    location = tuple(location)  # noqa: PLW2901
+                    loc_to_use = tuple(location)
 
                 if symbol in self.bindings:
-                    results = self.bindings[symbol](self, location, **params)
+                    results = self.bindings[symbol](self, loc_to_use, **params)
                 else:
                     msg = f"Gate {symbol} is not supported in the QuEST simulator."
                     raise Exception(msg)

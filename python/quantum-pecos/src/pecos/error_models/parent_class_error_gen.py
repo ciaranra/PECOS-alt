@@ -15,11 +15,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from pecos.error_models.class_errors_circuit import ErrorCircuits
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -201,7 +204,7 @@ class Generator:
         """
         for symbol in self.gate_groups[group_symbol]:
             if symbol in self.error_func_dict:
-                print(f"Overriding gate error for gate: {symbol}.")
+                logger.warning("Overriding gate error for gate: %s.", symbol)
 
             self.set_gate_error(symbol, error_func, error_param, after)
 
@@ -229,7 +232,7 @@ class Generator:
         after: dict[str, set[int]],
         before: dict[str, set[int]],
         replace: set[int],
-        **kwargs: Any,  # noqa: ANN401 - Error functions have varying signatures
+        **kwargs: object,
     ) -> set | list | None:
         """Used to determine if an error occurs, and if so, calls the error function to determine errors.
 
@@ -403,8 +406,8 @@ class Generator:
         ) -> None:
             """Apply sampled multi-qubit error after gate execution."""
             # Choose an error symbol or tuple of symbols:
-            indx = np.random.choice(len(self.data))
-            error_symbols = self.data[indx]
+            index = np.random.choice(len(self.data))
+            error_symbols = self.data[index]
 
             if isinstance(error_symbols, tuple | np.ndarray) and len(error_symbols) > 1:
                 for sym, loc in zip(error_symbols, location, strict=False):
@@ -432,8 +435,8 @@ class Generator:
             _error_params: dict[str, Any],
         ) -> None:
             """Apply sampled multi-qubit error before gate execution."""
-            indx = np.random.choice(len(self.data))
-            error_symbols = self.data[indx]
+            index = np.random.choice(len(self.data))
+            error_symbols = self.data[index]
 
             if isinstance(error_symbols, np.ndarray) and len(error_symbols) > 1:
                 for sym, loc in zip(error_symbols, location, strict=False):

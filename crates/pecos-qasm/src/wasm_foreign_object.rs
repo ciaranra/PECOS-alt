@@ -24,7 +24,9 @@
 //!
 //! ```no_run
 //! # #[cfg(feature = "wasm")] {
-//! use pecos_qasm::simulation::qasm_sim;
+//! use pecos_qasm::qasm_engine;
+//! use pecos_engines::ClassicalControlEngineBuilder;
+//! use pecos_programs::QasmProgram;
 //!
 //! let qasm = r#"
 //!     OPENQASM 2.0;
@@ -38,8 +40,10 @@
 //! "#;
 //!
 //! // Run simulation with WASM module
-//! let results = qasm_sim(qasm)
+//! let results = qasm_engine()
+//!     .program(QasmProgram::from_string(qasm))
 //!     .wasm("math.wasm")
+//!     .to_sim()
 //!     .run(100)
 //!     .expect("Failed to run simulation");
 //!

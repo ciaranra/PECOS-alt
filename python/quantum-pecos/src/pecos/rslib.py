@@ -15,4 +15,4 @@ This module provides Python bindings to the high-performance Rust implementation
 of PECOS simulators and quantum error correction algorithms.
 """
 
-from pecos_rslib import *  # noqa: F403
+from pecos_rslib import *

@@ -114,13 +114,3 @@ def test_ir_variable_renaming() -> None:
     assert "array_reg" in code
     # Should use renamed variables correctly
     assert "quantum.measure_array" in code
-
-
-if __name__ == "__main__":
-    # Run individual tests for debugging
-    test_ir_simple_measurement()
-    test_ir_full_array_measurement()
-    test_ir_quantum_gates()
-    test_ir_conditional_resources()
-    test_ir_variable_renaming()
-    print("All IR generator tests passed!")

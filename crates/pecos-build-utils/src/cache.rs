@@ -6,6 +6,10 @@ use std::path::PathBuf;
 
 /// Get the persistent cache directory for build artifacts
 /// Works across Windows, macOS, and Linux
+///
+/// # Errors
+///
+/// Returns an error if unable to determine a cache directory on the system
 pub fn get_cache_dir() -> Result<PathBuf> {
     let cache_dir = if let Ok(dir) = std::env::var("PECOS_CACHE_DIR") {
         // Allow override via environment variable

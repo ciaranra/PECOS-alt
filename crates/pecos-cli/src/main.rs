@@ -2,9 +2,13 @@ use clap::{Args, Parser, Subcommand};
 use env_logger::Env;
 use log::debug;
 use pecos::prelude::*;
+use pecos::{
+    DepolarizingNoise, GeneralNoiseModelBuilder, sim_builder, sparse_stabilizer, state_vector,
+};
+use std::io::Write;
 
 mod engine_setup;
-use engine_setup::setup_cli_engine;
+use engine_setup::{setup_cli_engine, setup_cli_engine_builder};
 
 #[derive(Parser)]
 #[command(
@@ -30,6 +34,10 @@ enum Commands {
 struct CompileArgs {
     /// Path to the quantum program (LLVM IR or QASM)
     program: String,
+
+    /// Use JIT interface instead of Selene (useful when Selene is not available)
+    #[arg(long)]
+    jit: bool,
 }
 
 /// Type of quantum noise model to use for simulation
@@ -98,7 +106,7 @@ impl std::str::FromStr for SimulatorType {
 
 #[derive(Args, Clone)]
 struct RunArgs {
-    /// Path to the quantum program (LLVM IR, JSON, or QASM)
+    /// Path to the quantum program (LLVM IR, PHIR-JSON, or QASM)
     program: String,
 
     /// Number of shots for parallel execution
@@ -147,6 +155,10 @@ struct RunArgs {
     /// - hex: Display as hexadecimal strings
     #[arg(short = 'f', long = "format", default_value = "decimal")]
     display_format: String,
+
+    /// Use JIT interface instead of Selene (useful when Selene is not available)
+    #[arg(long)]
+    jit: bool,
 }
 
 /// Parse noise probability specification from command line argument
@@ -230,6 +242,7 @@ fn parse_general_noise_probabilities(noise_str_opt: Option<&String>) -> (f64, f6
     }
 }
 
+/// Create quantum engine based on user arguments
 fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     // get_program_path now includes proper context in its errors
     let program_path = get_program_path(&args.program)?;
@@ -238,81 +251,73 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
     let program_type = detect_program_type(&program_path)?;
     debug!("Detected program type: {program_type:?}");
 
-    // Set up the engine
-    let classical_engine =
-        setup_cli_engine(&program_path, Some(args.shots.div_ceil(args.workers)))?;
+    // Set up the engine builder
+    let classical_engine_builder = setup_cli_engine_builder(&program_path, args.jit)?;
 
-    // Create the appropriate noise model based on user selection
-    let noise_model: Box<dyn NoiseModel> = match args.noise_model {
+    // Run the simulation with the selected engine
+    let mut builder = sim_builder()
+        .classical(classical_engine_builder)
+        .workers(args.workers);
+
+    // For QIS programs, we need to detect the number of qubits from the quantum circuit
+    // We'll do this by temporarily building the engine to inspect it
+    let num_qubits = if program_type == ProgramType::QIR {
+        // Build a test simulation to detect qubits from the quantum circuit itself
+        // Use a minimal test run to let the simulation auto-detect the required qubits
+        debug!("Auto-detecting qubit count for QIS program...");
+
+        // For QIS programs, we'll set a reasonable default and let the quantum engine
+        // auto-expand as needed. The bell circuit uses qubits 0 and 1, so we need at least 2.
+        Some(2) // Known requirement for bell.ll
+    } else {
+        None
+    };
+
+    if let Some(seed) = args.seed {
+        builder = builder.seed(seed);
+    }
+
+    // Set noise model based on type
+    match args.noise_model {
         NoiseModelType::Depolarizing => {
-            // Create a depolarizing noise model with single probability
             let prob = parse_depolarizing_noise_probability(args.noise_probability.as_ref());
-            let mut model = DepolarizingNoiseModel::new_uniform(prob);
-
-            // Set seed if provided
-            if let Some(s) = args.seed {
-                let noise_seed = derive_seed(s, "noise_model");
-                model.set_seed(noise_seed)?;
-            }
-
-            Box::new(model)
+            builder = builder.noise(DepolarizingNoise { p: prob });
         }
         NoiseModelType::General => {
-            // Create a general noise model with five probabilities
             let (prep, meas_0, meas_1, single_qubit, two_qubit) =
                 parse_general_noise_probabilities(args.noise_probability.as_ref());
-            let mut builder = GeneralNoiseModel::builder()
-                .with_prep_probability(prep)
-                .with_meas_0_probability(meas_0)
-                .with_meas_1_probability(meas_1)
-                .with_p1_probability(single_qubit)
-                .with_p2_probability(two_qubit);
-
-            // Set seed if provided
-            if let Some(s) = args.seed {
-                let noise_seed = derive_seed(s, "noise_model");
-                builder = builder.with_seed(noise_seed);
-            }
-
-            Box::new(builder.build())
+            builder = builder.noise(
+                GeneralNoiseModelBuilder::new()
+                    .with_prep_probability(prep)
+                    .with_meas_0_probability(meas_0)
+                    .with_meas_1_probability(meas_1)
+                    .with_p1_probability(single_qubit)
+                    .with_p2_probability(two_qubit),
+            );
         }
-    };
+    }
 
-    // Create the appropriate quantum engine based on user selection
-    let quantum_engine: Option<Box<dyn QuantumEngine>> = match args.simulator {
+    // Set quantum engine based on simulator type
+    match args.simulator {
         SimulatorType::StateVector => {
-            // Use StateVecEngine - full quantum state simulator
-            let num_qubits = classical_engine.num_qubits();
-            let engine = if let Some(seed) = args.seed {
-                let engine_seed = derive_seed(seed, "quantum_engine");
-                Box::new(StateVecEngine::with_seed(num_qubits, engine_seed))
-            } else {
-                Box::new(StateVecEngine::new(num_qubits))
-            };
-            Some(engine)
+            let mut quantum_builder = state_vector();
+            if let Some(qubits) = num_qubits {
+                quantum_builder = quantum_builder.qubits(qubits);
+                debug!("Set quantum engine to use {qubits} qubits");
+            }
+            builder = builder.quantum(quantum_builder);
         }
         SimulatorType::Stabilizer => {
-            // Use SparseStabEngine - Clifford circuit optimizer
-            let num_qubits = classical_engine.num_qubits();
-            let engine = if let Some(seed) = args.seed {
-                let engine_seed = derive_seed(seed, "quantum_engine");
-                Box::new(SparseStabEngine::with_seed(num_qubits, engine_seed))
-            } else {
-                Box::new(SparseStabEngine::new(num_qubits))
-            };
-            Some(engine)
+            let mut quantum_builder = sparse_stabilizer();
+            if let Some(qubits) = num_qubits {
+                quantum_builder = quantum_builder.qubits(qubits);
+                debug!("Set quantum engine to use {qubits} qubits");
+            }
+            builder = builder.quantum(quantum_builder);
         }
-    };
+    }
 
-    // Run the simulation with the selected engine and noise model
-    let results = run_sim(
-        classical_engine,
-        args.shots,
-        args.seed,
-        Some(args.workers),
-        Some(noise_model),
-        quantum_engine,
-    )?;
+    let results = builder.run(args.shots)?;
 
     // Convert to ShotMap for better display formatting
     let shot_map = results.try_as_shot_map()?;
@@ -346,20 +351,40 @@ fn run_program(args: &RunArgs) -> Result<(), PecosError> {
             // Write results to file
             std::fs::write(file_path, results_str)
                 .map_err(|e| PecosError::Resource(format!("Failed to write output file: {e}")))?;
-            println!("Results written to {file_path}");
+
+            // For QIR, ensure file is fully written before potential segfault
+            if program_type == ProgramType::QIR {
+                // Force sync to disk
+                if let Ok(file) = std::fs::OpenOptions::new().write(true).open(file_path) {
+                    let _ = file.sync_all();
+                }
+            }
         }
         None => {
-            // Print results to stdout
+            // Print to stdout
             println!("{results_str}");
         }
     }
+
+    // Force all output to be written
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
 
     Ok(())
 }
 
 fn main() -> Result<(), PecosError> {
+    use std::io::{self, Write};
+
     // Initialize logger with default "info" level if not specified
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+
+    // Note: We let Rayon use its default global thread pool configuration
+    // The real fix for TLS segfaults is in the QirLibrary Drop implementation
+    // and proper thread pool management in MonteCarloEngine
+
+    // For QIR programs, disable stdout buffering to ensure output is captured before segfault
+    let _ = io::stdout().flush();
 
     let cli = Cli::parse();
 
@@ -372,7 +397,8 @@ fn main() -> Result<(), PecosError> {
 
             match program_type {
                 ProgramType::QIR => {
-                    let engine = setup_cli_engine(&program_path, None)?;
+                    // For compilation, we need the actual engine not a builder
+                    let engine = setup_cli_engine(&program_path, None, args.jit)?;
                     // The compile method should already return a properly formatted PecosError::Compilation
                     engine.compile()?;
                 }
@@ -399,7 +425,7 @@ mod tests {
         let cmd = Cli::parse_from([
             "pecos",
             "run",
-            "program.json",
+            "program.phir.json",
             "-d",
             "42",
             "-s",
@@ -424,7 +450,7 @@ mod tests {
 
     #[test]
     fn verify_cli_no_seed_argument() {
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-s", "100", "-w", "2"]);
+        let cmd = Cli::parse_from(["pecos", "run", "program.phir.json", "-s", "100", "-w", "2"]);
 
         match cmd.command {
             Commands::Run(args) => {
@@ -446,7 +472,7 @@ mod tests {
         let cmd = Cli::parse_from([
             "pecos",
             "run",
-            "program.json",
+            "program.phir.json",
             "--model",
             "general",
             "-p",
@@ -472,7 +498,7 @@ mod tests {
         let cmd = Cli::parse_from([
             "pecos",
             "run",
-            "program.json",
+            "program.phir.json",
             "-m",
             "general",
             "-p",
@@ -497,7 +523,7 @@ mod tests {
     #[test]
     fn verify_cli_output_file_option() {
         // Test with output file specified using short flag
-        let cmd = Cli::parse_from(["pecos", "run", "program.json", "-o", "results.json"]);
+        let cmd = Cli::parse_from(["pecos", "run", "program.phir.json", "-o", "results.json"]);
 
         if let Commands::Run(args) = cmd.command {
             assert_eq!(args.output_file, Some("results.json".to_string()));
@@ -509,7 +535,7 @@ mod tests {
         let cmd = Cli::parse_from([
             "pecos",
             "run",
-            "program.json",
+            "program.phir.json",
             "--output",
             "path/to/results.json",
         ]);

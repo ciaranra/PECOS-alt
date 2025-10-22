@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Protocol, Union
 import numpy as np
 
 from pecos.classical_interpreters.phir_classical_interpreter import (
-    PHIRClassicalInterpreter,
+    PhirClassicalInterpreter,
 )
 from pecos.engines import hybrid_engine_multiprocessing
 from pecos.error_models.error_model import NoErrorModel
@@ -39,11 +39,11 @@ if TYPE_CHECKING:
         MachineProtocol,
         OpProcessorProtocol,
     )
-    from pecos.reps.pypmir import PyPMIR
+    from pecos.reps.pyphir import PyPHIR
     from pecos.typing import GateParams
 
 
-class PHIRConvertible(Protocol):
+class PhirConvertible(Protocol):
     """Protocol for objects that can be converted to PHIR dictionary format."""
 
     def to_phir_dict(self) -> dict[str, Any]:
@@ -51,7 +51,7 @@ class PHIRConvertible(Protocol):
         ...
 
 
-PHIRProgram = Union[str, dict[str, Any], "PyPMIR", PHIRConvertible]
+PHIRProgram = Union[str, dict[str, Any], "PyPHIR", PhirConvertible]
 
 
 class HybridEngine:
@@ -75,7 +75,7 @@ class HybridEngine:
 
         Args:
             cinterp: Classical interpreter for executing classical operations.
-                Defaults to PHIRClassicalInterpreter if None.
+                Defaults to PhirClassicalInterpreter if None.
             qsim: Quantum simulator for executing quantum operations. Can be a
                 QuantumSimulator instance or a string specifying the simulator type.
                 Defaults to QuantumSimulator if None.
@@ -91,10 +91,10 @@ class HybridEngine:
 
         self.cinterp: ClassicalInterpreterProtocol | None = cinterp
         if self.cinterp is None:
-            self.cinterp: ClassicalInterpreterProtocol = PHIRClassicalInterpreter()
+            self.cinterp: ClassicalInterpreterProtocol = PhirClassicalInterpreter()
 
         self._internal_cinterp: ClassicalInterpreterProtocol = (
-            PHIRClassicalInterpreter()
+            PhirClassicalInterpreter()
         )
         self._internal_cinterp.phir_validate = self.cinterp.phir_validate
 

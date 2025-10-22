@@ -23,10 +23,10 @@ import warnings
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from phir.model import PHIRModel
 
-from pecos.reps.pypmir import PyPMIR, signed_data_types, unsigned_data_types
-from pecos.reps.pypmir import types as pt
+from pecos.reps.pyphir import PyPHIR, signed_data_types, unsigned_data_types
+from pecos.reps.pyphir import types as pt
+from pecos.types import PhirModel
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
@@ -47,7 +47,7 @@ data_type_map = signed_data_types | unsigned_data_types
 data_type_map_rev = {v: k for k, v in data_type_map.items()}
 
 
-class PHIRClassicalInterpreter:
+class PhirClassicalInterpreter:
     """An interpreter that takes in a PHIR program and runs the classical side of the program."""
 
     def __init__(self) -> None:
@@ -95,14 +95,14 @@ class PHIRClassicalInterpreter:
             str,
         ):  # Assume it is in the PHIR/JSON format and convert to dict
             self.program = json.loads(program)
-        elif isinstance(self.program, PyPMIR | dict):
+        elif isinstance(self.program, PyPHIR | dict):
             pass
         else:
             self.program = self.program.to_phir_dict()
 
         # Assume PHIR dict format, validate PHIR
         if isinstance(self.program, dict) and self.phir_validate:
-            PHIRModel.model_validate(self.program)
+            PhirModel.model_validate(self.program)
 
         if isinstance(self.program, dict):
             if self.program["format"] not in {"PHIR/JSON", "PHIR"}:
@@ -113,8 +113,8 @@ class PHIRClassicalInterpreter:
                 raise ValueError(msg)
 
         # convert to a format that will, hopefully, run faster in simulation
-        if not isinstance(self.program, PyPMIR):
-            self.program = PyPMIR.from_phir(self.program)
+        if not isinstance(self.program, PyPHIR):
+            self.program = PyPHIR.from_phir(self.program)
 
         self.check_ffc(self.program.foreign_func_calls, self.foreign_obj)
 

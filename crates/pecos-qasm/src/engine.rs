@@ -344,7 +344,31 @@ impl QASMEngine {
         qubits: &[usize],
         params: &[f64],
     ) -> Result<(), PecosError> {
+        debug!(
+            "QASM: handle_rz called with angle={}, qubit={}",
+            params[0], qubits[0]
+        );
         engine.message_builder.add_rz(params[0], &[qubits[0]]);
+        Ok(())
+    }
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn handle_rx(
+        engine: &mut QASMEngine,
+        qubits: &[usize],
+        params: &[f64],
+    ) -> Result<(), PecosError> {
+        engine.message_builder.add_rx(params[0], &[qubits[0]]);
+        Ok(())
+    }
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn handle_ry(
+        engine: &mut QASMEngine,
+        qubits: &[usize],
+        params: &[f64],
+    ) -> Result<(), PecosError> {
+        engine.message_builder.add_ry(params[0], &[qubits[0]]);
         Ok(())
     }
 
@@ -495,6 +519,20 @@ impl QASMEngine {
         use pecos_core::prelude::GateType;
 
         match gate_type {
+            GateType::RX => {
+                if let Some(&angle) = params.first() {
+                    for &qubit in qubits {
+                        self.message_builder.add_rx(angle, &[qubit]);
+                    }
+                }
+            }
+            GateType::RY => {
+                if let Some(&angle) = params.first() {
+                    for &qubit in qubits {
+                        self.message_builder.add_ry(angle, &[qubit]);
+                    }
+                }
+            }
             GateType::RZ => {
                 if let Some(&angle) = params.first() {
                     for &qubit in qubits {
@@ -561,9 +599,12 @@ impl QASMEngine {
             GateType::CX | GateType::SZZ | GateType::SZZdg => {
                 self.process_two_qubit_gate(gate.gate_type, &qubits)
             }
-            GateType::RZ | GateType::RZZ | GateType::R1XY | GateType::U => {
-                self.process_parameterized_gate(gate.gate_type, &qubits, &gate.params)
-            }
+            GateType::RX
+            | GateType::RY
+            | GateType::RZ
+            | GateType::RZZ
+            | GateType::R1XY
+            | GateType::U => self.process_parameterized_gate(gate.gate_type, &qubits, &gate.params),
             GateType::Measure | GateType::MeasureLeaked => Err(PecosError::Processing(
                 "Measure and MeasureLeaked gates should be handled by MeasureWithMapping operation"
                     .to_string(),
@@ -572,101 +613,115 @@ impl QASMEngine {
     }
 
     /// Get the gate table for table-driven processing
+    #[allow(clippy::too_many_lines)]
     fn get_gate_table() -> Vec<GateInfo> {
+        use GateInfo as G;
         vec![
             // Single-qubit gates
-            GateInfo {
+            G {
                 name: "h",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_h,
             },
-            GateInfo {
+            G {
                 name: "x",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_x,
             },
-            GateInfo {
+            G {
                 name: "y",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_y,
             },
-            GateInfo {
+            G {
                 name: "z",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_z,
             },
-            GateInfo {
+            G {
                 name: "s",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_s,
             },
-            GateInfo {
+            G {
                 name: "sdg",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_sdg,
             },
-            GateInfo {
+            G {
                 name: "t",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_t,
             },
-            GateInfo {
+            G {
                 name: "tdg",
                 required_qubits: 1,
                 required_params: 0,
                 handler: Self::handle_tdg,
             },
-            GateInfo {
+            G {
                 name: "rz",
                 required_qubits: 1,
                 required_params: 1,
                 handler: Self::handle_rz,
             },
-            GateInfo {
+            G {
+                name: "rx",
+                required_qubits: 1,
+                required_params: 1,
+                handler: Self::handle_rx,
+            },
+            G {
+                name: "ry",
+                required_qubits: 1,
+                required_params: 1,
+                handler: Self::handle_ry,
+            },
+            G {
                 name: "r1xy",
                 required_qubits: 1,
                 required_params: 2,
                 handler: Self::handle_r1xy,
             },
             // Two-qubit gates
-            GateInfo {
+            G {
                 name: "cx",
                 required_qubits: 2,
                 required_params: 0,
                 handler: Self::handle_cx,
             },
-            GateInfo {
+            G {
                 name: "cy",
                 required_qubits: 2,
                 required_params: 0,
                 handler: Self::handle_cy,
             },
-            GateInfo {
+            G {
                 name: "cz",
                 required_qubits: 2,
                 required_params: 0,
                 handler: Self::handle_cz,
             },
-            GateInfo {
+            G {
                 name: "rzz",
                 required_qubits: 2,
                 required_params: 1,
                 handler: Self::handle_rzz,
             },
-            GateInfo {
+            G {
                 name: "szz",
                 required_qubits: 2,
                 required_params: 0,
                 handler: Self::handle_szz,
             },
-            GateInfo {
+            G {
                 name: "swap",
                 required_qubits: 2,
                 required_params: 0,
@@ -925,7 +980,11 @@ impl QASMEngine {
                     }
 
                     debug!("Evaluating if condition: {condition:?}");
-                    let condition_value = self.evaluate_expression_bitvec(condition)?.as_i64();
+                    // Use evaluate_expression_bitvec_with_width to support WASM functions
+                    // For conditions, we don't need a specific width - just evaluate as boolean
+                    let condition_value = self
+                        .evaluate_expression_bitvec_with_width(condition, 1)?
+                        .as_i64();
                     debug!("Condition value: {condition_value}");
 
                     if condition_value != 0 {
@@ -1083,14 +1142,21 @@ impl QASMEngine {
             self.current_op += 1;
         }
 
-        Ok(Some(self.message_builder.build()))
-    }
+        let msg = self.message_builder.build();
 
-    /// Evaluate an expression with `BitVec` support
-    fn evaluate_expression_bitvec(&self, expr: &Expression) -> Result<ExpressionValue, PecosError> {
-        // For non-assignment contexts (like conditionals), let operands determine width
-        // by using 0 as the minimum width hint
-        evaluate_expression_bitvec(expr, self, 0)
+        // Debug: Print the actual ByteMessage content
+        debug!("QASMEngine: Generated ByteMessage:");
+        if let Ok(quantum_ops) = msg.quantum_ops() {
+            debug!("  Quantum ops: {} total", quantum_ops.len());
+            for (i, gate) in quantum_ops.iter().enumerate() {
+                debug!("    Gate {i}: {gate:?}");
+            }
+        }
+        if let Ok(empty) = msg.is_empty() {
+            debug!("  Is empty: {empty}");
+        }
+
+        Ok(Some(msg))
     }
 
     fn evaluate_expression_bitvec_with_width(
@@ -1098,6 +1164,8 @@ impl QASMEngine {
         expr: &Expression,
         target_width: usize,
     ) -> Result<ExpressionValue, PecosError> {
+        log::debug!(" evaluate_expression_bitvec_with_width called with expr: {expr:?}");
+
         // Check if this is a WASM function call
         #[cfg(feature = "wasm")]
         if let Expression::FunctionCall { name, args } = expr
@@ -1138,6 +1206,23 @@ impl QASMEngine {
         }
 
         // Use target width as hint for expression evaluation
+        debug!("Falling back to regular evaluate_expression_bitvec for expr: {expr:?}");
+
+        // If this is a function call and we reached here, it means:
+        // 1. Either WASM feature is disabled, or
+        // 2. No foreign object is set, or
+        // 3. It's a built-in function
+        #[cfg(feature = "wasm")]
+        if let Expression::FunctionCall { name, .. } = expr
+            && !crate::BUILTIN_FUNCTIONS.contains(&name.as_str())
+        {
+            debug!(
+                "WASM function '{}' called but foreign_object is {:?}",
+                name,
+                self.foreign_object.is_some()
+            );
+        }
+
         evaluate_expression_bitvec(expr, self, target_width)
     }
 }

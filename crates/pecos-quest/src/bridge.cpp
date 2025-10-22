@@ -4,8 +4,8 @@
 
 #include "quest_ffi.h"
 #include "quest.h"
-#include "pecos-quest/src/bridge.rs.h"
-#include <memory>
+// Note: quest_ffi.h includes the cxx-generated header and rust/cxx.h before <memory>
+
 #include <stdexcept>
 #include <vector>
 #include <cstring>

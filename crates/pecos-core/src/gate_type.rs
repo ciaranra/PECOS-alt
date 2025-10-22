@@ -11,7 +11,7 @@ use std::fmt;
 /// It represents the same gate types as the core `GateType` enum but with a more
 /// predictable memory layout.
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GateType {
     I = 0b00,
     X = 0b01,
@@ -37,9 +37,8 @@ pub enum GateType {
     // F3dg = 21
     // F4 = 22
     // F4dg = 23
-
-    // RX = 30
-    // RY = 31
+    RX = 30,
+    RY = 31,
     RZ = 32,
     T = 33,
     Tdg = 34,
@@ -95,6 +94,8 @@ impl From<u8> for GateType {
             8 => GateType::SZ,
             9 => GateType::SZdg,
             10 => GateType::H,
+            30 => GateType::RX,
+            31 => GateType::RY,
             32 => GateType::RZ,
             33 => GateType::T,
             34 => GateType::Tdg,
@@ -140,7 +141,7 @@ impl GateType {
             | GateType::Prep => 0,
 
             // Gates with one parameter
-            GateType::RZ | GateType::RZZ | GateType::Idle => 1,
+            GateType::RX | GateType::RY | GateType::RZ | GateType::RZZ | GateType::Idle => 1,
 
             // Gates with two parameters
             GateType::R1XY => 2,
@@ -167,6 +168,8 @@ impl GateType {
             | GateType::SZ
             | GateType::SZdg
             | GateType::H
+            | GateType::RX
+            | GateType::RY
             | GateType::RZ
             | GateType::T
             | GateType::Tdg
@@ -211,6 +214,8 @@ impl fmt::Display for GateType {
             GateType::SZ => write!(f, "SZ"),
             GateType::SZdg => write!(f, "SZdg"),
             GateType::H => write!(f, "H"),
+            GateType::RX => write!(f, "RX"),
+            GateType::RY => write!(f, "RY"),
             GateType::RZ => write!(f, "RZ"),
             GateType::T => write!(f, "T"),
             GateType::Tdg => write!(f, "Tdg"),

@@ -309,7 +309,7 @@ def codecapacity_logical_rate(
     error_params: ErrorParams,
     decoder: Decoder,
     seed: int | None = None,
-    state_sim: SimulatorProtocol | None = None,  # noqa: ARG001
+    _state_sim: SimulatorProtocol | None = None,
     *,
     verbose: bool = True,
     circuit_runner: Standard | None = None,
@@ -428,7 +428,7 @@ def codecapacity_logical_rate2(
     *,
     verbose: bool = True,
     circuit_runner: Standard | None = None,
-    basis: str | None = None,  # noqa: ARG001
+    _basis: str | None = None,
 ) -> tuple[float, float]:
     """A tool for determining the code-capacity logical-error rate for syndrome extraction.
 

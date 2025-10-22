@@ -5,16 +5,17 @@ or JSON configuration while maintaining the benefits of the builder pattern.
 """
 
 import json
-from pecos_rslib.qasm_sim import qasm_sim
+
+from pecos_rslib import sim
 from pecos_rslib.general_noise_factory import (
     GeneralNoiseFactory,
+    IonTrapNoiseFactory,
     create_noise_from_dict,
     create_noise_from_json,
-    IonTrapNoiseFactory,
 )
 
 
-def example_basic_dict_config():
+def example_basic_dict_config() -> None:
     """Example 1: Basic dictionary configuration."""
     print("\n=== Example 1: Basic Dictionary Configuration ===")
 
@@ -42,12 +43,12 @@ def example_basic_dict_config():
     measure q -> c;
     """
 
-    results = qasm_sim(qasm).noise(noise).run(1000)
+    results = sim(qasm).noise(noise).run(1000)
     print(f"Created noise model from dict: {noise_config}")
     print(f"Ran simulation, got {len(results['c'])} results")
 
 
-def example_json_config():
+def example_json_config() -> None:
     """Example 2: JSON configuration with validation."""
     print("\n=== Example 2: JSON Configuration ===")
 
@@ -75,7 +76,7 @@ def example_json_config():
     print("- Asymmetric measurement errors")
 
 
-def example_custom_factory():
+def example_custom_factory() -> None:
     """Example 3: Custom factory with defaults and mappings."""
     print("\n=== Example 3: Custom Factory ===")
 
@@ -115,7 +116,7 @@ def example_custom_factory():
     print("- T1 converted to emission scale")
 
 
-def example_validation_and_errors():
+def example_validation_and_errors() -> None:
     """Example 4: Configuration validation and error handling."""
     print("\n=== Example 4: Validation and Error Handling ===")
 
@@ -156,7 +157,7 @@ def example_validation_and_errors():
     print(f"\nType validation errors: {errors}")
 
 
-def example_custom_key_mappings():
+def example_custom_key_mappings() -> None:
     """Example 5: Custom key mappings for domain-specific terminology."""
     print("\n=== Example 5: Custom Key Mappings ===")
 
@@ -172,7 +173,10 @@ def example_custom_key_mappings():
         "Single-qubit gate error probability",
     )
     factory.add_mapping(
-        "p_tq", "with_average_p2_probability", float, "Two-qubit gate error probability"
+        "p_tq",
+        "with_average_p2_probability",
+        float,
+        "Two-qubit gate error probability",
     )
     factory.add_mapping(
         "readout_error",
@@ -215,7 +219,7 @@ def example_custom_key_mappings():
     print("\nResulting config: p1_avg≈0.0015, p2_avg=0.01, readout=0.002")
 
 
-def example_ion_trap_specialized():
+def example_ion_trap_specialized() -> None:
     """Example 6: Specialized ion trap factory."""
     print("\n=== Example 6: Ion Trap Specialized Factory ===")
 
@@ -236,7 +240,7 @@ def example_ion_trap_specialized():
     print("- Asymmetric measurement errors (0.001/0.005)")
 
 
-def example_available_keys():
+def example_available_keys() -> None:
     """Example 7: Discovering available configuration keys."""
     print("\n=== Example 7: Available Configuration Keys ===")
 
@@ -248,7 +252,7 @@ def example_available_keys():
         print(f"  {key:15} - {description}")
 
 
-def example_complex_configuration():
+def example_complex_configuration() -> None:
     """Example 8: Complex configuration with all features."""
     print("\n=== Example 8: Complex Configuration ===")
 
@@ -289,7 +293,7 @@ def example_complex_configuration():
     print(f"\nConfiguration JSON (can be saved to file):\n{config_json}")
 
 
-def main():
+def main() -> None:
     """Run all examples."""
     print("GeneralNoiseFactory Examples")
     print("=" * 50)

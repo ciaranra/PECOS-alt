@@ -1,3 +1,4 @@
+use log::warn;
 use pecos_build_utils::{
     boost_download_info, download_cached, eigen_download_info, extract_archive,
     qulacs_download_info,
@@ -6,6 +7,9 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 fn main() {
+    // Initialize logger for build script
+    env_logger::init();
+
     setup_rerun_conditions();
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -33,6 +37,7 @@ fn main() {
         &qulacs_src,
         &out_dir,
         is_windows,
+        &target,
     );
 
     // Compile everything
@@ -41,6 +46,13 @@ fn main() {
     // Add Windows-specific boost exception stub if needed
     if is_windows {
         create_windows_boost_stub(&out_dir);
+    }
+
+    // On macOS, link against the system C++ library from dyld shared cache
+    if target.contains("darwin") {
+        println!("cargo:rustc-link-search=native=/usr/lib");
+        println!("cargo:rustc-link-lib=c++");
+        println!("cargo:rustc-link-arg=-Wl,-search_paths_first");
     }
 }
 
@@ -94,7 +106,7 @@ fn add_qulacs_source_files(build: &mut cc::Build, qulacs_src: &Path) {
         if path.exists() {
             build.file(path);
         } else {
-            eprintln!("Warning: Skipping missing file: cppsim/{file}");
+            warn!("Skipping missing file: cppsim/{file}");
         }
     }
 
@@ -148,7 +160,7 @@ fn add_qulacs_source_files(build: &mut cc::Build, qulacs_src: &Path) {
         if path.exists() {
             build.file(path);
         } else {
-            eprintln!("Warning: Skipping missing file: csim/{file}");
+            warn!("Skipping missing file: csim/{file}");
         }
     }
 }
@@ -160,6 +172,7 @@ fn configure_build(
     qulacs_src: &Path,
     out_dir: &Path,
     is_windows: bool,
+    target: &str,
 ) {
     // Include directories
     build.include(eigen_path);
@@ -180,6 +193,13 @@ fn configure_build(
         // Windows needs these for proper linking
         build.define("_WINDOWS", None);
         build.define("NOMINMAX", None);
+
+        // Fix MSVC compiler crash with Eigen templates
+        build.flag("/bigobj"); // Allow larger object files
+        build.flag("/EHsc"); // Enable exception handling
+
+        // Use standard optimization level - /bigobj should prevent compiler crashes
+        build.opt_level(2); // Maximize speed optimization (/O2)
     } else {
         build.flag_if_supported("-std=c++14");
         build.flag_if_supported("-O3");
@@ -187,6 +207,14 @@ fn configure_build(
         // Silence OpenMP pragma warnings since we intentionally don't use OpenMP
         // PECOS uses thread-level parallelism instead of OpenMP's internal parallelism
         build.flag_if_supported("-Wno-unknown-pragmas");
+
+        // On macOS, use the -stdlib=libc++ flag to ensure proper C++ standard library linkage
+        if target.contains("darwin") {
+            build.flag("-stdlib=libc++");
+            // Prevent opportunistic linking to Homebrew's libunwind (Xcode 15+ issue)
+            build.flag("-L/usr/lib");
+            build.flag("-Wl,-search_paths_first");
+        }
     }
 
     // Define preprocessor macros

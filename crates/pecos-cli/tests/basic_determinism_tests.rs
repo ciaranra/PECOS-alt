@@ -16,9 +16,12 @@
 /// behavior, which is crucial for reproducible quantum simulations.
 use assert_cmd::prelude::*;
 use pecos::prelude::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
+
+// Test lock removed: These tests only verify determinism by executing quantum programs
+// They don't modify any shared state and can safely run in parallel
 
 /// Helper function to run PECOS CLI with given parameters
 fn run_pecos(
@@ -29,9 +32,15 @@ fn run_pecos(
     noise_prob: &str,
     seed: u64,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let output = Command::cargo_bin("pecos")?
-        .env("RUST_LOG", "info")
-        .arg("run")
+    let mut cmd = Command::cargo_bin("pecos")?;
+    cmd.env("RUST_LOG", "info").arg("run");
+
+    // Add --jit flag for LLVM files (when Selene is not available)
+    if file_path.extension().and_then(|s| s.to_str()) == Some("ll") {
+        cmd.arg("--jit");
+    }
+
+    let output = cmd
         .arg(file_path)
         .arg("-s")
         .arg(shots.to_string())
@@ -72,7 +81,7 @@ fn run_pecos(
 /// Extract measurement results from JSON output
 /// Handles the new columnar format: {"c": [3, 0, ...]}
 fn get_values(json_output: &str) -> Vec<String> {
-    let mut register_values: HashMap<String, Vec<String>> = HashMap::new();
+    let mut register_values: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     // Parse the JSON - expecting an object with register names as keys
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output)
@@ -154,14 +163,14 @@ fn test_determinism_for_file(
 
 /// Test basic determinism with PHIR (JSON) files
 #[test]
-fn test_basic_determinism_phir() -> Result<(), Box<dyn std::error::Error>> {
+fn test_basic_determinism_phir_json() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-    println!("BASIC DETERMINISM TEST - PHIR FILES");
+    println!("BASIC DETERMINISM TEST - PHIR-JSON FILES");
     println!("-----------------------------------");
 
     // Test bell.json with depolarizing noise model
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
     println!("\nTesting with depolarizing noise (p=0.1):");
     test_determinism_for_file(&bell_json_path, 100, 1, "depolarizing", "0.1")?;
 
@@ -173,12 +182,12 @@ fn test_basic_determinism_phir() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nTesting with no noise (p=0.0):");
     test_determinism_for_file(&bell_json_path, 100, 1, "depolarizing", "0.0")?;
 
-    // Test qprog.json
-    let qprog_json_path = manifest_dir.join("../../examples/phir/qprog.json");
-    println!("\nTesting qprog.json:");
+    // Test qprog.phir.json
+    let qprog_json_path = manifest_dir.join("../../examples/phir/qprog.phir.json");
+    println!("\nTesting qprog.phir.json:");
     test_determinism_for_file(&qprog_json_path, 100, 1, "depolarizing", "0.1")?;
 
-    println!("\nPHIR files exhibit deterministic behavior with the same seed");
+    println!("\nPHIR-JSON files exhibit deterministic behavior with the same seed");
 
     Ok(())
 }
@@ -213,16 +222,18 @@ fn test_basic_determinism_qasm() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Test basic determinism with QIR files, gracefully skipping if LLVM tools are unavailable
+/// Test basic determinism with LLVM files, gracefully skipping if LLVM tools are unavailable
 #[test]
-fn test_basic_determinism_qir() {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_ll_path = manifest_dir.join("../../examples/qir/bell.ll");
+fn test_basic_determinism_llvm() {
+    // No lock needed: This test only verifies determinism without modifying shared state
 
-    println!("BASIC DETERMINISM TEST - QIR FILES");
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let bell_ll_path = manifest_dir.join("../../examples/llvm/bell.ll");
+
+    println!("BASIC DETERMINISM TEST - LLVM FILES");
     println!("---------------------------------");
 
-    // Try to run QIR tests, but handle any errors gracefully
+    // Try to run LLVM tests, but handle any errors gracefully
     let result = (|| -> Result<(), Box<dyn std::error::Error>> {
         // Test with depolarizing noise
         println!("\nTesting with depolarizing noise (p=0.1):");
@@ -241,19 +252,19 @@ fn test_basic_determinism_qir() {
 
     // If there was an error, print a message but don't fail the test
     if let Err(e) = result {
-        println!("Skipping QIR determinism test - QIR engine error: {e}");
+        println!("Skipping LLVM determinism test - LLVM engine error: {e}");
         println!("This might be due to missing LLVM tools or other dependencies");
         return;
     }
 
-    println!("\nQIR files exhibit deterministic behavior with the same seed");
+    println!("\nLLVM files exhibit deterministic behavior with the same seed");
 }
 
 /// Test that with 0 noise probability, both noise models give identical results
 #[test]
 fn test_cross_model_consistency() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     println!("CROSS-MODEL CONSISTENCY TEST");
     println!("----------------------------");

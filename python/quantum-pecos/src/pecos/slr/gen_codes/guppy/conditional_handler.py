@@ -195,26 +195,24 @@ class ConditionalResourceTracker:
                             self.generator.write(
                                 f"_ = quantum.measure({qreg_name}[{idx}])",
                             )
-                else:
-                    # Check if we need to unpack first
-                    if not unpacked_names.startswith("__measure_array"):
-                        # Not a special marker - use standard indexing
-                        for idx in indices:
-                            self.generator.write(
-                                f"_ = quantum.measure({qreg_name}[{idx}])",
-                            )
-                    else:
-                        # This was marked for measure_array but we need partial
-                        # We need to unpack it first
-                        self._unpack_for_partial_access(qreg_name, indices)
-            else:
-                # Not unpacked - check if we should unpack for partial access
-                if self._should_unpack_for_cleanup(qreg_name, indices):
-                    self._unpack_for_partial_access(qreg_name, indices)
-                else:
-                    # Use standard array indexing
+                # Check if we need to unpack first
+                elif not unpacked_names.startswith("__measure_array"):
+                    # Not a special marker - use standard indexing
                     for idx in indices:
-                        self.generator.write(f"_ = quantum.measure({qreg_name}[{idx}])")
+                        self.generator.write(
+                            f"_ = quantum.measure({qreg_name}[{idx}])",
+                        )
+                else:
+                    # This was marked for measure_array but we need partial
+                    # We need to unpack it first
+                    self._unpack_for_partial_access(qreg_name, indices)
+            # Not unpacked - check if we should unpack for partial access
+            elif self._should_unpack_for_cleanup(qreg_name, indices):
+                self._unpack_for_partial_access(qreg_name, indices)
+            else:
+                # Use standard array indexing
+                for idx in indices:
+                    self.generator.write(f"_ = quantum.measure({qreg_name}[{idx}])")
 
         return True
 
@@ -256,7 +254,7 @@ class ConditionalResourceTracker:
     def ensure_branches_consume_same_resources(self, if_block: Block) -> None:
         """Ensure both branches of an If block consume the same quantum resources."""
         # Analyze resource consumption
-        then_consumed, else_consumed, all_used = self.analyze_if_block_resources(
+        then_consumed, else_consumed, _all_used = self.analyze_if_block_resources(
             if_block,
         )
 

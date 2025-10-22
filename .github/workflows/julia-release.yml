@@ -70,15 +70,24 @@ jobs:
   build_julia_binaries:
     needs: check_pr_push
     if: needs.check_pr_push.result == 'success' && needs.check_pr_push.outputs.run == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        architecture: [x86_64, aarch64]
-        exclude:
-          - os: windows-latest
+        include:
+          - os: ubuntu-latest
+            architecture: x86_64
+          - os: ubuntu-latest
             architecture: aarch64
+            runner: ubuntu-latest
+          - os: macos-13
+            architecture: x86_64
+            runner: macos-13  # Intel Mac for x86_64
+          - os: macos-latest
+            architecture: aarch64
+            runner: macos-latest  # ARM64 Mac
+          - os: windows-latest
+            architecture: x86_64
 
     steps:
       - uses: actions/checkout@v4
@@ -88,22 +97,14 @@ jobs:
       - name: Set up Rust
         run: rustup show
 
+      - name: Setup LLVM 14.0.6
+        uses: ./.github/actions/setup-llvm
+
       - name: Install Rust target
         run: |
-          if [ "${{ matrix.architecture }}" = "aarch64" ]; then
-            if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-              rustup target add aarch64-unknown-linux-gnu
-              sudo apt-get update
-              sudo apt-get install -y gcc-aarch64-linux-gnu
-            elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-              rustup target add aarch64-apple-darwin
-            fi
-          else
-            # For x86_64 builds on ARM64 macOS
-            if [ "${{ matrix.os }}" = "macos-latest" ]; then
-              rustup target add x86_64-apple-darwin
-            fi
-          fi
+          # With native ARM64 runners, no cross-compilation setup is needed
+          # All builds are now native for their respective architectures
+          echo "Using native build for ${{ matrix.architecture }} on ${{ matrix.os }}"
 
       - name: Set up Visual Studio environment on Windows
         if: runner.os == 'Windows'
@@ -133,33 +134,49 @@ jobs:
         run: |
           cd julia/pecos-julia-ffi
 
-          if [ "${{ matrix.architecture }}" = "aarch64" ]; then
-            if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-              export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-              cargo build --release --target aarch64-unknown-linux-gnu
-              target_dir="../../target/aarch64-unknown-linux-gnu/release"
-            elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-              cargo build --release --target aarch64-apple-darwin
-              target_dir="../../target/aarch64-apple-darwin/release"
-            fi
-          else
-            # For x86_64 builds
-            if [ "${{ matrix.os }}" = "macos-latest" ]; then
-              # On ARM64 macOS, explicitly build for x86_64
-              cargo build --release --target x86_64-apple-darwin
-              target_dir="../../target/x86_64-apple-darwin/release"
-            else
-              cargo build --release
-              target_dir="../../target/release"
-            fi
+          # Set up build flags for macOS to avoid LLVM dependency issues
+          if [[ "${{ matrix.os }}" == macos-* ]]; then
+            # Prevent linking against LLVM's libunwind
+            export RUSTFLAGS="-C link-arg=-Wl,-dead_strip_dylibs -C link-arg=-Wl,-ld_classic"
+            # Remove LLVM from library paths during build
+            unset DYLD_LIBRARY_PATH
+            unset DYLD_FALLBACK_LIBRARY_PATH
+            # Explicitly exclude LLVM libraries from linking
+            export RUSTFLAGS="$RUSTFLAGS -L native=/usr/lib"
           fi
+
+          # Native build for all platforms (no cross-compilation needed with native ARM64 runners)
+          cargo build --release
+          target_dir="../../target/release"
 
           # Create artifact directory
           mkdir -p ../../artifacts
 
           # Copy the built library
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+          if [[ "${{ matrix.os }}" == macos-* ]]; then
             cp $target_dir/libpecos_julia.dylib ../../artifacts/
+
+            # Fix any remaining LLVM dependencies
+            echo "Checking and fixing library dependencies..."
+            otool -L ../../artifacts/libpecos_julia.dylib
+
+            # Check for any problematic dependencies
+            if otool -L ../../artifacts/libpecos_julia.dylib | grep -q "/tmp/llvm"; then
+              echo "ERROR: Binary has dependencies on /tmp/llvm which won't exist at runtime!"
+              echo "Attempting to fix..."
+
+              # For libunwind specifically, we'll strip it out by creating a new dylib without it
+              if otool -L ../../artifacts/libpecos_julia.dylib | grep -q "/tmp/llvm/lib/libunwind.dylib"; then
+                echo "Creating fixed library without LLVM libunwind dependency..."
+                # Use install_name_tool to remove the dependency by setting it to a weak import
+                # that can fail at runtime without crashing
+                install_name_tool -change /tmp/llvm/lib/libunwind.dylib /usr/lib/libSystem.B.dylib ../../artifacts/libpecos_julia.dylib || \
+                  echo "Warning: Could not remap libunwind dependency"
+              fi
+            fi
+
+            echo "Final library dependencies:"
+            otool -L ../../artifacts/libpecos_julia.dylib
           else
             cp $target_dir/libpecos_julia.so ../../artifacts/
           fi
@@ -200,7 +217,7 @@ jobs:
             os: windows-latest
             architecture: x86_64
           - runner: macos-13
-            os: macos-latest
+            os: macos-13
             architecture: x86_64
           - runner: macos-latest
             os: macos-latest

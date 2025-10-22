@@ -60,72 +60,40 @@ jobs:
   build_wheels_pecos_rslib:
     needs: check_pr_push
     if: needs.check_pr_push.result == 'success' && needs.check_pr_push.outputs.run == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        architecture: [ x86_64, aarch64 ]
-        exclude:
-          - os: windows-latest
+        include:
+          - os: ubuntu-latest
+            architecture: x86_64
+          - os: ubuntu-latest
             architecture: aarch64
+            runner: ubuntu-latest
+          - os: macos-14
+            architecture: aarch64
+          - os: macos-13
+            architecture: x86_64
+          - os: windows-2022
+            architecture: x86_64
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha || github.sha }}
+          submodules: recursive
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.2.1
         with:
-          python-version: '3.10'
+          package-dir: python/pecos-rslib
+          output-dir: wheelhouse
 
-      - name: Remove conflicting README.md
-        run: |
-          if [ -f crates/pecos-python/README.md ]; then
-            mv crates/pecos-python/README.md crates/pecos-python/README.md.bak
-            echo "Moved conflicting README.md to README.md.bak"
-          else
-            echo "No conflicting README.md found"
-          fi
-
-      - name: Build wheel
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --release --out dist --interpreter python3.10 ${{ matrix.architecture == 'aarch64' && '--zig' || '' }}
-          working-directory: python/pecos-rslib
-          target: ${{ matrix.architecture == 'aarch64' && (matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || 'aarch64-unknown-linux-gnu') || (matrix.os == 'macos-latest' && 'x86_64-apple-darwin' || '') }}
-          manylinux: auto
-
-      - name: Restore README.md
-        if: always()
-        run: |
-          if [ -f crates/pecos-python/README.md.bak ]; then
-            mv crates/pecos-python/README.md.bak crates/pecos-python/README.md
-            echo "Restored README.md from backup"
-          else
-            echo "No README.md backup found"
-          fi
-
-      - name: Test wheel is abi3
-        run: |
-          # Check that the wheel has abi3 tag
-          ls -la python/pecos-rslib/dist/
-          wheel_file=$(ls python/pecos-rslib/dist/*.whl)
-          echo "Built wheel: $wheel_file"
-          if [[ $wheel_file == *"abi3"* ]]; then
-            echo "Wheel has abi3 tag"
-          else
-            echo "ERROR: Wheel does not have abi3 tag!"
-            exit 1
-          fi
-
-      - name: Upload wheel
+      - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: wheel-pecos-rslib-${{ matrix.os }}-${{ matrix.architecture }}
-          path: python/pecos-rslib/dist/*.whl
+          path: ./wheelhouse/*.whl
 
   test_abi3_wheels:
     needs: build_wheels_pecos_rslib
@@ -142,13 +110,13 @@ jobs:
             os: ubuntu-latest
             architecture: x86_64
           - runner: windows-latest
-            os: windows-latest
+            os: windows-2022
             architecture: x86_64
           - runner: macos-13
-            os: macos-latest
+            os: macos-13
             architecture: x86_64
-          - runner: macos-latest
-            os: macos-latest
+          - runner: macos-14
+            os: macos-14
             architecture: aarch64
     steps:
       - uses: actions/checkout@v4

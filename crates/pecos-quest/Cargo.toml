@@ -22,6 +22,7 @@ thiserror.workspace = true
 cxx.workspace = true
 pecos-core.workspace = true
 pecos-qsim.workspace = true
+pecos-engines.workspace = true
 num-complex.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
@@ -30,12 +31,11 @@ rand_chacha.workspace = true
 pecos-build-utils.workspace = true
 cxx-build.workspace = true
 cc.workspace = true
+log.workspace = true
+env_logger.workspace = true
 
 [dev-dependencies]
-approx = "0.5"
-
-[lib]
-name = "pecos_quest"
+approx.workspace = true
 
 [lints]
 workspace = true

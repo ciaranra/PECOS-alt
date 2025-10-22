@@ -10,7 +10,7 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use crate::engine_system::{ClassicalEngine, HybridEngine};
+use crate::engine_system::{ClassicalControlEngine, ClassicalEngine, HybridEngine};
 use crate::hybrid::HybridEngineBuilder;
 use crate::monte_carlo::engine::MonteCarloEngine;
 use crate::noise::{DepolarizingNoiseModel, NoiseModel};
@@ -62,6 +62,8 @@ pub struct MonteCarloEngineBuilder {
     hybrid_engine: Option<HybridEngine>,
     /// Optional seed for the `MonteCarloEngine`'s RNG
     seed: Option<u64>,
+    /// Default number of worker threads
+    default_workers: usize,
 }
 
 impl MonteCarloEngineBuilder {
@@ -75,6 +77,7 @@ impl MonteCarloEngineBuilder {
             hybrid_engine_builder: Some(HybridEngineBuilder::new()),
             hybrid_engine: None,
             seed: None,
+            default_workers: 1,
         }
     }
 
@@ -129,7 +132,7 @@ impl MonteCarloEngineBuilder {
     /// Panics if accessing fields of a hybrid engine that doesn't exist when `self.hybrid_engine` is `Some`
     /// but the unwrap operation fails.
     #[must_use]
-    pub fn with_classical_engine(mut self, engine: Box<dyn ClassicalEngine>) -> Self {
+    pub fn with_classical_engine(mut self, engine: Box<dyn ClassicalControlEngine>) -> Self {
         let hybrid_engine_clone = self.hybrid_engine.clone();
 
         let update_fn = move |builder: HybridEngineBuilder| {
@@ -297,6 +300,19 @@ impl MonteCarloEngineBuilder {
         self
     }
 
+    /// Set the default number of worker threads
+    ///
+    /// # Arguments
+    /// * `workers` - The default number of worker threads to use
+    ///
+    /// # Returns
+    /// The builder for method chaining
+    #[must_use]
+    pub fn with_default_workers(mut self, workers: usize) -> Self {
+        self.default_workers = workers;
+        self
+    }
+
     /// Set the number of qubits in the quantum system
     ///
     /// # Arguments
@@ -363,6 +379,7 @@ impl MonteCarloEngineBuilder {
         MonteCarloEngine {
             hybrid_engine_template: hybrid_engine,
             rng,
+            default_workers: self.default_workers,
         }
     }
 
@@ -404,6 +421,7 @@ impl MonteCarloEngineBuilder {
         let engine = MonteCarloEngine {
             hybrid_engine_template: hybrid_engine,
             rng: ChaCha8Rng::seed_from_u64(seed),
+            default_workers: self.default_workers,
         };
 
         Ok(engine)

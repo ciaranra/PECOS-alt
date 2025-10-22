@@ -117,30 +117,29 @@ class OperationHandler:
                     self.generator.write(
                         f"# ERROR: Two-qubit gate {gate_name} requires exactly 2 qubits",
                     )
-            else:
-                # Single-qubit gates
-                if gate.qargs:
-                    # Check if this is a full register operation
-                    if (
-                        len(gate.qargs) == 1
-                        and hasattr(gate.qargs[0], "size")
-                        and gate.qargs[0].size > 1
-                    ):
-                        # Apply gate to all qubits in register
-                        reg = gate.qargs[0]
-                        self.generator.write(f"for i in range({reg.size}):")
-                        self.generator.indent()
-                        self.generator.write(f"{guppy_gate}({reg.sym}[i])")
-                        self.generator.dedent()
-                    else:
-                        # Single qubit operation(s)
-                        for q in gate.qargs:
-                            qubit = self._get_qubit_ref(q)
-                            self.generator.write(f"{guppy_gate}({qubit})")
+            # Single-qubit gates
+            elif gate.qargs:
+                # Check if this is a full register operation
+                if (
+                    len(gate.qargs) == 1
+                    and hasattr(gate.qargs[0], "size")
+                    and gate.qargs[0].size > 1
+                ):
+                    # Apply gate to all qubits in register
+                    reg = gate.qargs[0]
+                    self.generator.write(f"for i in range({reg.size}):")
+                    self.generator.indent()
+                    self.generator.write(f"{guppy_gate}({reg.sym}[i])")
+                    self.generator.dedent()
                 else:
-                    self.generator.write(
-                        f"# ERROR: Single-qubit gate {gate_name} called with no qubit arguments",
-                    )
+                    # Single qubit operation(s)
+                    for q in gate.qargs:
+                        qubit = self._get_qubit_ref(q)
+                        self.generator.write(f"{guppy_gate}({qubit})")
+            else:
+                self.generator.write(
+                    f"# ERROR: Single-qubit gate {gate_name} called with no qubit arguments",
+                )
         else:
             self.generator.write(f"# WARNING: Unknown quantum gate: {gate_name}")
             self.generator.write("# Add mapping for this gate in gate_map dictionary")
@@ -461,42 +460,41 @@ class OperationHandler:
                     qubit_ref = self._get_qubit_ref(q)
                     bit_ref = self._get_qubit_ref(c)
                     self._generate_individual_measurement(q, c, qubit_ref, bit_ref)
-            else:
-                # Standard one-to-one measurement
-                # Check if this is a single full-register measurement
-                if (
-                    len(meas.qargs) == 1
-                    and len(meas.cout) == 1
-                    and hasattr(meas.qargs[0], "sym")
-                    and hasattr(meas.cout[0], "sym")
-                ):
-                    # Full register measurement - use measure_array for HUGR compatibility
-                    qreg = meas.qargs[0]
-                    creg = meas.cout[0]
-                    # Check for renamed variables
-                    qreg_name = qreg.sym
-                    creg_name = creg.sym
-                    if hasattr(self.generator, "renamed_vars"):
-                        if qreg_name in self.generator.renamed_vars:
-                            qreg_name = self.generator.renamed_vars[qreg_name]
-                        if creg_name in self.generator.renamed_vars:
-                            creg_name = self.generator.renamed_vars[creg_name]
-                    self.generator.write(
-                        f"{creg_name} = quantum.measure_array({qreg_name})",
-                    )
+            # Standard one-to-one measurement
+            # Check if this is a single full-register measurement
+            elif (
+                len(meas.qargs) == 1
+                and len(meas.cout) == 1
+                and hasattr(meas.qargs[0], "sym")
+                and hasattr(meas.cout[0], "sym")
+            ):
+                # Full register measurement - use measure_array for HUGR compatibility
+                qreg = meas.qargs[0]
+                creg = meas.cout[0]
+                # Check for renamed variables
+                qreg_name = qreg.sym
+                creg_name = creg.sym
+                if hasattr(self.generator, "renamed_vars"):
+                    if qreg_name in self.generator.renamed_vars:
+                        qreg_name = self.generator.renamed_vars[qreg_name]
+                    if creg_name in self.generator.renamed_vars:
+                        creg_name = self.generator.renamed_vars[creg_name]
+                self.generator.write(
+                    f"{creg_name} = quantum.measure_array({qreg_name})",
+                )
 
-                    # Mark entire array as consumed
-                    if hasattr(qreg, "sym") and hasattr(qreg, "size"):
-                        if qreg.sym not in self.generator.consumed_qubits:
-                            self.generator.consumed_qubits[qreg.sym] = set()
-                        for i in range(qreg.size):
-                            self.generator.consumed_qubits[qreg.sym].add(i)
-                else:
-                    # Individual qubit measurements
-                    for q, c in zip(meas.qargs, meas.cout):
-                        qubit_ref = self._get_qubit_ref(q)
-                        bit_ref = self._get_qubit_ref(c)
-                        self._generate_individual_measurement(q, c, qubit_ref, bit_ref)
+                # Mark entire array as consumed
+                if hasattr(qreg, "sym") and hasattr(qreg, "size"):
+                    if qreg.sym not in self.generator.consumed_qubits:
+                        self.generator.consumed_qubits[qreg.sym] = set()
+                    for i in range(qreg.size):
+                        self.generator.consumed_qubits[qreg.sym].add(i)
+            else:
+                # Individual qubit measurements
+                for q, c in zip(meas.qargs, meas.cout):
+                    qubit_ref = self._get_qubit_ref(q)
+                    bit_ref = self._get_qubit_ref(c)
+                    self._generate_individual_measurement(q, c, qubit_ref, bit_ref)
         else:
             # No explicit output bits - just measure and discard results
             for q in meas.qargs:
@@ -558,19 +556,18 @@ class OperationHandler:
                 arg = self.generator.expression_handler.generate_expr(op.arg)
                 result = self.generator.expression_handler.generate_expr(op.result)
                 self.generator.write(f"{result} = not {arg}")
-        else:
-            # Binary operations (XOR, AND, OR)
-            if hasattr(op, "left") and hasattr(op, "right") and hasattr(op, "result"):
-                left = self.generator.expression_handler.generate_expr(op.left)
-                right = self.generator.expression_handler.generate_expr(op.right)
-                result = self.generator.expression_handler.generate_expr(op.result)
+        # Binary operations (XOR, AND, OR)
+        elif hasattr(op, "left") and hasattr(op, "right") and hasattr(op, "result"):
+            left = self.generator.expression_handler.generate_expr(op.left)
+            right = self.generator.expression_handler.generate_expr(op.right)
+            result = self.generator.expression_handler.generate_expr(op.result)
 
-                if op_name == "XOR":
-                    self.generator.write(f"{result} = {left} != {right}")  # Boolean XOR
-                elif op_name == "AND":
-                    self.generator.write(f"{result} = {left} and {right}")
-                elif op_name == "OR":
-                    self.generator.write(f"{result} = {left} or {right}")
+            if op_name == "XOR":
+                self.generator.write(f"{result} = {left} != {right}")  # Boolean XOR
+            elif op_name == "AND":
+                self.generator.write(f"{result} = {left} and {right}")
+            elif op_name == "OR":
+                self.generator.write(f"{result} = {left} or {right}")
 
     def _handle_measure_array_distribution(self, meas, qreg_name: str) -> None:
         """Handle distributing measurement results from a temporary array."""
@@ -613,7 +610,7 @@ class OperationHandler:
             in_main
             and hasattr(q, "reg")
             and hasattr(q.reg, "sym")
-            and (qreg_name := q.reg.sym) in self.generator.unpacked_arrays  # noqa: F841
+            and q.reg.sym in self.generator.unpacked_arrays
             and hasattr(c, "reg")
             and hasattr(c.reg, "sym")
             and hasattr(c, "index")

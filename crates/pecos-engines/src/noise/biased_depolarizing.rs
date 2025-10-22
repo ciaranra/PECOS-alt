@@ -164,6 +164,8 @@ impl BiasedDepolarizingNoiseModel {
                 | GateType::H
                 | GateType::T
                 | GateType::Tdg
+                | GateType::RX
+                | GateType::RY
                 | GateType::R1XY
                 | GateType::RZ
                 | GateType::U => {
@@ -590,6 +592,12 @@ impl BiasedDepolarizingNoiseModelBuilder {
         }
 
         noise
+    }
+}
+
+impl crate::noise::IntoNoiseModel for BiasedDepolarizingNoiseModelBuilder {
+    fn into_noise_model(self) -> Box<dyn crate::noise::NoiseModel> {
+        Box::new(self.build())
     }
 }
 

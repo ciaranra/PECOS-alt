@@ -272,3 +272,46 @@ fn test_method_chaining() {
     // Just verify it compiles and runs
     assert_eq!(state.num_qubits(), 2);
 }
+
+#[test]
+fn test_gpu_acceleration_status() {
+    let state = QuestStateVec::new(2);
+    let qureg_info = state.get_info();
+    let env_info = state.get_env_info();
+
+    // Print environment status for visibility
+    println!("QuEST Environment Info:");
+    println!("  Multithreaded: {}", env_info.is_multithreaded);
+    println!("  GPU accelerated: {}", env_info.is_gpu_accelerated);
+    println!("  Distributed: {}", env_info.is_distributed);
+    println!("  Rank: {}", env_info.rank);
+    println!("  Num nodes: {}", env_info.num_nodes);
+
+    println!("\nQureg Info:");
+    println!("  Number of qubits: {}", qureg_info.num_qubits);
+    println!("  Number of amplitudes: {}", qureg_info.num_amps);
+    println!("  Is density matrix: {}", qureg_info.is_density_matrix);
+
+    // When built with --features gpu, GPU should be enabled
+    #[cfg(feature = "gpu")]
+    {
+        assert!(
+            env_info.is_gpu_accelerated,
+            "GPU feature enabled but QuEST reports GPU acceleration is OFF. \
+             This means GPU compilation succeeded but runtime GPU detection failed. \
+             Check that CUDA runtime libraries are available."
+        );
+        println!("\nSUCCESS: QuEST is using GPU acceleration!");
+    }
+
+    // When built without gpu feature, should be CPU-only
+    #[cfg(not(feature = "gpu"))]
+    {
+        assert!(
+            !env_info.is_gpu_accelerated,
+            "GPU feature disabled but QuEST reports GPU acceleration is ON. \
+             This should not happen."
+        );
+        println!("\nINFO: QuEST is running on CPU (GPU feature not enabled)");
+    }
+}

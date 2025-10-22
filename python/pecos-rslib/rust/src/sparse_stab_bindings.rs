@@ -1,4 +1,5 @@
 // Copyright 2024 The PECOS Developers
+use pecos::prelude::*;
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.You may obtain a copy of the License at
@@ -10,7 +11,6 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use pecos::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
@@ -318,22 +318,22 @@ impl SparseSim {
             let destab_lines: Vec<String> = destabs.lines().map(String::from).collect();
 
             if verbose {
-                println!("Stabilizers:");
+                log::debug!("Stabilizers:");
                 for line in &stab_lines {
-                    println!("{line}");
+                    log::debug!("{line}");
                 }
-                println!("Destabilizers:");
+                log::debug!("Destabilizers:");
                 for line in &destab_lines {
-                    println!("{line}");
+                    log::debug!("{line}");
                 }
             }
 
             [stab_lines, destab_lines].concat()
         } else {
             if verbose {
-                println!("Stabilizers:");
+                log::debug!("Stabilizers:");
                 for line in &stab_lines {
-                    println!("{line}");
+                    log::debug!("{line}");
                 }
             }
 

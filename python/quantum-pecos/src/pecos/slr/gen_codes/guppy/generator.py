@@ -74,7 +74,7 @@ class GuppyGenerator(Generator):
                 self._generate_function_definition(block_type, func_name, sample_block)
             else:
                 # New format: (block_key, func_name, sample_block, block_name)
-                block_key, func_name, sample_block, block_name = item
+                _block_key, func_name, sample_block, block_name = item
                 self._generate_function_definition_by_info(
                     func_name,
                     sample_block,
@@ -381,7 +381,9 @@ class GuppyGenerator(Generator):
         param_str = ", ".join(params) if params else ""
 
         # Analyze quantum resource flow to determine return type
-        consumed_qubits, live_qubits = self._analyze_quantum_resource_flow(sample_block)
+        _consumed_qubits, live_qubits = self._analyze_quantum_resource_flow(
+            sample_block,
+        )
         # Debug output
         # print(f"DEBUG: Function {func_name} - consumed: {consumed_qubits}, live: {live_qubits}")
 

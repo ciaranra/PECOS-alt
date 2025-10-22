@@ -16,7 +16,7 @@
 /// behavior regardless of the parallelization configuration.
 use assert_cmd::prelude::*;
 use pecos::prelude::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -72,7 +72,7 @@ fn run_pecos(
 /// Extract measurement results from JSON output
 /// Handles the new columnar format: {"c": [3, 0, ...]}
 fn get_values(json_output: &str) -> Vec<String> {
-    let mut register_values: HashMap<String, Vec<String>> = HashMap::new();
+    let mut register_values: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     // Parse the JSON - expecting an object with register names as keys
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_output)
@@ -104,7 +104,7 @@ fn get_values(json_output: &str) -> Vec<String> {
 #[test]
 fn test_worker_count_self_determinism() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     println!("WORKER COUNT SELF-DETERMINISM: Testing that each worker count is self-consistent");
     println!("----------------------------------------------------------------------------");
@@ -160,7 +160,7 @@ fn test_worker_count_self_determinism() -> Result<(), Box<dyn std::error::Error>
 #[allow(clippy::similar_names)]
 fn test_small_shots_with_multiple_workers() -> Result<(), Box<dyn std::error::Error>> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bell_json_path = manifest_dir.join("../../examples/phir/bell.json");
+    let bell_json_path = manifest_dir.join("../../examples/phir/bell.phir.json");
 
     println!("SMALL SHOT COUNT TEST: Verifying behavior with 10 shots and various worker counts");
     println!("------------------------------------------------------------------------");

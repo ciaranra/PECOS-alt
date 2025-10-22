@@ -22,7 +22,7 @@ calls to Wasm VMs, conditional branching, and more.
 - Fast Simulation: Leverages a fast stabilizer simulation algorithm.
 - Multi-language extensions: Core functionalities implemented via Rust for performance and safety. Additional add-ons
 and extension support in C/C++ via Cython.
-- QIR Support: Execute Quantum Intermediate Representation programs (requires LLVM version 14 with the 'llc' tool).
+- LLVM IR Support: Execute LLVM Intermediate Representation programs for hybrid quantum/classical computing. LLVM support is optional - PECOS can be built without LLVM by using `--no-default-features` when building the Rust crates. When LLVM is enabled (default), requires LLVM version 14.
 
 ## Getting Started
 
@@ -41,7 +41,7 @@ PECOS now consists of multiple interconnected components:
   - `/crates/pecos-qsims/`: A collection of quantum simulators
   - `/crates/pecos-qec/`: Rust code for analyzing and exploring quantum error correction (QEC)
   - `/crates/pecos-qasm/`: Implementation of QASM parsing and execution
-  - `/crates/pecos-qir/`: Implementation of QIR (Quantum Intermediate Representation) execution
+  - `/crates/pecos-llvm-runtime/`: Implementation of LLVM IR execution for hybrid quantum-classical programs
   - `/crates/pecos-engines/`: Quantum and classical engines for simulations
   - `/crates/pecos-cli/`: Command-line interface for PECOS
   - `/crates/pecos-python/`: Rust code for Python extensions
@@ -115,14 +115,17 @@ pecos = "0.x.x"  # Replace with the latest version
 
 #### Optional Dependencies
 
-- **LLVM version 14**: Required for QIR (Quantum Intermediate Representation) support
+- **LLVM version 14**: Required for LLVM IR execution support
   - Linux: `sudo apt install llvm-14`
   - macOS: `brew install llvm@14`
-  - Windows: Download LLVM 14.x installer from [LLVM releases](https://releases.llvm.org/download.html#14.0.0)
+  - Windows:
+    - For development builds, use the included setup script: `.\scripts\setup_llvm.ps1`
+    - This will extract the bundled LLVM 14.0.6 and configure the build and test environment
+    - Alternatively, download LLVM 14.x installer from [LLVM releases](https://releases.llvm.org/download.html#14.0.0)
 
-  **Note**: Only LLVM version 14.x is compatible. LLVM 15 or later versions will not work with PECOS's QIR implementation.
+  **Note**: Only LLVM version 14.x is compatible. LLVM 15 or later versions will not work with PECOS's LLVM runtime implementation.
 
-  If LLVM 14 is not installed, PECOS will still function normally but QIR-related features will be disabled.
+  If LLVM 14 is not installed, PECOS will still function normally but LLVM IR execution features will be disabled.
 
 ### Julia Package (Experimental)
 
@@ -154,11 +157,26 @@ If you are interested in editing or developing the code in this project, see thi
 
 Certain simulators from `pecos.simulators` require external packages that are not installed by `pip install .[all]`.
 
-- `CuStateVec` requires a Linux machine with an NVIDIA GPU (see requirements [here](https://docs.nvidia.com/cuda/cuquantum/latest/getting_started/getting_started.html#dependencies-custatevec-label)). PECOS' dependencies are
-specified in the `[cuda]` section of `pyproject.toml`, however, installation via `pip` is not reliable. The recommended method of installation is via `conda`, as discussed [here](https://docs.nvidia.com/cuda/cuquantum/latest/getting_started/getting_started.html#installing-cuquantum). Note that there might be conflicts between `conda` and `venv`; if you intend to use `CuStateVec`, you may follow the installation instructions for PECOS within a `conda` environment without involving the `venv` commands.
-- `MPS` uses `pytket-cutensornet` (see [repository](https://github.com/CQCL/pytket-cutensornet)) and can be installed via `pip install .[cuda]`. These
-simulators use NVIDIA GPUs and cuQuantum. Unfortunately, installation of cuQuantum does not currently work via `pip`.
-Please follow the instructions specified above for `CuStateVec` to install cuQuantum.
+### GPU-Accelerated Simulators (CuStateVec and MPS)
+
+- **`CuStateVec`** and **`MPS`** require:
+  - Linux machine with NVIDIA GPU (Compute Capability 7.0+)
+  - CUDA Toolkit 13 or 12 (system-level installation)
+  - Python packages: `cupy-cuda13x`, `cuquantum-python-cu13`, `pytket-cutensornet`
+
+**Installation:** See the comprehensive [CUDA Setup Guide](docs/user-guide/cuda-setup.md) for detailed step-by-step instructions.
+
+**Quick install** (after installing CUDA Toolkit):
+```bash
+uv pip install quantum-pecos[cuda]
+
+# For development with CUDA support:
+make build-cuda  # Build with CUDA
+make devc        # Full dev cycle (clean + build-cuda + test)
+make devcl       # Dev cycle + linting
+```
+
+**Note:** When using `uv` or `pip`, install CUDA Toolkit via system package manager (e.g., `sudo apt install cuda-toolkit-13`), then install Python packages. Conda environments may conflict with `uv`/`venv` workflows.
 
 ## Uninstall
 

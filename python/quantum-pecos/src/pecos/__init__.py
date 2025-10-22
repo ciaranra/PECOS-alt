@@ -1,5 +1,5 @@
 # Copyright 2018 The PECOS Developers
-# Copyright 2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
+# Copyright 2014-2018 National Technology & Engineering Solutions of Sandia, LLC (NTESS). Under the terms of Contract
 # DE-NA0003525 with NTESS, the U.S. Government retains certain rights in this software.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
@@ -27,12 +27,15 @@ except PackageNotFoundError:
     __version__ = "0.0.0"
 
 # PECOS namespaces
+from typing import NoReturn
+
 from pecos import (
     circuit_converters,
     circuits,
     decoders,
     engines,
     error_models,
+    frontends,
     misc,
     protocols,
     qeccs,
@@ -45,7 +48,46 @@ from pecos.engines import circuit_runners
 from pecos.engines.cvm.binarray import BinArray
 from pecos.engines.hybrid_engine_old import HybridEngine
 
+# Import Guppy functionality (with graceful fallback)
+try:
+    from pecos.frontends import (
+        get_guppy_backends,
+        sim,
+    )
+
+    GUPPY_INTEGRATION_AVAILABLE = True
+except ImportError:
+    GUPPY_INTEGRATION_AVAILABLE = False
+
+    def sim(*args: object, **kwargs: object) -> NoReturn:
+        """Stub for sim when Guppy integration is not available."""
+        del args, kwargs  # Unused
+        msg = "Guppy integration not available. Install with: pip install quantum-pecos[guppy]"
+        raise ImportError(
+            msg,
+        )
+
+    def get_guppy_backends() -> dict:
+        """Stub for get_guppy_backends."""
+        return {"guppy_available": False, "rust_backend": False}
+
+
+# Import Selene Bridge Plugin (with graceful fallback)
+try:
+    from pecos.selene_plugins.simulators import PecosBridgePlugin
+
+    SELENE_BRIDGE_AVAILABLE = True
+except ImportError:
+    SELENE_BRIDGE_AVAILABLE = False
+    PecosBridgePlugin = None
+
+    def get_guppy_backends() -> dict[str, object]:
+        """Stub for get_guppy_backends when Guppy integration is not available."""
+        return {"guppy_available": False, "error": "Guppy integration not available"}
+
+
 __all__ = [
+    "GUPPY_INTEGRATION_AVAILABLE",
     "BinArray",
     "HybridEngine",
     "QuantumCircuit",
@@ -56,10 +98,14 @@ __all__ = [
     "decoders",
     "engines",
     "error_models",
+    "frontends",
+    "get_guppy_backends",
     "misc",
     "protocols",
     "qeccs",
     "rslib",
+    # Guppy integration
+    "sim",
     "simulators",
     "tools",
 ]

@@ -19,17 +19,15 @@ rand.workspace = true
 rand_chacha.workspace = true
 cxx.workspace = true
 
-
 [dev-dependencies]
 rand.workspace = true
 
 [build-dependencies]
 cxx-build.workspace = true
+cc.workspace = true
 pecos-build-utils.workspace = true
-cc = "1.0"
-
-[lib]
-name = "pecos_qulacs"
+log.workspace = true
+env_logger.workspace = true
 
 [lints]
 workspace = true

@@ -14,7 +14,6 @@ default-members = [
     "crates/pecos-qsim",
     "crates/pecos-qasm",
     "crates/pecos-phir",
-    "crates/pecos-qir",
     "crates/pecos-qec",
     "crates/pecos-rng",
     "crates/pecos",
@@ -54,8 +53,8 @@ categories = ["science", "simulation"]
 thiserror = "2"
 rand = "0.9"
 rand_chacha = "0.9"
-pyo3 = { version = "0.25", features = ["extension-module"] }
-pyo3-build-config = { version = "0.25", features = ["resolve-config"] }
+pyo3 = { version = "0.27", features = ["extension-module"] }
+pyo3-build-config = { version = "0.27", features = ["resolve-config"] }
 rayon = "1"
 clap = { version = "4", features = ["derive"] }
 log = "0.4"
@@ -67,8 +66,9 @@ num-complex = "0.4"
 num-traits = "0.2"
 num-bigint = { version = "0.4", features = ["serde"] }
 bitvec = { version = "1", features = ["serde"] }
-criterion = "0.6"
+criterion = "0.7"
 libloading = "0.8"
+libc = "0.2"
 bytemuck = {  version = "1", features = ["derive"] }
 bitflags = "2"
 dyn-clone = "1"
@@ -77,42 +77,63 @@ pest = "2"
 pest_derive = "2"
 tempfile = "3"
 assert_cmd = "2"
-wasmtime = "33"
-serial_test = "3"
+wasmtime = { version = "38", default-features = false, features = ["cranelift", "runtime", "wat", "std"] }
+wat = "1"
 cc = "1"
-
-# Dependencies for decoder crates
+ron = "0.11"
+tket = "0.16"
+tket-qsystem = { version = "0.22", default-features = false }
 ndarray = "0.16"
 anyhow = "1"
-cxx = "1"
-cxx-build = "1"
+cxx = "1.0.187"
+cxx-build = "1.0.187"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 tar = "0.4"
 flate2 = "1"
-bzip2 = "0.4"
+bzip2 = "0.6"
 sha2 = "0.10"
 dirs = "6"
+approx = "0.5"
+itertools = "0.14"
+inkwell = "0.6"
+bincode = "2"
+tracing = "0.1"
+cargo_metadata = "0.23"
 
 pecos-core = { version = "0.1.1", path = "crates/pecos-core" }
+pecos-programs = { version = "0.1.1", path = "crates/pecos-programs" }
 pecos-qsim = { version = "0.1.1", path = "crates/pecos-qsim" }
 pecos-qasm = { version = "0.1.1", path = "crates/pecos-qasm" }
-pecos-phir = { version = "0.1.1", path = "crates/pecos-phir" }
+pecos-phir-json = { version = "0.1.1", path = "crates/pecos-phir-json" }
 pecos-engines = { version = "0.1.1", path = "crates/pecos-engines" }
-pecos-qir = { version = "0.1.1", path = "crates/pecos-qir" }
+pecos-phir = { version = "0.1.1", path = "crates/pecos-phir" }
 pecos-qec = { version = "0.1.1", path = "crates/pecos-qec" }
 pecos-rng = { version = "0.1.0", path = "crates/pecos-rng" }
 pecos = { version = "0.1.1", path = "crates/pecos" }
 pecos-cli = { version = "0.1.1", path = "crates/pecos-cli" }
+pecos-qis-ffi = { version = "0.1.1", path = "crates/pecos-qis-ffi" }
+pecos-qis-ffi-types = { version = "0.1.1", path = "crates/pecos-qis-ffi-types" }
+pecos-qis-selene = { version = "0.1.1", path = "crates/pecos-qis-selene" }
+pecos-qis-core = { version = "0.1.1", path = "crates/pecos-qis-core" }
+pecos-hugr-qis = { version = "0.1.1", path = "crates/pecos-hugr-qis" }
 pecos-rslib = { version = "0.1.1", path = "python/pecos-rslib/rust" }
+pecos-build-utils = { version = "0.1.1", path = "crates/pecos-build-utils" }
 
 # Decoder crates
 pecos-decoder-core = { version = "0.1.1", path = "crates/pecos-decoder-core" }
-pecos-build-utils = { version = "0.1.1", path = "crates/pecos-build-utils" }
-pecos-ldpc-decoders = { version = "0.1.1", path = "crates/pecos-ldpc-decoders" }
 pecos-decoders = { version = "0.1.1", path = "crates/pecos-decoders" }
 
-# QuEST simulator wrapper
+# ldpc decoder wrapper (https://github.com/quantumgizmos/ldpc)
+pecos-ldpc-decoders = { version = "0.1.1", path = "crates/pecos-ldpc-decoders" }
+
+# QuEST simulator wrapper (https://github.com/quest-kit/QuEST)
 pecos-quest = { version = "0.1.1", path = "crates/pecos-quest" }
+
+# Qulacs simulator wrapper (https://github.com/qulacs/qulacs)
+pecos-qulacs = { version = "0.1.1", path = "crates/pecos-qulacs" }
+
+# CppSparseSim simulator wrapper
+pecos-cppsparsesim = { version = "0.1.1", path = "crates/pecos-cppsparsesim" }
 
 # Optimize build times
 [profile.dev]
@@ -132,7 +153,7 @@ debug = true           # Include debug info
 incremental = true     # Enable incremental compilation
 split-debuginfo = "unpacked"  # Faster linking on supported platforms
 
-# Release profile remains fully optimized
+# The release profile
 [profile.release]
 opt-level = 3          # Maximum optimization
 lto = true             # Link-time optimization (same as "fat")
