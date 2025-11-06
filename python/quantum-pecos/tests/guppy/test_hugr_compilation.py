@@ -91,6 +91,8 @@ class TestHUGRCompilation:
 
     def test_llvm_ir_format_validation(self) -> None:
         """Test that generated LLVM IR follows HUGR conventions."""
+        import os
+
         # Create a test LLVM IR file following HUGR conventions
         test_llvm = """
 ; HUGR convention LLVM IR
@@ -124,32 +126,68 @@ attributes #0 = { "EntryPoint" }
             llvm_file = Path(f.name)
 
         try:
-            # Try to validate with llvm-as if available
+            # Find llvm-as - check PATH first, then use pecos-llvm-utils
             llvm_as_path = shutil.which("llvm-as")
+            print(f"DEBUG: llvm-as in PATH: {llvm_as_path}")
+
+            if not llvm_as_path:
+                # Use pecos-llvm-utils to find the tool
+                cargo_path = shutil.which("cargo")
+                print(f"DEBUG: cargo found at: {cargo_path}")
+                if cargo_path:
+                    try:
+                        print("DEBUG: Running cargo to find llvm-as...")
+                        result = subprocess.run(
+                            [
+                                cargo_path,
+                                "run",
+                                "-q",
+                                "--release",
+                                "-p",
+                                "pecos-llvm-utils",
+                                "--bin",
+                                "pecos-llvm",
+                                "--",
+                                "tool",
+                                "llvm-as",
+                            ],
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                            timeout=120,  # Increased from 30s to account for compilation time on CI
+                        )
+                        print(f"DEBUG: cargo returncode: {result.returncode}")
+                        print(f"DEBUG: cargo stdout: {result.stdout[:200]}")
+                        print(f"DEBUG: cargo stderr: {result.stderr[:200]}")
+                        if result.returncode == 0 and result.stdout.strip():
+                            llvm_as_path = result.stdout.strip()
+                            print(f"DEBUG: llvm-as found at: {llvm_as_path}")
+                    except subprocess.TimeoutExpired as e:
+                        print(f"DEBUG: cargo command timed out after {e.timeout}s")
+                    except Exception as e:
+                        print(f"DEBUG: cargo command failed with exception: {e}")
+                else:
+                    print("DEBUG: cargo not found in PATH")
+
             if llvm_as_path:
+                # Validate with llvm-as
+                output_path = "nul" if os.name == "nt" else "/dev/null"
                 result = subprocess.run(
-                    [llvm_as_path, str(llvm_file), "-o", "/dev/null"],
+                    [llvm_as_path, str(llvm_file), "-o", output_path],
                     capture_output=True,
                     text=True,
                     check=False,
                 )
 
-                if result.returncode == 0:
-                    # Successfully validated
-                    assert True, "LLVM IR format is valid"
-                else:
-                    # Validation failed
-                    pytest.skip(f"LLVM IR validation failed: {result.stderr}")
+                assert (
+                    result.returncode == 0
+                ), f"LLVM IR validation failed: {result.stderr}"
             else:
-                # llvm-as not available, just check file was created
-                assert llvm_file.exists(), "LLVM IR file should be created"
-                content = llvm_file.read_text()
-
-                # Check for key HUGR convention patterns
-                assert "__quantum__qis__" in content, "Should have quantum intrinsics"
-                assert "i64" in content, "Should use i64 for qubit indices"
-                assert "@main" in content, "Should have main entry point"
-                assert "EntryPoint" in content, "Should have EntryPoint attribute"
+                # llvm-as not available - this shouldn't happen for HUGR/QIS tests
+                pytest.fail(
+                    "llvm-as not found. LLVM should be available for HUGR/QIS tests. "
+                    "Check LLVM_SYS_140_PREFIX environment variable.",
+                )
 
         finally:
             # Clean up

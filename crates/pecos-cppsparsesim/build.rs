@@ -24,6 +24,11 @@ fn main() {
         build.std("c++14");
     }
 
+    // On Windows, embed debug info in .obj files (no PDB) for parallel build reliability
+    if target.contains("windows") {
+        build.flag("/Z7");
+    }
+
     build.compile("sparsesim");
 
     // Generate cxx bridge code with same C++ standard
@@ -44,9 +49,12 @@ fn main() {
     // On macOS, use the -stdlib=libc++ flag to ensure proper C++ standard library linkage
     if target.contains("darwin") {
         bridge.flag("-stdlib=libc++");
-        // Prevent opportunistic linking to Homebrew's libunwind (Xcode 15+ issue)
-        bridge.flag("-L/usr/lib");
-        bridge.flag("-Wl,-search_paths_first");
+        // Note: Linker-specific flags are passed via cargo:rustc-link-arg below, not here
+    }
+
+    // On Windows, embed debug info in .obj files (no PDB) for parallel build reliability
+    if target.contains("windows") {
+        bridge.flag("/Z7");
     }
 
     bridge.compile("cppsparsesim-bridge");

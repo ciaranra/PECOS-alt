@@ -562,7 +562,8 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
         // For MSVC
         build
             .flag_if_supported("/permissive-") // Enable standards-compliant C++ parsing
-            .flag_if_supported("/Zc:__cplusplus"); // Report correct __cplusplus macro value
+            .flag_if_supported("/Zc:__cplusplus") // Report correct __cplusplus macro value
+            .flag("/Z7"); // Embed debug info in .obj files (no PDB) - required for parallel builds
     }
 
     // Platform-specific C++ library linking configuration
@@ -575,11 +576,7 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
             .contains("darwin")
         {
             build.flag("-stdlib=libc++");
-
-            // Prevent opportunistic linking to Homebrew's libunwind (Xcode 15+ issue)
-            // Force use of system libraries only by excluding common Homebrew paths
-            build.flag("-L/usr/lib");
-            build.flag("-Wl,-search_paths_first");
+            // Note: Linker-specific flags are passed via cargo:rustc-link-arg below, not here
         }
     }
 
