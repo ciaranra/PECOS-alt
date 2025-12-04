@@ -17,11 +17,9 @@ quantum-classical algorithms with integrated classical computation support.
 
 from __future__ import annotations
 
-import random
 from typing import TYPE_CHECKING, Any, Protocol, Union
 
-import numpy as np
-
+import pecos as pc
 from pecos.classical_interpreters.phir_classical_interpreter import (
     PhirClassicalInterpreter,
 )
@@ -168,7 +166,7 @@ class HybridEngine:
         self.cinterp.shot_reinit()
         self._internal_cinterp.shot_reinit()
         for i in range(self.machine.num_qubits):
-            self._internal_cinterp.add_cvar(f"__q{i}__", np.uint8, 1)
+            self._internal_cinterp.add_cvar(f"__q{i}__", pc.dtypes.i64, 1)
         self.machine.shot_reinit()
         self.error_model.shot_reinit()
         self.op_processor.shot_reinit()
@@ -178,9 +176,9 @@ class HybridEngine:
     def use_seed(seed: int | None = None) -> int:
         """Use a seed to set random number generators."""
         if seed is None:
-            seed = np.random.randint(np.iinfo(np.int32).max)
-        np.random.seed(seed)
-        random.seed(seed)
+            # Use i32::MAX from Rust as max seed value
+            seed = int(pc.random.randint(0, pc.dtypes.i32.max, 1)[0])
+        pc.random.seed(seed)
         return seed
 
     def results_accumulator(self, shot_results: dict) -> None:

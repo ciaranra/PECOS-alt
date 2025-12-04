@@ -4,6 +4,7 @@ version = "0.7.0.dev4"
 dependencies = [
     # Note: guppylang is an optional dependency in quantum-pecos
     # Don't include it here as a direct dependency
+    "stim>=1.15.0",
 ]
 
 [tool.uv.workspace]
@@ -27,9 +28,7 @@ dev = [
     "mkdocs-material", # Material theme for MkDocs
     "mkdocstrings[python]", # Code documentation extraction
     "markdown-exec[ansi]", # Executable markdown blocks
-    # Runtime dependencies for development
-    "numpy>=1.15.0",
-    "scipy>=1.1.0",
+    # Runtime dependencies for development (non-test)
     "networkx>=2.1.0",
     "matplotlib>=2.2.0",
     "phir>=0.3.3",
@@ -41,6 +40,10 @@ test = [ # pinning testing environment
     "pytest==8.3.3", # 8.3.4 seems to be causing errors
     "pytest-cov==6.0.0",
     "hypothesis==6.122.3",
+]
+numpy-compat = [  # NumPy/SciPy compatibility tests - verify compatibility with scientific Python stack
+    "numpy>=1.15.0",
+    "scipy>=1.1.0",
 ]
 
 [tool.uv]
@@ -55,4 +58,5 @@ markers = [
     "optional_unix: mark tests as using an optional dependency that only work with Unix-based systems",
     "wasmer: mark test as using the 'wasmer' option",
     "wasmtime: mark test as using the 'wasmtime' option",
+    "numpy: mark tests that verify NumPy compatibility (requires numpy installed)",
 ]

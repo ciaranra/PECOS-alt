@@ -22,8 +22,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
-
+import pecos as pc
 from pecos.circuits import QuantumCircuit
 from pecos.engines.circuit_runners import TimingRunner
 
@@ -31,6 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
 
     from pecos.protocols import SimulatorProtocol
+    from pecos.typing import Array
 
 
 def random_circuit_speed(
@@ -156,8 +156,8 @@ def generate_circuits(
     circuits = []
 
     for seed in range(seed_start, seed_start + trials):
-        np.random.seed(seed)
-        circuit_elements = list(np.random.choice(gates, circuit_depth))
+        pc.random.seed(seed)
+        circuit_elements = list(pc.random.choice(gates, circuit_depth))
         qc = QuantumCircuit()
 
         for element in circuit_elements:
@@ -184,7 +184,7 @@ def generate_circuits(
         return circuits
 
 
-def get_qubits(num_qubits: int, size: int) -> np.ndarray:
+def get_qubits(num_qubits: int, size: int) -> Array:
     """Get random qubit indices without replacement.
 
     Args:
@@ -194,4 +194,4 @@ def get_qubits(num_qubits: int, size: int) -> np.ndarray:
     Returns:
         Array of randomly selected qubit indices.
     """
-    return np.random.choice(list(range(num_qubits)), size, replace=False)
+    return pc.random.choice(list(range(num_qubits)), size, replace=False)

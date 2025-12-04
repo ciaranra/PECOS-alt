@@ -25,8 +25,24 @@ nalgebra.workspace = true  # Required by levenberg-marquardt
 # Array interface (for API compatibility and return types)
 ndarray.workspace = true
 
+# Random number generation (for numpy.random drop-in replacements)
+rand.workspace = true
+
+# Complex number support (for numpy complex operations)
+num-complex.workspace = true
+
+# Numeric traits (for generic trait implementations)
+num-traits.workspace = true
+
 # Logging
 log.workspace = true
+
+# Graph algorithms (for MWPM decoder and other graph operations)
+rustworkx-core.workspace = true
+
+# Serialization (for JSON attribute support in graphs)
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 
 [lints]
 workspace = true

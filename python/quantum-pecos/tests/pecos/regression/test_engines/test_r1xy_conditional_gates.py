@@ -24,8 +24,8 @@ Background:
     properly, producing random results instead of deterministic zeros.
 """
 
-import math
 
+import pecos as pc
 from pecos.engines.hybrid_engine import HybridEngine
 
 
@@ -195,7 +195,7 @@ def test_r1xy_alternative_angles_summing_to_4pi() -> None:
 
     This was reported as working correctly in issue #81 comments.
     """
-    four_pi_minus_1_9 = 4 * math.pi - 1.9
+    four_pi_minus_1_9 = 4 * pc.f64.pi - 1.9
 
     phir = f"""{{
     "format": "PHIR/JSON",

@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
-from pecos.simulators import CppSparseSimRs, SparseSimPy, SparseSimRs
+import pecos as pc
+from pecos.simulators import SparseSim, SparseSimCpp, SparseSimPy
 
 
 def test_random_circuits() -> None:
@@ -60,8 +60,8 @@ def test_random_circuits() -> None:
         pass
 
     state_sims.append(SparseSimPy)
-    state_sims.append(SparseSimRs)
-    state_sims.append(CppSparseSimRs)
+    state_sims.append(SparseSim)
+    state_sims.append(SparseSimCpp)
 
     assert run_circuit_test(state_sims, num_qubits=10, circuit_depth=50)
 
@@ -78,15 +78,13 @@ def run_circuit_test(
         gates = ["H", "S", "CNOT", "measure Z", "init |0>"]
 
     for seed in range(trials):
-        np.random.seed(seed)
+        pc.random.seed(seed)
         circuit = generate_circuit(gates, num_qubits, circuit_depth)
 
         measurements = []
         for _i, state_sim in enumerate(state_sims):
-            np.random.seed(seed)
-            verbose = (
-                seed == 32 and state_sim.__name__ == "CppSparseSimRs"
-            )  # Debug failing case
+            pc.random.seed(seed)
+            verbose = False  # Can set to True for debugging
             meas = run_a_circuit(
                 num_qubits,
                 state_sim,
@@ -94,38 +92,28 @@ def run_circuit_test(
                 _test_seed=seed,
                 verbose=verbose,
             )
-            if seed == 32:
-                # print(
-                #     f"Simulator {i} ({state_sim.__name__}): {meas[:20]}...",
-                # )  # Show first 20 measurements
-                pass
             measurements.append(meas)
 
         meas0 = measurements[0]
         for _i, meas in enumerate(measurements[1:], 1):
             if meas0 != meas:
-                # print("seed=", seed)
-                # print("Simulator 0 measurements:", meas0)
-                # print(f"Simulator {i} measurements:", meas)
-                # print(f"Simulator types: {[type(s).__name__ for s in state_sims]}")
-                # print(circuit)
                 return False
 
     return True
 
 
-def get_qubits(num_qubits: int, size: int) -> np.ndarray:
+def get_qubits(num_qubits: int, size: int) -> pc.Array:
     """Get random qubit indices for gate operations."""
-    return np.random.choice(list(range(num_qubits)), size, replace=False)
+    return pc.random.choice(list(range(num_qubits)), size, replace=False)
 
 
 def generate_circuit(
     gates: list[str],
     num_qubits: int,
     circuit_depth: int,
-) -> list[tuple[str, int | np.ndarray]]:
+) -> list[tuple[str, int | pc.Array]]:
     """Generate a random quantum circuit with specified gates and depth."""
-    circuit_elements = list(np.random.choice(gates, circuit_depth))
+    circuit_elements = list(pc.random.choice(gates, circuit_depth))
 
     circuit = []
 
@@ -144,7 +132,7 @@ def generate_circuit(
 def run_a_circuit(
     num_qubits: int,
     state_rep: type[Any],
-    circuit: list[tuple[str, int | np.ndarray]],
+    circuit: list[tuple[str, int | pc.Array]],
     *,
     verbose: bool = False,
     _test_seed: int | None = None,  # Unused - kept for API compatibility
@@ -153,14 +141,14 @@ def run_a_circuit(
     state = state_rep(num_qubits)
     measurements = []
 
-    if isinstance(state, SparseSimRs | CppSparseSimRs):
+    if isinstance(state, SparseSim | SparseSimCpp):
         state.bindings["measure Z"] = state.bindings["MZForced"]
         state.bindings["init |0>"] = state.bindings.get(
             "PZForced",
             state.bindings.get("init |0>"),
         )
         # Don't set seed for C++ simulator - use numpy random for forced outcomes instead
-        # if isinstance(state, CppSparseSimRs) and hasattr(state, 'set_seed') and test_seed is not None:
+        # if isinstance(state, SparseSimCpp) and hasattr(state, 'set_seed') and test_seed is not None:
         #     # Use the test seed directly for C++ RNG
         #     state.set_seed(test_seed)
 
@@ -168,24 +156,24 @@ def run_a_circuit(
         m = -1
         if element == "measure Z":
             if (
-                verbose and isinstance(state, CppSparseSimRs) and i == 26
+                verbose and isinstance(state, SparseSimCpp) and i == 26
             ):  # Debug the 27th operation
                 pass
                 # print(f"\n[DEBUG] Op {i}: {element} on qubit {q}, forcing outcome to 0")
             m = state.run_gate(element, {q}, forced_outcome=0)
             m = m.get(q, 0)
-            if verbose and isinstance(state, CppSparseSimRs) and i == 26:
+            if verbose and isinstance(state, SparseSimCpp) and i == 26:
                 pass
                 # print(f"[DEBUG] Result: {m}\n")
             measurements.append(m)
 
         elif element == "init |0>":
-            q_tuple = tuple(q) if isinstance(q, np.ndarray) else q
+            q_tuple = tuple(q) if isinstance(q, (pc.Array, list)) else q
 
             state.run_gate(element, {q_tuple}, forced_outcome=0)
 
         else:
-            q_tuple = tuple(q) if isinstance(q, np.ndarray) else q
+            q_tuple = tuple(q) if isinstance(q, (pc.Array, list)) else q
 
             state.run_gate(element, {q_tuple})
 

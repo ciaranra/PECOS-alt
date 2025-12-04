@@ -20,8 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
-
+import pecos as pc
 from pecos.error_models.noise_impl.noise_initz_bitflip_leakage import (
     noise_initz_bitflip_leakage,
 )
@@ -132,7 +131,7 @@ class GenericErrorModel:
         self._eparams["p2"] *= scale
 
         if isinstance(self._eparams["p_meas"], tuple):
-            self._eparams["p_meas"] = np.mean(self._eparams["p_meas"])
+            self._eparams["p_meas"] = pc.mean(self._eparams["p_meas"])
 
         self._eparams["p_meas"] *= scale
         self._eparams["p_init"] *= scale
