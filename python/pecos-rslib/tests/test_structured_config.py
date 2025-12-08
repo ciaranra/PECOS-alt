@@ -3,13 +3,13 @@
 from collections import Counter
 
 import pytest
-from _pecos_rslib import (
+from pecos_rslib import (
     biased_depolarizing_noise,
     depolarizing_noise,
     general_noise,
 )
-from _pecos_rslib import QasmProgram
-from _pecos_rslib import sim
+from pecos_rslib.programs import Qasm
+from pecos_rslib import sim
 
 
 class TestDirectMethodChaining:
@@ -60,7 +60,7 @@ class TestDirectMethodChaining:
         measure q -> c;
         """
 
-        prog = QasmProgram.from_string(qasm)
+        prog = Qasm.from_string(qasm)
 
         # Create a configured noise builder
         noise = (
@@ -92,7 +92,7 @@ class TestDirectMethodChaining:
         measure q[0] -> c[0];
         """
 
-        prog = QasmProgram.from_string(qasm)
+        prog = Qasm.from_string(qasm)
 
         # Create builder with specific config
         noise = depolarizing_noise().with_seed(42).with_uniform_probability(0.1)
@@ -114,7 +114,7 @@ class TestDirectMethodChaining:
         measure q[0] -> c[0];
         """
 
-        prog = QasmProgram.from_string(qasm)
+        prog = Qasm.from_string(qasm)
 
         # Create builder with uniform probability
         noise = biased_depolarizing_noise().with_seed(42).with_uniform_probability(0.05)
@@ -139,7 +139,7 @@ class TestDirectMethodChaining:
         measure q -> c;
         """
 
-        prog = QasmProgram.from_string(qasm)
+        prog = Qasm.from_string(qasm)
 
         # Configure general noise with specific parameters
         noise = (

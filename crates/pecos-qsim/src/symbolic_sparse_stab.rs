@@ -27,8 +27,7 @@ use crate::QuantumSimulator;
 use crate::sign_algebra::{SignAlgebra, SymbolicSign};
 use crate::symbolic_gens::SymbolicGens;
 use core::mem;
-use pecos_core::{IndexableElement, Set, VecSet};
-use std::collections::BTreeSet;
+use pecos_core::{BitSet, IndexableElement, Set, VecSet};
 
 /// Standard type alias for symbolic sparse stabilizer simulator.
 pub type StdSymbolicSparseStab = SymbolicSparseStab<VecSet<usize>, usize>;
@@ -46,18 +45,20 @@ pub type StdSymbolicSparseStab = SymbolicSparseStab<VecSet<usize>, usize>;
 ///
 /// # Display Format
 ///
-/// The `Display` implementation formats results as `m{index}^m{dep1}^m{dep2}^...={flip}`:
-/// - `m5=0`: measurement 5 is deterministic 0
-/// - `m5=1`: measurement 5 is deterministic 1
-/// - `m5^m2=0`: measurement 5 equals measurement 2
-/// - `m5^m3^m1=1`: measurement 5 equals `m3 XOR m1 XOR 1`
+/// The `Display` implementation formats results as `m{index}={expression}`:
+/// - `m0=?`: non-deterministic (random outcome)
+/// - `m0=0`: deterministic 0 (no dependencies, no flip)
+/// - `m0=1`: deterministic 1 (no dependencies, flip=true)
+/// - `m2=m0`: measurement 2 equals measurement 0
+/// - `m3=m2^m1`: measurement 3 equals m2 XOR m1
+/// - `m3=m2^m1^1`: measurement 3 equals m2 XOR m1 XOR 1 (with flip)
 ///
 /// Dependencies are ordered from largest to smallest index.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SymbolicMeasurementResult {
     /// The set of measurement indices whose outcomes XOR together.
     /// Empty set means no measurement dependency (outcome is just `flip`).
-    pub outcome: BTreeSet<usize>,
+    pub outcome: BitSet,
     /// Whether to flip the XOR result (accumulated from unitary gate phases).
     pub flip: bool,
     /// Whether this measurement was deterministic (outcome determined by prior measurements).
@@ -69,18 +70,33 @@ pub struct SymbolicMeasurementResult {
 impl std::fmt::Display for SymbolicMeasurementResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Start with this measurement's index
-        write!(f, "m{}", self.index)?;
+        write!(f, "m{}=", self.index)?;
 
         if self.is_deterministic {
-            // Add dependencies in reverse order (largest to smallest)
-            for &dep in self.outcome.iter().rev() {
-                write!(f, "^m{dep}")?;
+            if self.outcome.is_empty() {
+                // No dependencies: just show flip as 0 or 1
+                write!(f, "{}", u8::from(self.flip))
+            } else {
+                // Show dependencies in reverse order (largest to smallest)
+                // Collect to Vec and reverse since BitSet iterates in ascending order
+                let deps: Vec<_> = self.outcome.iter().collect();
+                let mut first = true;
+                for dep in deps.into_iter().rev() {
+                    if !first {
+                        write!(f, "^")?;
+                    }
+                    write!(f, "m{dep}")?;
+                    first = false;
+                }
+                // Only add ^1 if flip is true
+                if self.flip {
+                    write!(f, "^1")?;
+                }
+                Ok(())
             }
-            // Add the flip value
-            write!(f, "={}", u8::from(self.flip))
         } else {
             // Non-deterministic: show as random/unknown
-            write!(f, "=?")
+            write!(f, "?")
         }
     }
 }
@@ -387,7 +403,7 @@ where
                 let indices: Vec<String> = sign
                     .measurements
                     .iter()
-                    .map(std::string::ToString::to_string)
+                    .map(|idx| idx.to_string())
                     .collect();
                 let _ = write!(result, "{{{}}} ^ {flip} ", indices.join(","));
             }
@@ -794,11 +810,8 @@ where
 
         // The outcome is just this measurement's index, with no flip
         // (the measurement result is "fresh" - no accumulated phase)
-        let mut outcome = BTreeSet::new();
-        outcome.insert(measurement_index);
-
         SymbolicMeasurementResult {
-            outcome,
+            outcome: BitSet::single(measurement_index),
             flip: false,
             is_deterministic: false,
             index: measurement_index,
@@ -832,7 +845,7 @@ mod tests {
         let r0 = sim.mz(0);
         assert!(!r0.is_deterministic);
         assert_eq!(r0.outcome.len(), 1);
-        assert!(r0.outcome.contains(&0)); // First measurement has index 0
+        assert!(r0.outcome.contains(0)); // First measurement has index 0
         assert_eq!(r0.index, 0);
 
         // Measure qubit 1 - should be deterministic but still gets an index
@@ -870,7 +883,7 @@ mod tests {
         let r = sim.mz(0);
         assert!(!r.is_deterministic);
         assert_eq!(r.outcome.len(), 1);
-        assert!(r.outcome.contains(&0));
+        assert!(r.outcome.contains(0));
         assert_eq!(r.index, 0);
     }
 
@@ -884,7 +897,7 @@ mod tests {
         // Measure qubit 0 - non-deterministic
         let r0 = sim.mz(0);
         assert!(!r0.is_deterministic);
-        assert!(r0.outcome.contains(&0));
+        assert!(r0.outcome.contains(0));
         assert_eq!(r0.index, 0);
 
         // Measure qubit 1 - deterministic, depends on measurement 0
@@ -910,13 +923,13 @@ mod tests {
         // Measure qubit 0 - non-deterministic, index 0
         let r0 = sim.mz(0);
         assert!(!r0.is_deterministic);
-        assert!(r0.outcome.contains(&0));
+        assert!(r0.outcome.contains(0));
         assert_eq!(r0.index, 0);
 
         // Measure qubit 1 - non-deterministic, index 1
         let r1 = sim.mz(1);
         assert!(!r1.is_deterministic);
-        assert!(r1.outcome.contains(&1));
+        assert!(r1.outcome.contains(1));
         assert_eq!(r1.index, 1);
 
         // They should have different measurement indices (independent)
@@ -1054,7 +1067,7 @@ mod tests {
         // Measure - non-deterministic, no flip since no accumulated phase
         let r = sim.mz(0);
         assert!(!r.is_deterministic);
-        assert!(r.outcome.contains(&0));
+        assert!(r.outcome.contains(0));
         assert!(!r.flip);
     }
 
@@ -1069,7 +1082,7 @@ mod tests {
         // Measure qubit 0
         let r0 = sim.mz(0);
         assert!(!r0.is_deterministic);
-        assert!(r0.outcome.contains(&0));
+        assert!(r0.outcome.contains(0));
         // The X gate introduces a flip that should propagate
         // Note: The exact flip value depends on how phases propagate through H and CX
 
@@ -1154,7 +1167,7 @@ mod tests {
     fn test_display_format() {
         // Test deterministic 0: m0=0
         let r = SymbolicMeasurementResult {
-            outcome: BTreeSet::new(),
+            outcome: BitSet::new(),
             flip: false,
             is_deterministic: true,
             index: 0,
@@ -1163,41 +1176,52 @@ mod tests {
 
         // Test deterministic 1: m1=1
         let r = SymbolicMeasurementResult {
-            outcome: BTreeSet::new(),
+            outcome: BitSet::new(),
             flip: true,
             is_deterministic: true,
             index: 1,
         };
         assert_eq!(format!("{r}"), "m1=1");
 
-        // Test single dependency: m2^m0=0
-        let mut outcome = BTreeSet::new();
-        outcome.insert(0);
+        // Test single dependency, no flip: m2=m0
         let r = SymbolicMeasurementResult {
-            outcome,
+            outcome: BitSet::single(0),
             flip: false,
             is_deterministic: true,
             index: 2,
         };
-        assert_eq!(format!("{r}"), "m2^m0=0");
+        assert_eq!(format!("{r}"), "m2=m0");
 
-        // Test multiple dependencies (should be largest to smallest): m5^m3^m1=1
-        let mut outcome = BTreeSet::new();
-        outcome.insert(1);
-        outcome.insert(3);
+        // Test single dependency with flip: m2=m0^1
         let r = SymbolicMeasurementResult {
-            outcome,
+            outcome: BitSet::single(0),
+            flip: true,
+            is_deterministic: true,
+            index: 2,
+        };
+        assert_eq!(format!("{r}"), "m2=m0^1");
+
+        // Test multiple dependencies, no flip (largest to smallest): m5=m3^m1
+        let r = SymbolicMeasurementResult {
+            outcome: [1, 3].into_iter().collect(),
+            flip: false,
+            is_deterministic: true,
+            index: 5,
+        };
+        assert_eq!(format!("{r}"), "m5=m3^m1");
+
+        // Test multiple dependencies with flip: m5=m3^m1^1
+        let r = SymbolicMeasurementResult {
+            outcome: [1, 3].into_iter().collect(),
             flip: true,
             is_deterministic: true,
             index: 5,
         };
-        assert_eq!(format!("{r}"), "m5^m3^m1=1");
+        assert_eq!(format!("{r}"), "m5=m3^m1^1");
 
         // Test non-deterministic: m0=?
-        let mut outcome = BTreeSet::new();
-        outcome.insert(0);
         let r = SymbolicMeasurementResult {
-            outcome,
+            outcome: BitSet::single(0),
             flip: false,
             is_deterministic: false,
             index: 0,
@@ -1230,7 +1254,7 @@ mod tests {
         // r0 is non-deterministic
         assert_eq!(format!("{r0}"), "m0=?");
         // r1 is deterministic, depends on m0
-        assert_eq!(format!("{r1}"), "m1^m0=0");
+        assert_eq!(format!("{r1}"), "m1=m0");
     }
 
     #[test]
@@ -1246,11 +1270,11 @@ mod tests {
         let history = sim.measurement_history();
 
         // Test format_all (also tests Display)
-        assert_eq!(history.format_all(), "[m0=?, m1^m0=0, m2^m0=0]");
-        assert_eq!(format!("{history}"), "[m0=?, m1^m0=0, m2^m0=0]");
+        assert_eq!(history.format_all(), "[m0=?, m1=m0, m2=m0]");
+        assert_eq!(format!("{history}"), "[m0=?, m1=m0, m2=m0]");
 
         // Test format_deterministic
-        assert_eq!(history.format_deterministic(), "[m1^m0=0, m2^m0=0]");
+        assert_eq!(history.format_deterministic(), "[m1=m0, m2=m0]");
 
         // Test format_nondeterministic
         assert_eq!(history.format_nondeterministic(), "[m0=?]");

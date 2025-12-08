@@ -14,15 +14,15 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from _pecos_rslib import state_vector
-    from pecos.frontends.guppy_api import sim
+    from pecos import Guppy, sim
+    from pecos_rslib import state_vector
 
     PECOS_API_AVAILABLE = True
 except ImportError:
     PECOS_API_AVAILABLE = False
 
 try:
-    from _pecos_rslib import compile_hugr_to_llvm
+    from pecos_rslib import compile_hugr_to_llvm
 
     HUGR_LLVM_AVAILABLE = True
 except ImportError:
@@ -196,11 +196,19 @@ class TestSimAPI:
 
         try:
             results = (
-                sim(simple_circuit).qubits(1).quantum(state_vector()).seed(42).run(10)
+                sim(Guppy(simple_circuit))
+                .qubits(1)
+                .quantum(state_vector())
+                .seed(42)
+                .run(10)
             )
 
-            # Verify results structure
-            assert isinstance(results, dict), "Results should be a dictionary"
+            # Verify results structure - check for dict-like interface
+            assert hasattr(results, "__getitem__"), "Results should be dict-like"
+            assert hasattr(
+                results,
+                "__contains__",
+            ), "Results should support 'in' operator"
 
             # Check for measurements
             if "measurement_0" in results:
@@ -234,10 +242,15 @@ class TestSimAPI:
 
         try:
             results = (
-                sim(bell_state).qubits(2).quantum(state_vector()).seed(42).run(100)
+                sim(Guppy(bell_state))
+                .qubits(2)
+                .quantum(state_vector())
+                .seed(42)
+                .run(100)
             )
 
-            assert isinstance(results, dict), "Results should be a dictionary"
+            # Verify results structure - check for dict-like interface
+            assert hasattr(results, "__getitem__"), "Results should be dict-like"
 
             # Check for Bell state correlation
             if "measurement_0" in results and "measurement_1" in results:
@@ -271,7 +284,7 @@ class TestSimAPI:
             return measure(q)
 
         try:
-            from _pecos_rslib import depolarizing_noise
+            from pecos_rslib import depolarizing_noise
 
             # Create depolarizing noise model with 10% error probability
             noise_model = depolarizing_noise().with_uniform_probability(0.1)
@@ -288,7 +301,8 @@ class TestSimAPI:
                 .run(100)
             )
 
-            assert isinstance(results, dict), "Results should be a dictionary"
+            # Verify results structure - check for dict-like interface
+            assert hasattr(results, "__getitem__"), "Results should be dict-like"
 
             # With X gate and no noise, should always measure 1
             # With 10% depolarizing noise, should sometimes measure 0
@@ -351,7 +365,8 @@ class TestCompletePipeline:
                 .run(50)
             )
 
-            assert isinstance(results, dict), "Should get results dictionary"
+            # Verify results structure - check for dict-like interface
+            assert hasattr(results, "__getitem__"), "Results should be dict-like"
 
             # Verify we got measurements
             has_measurements = (
@@ -396,9 +411,14 @@ class TestCompletePipeline:
         if PECOS_API_AVAILABLE:
             # Should handle execution gracefully
             try:
-                results = sim(invalid_circuit).qubits(1).quantum(state_vector()).run(10)
-                # If it works, verify results
-                assert isinstance(results, dict), "Should get results"
+                results = (
+                    sim(Guppy(invalid_circuit))
+                    .qubits(1)
+                    .quantum(state_vector())
+                    .run(10)
+                )
+                # If it works, verify results are dict-like
+                assert hasattr(results, "__getitem__"), "Results should be dict-like"
             except (RuntimeError, ValueError):
                 # Expected - some backends might reject this
                 pass

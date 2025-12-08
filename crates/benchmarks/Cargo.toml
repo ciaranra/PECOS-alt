@@ -13,6 +13,12 @@ publish = false
 [dev-dependencies]
 criterion.workspace = true
 pecos.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+rand_xoshiro.workspace = true
+wyrand.workspace = true
+romu.workspace = true
+wide.workspace = true
 
 [[bench]]
 name = "benchmarks"

@@ -23,7 +23,7 @@
 //!     measure q -> c;
 //! "#;
 //!
-//! let program = QasmProgram::from_string(qasm_code);
+//! let program = Qasm::from_string(qasm_code);
 //!
 //! // Run simulation
 //! let results = sim(program)
@@ -101,9 +101,9 @@ pub mod unified_sim;
 /// # use pecos_core::errors::PecosError;
 /// # fn example() -> Result<(), PecosError> {
 /// use pecos::engines;
-/// use pecos_programs::QasmProgram;
+/// use pecos_programs::Qasm;
 ///
-/// let program = QasmProgram::from_string("OPENQASM 2.0; qreg q[1]; h q[0];");
+/// let program = Qasm::from_string("OPENQASM 2.0; qreg q[1]; h q[0];");
 /// let engine = engines::qasm_engine().program(program);
 /// # Ok(())
 /// # }
@@ -198,19 +198,19 @@ pub mod noise {
 ///
 /// # Available Program Types
 ///
-/// - **`QasmProgram`**: `OpenQASM` 2.0 programs
-/// - **`QisProgram`**: LLVM IR based quantum programs
-/// - **`HugrProgram`**: HUGR-based quantum programs
+/// - **`Qasm`**: `OpenQASM` 2.0 programs
+/// - **`Qis`**: LLVM IR based quantum programs
+/// - **`Hugr`**: HUGR-based quantum programs
 ///
 /// # Example
 ///
 /// ```rust
-/// use pecos::programs::QasmProgram;
+/// use pecos::programs::Qasm;
 ///
-/// let program = QasmProgram::from_string("OPENQASM 2.0; qreg q[1]; h q[0];");
+/// let program = Qasm::from_string("OPENQASM 2.0; qreg q[1]; h q[0];");
 /// ```
 pub mod programs {
-    pub use pecos_programs::{HugrProgram, Program, QasmProgram, QisProgram};
+    pub use pecos_programs::{Hugr, Program, Qasm, Qis};
 }
 
 /// QIS runtime implementations
@@ -504,6 +504,36 @@ pub mod graph {
     pub use pecos_num::graph::*;
 }
 
+/// Quantum simulation implementations
+///
+/// This module provides low-level quantum simulation implementations and utilities
+/// from pecos-qsim, including stabilizer simulators, state vectors, and measurement
+/// samplers.
+///
+/// # Available Types
+///
+/// - **Simulators**: `SparseStab`, `StateVec`, `SymbolicSparseStab`
+/// - **Measurement Sampling**: `MeasurementSampler`
+/// - **Utilities**: `CliffordGateable`, `ArbitraryRotationGateable`
+///
+/// # Example
+///
+/// ```rust
+/// use pecos::qsim::measurement_sampler::MeasurementSampler;
+/// use pecos::prelude::*;
+///
+/// let mut sim = StdSymbolicSparseStab::new(2);
+/// sim.h(0).cx(0, 1);
+/// sim.mz(0);
+/// sim.mz(1);
+///
+/// let sampler = MeasurementSampler::new(sim.measurement_history());
+/// let samples = sampler.sample(1000);
+/// ```
+pub mod qsim {
+    pub use pecos_qsim::*;
+}
+
 // ============================================================================
 // Top-level re-exports for convenience and backward compatibility
 // ============================================================================
@@ -528,7 +558,7 @@ pub use pecos_engines::{
 };
 
 // Program types
-pub use pecos_programs::{HugrProgram, Program, QasmProgram, QisProgram};
+pub use pecos_programs::{Hugr, Program, Qasm, Qis};
 
 // Selene interface (when feature is enabled)
 #[cfg(feature = "selene")]

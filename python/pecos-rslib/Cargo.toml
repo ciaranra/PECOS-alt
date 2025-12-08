@@ -12,7 +12,7 @@ description = "Allows running Rust code in Python."
 publish = false
 
 [lib]
-name = "_pecos_rslib"
+name = "pecos_rslib"
 crate-type = ["cdylib", "rlib"]
 # Skip doc tests as they won't work properly in this setup
 doctest = false
@@ -40,11 +40,6 @@ libc.workspace = true
 
 # Inkwell for LLVM types (needed for llvmlite bindings)
 inkwell = { workspace = true, features = ["llvm14-0"] }
-
-[build-dependencies]
-pyo3-build-config.workspace = true
-
-[dev-dependencies]
 
 [lints]
 workspace = true

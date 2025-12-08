@@ -15,13 +15,13 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from _pecos_rslib import (
+    from pecos import Guppy, sim
+    from pecos_rslib import (
         biased_depolarizing_noise,
         depolarizing_noise,
         general_noise,
         state_vector,
     )
-    from pecos.frontends.guppy_api import sim
 except ImportError:
     pass
 
@@ -169,7 +169,11 @@ class TestNoiseModels:
 
         # Run without noise
         results_clean = (
-            sim(bell_circuit).qubits(10).quantum(state_vector()).seed(42).run(100)
+            sim(Guppy(bell_circuit))
+            .qubits(10)
+            .quantum(state_vector())
+            .seed(42)
+            .run(100)
         )
 
         # Run with depolarizing noise - chain all probability setters
