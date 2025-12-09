@@ -10,23 +10,23 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-//! PECOS StateVec simulator plugin for the Selene quantum emulator.
+//! PECOS `StateVec` simulator plugin for the Selene quantum emulator.
 //!
 //! This crate provides a Selene-compatible plugin wrapping the PECOS state vector simulator.
 //! Unlike stabilizer simulators, this supports arbitrary rotation angles, making it suitable
 //! for simulating any quantum circuit.
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec};
 use rand_chacha::ChaCha8Rng;
 use selene_core::export_simulator_plugin;
-use selene_core::simulator::interface::SimulatorInterfaceFactory;
 use selene_core::simulator::SimulatorInterface;
+use selene_core::simulator::interface::SimulatorInterfaceFactory;
 use selene_core::utils::MetricValue;
 use std::io::Write;
 use std::sync::Arc;
 
-/// The PECOS StateVec simulator wrapped for Selene compatibility.
+/// The PECOS `StateVec` simulator wrapped for Selene compatibility.
 pub struct StateVecSimulator {
     /// The underlying PECOS state vector simulator
     simulator: StateVec<ChaCha8Rng>,
@@ -36,6 +36,22 @@ pub struct StateVecSimulator {
     cumulative_postselect_probability: f64,
 }
 
+impl StateVecSimulator {
+    /// Convert a `u64` to `usize` for use with the simulator.
+    ///
+    /// # Safety
+    ///
+    /// This is safe because `check_memory()` validates that `n_qubits <= 60` before
+    /// any simulator is created, and all qubit indices are bounds-checked against
+    /// `n_qubits` before this function is called. Thus, the value will always fit
+    /// in a `usize` on any platform (even 32-bit).
+    #[allow(clippy::cast_possible_truncation)]
+    #[inline]
+    const fn to_usize(value: u64) -> usize {
+        value as usize
+    }
+}
+
 impl SimulatorInterface for StateVecSimulator {
     fn exit(&mut self) -> Result<()> {
         Ok(())
@@ -43,7 +59,7 @@ impl SimulatorInterface for StateVecSimulator {
 
     fn shot_start(&mut self, _shot_id: u64, seed: u64) -> Result<()> {
         // Create a fresh simulator with the given seed for deterministic behavior
-        self.simulator = StateVec::with_seed(self.n_qubits as usize, seed);
+        self.simulator = StateVec::with_seed(Self::to_usize(self.n_qubits), seed);
         self.cumulative_postselect_probability = 1.0;
         Ok(())
     }
@@ -61,7 +77,7 @@ impl SimulatorInterface for StateVecSimulator {
             ));
         }
 
-        let q = qubit as usize;
+        let q = Self::to_usize(qubit);
 
         // RXY(theta, phi) = Rz(phi) * Rx(theta) * Rz(-phi)
         // Gates are applied left-to-right in code but the matrix multiplication
@@ -82,7 +98,7 @@ impl SimulatorInterface for StateVecSimulator {
             ));
         }
 
-        self.simulator.rz(theta, qubit as usize);
+        self.simulator.rz(theta, Self::to_usize(qubit));
         Ok(())
     }
 
@@ -95,7 +111,8 @@ impl SimulatorInterface for StateVecSimulator {
             ));
         }
 
-        self.simulator.rzz(theta, qubit1 as usize, qubit2 as usize);
+        self.simulator
+            .rzz(theta, Self::to_usize(qubit1), Self::to_usize(qubit2));
         Ok(())
     }
 
@@ -108,7 +125,7 @@ impl SimulatorInterface for StateVecSimulator {
             ));
         }
 
-        let result = self.simulator.mz(qubit as usize);
+        let result = self.simulator.mz(Self::to_usize(qubit));
         Ok(result.outcome)
     }
 
@@ -121,7 +138,7 @@ impl SimulatorInterface for StateVecSimulator {
             ));
         }
 
-        let q = qubit as usize;
+        let q = Self::to_usize(qubit);
 
         // Calculate the probability of measuring the target value
         let state = self.simulator.state();
@@ -171,7 +188,7 @@ impl SimulatorInterface for StateVecSimulator {
             ));
         }
 
-        let q = qubit as usize;
+        let q = Self::to_usize(qubit);
 
         // Measure the qubit and flip if needed to get |0>
         let result = self.simulator.mz(q);
@@ -244,8 +261,7 @@ fn check_memory(n_qubits: u64) -> Result<()> {
                 // > 1GB
                 eprintln!(
                     "Warning: Allocating state vector for {n_qubits} qubits requires \
-                     approximately {} bytes",
-                    bytes
+                     approximately {bytes} bytes"
                 );
             }
             Ok(())
@@ -278,7 +294,7 @@ impl SimulatorInterfaceFactory for StateVecSimulatorFactory {
         check_memory(n_qubits)?;
 
         Ok(Box::new(StateVecSimulator {
-            simulator: StateVec::with_seed(n_qubits as usize, 0),
+            simulator: StateVec::with_seed(StateVecSimulator::to_usize(n_qubits), 0),
             n_qubits,
             cumulative_postselect_probability: 1.0,
         }))
@@ -297,7 +313,7 @@ mod tests {
     #[test]
     fn basic_conformance_test() {
         let interface = Arc::new(StateVecSimulatorFactory);
-        let args: Vec<String> = vec!["".to_string()];
+        let args: Vec<String> = vec![String::new()];
         run_basic_tests(interface, args);
     }
 }

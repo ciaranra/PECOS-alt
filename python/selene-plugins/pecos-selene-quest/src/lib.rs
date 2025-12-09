@@ -12,31 +12,174 @@
 
 //! PECOS Quest simulator plugin for the Selene quantum emulator.
 //!
-//! This crate provides a Selene-compatible plugin wrapping the PECOS Quest state vector simulator.
+//! This crate provides a Selene-compatible plugin wrapping the PECOS Quest simulator.
 //! Quest is a high-performance quantum simulator that supports arbitrary rotation angles and
 //! can utilize GPU acceleration when available.
+//!
+//! The plugin supports two simulation modes:
+//! - State vector: Memory scales as 16 bytes * `2^n_qubits`
+//! - Density matrix: Memory scales as 16 bytes * `4^n_qubits`
+//!
+//! # Attribution
+//!
+//! This plugin wraps `QuEST` (Quantum Exact Simulation Toolkit), developed by the QuEST-Kit team.
+//!
+//! - **Repository:** <https://github.com/quest-kit/QuEST>
+//! - **License:** MIT License
 
-use anyhow::{anyhow, bail, Result};
-use pecos_quest::{ArbitraryRotationGateable, CliffordGateable, QuestStateVec};
+use anyhow::{Result, anyhow, bail};
+use num_complex::Complex64;
+use pecos_quest::{ArbitraryRotationGateable, CliffordGateable, QuestDensityMatrix, QuestStateVec};
 use rand_chacha::ChaCha8Rng;
 use selene_core::export_simulator_plugin;
-use selene_core::simulator::interface::SimulatorInterfaceFactory;
 use selene_core::simulator::SimulatorInterface;
+use selene_core::simulator::interface::SimulatorInterfaceFactory;
 use selene_core::utils::MetricValue;
 use std::io::Write;
 use std::sync::Arc;
 
+/// Simulation mode for the Quest plugin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SimulatorMode {
+    /// State vector simulation (default)
+    #[default]
+    StateVector,
+    /// Density matrix simulation
+    DensityMatrix,
+}
+
+impl SimulatorMode {
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "state_vector" => Ok(Self::StateVector),
+            "density_matrix" => Ok(Self::DensityMatrix),
+            _ => bail!("Unknown simulator mode: {s}. Expected 'state_vector' or 'density_matrix'"),
+        }
+    }
+}
+
+/// Wrapper enum to hold either state vector or density matrix simulator.
+enum QuestSimulatorInner {
+    StateVector(QuestStateVec<ChaCha8Rng>),
+    DensityMatrix(QuestDensityMatrix<ChaCha8Rng>),
+}
+
+impl QuestSimulatorInner {
+    fn new_state_vector(n_qubits: usize, seed: u64) -> Self {
+        Self::StateVector(QuestStateVec::with_seed(n_qubits, seed))
+    }
+
+    fn new_density_matrix(n_qubits: usize, seed: u64) -> Self {
+        Self::DensityMatrix(QuestDensityMatrix::with_seed(n_qubits, seed))
+    }
+
+    fn rz(&mut self, theta: f64, qubit: usize) {
+        match self {
+            Self::StateVector(sim) => {
+                sim.rz(theta, qubit);
+            }
+            Self::DensityMatrix(sim) => {
+                sim.rz(theta, qubit);
+            }
+        }
+    }
+
+    fn rx(&mut self, theta: f64, qubit: usize) {
+        match self {
+            Self::StateVector(sim) => {
+                sim.rx(theta, qubit);
+            }
+            Self::DensityMatrix(sim) => {
+                sim.rx(theta, qubit);
+            }
+        }
+    }
+
+    fn cx(&mut self, control: usize, target: usize) {
+        match self {
+            Self::StateVector(sim) => {
+                sim.cx(control, target);
+            }
+            Self::DensityMatrix(sim) => {
+                sim.cx(control, target);
+            }
+        }
+    }
+
+    fn x(&mut self, qubit: usize) {
+        match self {
+            Self::StateVector(sim) => {
+                sim.x(qubit);
+            }
+            Self::DensityMatrix(sim) => {
+                sim.x(qubit);
+            }
+        }
+    }
+
+    fn mz(&mut self, qubit: usize) -> pecos_quest::MeasurementResult {
+        match self {
+            Self::StateVector(sim) => sim.mz(qubit),
+            Self::DensityMatrix(sim) => sim.mz(qubit),
+        }
+    }
+
+    fn probability(&self, state_index: usize) -> f64 {
+        match self {
+            Self::StateVector(sim) => sim.probability(state_index),
+            Self::DensityMatrix(sim) => sim.probability(state_index),
+        }
+    }
+
+    fn get_amplitude(&self, state_index: usize) -> Complex64 {
+        match self {
+            Self::StateVector(sim) => sim.get_amplitude(state_index),
+            Self::DensityMatrix(_sim) => {
+                // For density matrix, we can't directly get amplitudes
+                // This is a limitation - dump_state will need special handling
+                Complex64::new(0.0, 0.0)
+            }
+        }
+    }
+
+    fn is_gpu_accelerated(&self) -> bool {
+        match self {
+            Self::StateVector(sim) => sim.get_env_info().is_gpu_accelerated,
+            Self::DensityMatrix(sim) => sim.get_env_info().is_gpu_accelerated,
+        }
+    }
+}
+
 /// The PECOS Quest simulator wrapped for Selene compatibility.
 pub struct QuestSimulator {
-    /// The underlying PECOS Quest state vector simulator
-    simulator: QuestStateVec<ChaCha8Rng>,
+    /// The underlying PECOS Quest simulator
+    simulator: QuestSimulatorInner,
     /// Number of qubits in the system
     n_qubits: u64,
+    /// Simulation mode
+    mode: SimulatorMode,
+    /// Whether GPU is requested
+    #[allow(dead_code)]
+    use_gpu: bool,
     /// Cumulative probability of postselection outcomes
     cumulative_postselect_probability: f64,
 }
 
 impl QuestSimulator {
+    /// Convert a `u64` to `usize` for use with the simulator.
+    ///
+    /// # Safety
+    ///
+    /// This is safe because `check_memory()` validates that `n_qubits <= 60` (state vector)
+    /// or `n_qubits <= 30` (density matrix) before any simulator is created, and all qubit
+    /// indices are bounds-checked against `n_qubits` before this function is called.
+    /// Thus, the value will always fit in a `usize` on any platform.
+    #[allow(clippy::cast_possible_truncation)]
+    #[inline]
+    const fn to_usize(value: u64) -> usize {
+        value as usize
+    }
+
     /// Convert Selene qubit index to PECOS qubit index.
     ///
     /// PECOS Quest internally converts qubit indices from PECOS convention (MSB-first,
@@ -51,7 +194,15 @@ impl QuestSimulator {
     /// This double conversion ensures Selene qubit indices are preserved in Quest.
     #[inline]
     fn convert_qubit(&self, selene_qubit: u64) -> usize {
-        (self.n_qubits - 1 - selene_qubit) as usize
+        Self::to_usize(self.n_qubits - 1 - selene_qubit)
+    }
+
+    /// Create a new simulator with the given seed.
+    fn new_simulator(mode: SimulatorMode, n_qubits: usize, seed: u64) -> QuestSimulatorInner {
+        match mode {
+            SimulatorMode::StateVector => QuestSimulatorInner::new_state_vector(n_qubits, seed),
+            SimulatorMode::DensityMatrix => QuestSimulatorInner::new_density_matrix(n_qubits, seed),
+        }
     }
 }
 
@@ -62,7 +213,7 @@ impl SimulatorInterface for QuestSimulator {
 
     fn shot_start(&mut self, _shot_id: u64, seed: u64) -> Result<()> {
         // Create a fresh simulator with the given seed for deterministic behavior
-        self.simulator = QuestStateVec::with_seed(self.n_qubits as usize, seed);
+        self.simulator = Self::new_simulator(self.mode, Self::to_usize(self.n_qubits), seed);
         self.cumulative_postselect_probability = 1.0;
         Ok(())
     }
@@ -247,22 +398,62 @@ impl SimulatorInterface for QuestSimulator {
 }
 
 /// Factory for creating `QuestSimulator` instances.
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct QuestSimulatorFactory;
 
-/// Check if there is enough memory to allocate a state vector of the given size.
-fn check_memory(n_qubits: u64) -> Result<()> {
+/// Parse command-line style arguments.
+fn parse_args(args: &[impl AsRef<str>]) -> Result<(SimulatorMode, bool)> {
+    let mut mode = SimulatorMode::StateVector;
+    let mut use_gpu = false;
+
+    for arg in args {
+        let arg = arg.as_ref();
+        if arg.is_empty() {
+            continue;
+        }
+
+        if let Some(value) = arg.strip_prefix("--mode=") {
+            mode = SimulatorMode::from_str(value)?;
+        } else if arg == "--use-gpu" {
+            use_gpu = true;
+        } else if arg.starts_with("--") {
+            bail!("Unknown argument: {arg}");
+        }
+        // Ignore positional args (like the empty string from Selene)
+    }
+
+    Ok((mode, use_gpu))
+}
+
+/// Check if there is enough memory to allocate a simulator of the given size.
+fn check_memory(n_qubits: u64, mode: SimulatorMode) -> Result<()> {
     if n_qubits == 0 {
         bail!("Number of qubits must be greater than 0");
-    } else if n_qubits > 60 {
+    }
+
+    let max_qubits = match mode {
+        SimulatorMode::StateVector => 60,
+        SimulatorMode::DensityMatrix => 30, // 4^30 states = 2^60 elements
+    };
+
+    if n_qubits > max_qubits {
         bail!(
-            "It is impossible to describe more than 60 qubits in a statevector \
-             on a computer with a 64-bit address space."
+            "It is impossible to describe more than {max_qubits} qubits in {} mode \
+             on a computer with a 64-bit address space.",
+            match mode {
+                SimulatorMode::StateVector => "state vector",
+                SimulatorMode::DensityMatrix => "density matrix",
+            }
         );
     }
 
     // Each amplitude is a Complex64 = 16 bytes (2 * f64)
-    let bytes_required = 16_u64.checked_mul(1_u64 << n_qubits);
+    // State vector: 2^n states, Density matrix: 4^n = 2^(2n) states
+    let num_elements = match mode {
+        SimulatorMode::StateVector => 1_u64 << n_qubits,
+        SimulatorMode::DensityMatrix => 1_u64 << (2 * n_qubits),
+    };
+    let bytes_required = 16_u64.checked_mul(num_elements);
 
     match bytes_required {
         Some(bytes) => {
@@ -271,8 +462,12 @@ fn check_memory(n_qubits: u64) -> Result<()> {
             if bytes > 1024 * 1024 * 1024 {
                 // > 1GB
                 eprintln!(
-                    "Warning: Allocating state vector for {n_qubits} qubits requires \
+                    "Warning: Allocating {} for {n_qubits} qubits requires \
                      approximately {} bytes",
+                    match mode {
+                        SimulatorMode::StateVector => "state vector",
+                        SimulatorMode::DensityMatrix => "density matrix",
+                    },
                     bytes
                 );
             }
@@ -292,22 +487,32 @@ impl SimulatorInterfaceFactory for QuestSimulatorFactory {
         n_qubits: u64,
         args: &[impl AsRef<str>],
     ) -> Result<Box<Self::Interface>> {
-        let args: Vec<String> = args.iter().map(|s| s.as_ref().to_string()).collect();
+        let (mode, use_gpu) = parse_args(args)?;
 
-        // Quest plugin doesn't require any arguments
-        if args.len() > 1 {
-            bail!(
-                "Expected no arguments for the PECOS Quest plugin, got {} arguments: {:?}",
-                args.len() - 1,
-                args.iter().skip(1).collect::<Vec<_>>()
-            );
+        check_memory(n_qubits, mode)?;
+
+        let simulator = QuestSimulator::new_simulator(mode, QuestSimulator::to_usize(n_qubits), 0);
+
+        // Check GPU availability at runtime if GPU was requested
+        if use_gpu {
+            let is_gpu_accelerated = simulator.is_gpu_accelerated();
+            if !is_gpu_accelerated {
+                bail!(
+                    "GPU acceleration was requested but is not available. \
+                     This could mean:\n\
+                     - CUDA is not installed or not properly configured\n\
+                     - No compatible GPU was found\n\
+                     - The library was not compiled with GPU support\n\
+                     Please check your CUDA installation and GPU availability."
+                );
+            }
         }
 
-        check_memory(n_qubits)?;
-
         Ok(Box::new(QuestSimulator {
-            simulator: QuestStateVec::with_seed(n_qubits as usize, 0),
+            simulator,
             n_qubits,
+            mode,
+            use_gpu,
             cumulative_postselect_probability: 1.0,
         }))
     }
@@ -318,16 +523,82 @@ export_simulator_plugin!(crate::QuestSimulatorFactory);
 
 #[cfg(test)]
 mod tests {
-    use super::QuestSimulatorFactory;
+    use super::{QuestSimulatorFactory, SimulatorMode, parse_args};
     use selene_core::simulator::conformance_testing::run_basic_tests;
     use std::sync::Arc;
+
+    #[test]
+    fn test_parse_args_default() {
+        let args: Vec<&str> = vec![];
+        let (mode, use_gpu) = parse_args(&args).unwrap();
+        assert_eq!(mode, SimulatorMode::StateVector);
+        assert!(!use_gpu);
+    }
+
+    #[test]
+    fn test_parse_args_state_vector() {
+        let args = vec!["--mode=state_vector"];
+        let (mode, use_gpu) = parse_args(&args).unwrap();
+        assert_eq!(mode, SimulatorMode::StateVector);
+        assert!(!use_gpu);
+    }
+
+    #[test]
+    fn test_parse_args_density_matrix() {
+        let args = vec!["--mode=density_matrix"];
+        let (mode, use_gpu) = parse_args(&args).unwrap();
+        assert_eq!(mode, SimulatorMode::DensityMatrix);
+        assert!(!use_gpu);
+    }
+
+    #[test]
+    fn test_parse_args_with_gpu() {
+        let args = vec!["--mode=state_vector", "--use-gpu"];
+        let (mode, use_gpu) = parse_args(&args).unwrap();
+        assert_eq!(mode, SimulatorMode::StateVector);
+        assert!(use_gpu);
+    }
+
+    #[test]
+    fn test_parse_args_empty_strings() {
+        let args = vec!["", "--mode=density_matrix", ""];
+        let (mode, use_gpu) = parse_args(&args).unwrap();
+        assert_eq!(mode, SimulatorMode::DensityMatrix);
+        assert!(!use_gpu);
+    }
+
+    /// Test that requesting GPU on a system without GPU fails with a helpful error.
+    #[test]
+    fn test_gpu_requested_but_unavailable() {
+        use selene_core::simulator::interface::SimulatorInterfaceFactory;
+
+        let factory = Arc::new(QuestSimulatorFactory);
+        let result = factory
+            .clone()
+            .init(2, &["--mode=state_vector", "--use-gpu"]);
+
+        // On a system without GPU, this should fail
+        // (If running on a system with GPU, this test would pass differently)
+        match result {
+            Ok(_) => {
+                // GPU is available - that's fine, test passes
+            }
+            Err(err) => {
+                let err_msg = err.to_string();
+                assert!(
+                    err_msg.contains("GPU acceleration was requested but is not available"),
+                    "Expected GPU unavailable error, got: {err_msg}"
+                );
+            }
+        }
+    }
 
     /// Test that a Bell state through the Selene wrapper produces correlated measurements.
     /// This validates the RZZ implementation fix (using CNOT instead of PECOS Quest's buggy rzz).
     #[test]
     fn test_bell_state_correlation() {
-        use selene_core::simulator::interface::SimulatorInterfaceFactory;
         use selene_core::simulator::SimulatorInterface;
+        use selene_core::simulator::interface::SimulatorInterfaceFactory;
 
         const HALF_PI: f64 = std::f64::consts::FRAC_PI_2;
         const PI: f64 = std::f64::consts::PI;
@@ -336,7 +607,7 @@ mod tests {
         let mut outcomes = [0u32; 4];
 
         for seed in 0..100u64 {
-            let mut sim = factory.clone().init(2, &[""; 0]).unwrap();
+            let mut sim = factory.clone().init(2, &["--mode=state_vector"]).unwrap();
             sim.shot_start(0, seed).unwrap();
 
             // Selene's H decomposition on qubit 0
@@ -354,23 +625,149 @@ mod tests {
             let m0 = sim.measure(0).unwrap();
             let m1 = sim.measure(1).unwrap();
 
-            let idx = (if m0 { 1 } else { 0 }) | (if m1 { 2 } else { 0 });
+            let idx = usize::from(m0) | (if m1 { 2 } else { 0 });
             outcomes[idx] += 1;
         }
 
         // Bell state should only produce |00⟩ and |11⟩, never |01⟩ or |10⟩
         assert!(
             outcomes[0b01] == 0 && outcomes[0b10] == 0,
-            "Bell state should only have |00⟩ and |11⟩, got {:?}",
-            outcomes
+            "Bell state should only have |00⟩ and |11⟩, got {outcomes:?}"
         );
     }
 
-    /// Run Selene's basic conformance tests for the Quest plugin.
+    /// Test Bell state with density matrix mode.
     #[test]
-    fn basic_conformance_test() {
+    fn test_bell_state_density_matrix() {
+        use selene_core::simulator::SimulatorInterface;
+        use selene_core::simulator::interface::SimulatorInterfaceFactory;
+
+        const HALF_PI: f64 = std::f64::consts::FRAC_PI_2;
+        const PI: f64 = std::f64::consts::PI;
+
+        let factory = Arc::new(QuestSimulatorFactory);
+        let mut outcomes = [0u32; 4];
+
+        for seed in 0..100u64 {
+            let mut sim = factory.clone().init(2, &["--mode=density_matrix"]).unwrap();
+            sim.shot_start(0, seed).unwrap();
+
+            // Selene's H decomposition on qubit 0
+            sim.rxy(0, HALF_PI, -HALF_PI).unwrap();
+            sim.rz(0, PI).unwrap();
+
+            // Selene's CNOT decomposition (control=0, target=1)
+            sim.rxy(1, HALF_PI, HALF_PI).unwrap();
+            sim.rzz(0, 1, HALF_PI).unwrap();
+            sim.rz(0, HALF_PI).unwrap();
+            sim.rxy(1, HALF_PI, 0.0).unwrap();
+            sim.rz(1, -HALF_PI).unwrap();
+
+            // Measure both qubits
+            let m0 = sim.measure(0).unwrap();
+            let m1 = sim.measure(1).unwrap();
+
+            let idx = usize::from(m0) | (if m1 { 2 } else { 0 });
+            outcomes[idx] += 1;
+        }
+
+        // Bell state should only produce |00⟩ and |11⟩, never |01⟩ or |10⟩
+        assert!(
+            outcomes[0b01] == 0 && outcomes[0b10] == 0,
+            "Bell state (density matrix) should only have |00⟩ and |11⟩, got {outcomes:?}"
+        );
+    }
+
+    /// Run Selene's basic conformance tests for the Quest plugin (state vector mode).
+    #[test]
+    fn basic_conformance_test_state_vector() {
         let interface = Arc::new(QuestSimulatorFactory);
-        let args: Vec<String> = vec!["".to_string()];
+        let args: Vec<String> = vec!["--mode=state_vector".to_string()];
         run_basic_tests(interface, args);
+    }
+
+    /// Run Selene's basic conformance tests for the Quest plugin (density matrix mode).
+    #[test]
+    fn basic_conformance_test_density_matrix() {
+        let interface = Arc::new(QuestSimulatorFactory);
+        let args: Vec<String> = vec!["--mode=density_matrix".to_string()];
+        run_basic_tests(interface, args);
+    }
+
+    /// Test GPU acceleration if available.
+    /// This test checks if GPU is available and runs a basic test if so.
+    /// If GPU is not available, it verifies the error message is helpful.
+    #[test]
+    fn test_gpu_acceleration() {
+        use selene_core::simulator::SimulatorInterface;
+        use selene_core::simulator::interface::SimulatorInterfaceFactory;
+
+        let factory = Arc::new(QuestSimulatorFactory);
+        let result = factory
+            .clone()
+            .init(2, &["--mode=state_vector", "--use-gpu"]);
+
+        match result {
+            Ok(mut sim) => {
+                // GPU is available - run a basic test
+                const HALF_PI: f64 = std::f64::consts::FRAC_PI_2;
+                const PI: f64 = std::f64::consts::PI;
+
+                sim.shot_start(0, 42).unwrap();
+
+                // Create Bell state
+                sim.rxy(0, HALF_PI, -HALF_PI).unwrap();
+                sim.rz(0, PI).unwrap();
+                sim.rxy(1, HALF_PI, HALF_PI).unwrap();
+                sim.rzz(0, 1, HALF_PI).unwrap();
+                sim.rz(0, HALF_PI).unwrap();
+                sim.rxy(1, HALF_PI, 0.0).unwrap();
+                sim.rz(1, -HALF_PI).unwrap();
+
+                let m0 = sim.measure(0).unwrap();
+                let m1 = sim.measure(1).unwrap();
+
+                // Bell state: both measurements should be the same
+                assert_eq!(m0, m1, "GPU Bell state measurements should be correlated");
+            }
+            Err(err) => {
+                // GPU not available - verify error message is helpful
+                let err_msg = err.to_string();
+                assert!(
+                    err_msg.contains("GPU acceleration was requested but is not available"),
+                    "Expected helpful GPU error message, got: {err_msg}"
+                );
+            }
+        }
+    }
+
+    /// Test GPU with density matrix mode if available.
+    #[test]
+    fn test_gpu_density_matrix() {
+        use selene_core::simulator::SimulatorInterface;
+        use selene_core::simulator::interface::SimulatorInterfaceFactory;
+
+        let factory = Arc::new(QuestSimulatorFactory);
+        let result = factory
+            .clone()
+            .init(2, &["--mode=density_matrix", "--use-gpu"]);
+
+        match result {
+            Ok(mut sim) => {
+                // GPU is available - run a basic test
+                sim.shot_start(0, 42).unwrap();
+                let m = sim.measure(0).unwrap();
+                // Should measure 0 for |0> state
+                assert!(!m, "Initial state should measure 0");
+            }
+            Err(err) => {
+                // GPU not available - verify error message
+                let err_msg = err.to_string();
+                assert!(
+                    err_msg.contains("GPU acceleration was requested but is not available"),
+                    "Expected helpful GPU error message, got: {err_msg}"
+                );
+            }
+        }
     }
 }

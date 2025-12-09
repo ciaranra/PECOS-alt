@@ -13,19 +13,17 @@
 """Tests for the PECOS SparseStab Selene plugin."""
 
 import pytest
-
 from guppylang import guppy
-from guppylang.std.quantum import qubit, h, measure, discard, cx
 from guppylang.std.builtins import result
-
-from selene_sim.build import build
+from guppylang.std.quantum import cx, discard, h, measure, qubit
 from pecos_selene_sparsestab import SparseStabPlugin
+from selene_sim.build import build
 
 
 class TestSparseStabBasic:
     """Basic functionality tests for the SparseStab plugin."""
 
-    def test_single_qubit_discard(self):
+    def test_single_qubit_discard(self) -> None:
         """Test that a qubit can be created and discarded."""
 
         @guppy
@@ -40,7 +38,7 @@ class TestSparseStabBasic:
         results = list(runner.run(simulator, n_qubits=1))
         assert len(results) == 0  # No results expected since no measurements
 
-    def test_single_qubit_identity(self):
+    def test_single_qubit_identity(self) -> None:
         """Test that a qubit without operations measures to 0."""
 
         @guppy
@@ -56,7 +54,7 @@ class TestSparseStabBasic:
         results = list(runner.run(simulator, n_qubits=1))
         assert dict(results)["outcome"] == 0
 
-    def test_hadamard_measurement(self):
+    def test_hadamard_measurement(self) -> None:
         """Test that H gate creates superposition."""
 
         @guppy
@@ -78,7 +76,7 @@ class TestSparseStabBasic:
 class TestSparseStabBellState:
     """Tests involving Bell states and entanglement."""
 
-    def test_bell_state_correlation(self):
+    def test_bell_state_correlation(self) -> None:
         """Test that Bell state measurements are correlated."""
 
         @guppy
@@ -105,7 +103,7 @@ class TestSparseStabBellState:
 class TestSparseStabAngleValidation:
     """Tests for angle threshold and Clifford validation."""
 
-    def test_invalid_angle_threshold(self):
+    def test_invalid_angle_threshold(self) -> None:
         """Test that angle_threshold must be positive."""
         with pytest.raises(ValueError, match="greater than zero"):
             SparseStabPlugin(angle_threshold=0)
@@ -113,7 +111,7 @@ class TestSparseStabAngleValidation:
         with pytest.raises(ValueError, match="greater than zero"):
             SparseStabPlugin(angle_threshold=-0.1)
 
-    def test_valid_angle_threshold(self):
+    def test_valid_angle_threshold(self) -> None:
         """Test that valid angle thresholds are accepted."""
         plugin = SparseStabPlugin(angle_threshold=1e-6)
         assert plugin.angle_threshold == 1e-6
@@ -125,17 +123,19 @@ class TestSparseStabAngleValidation:
 class TestSparseStabPlugin:
     """Tests for the plugin interface."""
 
-    def test_library_file_exists(self):
+    def test_library_file_exists(self) -> None:
         """Test that the library file property returns a valid path."""
         plugin = SparseStabPlugin()
         lib_path = plugin.library_file
 
         # The path should be a Path object pointing to the expected location
-        assert lib_path.name.startswith("libpecos_selene_sparsestab") or lib_path.name.startswith(
-            "pecos_selene_sparsestab"
+        assert lib_path.name.startswith(
+            "libpecos_selene_sparsestab",
+        ) or lib_path.name.startswith(
+            "pecos_selene_sparsestab",
         )
 
-    def test_init_args(self):
+    def test_init_args(self) -> None:
         """Test that init args are correctly formatted."""
         plugin = SparseStabPlugin(angle_threshold=1e-5)
         args = plugin.get_init_args()
@@ -143,7 +143,7 @@ class TestSparseStabPlugin:
         assert len(args) == 1
         assert args[0] == "--angle-threshold=1e-05"
 
-    def test_default_init_args(self):
+    def test_default_init_args(self) -> None:
         """Test default init args."""
         plugin = SparseStabPlugin()
         args = plugin.get_init_args()

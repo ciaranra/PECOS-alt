@@ -14,51 +14,94 @@
 
 import platform
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from selene_core import Simulator
+
+
+class SimulatorMode(Enum):
+    """Simulator mode for Quest plugin.
+
+    Attributes:
+    ----------
+    STATE_VECTOR
+        State vector simulation. Memory scales as 16 bytes * 2^n_qubits.
+    DENSITY_MATRIX
+        Density matrix simulation. Memory scales as 16 bytes * 4^n_qubits.
+        Required for simulating mixed states and certain noise models.
+    """
+
+    STATE_VECTOR = "state_vector"
+    DENSITY_MATRIX = "density_matrix"
 
 
 @dataclass
 class QuestPlugin(Simulator):
     """PECOS Quest simulator plugin for Selene.
 
-    This plugin provides a Quest state vector simulator backend for Selene,
-    using the PECOS Quest wrapper. Quest is a high-performance quantum simulator
-    that supports arbitrary rotation angles and can utilize GPU acceleration.
-
-    The memory requirement scales exponentially with the number of qubits
-    (16 bytes * 2^n_qubits).
+    This plugin provides a Quest simulator backend for Selene, using the PECOS
+    Quest wrapper. Quest is a high-performance quantum simulator that supports
+    arbitrary rotation angles and can utilize GPU acceleration.
 
     Parameters
     ----------
+    mode : SimulatorMode, default SimulatorMode.STATE_VECTOR
+        The simulation mode to use. STATE_VECTOR for pure state simulation,
+        DENSITY_MATRIX for mixed state simulation.
+    use_gpu : bool, default False
+        Whether to use GPU acceleration. Requires the library to be compiled
+        with GPU support and a compatible CUDA GPU to be available.
     random_seed : int, optional
         Seed for the random number generator. If not provided, the seed
         will be determined by Selene's shot management.
+
+    Examples:
+    --------
+    Basic state vector simulation (default):
+
+    >>> plugin = QuestPlugin()
+
+    Density matrix simulation:
+
+    >>> plugin = QuestPlugin(mode=SimulatorMode.DENSITY_MATRIX)
+
+    GPU-accelerated state vector simulation:
+
+    >>> plugin = QuestPlugin(use_gpu=True)
+
+    GPU-accelerated density matrix simulation:
+
+    >>> plugin = QuestPlugin(mode=SimulatorMode.DENSITY_MATRIX, use_gpu=True)
     """
 
+    mode: SimulatorMode = SimulatorMode.STATE_VECTOR
+    use_gpu: bool = False
     random_seed: int | None = None
 
     def get_init_args(self) -> list[str]:
         """Return the initialization arguments for the Rust plugin.
 
-        Returns
+        Returns:
         -------
         list[str]
-            Empty list as Quest plugin doesn't require additional arguments.
+            List of command-line style arguments for the Rust plugin.
         """
-        return []
+        args = [f"--mode={self.mode.value}"]
+        if self.use_gpu:
+            args.append("--use-gpu")
+        return args
 
     @property
     def library_file(self) -> Path:
         """Return the path to the compiled Rust library.
 
-        Returns
+        Returns:
         -------
         Path
             Path to the shared library file.
 
-        Raises
+        Raises:
         ------
         FileNotFoundError
             If no matching library file is found.

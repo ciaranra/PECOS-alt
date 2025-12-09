@@ -10,8 +10,17 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 
-"""PECOS Qulacs Selene plugin."""
+"""PECOS Qulacs Selene plugin.
 
-from pecos_selene_qulacs.plugin import QulacsPlugin
+This plugin provides a Selene-compatible interface to the Qulacs quantum
+circuit simulator through the PECOS wrapper.
 
-__all__ = ["QulacsPlugin"]
+Qulacs is developed by the Qulacs team and is available at:
+https://github.com/qulacs/qulacs
+
+Qulacs is licensed under the MIT License.
+"""
+
+from pecos_selene_qulacs.plugin import QulacsPlugin, SimulatorMode
+
+__all__ = ["QulacsPlugin", "SimulatorMode"]

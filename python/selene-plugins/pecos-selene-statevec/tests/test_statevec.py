@@ -13,20 +13,18 @@
 """Tests for the PECOS StateVec Selene plugin."""
 
 import pytest
-
 from guppylang import guppy
 from guppylang.std.angles import pi
-from guppylang.std.quantum import qubit, h, measure, discard, cx, rz
 from guppylang.std.builtins import result
-
-from selene_sim.build import build
+from guppylang.std.quantum import cx, discard, h, measure, qubit, rz
 from pecos_selene_statevec import StateVecPlugin
+from selene_sim.build import build
 
 
 class TestStateVecBasic:
     """Basic functionality tests for the StateVec plugin."""
 
-    def test_single_qubit_discard(self):
+    def test_single_qubit_discard(self) -> None:
         """Test that a qubit can be created and discarded."""
 
         @guppy
@@ -41,7 +39,7 @@ class TestStateVecBasic:
         results = list(runner.run(simulator, n_qubits=1))
         assert len(results) == 0  # No results expected since no measurements
 
-    def test_single_qubit_identity(self):
+    def test_single_qubit_identity(self) -> None:
         """Test that a qubit without operations measures to 0."""
 
         @guppy
@@ -57,7 +55,7 @@ class TestStateVecBasic:
         results = list(runner.run(simulator, n_qubits=1))
         assert dict(results)["outcome"] == 0
 
-    def test_hadamard_measurement(self):
+    def test_hadamard_measurement(self) -> None:
         """Test that H gate creates superposition."""
 
         @guppy
@@ -79,7 +77,7 @@ class TestStateVecBasic:
 class TestStateVecBellState:
     """Tests involving Bell states and entanglement."""
 
-    def test_bell_state_correlation(self):
+    def test_bell_state_correlation(self) -> None:
         """Test that Bell state measurements are correlated."""
 
         @guppy
@@ -106,7 +104,7 @@ class TestStateVecBellState:
 class TestStateVecArbitraryRotations:
     """Tests for arbitrary rotation angles (non-Clifford)."""
 
-    def test_t_gate_like_rotation(self):
+    def test_t_gate_like_rotation(self) -> None:
         """Test that a T-gate-like rotation (pi/4) works."""
 
         @guppy
@@ -128,7 +126,7 @@ class TestStateVecArbitraryRotations:
             # Just check it doesn't crash - the rotation is valid
             assert dict(results)["outcome"] in [0, 1]
 
-    def test_arbitrary_rz_angle(self):
+    def test_arbitrary_rz_angle(self) -> None:
         """Test an arbitrary Rz rotation angle."""
 
         @guppy
@@ -152,17 +150,19 @@ class TestStateVecArbitraryRotations:
 class TestStateVecPlugin:
     """Tests for the plugin interface."""
 
-    def test_library_file_exists(self):
+    def test_library_file_exists(self) -> None:
         """Test that the library file property returns a valid path."""
         plugin = StateVecPlugin()
         lib_path = plugin.library_file
 
         # The path should be a Path object pointing to the expected location
-        assert lib_path.name.startswith("libpecos_selene_statevec") or lib_path.name.startswith(
-            "pecos_selene_statevec"
+        assert lib_path.name.startswith(
+            "libpecos_selene_statevec",
+        ) or lib_path.name.startswith(
+            "pecos_selene_statevec",
         )
 
-    def test_init_args_empty(self):
+    def test_init_args_empty(self) -> None:
         """Test that init args are empty (no special parameters)."""
         plugin = StateVecPlugin()
         args = plugin.get_init_args()

@@ -10,18 +10,18 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-//! PECOS SparseStab simulator plugin for the Selene quantum emulator.
+//! PECOS `SparseStab` simulator plugin for the Selene quantum emulator.
 //!
 //! This crate provides a Selene-compatible plugin wrapping the PECOS sparse stabilizer simulator.
 //! As a stabilizer simulator, it can only simulate Clifford operations (rotations that are
 //! multiples of pi/2).
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::Parser;
 use pecos_qsim::{CliffordGateable, StdSparseStab};
 use selene_core::export_simulator_plugin;
-use selene_core::simulator::interface::SimulatorInterfaceFactory;
 use selene_core::simulator::SimulatorInterface;
+use selene_core::simulator::interface::SimulatorInterfaceFactory;
 use selene_core::utils::MetricValue;
 use std::sync::Arc;
 
@@ -39,7 +39,7 @@ enum ApproxAngle {
     NoSuitableApproximation,
 }
 
-/// Command-line parameters for the SparseStab plugin.
+/// Command-line parameters for the `SparseStab` plugin.
 #[derive(Parser, Debug)]
 struct Params {
     /// Threshold for angle approximation. Angles within this threshold of a
@@ -48,7 +48,7 @@ struct Params {
     angle_threshold: f64,
 }
 
-/// The PECOS SparseStab simulator wrapped for Selene compatibility.
+/// The PECOS `SparseStab` simulator wrapped for Selene compatibility.
 pub struct SparseStabSimulator {
     /// The underlying PECOS sparse stabilizer simulator
     simulator: StdSparseStab,
@@ -59,6 +59,19 @@ pub struct SparseStabSimulator {
 }
 
 impl SparseStabSimulator {
+    /// Convert a `u64` to `usize` for use with the simulator.
+    ///
+    /// # Safety
+    ///
+    /// This is safe because stabilizer simulators are limited to a reasonable number of qubits
+    /// (typically < 10000), and all qubit indices are bounds-checked against `n_qubits` before
+    /// this function is called. Thus, the value will always fit in a `usize` on any platform.
+    #[allow(clippy::cast_possible_truncation)]
+    #[inline]
+    const fn to_usize(value: u64) -> usize {
+        value as usize
+    }
+
     /// Attempts to approximate an angle to a multiple of pi/2.
     ///
     /// Returns the closest Clifford angle if within the threshold, otherwise
@@ -66,12 +79,28 @@ impl SparseStabSimulator {
     fn get_approximate_angle(&self, theta: f64) -> ApproxAngle {
         // Convert angle to units of pi/2
         let quadrant_float = theta * 2.0 / std::f64::consts::PI;
-        let quadrant = quadrant_float.round() as i32;
-        let within_threshold = (quadrant_float - f64::from(quadrant)).abs() < self.angle_threshold;
+        // Round to nearest integer
+        let quadrant_rounded = quadrant_float.round();
+        // Check if we're within the threshold of a multiple of pi/2
+        let within_threshold = (quadrant_float - quadrant_rounded).abs() < self.angle_threshold;
 
-        // Map to the appropriate Clifford angle
-        // Using rem_euclid to handle negative values correctly
-        match (within_threshold, quadrant.rem_euclid(4)) {
+        // Map to the appropriate Clifford angle (0, 1, 2, or 3)
+        // Using rem_euclid on the f64 to handle negative values correctly,
+        // then converting to integer. The result is always 0, 1, 2, or 3.
+        let quadrant_mod4 = quadrant_rounded.rem_euclid(4.0);
+        // The result of rem_euclid(4.0) on a rounded f64 is always exactly
+        // 0.0, 1.0, 2.0, or 3.0, so we can safely compare with epsilon tolerance
+        let quadrant = if (quadrant_mod4 - 0.0).abs() < 0.5 {
+            0
+        } else if (quadrant_mod4 - 1.0).abs() < 0.5 {
+            1
+        } else if (quadrant_mod4 - 2.0).abs() < 0.5 {
+            2
+        } else {
+            3
+        };
+
+        match (within_threshold, quadrant) {
             (true, 0) => ApproxAngle::Zero,
             (true, 1) => ApproxAngle::FracPi2,
             (true, 2) => ApproxAngle::Pi,
@@ -88,7 +117,7 @@ impl SimulatorInterface for SparseStabSimulator {
 
     fn shot_start(&mut self, _shot_id: u64, seed: u64) -> Result<()> {
         // Create a fresh simulator with the given seed for deterministic behavior
-        self.simulator = StdSparseStab::with_seed(self.n_qubits as usize, seed);
+        self.simulator = StdSparseStab::with_seed(Self::to_usize(self.n_qubits), seed);
         Ok(())
     }
 
@@ -107,7 +136,7 @@ impl SimulatorInterface for SparseStabSimulator {
 
         let approx_theta = self.get_approximate_angle(theta);
         let approx_phi = self.get_approximate_angle(phi);
-        let q = qubit as usize;
+        let q = Self::to_usize(qubit);
 
         // RXY(theta, phi) = Rz(phi) * Rx(theta) * Rz(-phi)
         // Gates are applied left-to-right in code but the matrix multiplication
@@ -194,7 +223,7 @@ impl SimulatorInterface for SparseStabSimulator {
         }
 
         let approx = self.get_approximate_angle(theta);
-        let q = qubit as usize;
+        let q = Self::to_usize(qubit);
 
         match approx {
             ApproxAngle::Zero => (),
@@ -227,8 +256,8 @@ impl SimulatorInterface for SparseStabSimulator {
             ));
         }
 
-        let q1 = qubit1 as usize;
-        let q2 = qubit2 as usize;
+        let q1 = Self::to_usize(qubit1);
+        let q2 = Self::to_usize(qubit2);
         let approx = self.get_approximate_angle(theta);
 
         match approx {
@@ -266,7 +295,7 @@ impl SimulatorInterface for SparseStabSimulator {
             ));
         }
 
-        let result = self.simulator.mz(qubit as usize);
+        let result = self.simulator.mz(Self::to_usize(qubit));
         Ok(result.outcome)
     }
 
@@ -279,7 +308,7 @@ impl SimulatorInterface for SparseStabSimulator {
             ));
         }
 
-        let q = qubit as usize;
+        let q = Self::to_usize(qubit);
 
         // Measure the qubit
         let result = self.simulator.mz(q);
@@ -317,7 +346,7 @@ impl SimulatorInterface for SparseStabSimulator {
             ));
         }
 
-        let q = qubit as usize;
+        let q = Self::to_usize(qubit);
 
         // Use the measure-and-prepare operation to reset to |0>
         // mpz measures in Z basis and prepares |0> (the +1 eigenstate of Z)
@@ -355,11 +384,10 @@ impl SimulatorInterfaceFactory for SparseStabSimulatorFactory {
 
         match Params::try_parse_from(args) {
             Err(e) => Err(anyhow!(
-                "Error parsing arguments to PECOS SparseStab plugin: {}",
-                e
+                "Error parsing arguments to PECOS SparseStab plugin: {e}"
             )),
             Ok(params) => Ok(Box::new(SparseStabSimulator {
-                simulator: StdSparseStab::with_seed(n_qubits as usize, 0),
+                simulator: StdSparseStab::with_seed(SparseStabSimulator::to_usize(n_qubits), 0),
                 n_qubits,
                 angle_threshold: params.angle_threshold,
             })),
@@ -379,7 +407,7 @@ mod tests {
     #[test]
     fn basic_conformance_test() {
         let interface = Arc::new(SparseStabSimulatorFactory);
-        let args = vec!["".to_string(), "--angle-threshold=0.001".to_string()];
+        let args = vec![String::new(), "--angle-threshold=0.001".to_string()];
         run_basic_tests(interface, args);
     }
 }

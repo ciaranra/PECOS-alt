@@ -10,8 +10,17 @@
 # or implied. See the License for the specific language governing permissions and limitations under
 # the License.
 
-"""PECOS Quest Selene plugin."""
+"""PECOS Quest Selene plugin.
 
-from pecos_selene_quest.plugin import QuestPlugin
+This plugin provides a Selene-compatible interface to the QuEST (Quantum Exact
+Simulation Toolkit) simulator through the PECOS wrapper.
 
-__all__ = ["QuestPlugin"]
+QuEST is developed by the QuEST-Kit team and is available at:
+https://github.com/quest-kit/QuEST
+
+QuEST is licensed under the MIT License.
+"""
+
+from pecos_selene_quest.plugin import QuestPlugin, SimulatorMode
+
+__all__ = ["QuestPlugin", "SimulatorMode"]

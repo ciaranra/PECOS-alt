@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "PECOS SparseStab simulator plugin for the Selene quantum emulator"
 
 [lib]

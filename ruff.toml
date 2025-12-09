@@ -127,6 +127,12 @@ ignore = [
     "FBT003",   # Boolean positional values - OK in tests for explicit boolean testing
     "TRY300",   # Try-except patterns in test code
 ]
+"python/selene-plugins/*/tests/**/*.py" = [
+    "F401",     # Imported but unused - OK in tests
+    "INP001",   # File is part of an implicit namespace package - OK for test directories
+    "S101",     # Use of `assert` detected - standard in tests
+    "BLE001",   # Blind except - OK in tests for checking error conditions
+]
 "python/slr-tests/**/*.py" = [
     "INP001",   # File is part of an implicit namespace package - OK for test directories
     "S101",     # Use of `assert` detected - Assert is standard practice in test files
@@ -187,6 +193,9 @@ ignore = [
 
 # Re-export modules
 "python/quantum-pecos/src/pecos/rslib.py" = ["F403"]  # Re-exporting all symbols from pecos_rslib
+
+# Hatch build hooks - standalone build scripts, not packages
+"python/selene-plugins/*/hatch_build.py" = ["ARG002", "INP001", "PLC0415", "S603", "S607"]  # Build scripts call cargo, version arg required by interface, conditional imports for macOS
 
 # Subprocess calls (S603, S607) - These call trusted build tools and compilers
 "python/pecos-rslib/src/pecos_rslib/selene_compilation.py" = ["S603", "S607", "TRY301"]  # llc, gcc compilation

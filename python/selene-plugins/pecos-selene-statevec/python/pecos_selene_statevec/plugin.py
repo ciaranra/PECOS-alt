@@ -13,7 +13,6 @@
 """PECOS StateVec plugin for Selene."""
 
 import platform
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -43,7 +42,7 @@ class StateVecPlugin(Simulator):
     def get_init_args(self) -> list[str]:
         """Return the initialization arguments for the Rust plugin.
 
-        Returns
+        Returns:
         -------
         list[str]
             Empty list as StateVec plugin doesn't require additional arguments.
@@ -54,12 +53,12 @@ class StateVecPlugin(Simulator):
     def library_file(self) -> Path:
         """Return the path to the compiled Rust library.
 
-        Returns
+        Returns:
         -------
         Path
             Path to the shared library file.
 
-        Raises
+        Raises:
         ------
         FileNotFoundError
             If no matching library file is found.

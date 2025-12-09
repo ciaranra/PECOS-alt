@@ -14,14 +14,21 @@
 //!
 //! This crate provides a Selene-compatible plugin wrapping the PECOS Qulacs state vector simulator.
 //! Qulacs is a high-performance quantum simulator that supports arbitrary rotation angles.
+//!
+//! # Attribution
+//!
+//! This plugin wraps Qulacs, a high-performance quantum circuit simulator developed by the Qulacs team.
+//!
+//! - **Repository:** <https://github.com/qulacs/qulacs>
+//! - **License:** MIT License
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable};
 use pecos_qulacs::QulacsStateVec;
 use rand_chacha::ChaCha8Rng;
 use selene_core::export_simulator_plugin;
-use selene_core::simulator::interface::SimulatorInterfaceFactory;
 use selene_core::simulator::SimulatorInterface;
+use selene_core::simulator::interface::SimulatorInterfaceFactory;
 use selene_core::utils::MetricValue;
 use std::io::Write;
 use std::sync::Arc;
@@ -37,6 +44,20 @@ pub struct QulacsSimulator {
 }
 
 impl QulacsSimulator {
+    /// Convert a `u64` to `usize` for use with the simulator.
+    ///
+    /// # Safety
+    ///
+    /// This is safe because `check_memory()` validates that `n_qubits <= 60` before
+    /// any simulator is created, and all qubit indices are bounds-checked against
+    /// `n_qubits` before this function is called. Thus, the value will always fit
+    /// in a `usize` on any platform.
+    #[allow(clippy::cast_possible_truncation)]
+    #[inline]
+    const fn to_usize(value: u64) -> usize {
+        value as usize
+    }
+
     /// Convert Selene qubit index to PECOS qubit index.
     ///
     /// PECOS Qulacs internally converts qubit indices from PECOS convention (MSB-first,
@@ -51,7 +72,7 @@ impl QulacsSimulator {
     /// This double conversion ensures Selene qubit indices are preserved in Qulacs.
     #[inline]
     fn convert_qubit(&self, selene_qubit: u64) -> usize {
-        (self.n_qubits - 1 - selene_qubit) as usize
+        Self::to_usize(self.n_qubits - 1 - selene_qubit)
     }
 }
 
@@ -62,7 +83,7 @@ impl SimulatorInterface for QulacsSimulator {
 
     fn shot_start(&mut self, _shot_id: u64, seed: u64) -> Result<()> {
         // Create a fresh simulator with the given seed for deterministic behavior
-        self.simulator = QulacsStateVec::with_seed(self.n_qubits as usize, seed);
+        self.simulator = QulacsStateVec::with_seed(Self::to_usize(self.n_qubits), seed);
         self.cumulative_postselect_probability = 1.0;
         Ok(())
     }
@@ -239,8 +260,32 @@ impl SimulatorInterface for QulacsSimulator {
 }
 
 /// Factory for creating `QulacsSimulator` instances.
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct QulacsSimulatorFactory;
+
+/// Parse command-line style arguments.
+fn parse_args(args: &[impl AsRef<str>]) -> Result<()> {
+    for arg in args {
+        let arg = arg.as_ref();
+        if arg.is_empty() {
+            continue;
+        }
+
+        if let Some(value) = arg.strip_prefix("--mode=") {
+            if value != "state_vector" {
+                bail!(
+                    "Qulacs plugin only supports state_vector mode, got '{value}'. \
+                     Density matrix simulation is not yet implemented."
+                );
+            }
+        } else if arg.starts_with("--") {
+            bail!("Unknown argument: {arg}");
+        }
+        // Ignore positional args (like the empty string from Selene)
+    }
+
+    Ok(())
+}
 
 /// Check if there is enough memory to allocate a state vector of the given size.
 fn check_memory(n_qubits: u64) -> Result<()> {
@@ -264,8 +309,7 @@ fn check_memory(n_qubits: u64) -> Result<()> {
                 // > 1GB
                 eprintln!(
                     "Warning: Allocating state vector for {n_qubits} qubits requires \
-                     approximately {} bytes",
-                    bytes
+                     approximately {bytes} bytes"
                 );
             }
             Ok(())
@@ -284,21 +328,11 @@ impl SimulatorInterfaceFactory for QulacsSimulatorFactory {
         n_qubits: u64,
         args: &[impl AsRef<str>],
     ) -> Result<Box<Self::Interface>> {
-        let args: Vec<String> = args.iter().map(|s| s.as_ref().to_string()).collect();
-
-        // Qulacs plugin doesn't require any arguments
-        if args.len() > 1 {
-            bail!(
-                "Expected no arguments for the PECOS Qulacs plugin, got {} arguments: {:?}",
-                args.len() - 1,
-                args.iter().skip(1).collect::<Vec<_>>()
-            );
-        }
-
+        parse_args(args)?;
         check_memory(n_qubits)?;
 
         Ok(Box::new(QulacsSimulator {
-            simulator: QulacsStateVec::with_seed(n_qubits as usize, 0),
+            simulator: QulacsStateVec::with_seed(QulacsSimulator::to_usize(n_qubits), 0),
             n_qubits,
             cumulative_postselect_probability: 1.0,
         }))
@@ -310,15 +344,39 @@ export_simulator_plugin!(crate::QulacsSimulatorFactory);
 
 #[cfg(test)]
 mod tests {
-    use super::QulacsSimulatorFactory;
+    use super::{QulacsSimulatorFactory, parse_args};
     use selene_core::simulator::conformance_testing::run_basic_tests;
     use std::sync::Arc;
+
+    #[test]
+    fn test_parse_args_default() {
+        let args: Vec<&str> = vec![];
+        assert!(parse_args(&args).is_ok());
+    }
+
+    #[test]
+    fn test_parse_args_state_vector() {
+        let args = vec!["--mode=state_vector"];
+        assert!(parse_args(&args).is_ok());
+    }
+
+    #[test]
+    fn test_parse_args_density_matrix_fails() {
+        let args = vec!["--mode=density_matrix"];
+        assert!(parse_args(&args).is_err());
+    }
+
+    #[test]
+    fn test_parse_args_empty_strings() {
+        let args = vec!["", "--mode=state_vector", ""];
+        assert!(parse_args(&args).is_ok());
+    }
 
     /// Test that a Bell state through the Selene wrapper produces correlated measurements.
     #[test]
     fn test_bell_state_correlation() {
-        use selene_core::simulator::interface::SimulatorInterfaceFactory;
         use selene_core::simulator::SimulatorInterface;
+        use selene_core::simulator::interface::SimulatorInterfaceFactory;
 
         const HALF_PI: f64 = std::f64::consts::FRAC_PI_2;
         const PI: f64 = std::f64::consts::PI;
@@ -327,7 +385,7 @@ mod tests {
         let mut outcomes = [0u32; 4];
 
         for seed in 0..100u64 {
-            let mut sim = factory.clone().init(2, &[""; 0]).unwrap();
+            let mut sim = factory.clone().init(2, &["--mode=state_vector"]).unwrap();
             sim.shot_start(0, seed).unwrap();
 
             // Selene's H decomposition on qubit 0
@@ -345,15 +403,14 @@ mod tests {
             let m0 = sim.measure(0).unwrap();
             let m1 = sim.measure(1).unwrap();
 
-            let idx = (if m0 { 1 } else { 0 }) | (if m1 { 2 } else { 0 });
+            let idx = usize::from(m0) | (if m1 { 2 } else { 0 });
             outcomes[idx] += 1;
         }
 
         // Bell state should only produce |00> and |11>, never |01> or |10>
         assert!(
             outcomes[0b01] == 0 && outcomes[0b10] == 0,
-            "Bell state should only have |00> and |11>, got {:?}",
-            outcomes
+            "Bell state should only have |00> and |11>, got {outcomes:?}"
         );
     }
 
@@ -361,7 +418,7 @@ mod tests {
     #[test]
     fn basic_conformance_test() {
         let interface = Arc::new(QulacsSimulatorFactory);
-        let args: Vec<String> = vec!["".to_string()];
+        let args: Vec<String> = vec!["--mode=state_vector".to_string()];
         run_basic_tests(interface, args);
     }
 }

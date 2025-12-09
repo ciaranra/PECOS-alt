@@ -67,7 +67,7 @@ else
 endif
 
 .PHONY: build
-build: installreqs ## Compile and install for development
+build: installreqs build-selene ## Compile and install for development
 	@$(SETUP_LLVM); $(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv
 	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all]"
 	@if command -v julia >/dev/null 2>&1; then \
@@ -77,6 +77,44 @@ build: installreqs ## Compile and install for development
 	else \
 		echo "Julia not detected, skipping Julia build"; \
 	fi
+
+.PHONY: build-selene
+build-selene: ## Build and install Selene plugins for development
+	@echo "Building Selene plugins..."
+	@# Build Rust libraries (with GPU support if CUDA available)
+	@if command -v nvcc >/dev/null 2>&1 || [ -n "$$CUDA_PATH" ]; then \
+		echo "CUDA detected, building with GPU support..."; \
+		cargo build --release -p pecos-selene-quest --features gpu; \
+	else \
+		echo "CUDA not detected, building CPU-only..."; \
+		cargo build --release -p pecos-selene-quest; \
+	fi
+	@cargo build --release -p pecos-selene-qulacs -p pecos-selene-sparsestab -p pecos-selene-statevec
+	@# Copy libraries to Python package directories
+	@echo "Copying libraries to Python packages..."
+	@mkdir -p python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist/lib
+	@mkdir -p python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist/lib
+	@mkdir -p python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist/lib
+	@mkdir -p python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib
+	@cp target/release/libpecos_selene_quest.so python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist/lib/ 2>/dev/null || \
+		cp target/release/libpecos_selene_quest.dylib python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist/lib/ 2>/dev/null || \
+		cp target/release/pecos_selene_quest.dll python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist/lib/ 2>/dev/null || true
+	@cp target/release/libpecos_selene_qulacs.so python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist/lib/ 2>/dev/null || \
+		cp target/release/libpecos_selene_qulacs.dylib python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist/lib/ 2>/dev/null || \
+		cp target/release/pecos_selene_qulacs.dll python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist/lib/ 2>/dev/null || true
+	@cp target/release/libpecos_selene_sparsestab.so python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist/lib/ 2>/dev/null || \
+		cp target/release/libpecos_selene_sparsestab.dylib python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist/lib/ 2>/dev/null || \
+		cp target/release/pecos_selene_sparsestab.dll python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist/lib/ 2>/dev/null || true
+	@cp target/release/libpecos_selene_statevec.so python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib/ 2>/dev/null || \
+		cp target/release/libpecos_selene_statevec.dylib python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib/ 2>/dev/null || \
+		cp target/release/pecos_selene_statevec.dll python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib/ 2>/dev/null || true
+	@# Install Python packages in editable mode
+	@echo "Installing Selene plugins in editable mode..."
+	@$(UNSET_CONDA) uv pip install -e ./python/selene-plugins/pecos-selene-quest
+	@$(UNSET_CONDA) uv pip install -e ./python/selene-plugins/pecos-selene-qulacs
+	@$(UNSET_CONDA) uv pip install -e ./python/selene-plugins/pecos-selene-sparsestab
+	@$(UNSET_CONDA) uv pip install -e ./python/selene-plugins/pecos-selene-statevec
+	@echo "Selene plugins built and installed successfully"
 
 .PHONY: build-basic
 build-basic: installreqs ## Compile and install for development but do not include install extras

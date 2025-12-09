@@ -21,8 +21,7 @@ from selene_core import Simulator
 
 @dataclass
 class SparseStabPlugin(Simulator):
-    """
-    A plugin for using the PECOS SparseStab stabilizer simulator as a backend for Selene.
+    """A plugin for using the PECOS SparseStab stabilizer simulator as a backend for Selene.
 
     PECOS SparseStab is a sparse stabilizer simulator that can efficiently simulate
     Clifford circuits. As a stabilizer simulator, it can only simulate Clifford operations
@@ -36,7 +35,8 @@ class SparseStabPlugin(Simulator):
 
     angle_threshold: float = 1e-4
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Validate plugin configuration."""
         if self.angle_threshold <= 0:
             msg = "angle_threshold must be greater than zero to avoid numerical instability"
             raise ValueError(msg)

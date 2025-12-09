@@ -3087,6 +3087,7 @@ name = "pecos-selene-quest"
 version = "0.1.1"
 dependencies = [
  "anyhow",
+ "num-complex",
  "pecos-quest",
  "rand_chacha",
  "selene-core",

@@ -14,9 +14,24 @@
 
 import platform
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from selene_core import Simulator
+
+
+class SimulatorMode(Enum):
+    """Simulator mode for Qulacs plugin.
+
+    Currently only state vector simulation is supported.
+
+    Attributes:
+    ----------
+    STATE_VECTOR
+        State vector simulation. Memory scales as 16 bytes * 2^n_qubits.
+    """
+
+    STATE_VECTOR = "state_vector"
 
 
 @dataclass
@@ -27,38 +42,56 @@ class QulacsPlugin(Simulator):
     using the PECOS Qulacs wrapper. Qulacs is a high-performance quantum simulator
     that supports arbitrary rotation angles.
 
-    The memory requirement scales exponentially with the number of qubits
-    (16 bytes * 2^n_qubits).
-
     Parameters
     ----------
+    mode : SimulatorMode, default SimulatorMode.STATE_VECTOR
+        The simulation mode to use. Currently only STATE_VECTOR is supported.
     random_seed : int, optional
         Seed for the random number generator. If not provided, the seed
         will be determined by Selene's shot management.
+
+    Examples:
+    --------
+    Basic state vector simulation (default):
+
+    >>> plugin = QulacsPlugin()
+
+    With explicit mode:
+
+    >>> plugin = QulacsPlugin(mode=SimulatorMode.STATE_VECTOR)
     """
 
+    mode: SimulatorMode = SimulatorMode.STATE_VECTOR
     random_seed: int | None = None
+
+    def __post_init__(self) -> None:
+        """Validate plugin configuration."""
+        if self.mode != SimulatorMode.STATE_VECTOR:
+            msg = (
+                f"Qulacs plugin only supports state_vector mode, got {self.mode.value}"
+            )
+            raise ValueError(msg)
 
     def get_init_args(self) -> list[str]:
         """Return the initialization arguments for the Rust plugin.
 
-        Returns
+        Returns:
         -------
         list[str]
-            Empty list as Qulacs plugin doesn't require additional arguments.
+            List of command-line style arguments for the Rust plugin.
         """
-        return []
+        return [f"--mode={self.mode.value}"]
 
     @property
     def library_file(self) -> Path:
         """Return the path to the compiled Rust library.
 
-        Returns
+        Returns:
         -------
         Path
             Path to the shared library file.
 
-        Raises
+        Raises:
         ------
         FileNotFoundError
             If no matching library file is found.

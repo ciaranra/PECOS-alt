@@ -25,11 +25,13 @@ simulator = StateVecPlugin()
 
 # Use with Selene
 runner = build(program)
-results = list(runner.run_shots(
-    simulator=simulator,
-    n_qubits=10,
-    n_shots=1000,
-))
+results = list(
+    runner.run_shots(
+        simulator=simulator,
+        n_qubits=10,
+        n_shots=1000,
+    )
+)
 ```
 
 ## Parameters

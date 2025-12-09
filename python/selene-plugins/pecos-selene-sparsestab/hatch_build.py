@@ -12,19 +12,76 @@
 
 """Custom hatch build hook to compile and include the Rust shared library."""
 
+from __future__ import annotations
+
 import platform
 import shutil
 import subprocess
+import sys
 from pathlib import Path
+from typing import Any
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
+from packaging.tags import sys_tags
 
 
 class PecosSeleneSparsestabBuildHook(BuildHookInterface):
     """Build hook that compiles the Rust plugin and copies it to the Python package."""
 
-    def initialize(self, version: str, build_data: dict) -> None:
+    def _set_wheel_tag(self, build_data: dict[str, Any]) -> None:
+        """Set platform-specific wheel tags.
+
+        This ensures the wheel is marked as platform-specific (not pure Python).
+        We use py3-none-{platform} since we don't bind to Python ABI directly.
+        """
+        build_data["pure_python"] = False
+
+        # Get the appropriate platform tag
+        tag = next(
+            iter(
+                t
+                for t in sys_tags()
+                if "manylinux" not in t.platform and "musllinux" not in t.platform
+            ),
+        )
+        target_platform = tag.platform
+        if sys.platform == "darwin":
+            from hatchling.builders.macos import process_macos_plat_tag
+
+            target_platform = process_macos_plat_tag(target_platform, compat=False)
+        build_data["tag"] = f"py3-none-{target_platform}"
+
+        self.app.display_info(f"Wheel tag: {build_data['tag']}")
+
+    def initialize(
+        self,
+        version: str,
+        build_data: dict[str, Any],
+    ) -> None:
         """Build the Rust library and include it as an artifact."""
+        # Get the root directory (where pyproject.toml is)
+        root = Path(self.root)
+
+        # Check if library already exists (e.g., from `make build-selene`)
+        # If so, skip building and just collect artifacts
+        dist_dir = root / "python" / "pecos_selene_sparsestab" / "_dist"
+        lib_dir = dist_dir / "lib"
+        if lib_dir.exists() and any(lib_dir.iterdir()):
+            self.app.display_info("Library already built, skipping cargo build...")
+            # Collect artifacts
+            artifacts = []
+            for artifact in dist_dir.rglob("*"):
+                if artifact.is_file():
+                    rel_path = artifact.relative_to(root)
+                    artifacts.append(str(rel_path.as_posix()))
+            if artifacts:
+                self.app.display_info("Found existing artifacts:")
+                for a in artifacts:
+                    self.app.display_info(f"    {a}")
+                build_data["artifacts"] += artifacts
+                self._set_wheel_tag(build_data)
+                return
+
         # Determine library extension based on platform
         system = platform.system()
         if system == "Linux":
@@ -40,8 +97,6 @@ class PecosSeleneSparsestabBuildHook(BuildHookInterface):
             msg = f"Unsupported platform: {system}"
             raise RuntimeError(msg)
 
-        # Get the root directory (where pyproject.toml is)
-        root = Path(self.root)
         lib_name = "pecos_selene_sparsestab"
         cargo_package = "pecos-selene-sparsestab"
 
@@ -57,6 +112,7 @@ class PecosSeleneSparsestabBuildHook(BuildHookInterface):
                 "--package",
                 cargo_package,
             ],
+            check=False,
             cwd=workspace_root,
             capture_output=True,
             text=True,
@@ -97,3 +153,4 @@ class PecosSeleneSparsestabBuildHook(BuildHookInterface):
             self.app.display_info(f"    {a}")
 
         build_data["artifacts"] += artifacts
+        self._set_wheel_tag(build_data)

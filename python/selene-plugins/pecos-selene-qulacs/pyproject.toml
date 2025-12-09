@@ -1,6 +1,6 @@
 [project]
 name = "pecos-selene-qulacs"
-version = "0.1.0"
+version = "0.7.0.dev4"
 requires-python = ">=3.10"
 description = "PECOS Qulacs simulator plugin for the Selene quantum emulator"
 readme = "README.md"
@@ -20,8 +20,13 @@ test = [
 homepage = "https://pecos.io"
 repository = "https://github.com/PECOS-packages/PECOS"
 
+# Attribution: This plugin wraps Qulacs, a high-performance quantum simulator.
+# Qulacs is developed by the Qulacs team and is available at:
+# https://github.com/qulacs/qulacs
+# Qulacs is licensed under the MIT License.
+
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "packaging"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
