@@ -1,7 +1,7 @@
 """Test the Guppy → HUGR → PECOS pipeline."""
 
 import pytest
-from pecos.frontends import get_guppy_backends
+from pecos import get_guppy_backends
 
 
 def test_infrastructure() -> None:
@@ -31,10 +31,10 @@ def test_simple_classical_function_definition() -> None:
 def test_quantum_function() -> None:
     """Test quantum function compilation and execution."""
     try:
-        from _pecos_rslib import state_vector
         from guppylang.decorator import guppy
         from guppylang.std.quantum import h, measure, qubit
-        from pecos.frontends.guppy_api import sim
+        from pecos import Guppy, sim
+        from pecos_rslib import state_vector
 
         @guppy
         def quantum_coin() -> bool:
@@ -42,7 +42,7 @@ def test_quantum_function() -> None:
             h(q)
             return measure(q)
 
-        result = sim(quantum_coin).qubits(1).quantum(state_vector()).run(10)
+        result = sim(Guppy(quantum_coin)).qubits(1).quantum(state_vector()).run(10)
 
         # Should have measurement results
         assert "measurement_0" in result

@@ -27,8 +27,8 @@ except ImportError:
     GUPPY_AVAILABLE = False
 
 try:
-    from _pecos_rslib import state_vector
-    from pecos.frontends.guppy_api import sim
+    from pecos import Guppy, sim
+    from pecos_rslib import state_vector
 
     BUILDER_AVAILABLE = True
 except ImportError:
@@ -237,12 +237,16 @@ def test_api_demonstration() -> None:
 
     # print("\n3. Running 1000 shots with a new builder...")
     # Need to create a new builder since the previous one is consumed
-    results = sim(demo_circuit).qubits(10).quantum(state_vector()).seed(42).run(1000)
+    results = (
+        sim(Guppy(demo_circuit)).qubits(10).quantum(state_vector()).seed(42).run(1000)
+    )
     results.get(
         "measurements",
         results.get("measurement_0", results.get("result", [])),
     )
-    results = sim(demo_circuit).qubits(10).quantum(state_vector()).seed(123).run(50)
+    results = (
+        sim(Guppy(demo_circuit)).qubits(10).quantum(state_vector()).seed(123).run(50)
+    )
     results.get(
         "measurements",
         results.get("measurement_0", results.get("result", [])),

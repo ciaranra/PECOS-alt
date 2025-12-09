@@ -9,9 +9,9 @@ import os
 import tempfile
 
 
-from _pecos_rslib import phir_json_engine
-from _pecos_rslib import PhirJsonProgram
-from _pecos_rslib import sim
+from pecos_rslib import phir_json_engine
+from pecos_rslib.programs import PhirJson
+from pecos_rslib import sim
 
 
 def test_phir_wasm_basic_ffcall() -> None:
@@ -84,7 +84,7 @@ def test_phir_wasm_basic_ffcall() -> None:
         }
 
         # Create PHIR program
-        prog = PhirJsonProgram.from_json(json.dumps(phir_json))
+        prog = PhirJson.from_json(json.dumps(phir_json))
 
         # Create engine with WASM support using the same pattern as QASM
         engine = phir_json_engine().wasm(wasm_path).program(prog)
@@ -180,7 +180,7 @@ def test_phir_wasm_conditional_ffcall() -> None:
             ],
         }
 
-        prog = PhirJsonProgram.from_json(json.dumps(phir_json))
+        prog = PhirJson.from_json(json.dumps(phir_json))
         engine = phir_json_engine().wasm(wasm_path).program(prog)
         results = sim(prog).classical(engine).run(10).to_dict()
 
@@ -248,11 +248,11 @@ def test_phir_wasm_with_quantum_ops() -> None:
             ],
         }
 
-        prog = PhirJsonProgram.from_json(json.dumps(phir_json))
+        prog = PhirJson.from_json(json.dumps(phir_json))
         engine = phir_json_engine().wasm(wasm_path).program(prog)
 
         # Need to specify quantum engine for quantum operations
-        from _pecos_rslib import state_vector
+        from pecos_rslib import state_vector
 
         results = sim(prog).classical(engine).quantum(state_vector()).run(10).to_dict()
 

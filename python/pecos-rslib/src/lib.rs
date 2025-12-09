@@ -17,6 +17,7 @@
 // the License.
 
 mod array_buffer;
+mod bit_int_bindings;
 mod byte_message_bindings;
 mod coin_toss_bindings;
 mod cpp_sparse_sim_bindings;
@@ -35,27 +36,32 @@ mod pecos_array;
 mod pecos_rng_bindings;
 mod phir_json_bridge;
 // mod qir_bindings;  // Removed - replaced by llvm_bindings
+mod engines_module;
 mod llvm_bindings;
+mod programs_module;
 mod quest_bindings;
 mod qulacs_bindings;
 mod shot_results_bindings;
 mod sim;
 mod simulator_utils;
+mod simulators_module;
 mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
 mod state_vec_bindings;
 mod state_vec_engine_bindings;
+mod types_module;
 #[cfg(feature = "wasm")]
 mod wasm_foreign_object_bindings;
 mod wasm_program_bindings;
 
 // Note: hugr_bindings module is currently disabled - conflicts with pecos-qis-interface due to duplicate symbols
 
+use bit_int_bindings::PyBitInt;
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
 use coin_toss_bindings::PyCoinToss;
 use cpp_sparse_sim_bindings::PySparseSimCpp;
-use engine_builders::{PyHugrProgram, PyPhirJsonProgram, PyQasmProgram, PyQisProgram};
+use engine_builders::{PyHugr, PyPhirJson, PyQasm, PyQis};
 use pauli_prop_bindings::PyPauliProp;
 use pecos_array::Array;
 use pecos_rng_bindings::RngPcg;
@@ -70,15 +76,14 @@ use state_vec_engine_bindings::PyStateVecEngine;
 use wasm_foreign_object_bindings::PyWasmForeignObject;
 
 /// A Python module implemented in Rust.
-/// Named with underscore prefix to indicate it's a private implementation detail.
 /// Users should import from `pecos` (quantum-pecos) which re-exports these types
 /// with additional Python-native enhancements.
 #[pymodule]
 #[allow(clippy::too_many_lines)] // Module initialization legitimately needs many lines
-fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Note: Rust logging is controlled via RUST_LOG environment variable (e.g., RUST_LOG=debug)
     // We don't use pyo3-log because it interferes with Python's logging.basicConfig() in tests
-    log::debug!("_pecos_rslib module initializing...");
+    log::debug!("pecos_rslib module initializing...");
 
     // CRITICAL: Preload libselene_simple_runtime.so with RTLD_GLOBAL BEFORE anything else
     // This prevents conflicts with LLVM-14 when the Selene runtime is loaded later
@@ -142,6 +147,7 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<QuestStateVec>()?;
     m.add_class::<QuestDensityMatrix>()?;
     m.add_class::<Array>()?;
+    m.add_class::<PyBitInt>()?;
 
     // Register simulator utilities (GateBindingsDict, TableauWrapper)
     simulator_utils::register_simulator_utils(m)?;
@@ -189,10 +195,10 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     graph_bindings::register_graph_module(m)?;
 
     // Register program types
-    m.add_class::<PyQasmProgram>()?;
-    m.add_class::<PyQisProgram>()?;
-    m.add_class::<PyHugrProgram>()?;
-    m.add_class::<PyPhirJsonProgram>()?;
+    m.add_class::<PyQasm>()?;
+    m.add_class::<PyQis>()?;
+    m.add_class::<PyHugr>()?;
+    m.add_class::<PyPhirJson>()?;
     wasm_program_bindings::register_wasm_programs(m)?;
 
     // Register engine builder functions
@@ -228,9 +234,21 @@ fn _pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Note: This must come after all the factory functions and classes are registered
     namespace_modules::register_namespace_modules(m)?;
 
+    // Register simulators submodule containing all quantum simulator backends
+    simulators_module::register_simulators_module(m)?;
+
+    // Register programs submodule containing all program types
+    programs_module::register_programs_module(m)?;
+
+    // Register engines submodule containing all execution engines and builders
+    engines_module::register_engines_module(m)?;
+
+    // Register types submodule containing core data types
+    types_module::register_types_module(m)?;
+
     // =========================================================================
     // Top-level numerical function exports (NumPy-like API)
-    // These are convenience aliases for _pecos_rslib.mean instead of _pecos_rslib.num.mean
+    // These are convenience aliases for pecos_rslib.mean instead of pecos_rslib.num.mean
     // =========================================================================
     let num = m.getattr("num")?;
 

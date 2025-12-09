@@ -1,7 +1,7 @@
 """Tests for the modern sim() API."""
 
 import pytest
-from _pecos_rslib import (
+from pecos_rslib import (
     biased_depolarizing_noise,
     depolarizing_noise,
     general_noise,
@@ -9,8 +9,8 @@ from _pecos_rslib import (
     sparse_stabilizer,
     state_vector,
 )
-from _pecos_rslib import QasmProgram
-from _pecos_rslib import sim
+from pecos_rslib.programs import Qasm
+from pecos_rslib import sim
 
 
 class TestSimAPI:
@@ -28,7 +28,7 @@ class TestSimAPI:
         measure q -> c;
         """
 
-        program = QasmProgram.from_string(qasm)
+        program = Qasm.from_string(qasm)
         engine = qasm_engine().program(program)
         results = sim(program).classical(engine).run(10).to_dict()
 
@@ -47,7 +47,7 @@ class TestSimAPI:
         measure q[0] -> c[0];
         """
 
-        program = QasmProgram.from_string(qasm)
+        program = Qasm.from_string(qasm)
         engine = qasm_engine().program(program)
 
         # Run with same seed should give same results
@@ -73,7 +73,7 @@ class TestSimAPI:
         measure q -> c;
         """
 
-        program = QasmProgram.from_string(qasm)
+        program = Qasm.from_string(qasm)
         engine = qasm_engine().program(program)
 
         # Test with StateVector engine
@@ -103,7 +103,7 @@ class TestSimAPI:
         measure q[0] -> c[0];
         """
 
-        program = QasmProgram.from_string(qasm)
+        program = Qasm.from_string(qasm)
         engine = qasm_engine().program(program)
 
         # Test with no noise - should always measure 1
@@ -133,7 +133,7 @@ class TestSimAPI:
         measure q[0] -> c[0];
         """
 
-        program = QasmProgram.from_string(qasm)
+        program = Qasm.from_string(qasm)
         engine = qasm_engine().program(program)
 
         # Test with biased depolarizing noise
@@ -158,7 +158,7 @@ class TestSimAPI:
         measure q[0] -> c[0];
         """
 
-        program = QasmProgram.from_string(qasm)
+        program = Qasm.from_string(qasm)
         engine = qasm_engine().program(program)
 
         # Test with general noise model
@@ -173,7 +173,7 @@ class TestSimAPI:
     def test_error_handling(self) -> None:
         """Test error handling for invalid inputs."""
         # Invalid QASM should raise an error
-        program = QasmProgram.from_string("invalid qasm")
+        program = Qasm.from_string("invalid qasm")
         engine = qasm_engine().program(program)
         with pytest.raises((RuntimeError, ValueError)):
             sim(program).classical(engine).run(10).to_dict()
@@ -192,7 +192,7 @@ class TestSimAPI:
         measure q[1] -> c2[0];
         """
 
-        program = QasmProgram.from_string(qasm)
+        program = Qasm.from_string(qasm)
         engine = qasm_engine().program(program)
         results = sim(program).classical(engine).run(10).to_dict()
 
@@ -220,7 +220,7 @@ class TestSimAPI:
         measure q -> c;
         """
 
-        program = QasmProgram.from_string(qasm)
+        program = Qasm.from_string(qasm)
         engine = qasm_engine().program(program)
         results = sim(program).classical(engine).seed(42).run(100).to_dict()
 

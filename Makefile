@@ -120,9 +120,12 @@ build-cuda: installreqs ## Compile and install for development with CUDA support
 docs-build:  ## Clean, install deps, and build documentation
 	@uv run mkdocs build --clean
 
-.PHONY: docs-serve
-docs-serve:  ## Serve documentation (for  other ports add... -dev-addr=127.0.0.1:9000)
-	@uv run mkdocs serve
+.PHONY: docs
+docs:  ## Serve documentation and open in browser (PORT=9000 to change port)
+	@uv run mkdocs serve -a 127.0.0.1:$(or $(PORT),8000) 2>&1 | while IFS= read -r line; do \
+		echo "$$line"; \
+		case "$$line" in *"Serving on"*) xdg-open http://127.0.0.1:$(or $(PORT),8000)/PECOS/ 2>/dev/null ;; esac; \
+	done
 
 .PHONY: docs-test
 docs-test:  ## Test all code examples in documentation
@@ -495,6 +498,12 @@ clean-unix:
 	@/usr/bin/find . -type d -name "junit" -exec rm -rf {} + 2>/dev/null || true
 	@/usr/bin/find python -name "*.so" -delete 2>/dev/null || true
 	@/usr/bin/find python -name "*.pyd" -delete 2>/dev/null || true
+	@# Clean pecos-rslib from venv to force reinstall
+	@rm -rf .venv/lib/python*/site-packages/pecos_rslib 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_rslib*.dist-info 2>/dev/null || true
+	@# Clean pecos-rslib from uv cache to prevent stale wheel reinstallation
+	@# See: https://quanttype.net/posts/2025-09-12-uv-and-maturin.html
+	@uv cache clean pecos-rslib 2>/dev/null || true
 	@# Clean all target directories in crates (in case they were built independently)
 	@/usr/bin/find crates -type d -name "target" -exec rm -rf {} + 2>/dev/null || true
 	@/usr/bin/find python -type d -name "target" -exec rm -rf {} + 2>/dev/null || true
@@ -521,6 +530,11 @@ clean-windows-ps:
 	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter '.hypothesis' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter 'junit' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path python -Recurse -File -Include '*.so','*.pyd' | Remove-Item -Force -ErrorAction SilentlyContinue"
+	@# Clean pecos-rslib from venv to force reinstall
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_rslib' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_rslib*.dist-info' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@# Clean pecos-rslib from uv cache to prevent stale wheel reinstallation
+	@uv cache clean pecos-rslib 2>$null; exit 0
 	@# Clean all target directories in crates
 	@powershell -Command "Get-ChildItem -Path crates -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 	@powershell -Command "Get-ChildItem -Path python -Recurse -Directory -Filter 'target' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
@@ -539,6 +553,11 @@ clean-windows-cmd:
 	-@for /f "delims=" %%d in ('dir /s /b /ad .hypothesis 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%d in ('dir /s /b /ad junit 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%f in ('dir /s /b python\*.so python\*.pyd 2^>nul') do @del "%%f" 2>nul
+	-@REM Clean pecos-rslib from venv to force reinstall
+	-@for /f "delims=" %%d in ('dir /s /b /ad .venv\lib\*\site-packages\pecos_rslib 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@for /f "delims=" %%d in ('dir /s /b /ad .venv\lib\*\site-packages\pecos_rslib*.dist-info 2^>nul') do @rd /s /q "%%d" 2>nul
+	-@REM Clean pecos-rslib from uv cache to prevent stale wheel reinstallation
+	-@uv cache clean pecos-rslib 2>nul
 	-@REM Clean all target directories in crates
 	-@for /f "delims=" %%d in ('dir /s /b /ad crates\target 2^>nul') do @rd /s /q "%%d" 2>nul
 	-@for /f "delims=" %%d in ('dir /s /b /ad python\target 2^>nul') do @rd /s /q "%%d" 2>nul

@@ -10,7 +10,7 @@ def test_guppy_to_selene_pipeline() -> None:
     """Test that Guppy programs can be compiled to Selene Interface and executed."""
     # Import Guppy-aware sim from pecos.frontends
     try:
-        from pecos.frontends.guppy_api import sim
+        from pecos import Guppy, sim
     except ImportError:
         pytest.skip("sim() function not available")
 
@@ -35,9 +35,9 @@ def test_guppy_to_selene_pipeline() -> None:
         # 1. Detect Guppy function
         # 2. Compile to HUGR via Python-side Selene compilation
         # 3. Execute with SeleneSimpleRuntimeEngine
-        from _pecos_rslib import state_vector
+        from pecos_rslib import state_vector
 
-        result = sim(bell_state).qubits(2).quantum(state_vector()).run(10)
+        result = sim(Guppy(bell_state)).qubits(2).quantum(state_vector()).run(10)
 
         # Check that we got results
         assert result is not None
@@ -72,8 +72,8 @@ def test_guppy_to_selene_pipeline() -> None:
 def test_guppy_hadamard_compilation() -> None:
     """Test that Hadamard gate is compiled correctly."""
     try:
-        from _pecos_rslib import state_vector
-        from pecos.frontends.guppy_api import sim
+        from pecos import Guppy, sim
+        from pecos_rslib import state_vector
     except ImportError:
         pytest.skip("sim() not available")
 
@@ -88,7 +88,7 @@ def test_guppy_hadamard_compilation() -> None:
 
     try:
         # Try to compile and run
-        result = sim(hadamard_test).quantum(state_vector()).qubits(1).run(100)
+        result = sim(Guppy(hadamard_test)).quantum(state_vector()).qubits(1).run(100)
 
         # If successful, verify result structure
         assert result is not None
@@ -109,8 +109,8 @@ def test_guppy_hadamard_compilation() -> None:
 def test_guppy_cnot_compilation() -> None:
     """Test that CNOT gate is compiled correctly."""
     try:
-        from _pecos_rslib import state_vector
-        from pecos.frontends.guppy_api import sim
+        from pecos import Guppy, sim
+        from pecos_rslib import state_vector
     except ImportError:
         pytest.skip("sim() not available")
 
@@ -126,7 +126,7 @@ def test_guppy_cnot_compilation() -> None:
 
     try:
         # Try to compile and run
-        result = sim(cnot_test).quantum(state_vector()).qubits(2).run(100)
+        result = sim(Guppy(cnot_test)).quantum(state_vector()).qubits(2).run(100)
 
         # If successful, verify result structure
         assert result is not None
