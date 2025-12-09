@@ -347,9 +347,15 @@ pytest-perf: build-release ## Run performance tests on pecos-rslib with release 
 pytest-dep: ## Run tests on the Python package only for optional dependencies. ASSUMES: previous build command
 	@$(ADD_LLVM_TO_PATH) uv run pytest ./python/quantum-pecos/tests/ --doctest-modules -m optional_dependency
 
+.PHONY: pytest-selene
+pytest-selene: ## Run tests for Selene plugins. ASSUMES: previous build command
+	@echo "Running Selene plugin tests..."
+	@$(ADD_LLVM_TO_PATH) uv run pytest ./python/selene-plugins/ -v
+	@echo "Selene plugin tests completed"
+
 .PHONY: pytest-all
-pytest-all: pytest pytest-numpy ## Run all tests (core + numpy compat) on the Python package. ASSUMES: previous build command
-	@echo "All Python tests completed (core + NumPy/SciPy compatibility)"
+pytest-all: pytest pytest-numpy pytest-selene ## Run all tests (core + numpy compat + selene) on the Python package. ASSUMES: previous build command
+	@echo "All Python tests completed (core + NumPy/SciPy compatibility + Selene plugins)"
 
 # .PHONY: pytest-doc
 # pydoctest:  ## Run doctests with pytest. ASSUMES: A build command was ran previously. ASSUMES: previous build command

@@ -2,10 +2,10 @@
 resolver = "2"
 members = [
     "python/pecos-rslib",
-    "python/pecos-selene-sparsestab",
-    "python/pecos-selene-statevec",
-    "python/pecos-selene-quest",
-    "python/pecos-selene-qulacs",
+    "python/selene-plugins/pecos-selene-sparsestab",
+    "python/selene-plugins/pecos-selene-statevec",
+    "python/selene-plugins/pecos-selene-quest",
+    "python/selene-plugins/pecos-selene-qulacs",
     "julia/pecos-julia-ffi",
     "crates/pecos*",
     "crates/benchmarks",
