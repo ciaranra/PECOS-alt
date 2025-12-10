@@ -183,6 +183,10 @@ fn configure_build(
     build.include("src");
     build.include(out_dir);
 
+    // Check if we're in release mode (OPT_LEVEL > 0)
+    let opt_level = env::var("OPT_LEVEL").unwrap_or_else(|_| "0".to_string());
+    let is_release = opt_level != "0";
+
     // Set compiler flags
     if is_windows {
         // Windows-specific settings
@@ -203,21 +207,29 @@ fn configure_build(
         build.flag_if_supported("/external:anglebrackets"); // Treat angle-bracket includes as external
         build.flag_if_supported("/external:W0"); // Disable warnings for external headers
 
-        // Use standard optimization level - /bigobj should prevent compiler crashes
-        build.opt_level(2); // Maximize speed optimization (/O2)
+        // Use optimization level based on Cargo profile
+        if is_release {
+            build.opt_level(2); // Maximize speed optimization (/O2)
+        } else {
+            build.opt_level(0); // No optimization for debug builds
+        }
     } else {
         build.flag_if_supported("-std=c++14");
-        build.flag_if_supported("-O3");
 
-        // On macOS with ARM (Apple Silicon), -ffast-math causes issues with Eigen's NEON code
-        // which uses infinity constants. Use a more targeted optimization instead.
-        if target.contains("darwin") && target.contains("aarch64") {
-            // Enable fast math but allow infinity and NaN
-            build.flag_if_supported("-fno-math-errno");
-            build.flag_if_supported("-fno-trapping-math");
-        } else {
-            build.flag_if_supported("-ffast-math");
+        // Use optimization level based on Cargo profile
+        if is_release {
+            build.flag_if_supported("-O3");
+            // On macOS with ARM (Apple Silicon), -ffast-math causes issues with Eigen's NEON code
+            // which uses infinity constants. Use a more targeted optimization instead.
+            if target.contains("darwin") && target.contains("aarch64") {
+                // Enable fast math but allow infinity and NaN
+                build.flag_if_supported("-fno-math-errno");
+                build.flag_if_supported("-fno-trapping-math");
+            } else {
+                build.flag_if_supported("-ffast-math");
+            }
         }
+        // Debug builds use cc crate's default (no optimization flags)
 
         // Silence OpenMP pragma warnings since we intentionally don't use OpenMP
         // PECOS uses thread-level parallelism instead of OpenMP's internal parallelism
@@ -236,8 +248,10 @@ fn configure_build(
         }
     }
 
-    // Define preprocessor macros
-    build.define("EIGEN_NO_DEBUG", None);
+    // Define preprocessor macros - only disable Eigen debug checks in release mode
+    if is_release {
+        build.define("EIGEN_NO_DEBUG", None);
+    }
 }
 
 fn create_windows_boost_stub(out_dir: &Path) {

@@ -582,11 +582,31 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
 
     build.compile("quest-bridge");
 
-    // Link GPU object files if they were compiled
+    // Add GPU object files to the static library so they're available to downstream cdylib crates
+    // Using cargo:rustc-link-arg only works for direct binaries, not for rlib dependencies
     if let Some(gpu_objs) = gpu_object_files {
+        let lib_path = out_dir.join("libquest-bridge.a");
+        info!(
+            "Adding GPU object files to static library: {}",
+            lib_path.display()
+        );
+
         for obj in &gpu_objs {
-            println!("cargo:rustc-link-arg={}", obj.display());
+            let status = Command::new("ar")
+                .arg("rcs") // r=insert, c=create if needed, s=index
+                .arg(&lib_path)
+                .arg(obj)
+                .status()
+                .expect("Failed to run ar command");
+
+            if !status.success() {
+                eprintln!("ERROR: Failed to add {} to static library", obj.display());
+                std::process::exit(1);
+            }
+            debug!("Added {} to static library", obj.display());
         }
+
+        info!("GPU object files added to static library successfully");
     }
 
     // On macOS, ensure the C++ standard library is linked correctly

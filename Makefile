@@ -68,7 +68,7 @@ endif
 
 .PHONY: build
 build: installreqs build-selene ## Compile and install for development
-	@$(SETUP_LLVM); $(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv
+	@$(SETUP_LLVM); $(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop
 	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all]"
 	@if command -v julia >/dev/null 2>&1; then \
 		echo "Julia detected, building Julia FFI library..."; \
@@ -118,12 +118,12 @@ build-selene: ## Build and install Selene plugins for development
 
 .PHONY: build-basic
 build-basic: installreqs ## Compile and install for development but do not include install extras
-	@$(SETUP_LLVM); $(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv
+	@$(SETUP_LLVM); $(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop
 	@$(UNSET_CONDA) uv pip install -e ./python/quantum-pecos
 
 .PHONY: build-release
 build-release: installreqs ## Build a faster version of binaries
-	@$(SETUP_LLVM); $(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --uv --release
+	@$(SETUP_LLVM); $(UNSET_CONDA) cd python/pecos-rslib/ && uv run maturin develop --release
 	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all]"
 	@if command -v julia >/dev/null 2>&1; then \
 		echo "Julia detected, building Julia FFI library (release)..."; \
@@ -515,6 +515,52 @@ julia-lint: julia-build ## Run Aqua.jl quality checks on Julia code
 # Utility
 # -------
 
+.PHONY: clean-selene-plugins
+clean-selene-plugins:  ## Clean Selene plugin build artifacts
+ifeq ($(OS),Windows_NT)
+	@if command -v rm >/dev/null 2>&1; then \
+		$(MAKE) clean-selene-plugins-unix; \
+	else \
+		powershell -Command "exit 0" > NUL 2>&1 && $(MAKE) clean-selene-plugins-windows-ps || echo "Skipping Selene plugin cleanup on Windows cmd"; \
+	fi
+else
+	$(MAKE) clean-selene-plugins-unix
+endif
+
+.PHONY: clean-selene-plugins-unix
+clean-selene-plugins-unix:
+	@# Clean selene plugins _dist directories (contains compiled Rust libraries)
+	@rm -rf python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist 2>/dev/null || true
+	@rm -rf python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist 2>/dev/null || true
+	@rm -rf python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist 2>/dev/null || true
+	@rm -rf python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist 2>/dev/null || true
+	@# Clean selene plugins from venv to force reinstall
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_quest 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_quest*.dist-info 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_qulacs 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_qulacs*.dist-info 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_sparsestab 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_sparsestab*.dist-info 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_statevec 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_statevec*.dist-info 2>/dev/null || true
+
+.PHONY: clean-selene-plugins-windows-ps
+clean-selene-plugins-windows-ps:
+	@# Clean selene plugins _dist directories
+	@powershell -Command "if (Test-Path 'python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist') { Remove-Item -Recurse -Force 'python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist' }"
+	@powershell -Command "if (Test-Path 'python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist') { Remove-Item -Recurse -Force 'python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist' }"
+	@powershell -Command "if (Test-Path 'python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist') { Remove-Item -Recurse -Force 'python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist' }"
+	@powershell -Command "if (Test-Path 'python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist') { Remove-Item -Recurse -Force 'python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist' }"
+	@# Clean selene plugins from venv
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_quest' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_quest*.dist-info' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_qulacs' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_qulacs*.dist-info' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_sparsestab' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_sparsestab*.dist-info' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_statevec' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_statevec*.dist-info' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+
 .PHONY: clean
 clean:  ## Clean up caches and build artifacts
 ifeq ($(OS),Windows_NT)
@@ -529,7 +575,7 @@ else
 endif
 
 .PHONY: clean-unix
-clean-unix:
+clean-unix: clean-selene-plugins-unix
 	@rm -rf *.egg-info
 	@rm -rf dist
 	@/usr/bin/find . -type d -name "build" -exec rm -rf {} + 2>/dev/null || true
@@ -562,7 +608,7 @@ clean-unix:
 	@cargo clean
 
 .PHONY: clean-windows-ps
-clean-windows-ps:
+clean-windows-ps: clean-selene-plugins-windows-ps
 	@powershell -Command "if (Test-Path '*.egg-info') { Remove-Item -Recurse -Force *.egg-info }"
 	@powershell -Command "if (Test-Path 'dist') { Remove-Item -Recurse -Force dist }"
 	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter 'build' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
