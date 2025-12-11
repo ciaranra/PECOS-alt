@@ -1,15 +1,76 @@
+use std::env;
+
+/// Get the build profile from Cargo's environment
+/// Returns "debug", "release", or "native"
+///
+/// Cargo sets PROFILE env var during build script execution:
+/// - "debug" -> no C++ optimization, fast compile
+/// - "release" -> full optimization (-O3)
+/// - "native" -> full optimization + CPU-specific (-O3 -march=native)
+fn get_build_profile() -> String {
+    match env::var("PROFILE").as_deref() {
+        Ok("release") => "release".to_string(),
+        Ok("native") => "native".to_string(),
+        _ => "debug".to_string(), // debug or anything else
+    }
+}
+
+/// Apply profile optimization flags to a `cc::Build`
+fn apply_profile_flags(build: &mut cc::Build, target: &str) {
+    let profile = get_build_profile();
+
+    if target.contains("windows") {
+        // MSVC optimization flags
+        match profile.as_str() {
+            "native" => {
+                build.opt_level(2); // /O2
+                build.flag_if_supported("/arch:AVX2"); // Common native optimization for modern CPUs
+            }
+            "release" => {
+                build.opt_level(2); // /O2
+            }
+            _ => {
+                // Dev: use default (no optimization)
+            }
+        }
+    } else {
+        // GCC/Clang optimization flags
+        match profile.as_str() {
+            "native" => {
+                build.flag_if_supported("-O3");
+                build.flag_if_supported("-march=native");
+            }
+            "release" => {
+                build.flag_if_supported("-O3");
+            }
+            _ => {
+                // Dev: no optimization for fastest compile
+                build.flag_if_supported("-O0");
+            }
+        }
+    }
+}
+
 fn main() {
     // Build C++ source files
     let mut build = cc::Build::new();
+
+    // Use C++14 or newer to avoid issues with older cross-compilers
+    // that don't fully support C++11 type traits like is_trivially_move_constructible
+    let target = env::var("TARGET").unwrap_or_default();
+
+    // On macOS, explicitly use system clang to ensure SDK paths are correct.
+    // The PECOS LLVM clang may be in PATH but doesn't have SDK headers configured,
+    // causing "math.h file not found" errors during compilation.
+    if target.contains("darwin") && env::var("CXX").is_err() && env::var("CC").is_err() {
+        build.compiler("/usr/bin/clang++");
+    }
+
     build
         .cpp(true)
         .file("src/sparsesim.cpp")
         .file("src/cxx_shim.cpp")
         .include("src");
-
-    // Use C++14 or newer to avoid issues with older cross-compilers
-    // that don't fully support C++11 type traits like is_trivially_move_constructible
-    let target = std::env::var("TARGET").unwrap_or_default();
 
     // For cross-compilation (especially aarch64), we need at least C++14
     // to ensure type traits are available
@@ -29,11 +90,20 @@ fn main() {
         build.flag("/Z7");
     }
 
+    // Apply PECOS profile optimization flags
+    apply_profile_flags(&mut build, &target);
+
     build.compile("sparsesim");
 
     // Generate cxx bridge code with same C++ standard
     let mut bridge = cxx_build::bridge("src/lib.rs");
     bridge.file("src/cxx_shim.cpp");
+
+    // On macOS, explicitly use system clang to ensure SDK paths are correct.
+    // The PECOS LLVM clang may be in PATH but doesn't have SDK headers configured.
+    if target.contains("darwin") && env::var("CXX").is_err() && env::var("CC").is_err() {
+        bridge.compiler("/usr/bin/clang++");
+    }
 
     // Match the same C++ standard for cxx bridge
     if target.contains("aarch64") || target.contains("arm") {
@@ -56,6 +126,9 @@ fn main() {
     if target.contains("windows") {
         bridge.flag("/Z7");
     }
+
+    // Apply PECOS profile optimization flags to bridge
+    apply_profile_flags(&mut bridge, &target);
 
     bridge.compile("cppsparsesim-bridge");
 
