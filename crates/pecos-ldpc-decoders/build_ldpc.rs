@@ -8,6 +8,21 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Get the build profile from Cargo's environment
+/// Returns "debug", "release", or "native"
+///
+/// Cargo sets PROFILE env var during build script execution:
+/// - "debug" -> no C++ optimization, fast compile
+/// - "release" -> full optimization (-O3)
+/// - "native" -> full optimization + CPU-specific (-O3 -march=native)
+fn get_build_profile() -> String {
+    match env::var("PROFILE").as_deref() {
+        Ok("release") => "release".to_string(),
+        Ok("native") => "native".to_string(),
+        _ => "debug".to_string(), // debug or anything else
+    }
+}
+
 /// Main build function for LDPC
 pub fn build() -> Result<()> {
     // Tell Cargo when to rerun this build script
@@ -236,6 +251,16 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
 
     // Build the cxx bridge first to generate headers
     let mut build = cxx_build::bridge("src/bridge.rs");
+
+    let target = env::var("TARGET").unwrap_or_default();
+
+    // On macOS, explicitly use system clang to ensure SDK paths are correct.
+    // The PECOS LLVM clang may be in PATH but doesn't have SDK headers configured,
+    // causing "math.h file not found" errors during compilation.
+    if target.contains("darwin") && env::var("CXX").is_err() && env::var("CC").is_err() {
+        build.compiler("/usr/bin/clang++");
+    }
+
     build
         .file("src/bridge.cpp")
         .include(&src_cpp_dir)
@@ -247,7 +272,6 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
 
     // Use C++17 when available, fall back to C++14 for older compilers
     // This helps with cross-compilation where older toolchains may not fully support C++17
-    let target = env::var("TARGET").unwrap_or_default();
     if target.contains("aarch64") || target.contains("arm") {
         // For ARM targets, check what's supported
         if build.is_flag_supported("-std=c++17").unwrap_or(false) {
@@ -263,19 +287,26 @@ fn build_cxx_bridge(ldpc_dir: &Path) -> Result<()> {
     // Report ccache/sccache configuration
     report_cache_config();
 
-    // Use different optimization levels for debug vs release builds
-    if cfg!(debug_assertions) {
-        build.flag_if_supported("-O0"); // No optimization for faster compilation
-        build.flag_if_supported("-g"); // Include debug symbols
-    } else {
-        build.flag_if_supported("-O3"); // Full optimization for release
-    }
-
-    // Only use -march=native if not cross-compiling and not explicitly disabled
-    if env::var("CARGO_CFG_TARGET_ARCH").ok() == env::var("HOST_ARCH").ok()
-        && env::var("DECODER_DISABLE_NATIVE_ARCH").is_err()
-    {
-        build.flag_if_supported("-march=native");
+    // Use build profile for optimization settings
+    let profile = get_build_profile();
+    match profile.as_str() {
+        "native" => {
+            // Native profile: release optimizations + CPU-specific optimizations
+            build.flag_if_supported("-O3");
+            // Only use -march=native if not cross-compiling
+            if env::var("CARGO_CFG_TARGET_ARCH").ok() == env::var("HOST_ARCH").ok() {
+                build.flag_if_supported("-march=native");
+            }
+        }
+        "release" => {
+            // Release profile: full optimization
+            build.flag_if_supported("-O3");
+        }
+        _ => {
+            // Dev profile: no optimization for faster compilation
+            build.flag_if_supported("-O0");
+            build.flag_if_supported("-g"); // Include debug symbols
+        }
     }
 
     // Suppress warnings from external code

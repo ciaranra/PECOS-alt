@@ -63,6 +63,21 @@ fn setup_rerun_conditions() {
     println!("cargo:rerun-if-changed=src/qulacs_wrapper.h");
 }
 
+/// Get the build profile from Cargo's environment
+/// Returns "debug", "release", or "native"
+///
+/// Cargo sets PROFILE env var during build script execution:
+/// - "debug" -> no C++ optimization, fast compile
+/// - "release" -> full optimization (-O3)
+/// - "native" -> full optimization + CPU-specific (-O3 -march=native)
+fn get_build_profile() -> String {
+    match env::var("PROFILE").as_deref() {
+        Ok("release") => "release".to_string(),
+        Ok("native") => "native".to_string(),
+        _ => "debug".to_string(), // debug or anything else
+    }
+}
+
 fn download_and_extract_dependencies(out_dir: &Path) -> (PathBuf, PathBuf, PathBuf) {
     // Download all dependencies
     let qulacs_data = download_cached(&qulacs_download_info()).expect("Failed to download Qulacs");
@@ -183,13 +198,28 @@ fn configure_build(
     build.include("src");
     build.include(out_dir);
 
-    // Check if we're in release mode (OPT_LEVEL > 0)
-    let opt_level = env::var("OPT_LEVEL").unwrap_or_else(|_| "0".to_string());
-    let is_release = opt_level != "0";
+    // Configure the C++ compiler based on platform.
+    // - macOS: MUST use system clang (/usr/bin/clang++) which has proper SDK paths.
+    //   PECOS's bundled clang doesn't have macOS SDK headers configured (missing math.h, etc.)
+    //   and the cc crate will find PECOS clang first if it's in PATH.
+    // - Windows: Use MSVC (default). PECOS's bundled clang-cl is LLVM 14, but MSVC 2022's STL
+    //   requires Clang 19.0.0+ when using clang-cl, causing "STL1000: Unexpected compiler version".
+    // - Linux: Use system GCC (PECOS clang can't find system GCC headers for libstdc++)
+    // Only override if CXX/CC env vars are not already set (allow user override).
+    if env::var("CXX").is_err() && env::var("CC").is_err() && target.contains("darwin") {
+        // On macOS, explicitly use system clang to ensure SDK paths are correct.
+        // The PECOS LLVM clang may be in PATH but doesn't have SDK headers.
+        build.compiler("/usr/bin/clang++");
+    }
+    // On Windows and Linux, use the default compiler (MSVC on Windows, GCC on Linux)
 
-    // Set compiler flags
+    // Get the build profile for optimization decisions
+    let profile = get_build_profile();
+    let is_release = profile == "release" || profile == "native";
+
+    // Set compiler flags based on platform and compiler
     if is_windows {
-        // Windows-specific settings
+        // MSVC-specific settings
         build.std("c++14");
         // Define Boost exception handling for Windows
         build.define("BOOST_NO_EXCEPTIONS", None);
@@ -216,20 +246,33 @@ fn configure_build(
     } else {
         build.flag_if_supported("-std=c++14");
 
-        // Use optimization level based on Cargo profile
-        if is_release {
-            build.flag_if_supported("-O3");
-            // On macOS with ARM (Apple Silicon), -ffast-math causes issues with Eigen's NEON code
-            // which uses infinity constants. Use a more targeted optimization instead.
-            if target.contains("darwin") && target.contains("aarch64") {
-                // Enable fast math but allow infinity and NaN
-                build.flag_if_supported("-fno-math-errno");
-                build.flag_if_supported("-fno-trapping-math");
-            } else {
-                build.flag_if_supported("-ffast-math");
+        // Use profile-based optimization settings
+        match profile.as_str() {
+            "native" => {
+                // Native profile: release optimizations + CPU-specific optimizations
+                // Use -O3 with workarounds for GCC 11 ICE bugs.
+                build.flag_if_supported("-O3");
+                build.flag_if_supported("-fno-tree-vectorize"); // Disable vectorization that triggers ICE
+                build.flag_if_supported("-march=native"); // CPU-specific optimizations
+            }
+            "release" => {
+                // Release profile: optimized build
+                // Use -O3 with workarounds for GCC 11 ICE bugs.
+                // The ICE occurs in tree-vect-loop.c during auto-vectorization of
+                // complex Boost/Eigen templates. Disabling vectorization prevents the crash.
+                build.flag_if_supported("-O3");
+                build.flag_if_supported("-fno-tree-vectorize"); // Disable vectorization that triggers ICE
+            }
+            _ => {
+                // Dev profile: no optimization flags for fastest compile times
             }
         }
         // Debug builds use cc crate's default (no optimization flags)
+
+        // Safe math optimizations (don't cause ICEs, provide modest speedup)
+        // Applied to all profiles
+        build.flag_if_supported("-fno-math-errno");
+        build.flag_if_supported("-fno-trapping-math");
 
         // Silence OpenMP pragma warnings since we intentionally don't use OpenMP
         // PECOS uses thread-level parallelism instead of OpenMP's internal parallelism
@@ -241,11 +284,12 @@ fn configure_build(
         build.flag_if_supported("-Wno-unqualified-std-cast-call"); // Qulacs move() warnings
         build.flag_if_supported("-Wno-inconsistent-missing-override"); // Qulacs override warnings
 
-        // On macOS, use the -stdlib=libc++ flag to ensure proper C++ standard library linkage
+        // On macOS, use libc++ (the system default and what PECOS clang expects)
         if target.contains("darwin") {
             build.flag("-stdlib=libc++");
             // Note: Linker flags are passed via cargo:rustc-link-arg below, not here
         }
+        // On Linux, use system default (libstdc++) - no flag needed
     }
 
     // Define preprocessor macros - only disable Eigen debug checks in release mode
