@@ -3084,6 +3084,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "pecos-selene-quest"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "num-complex",
+ "pecos-quest",
+ "rand_chacha",
+ "selene-core",
+]
+
+[[package]]
+name = "pecos-selene-qulacs"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "pecos-qsim",
+ "pecos-qulacs",
+ "rand_chacha",
+ "selene-core",
+]
+
+[[package]]
+name = "pecos-selene-sparsestab"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "pecos-core",
+ "pecos-qsim",
+ "selene-core",
+]
+
+[[package]]
+name = "pecos-selene-statevec"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "pecos-qsim",
+ "rand_chacha",
+ "selene-core",
+]
+
+[[package]]
 name = "pecos-wasm"
 version = "0.1.1"
 dependencies = [

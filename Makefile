@@ -127,13 +127,51 @@ define BUILD_FFI_CRATES
 endef
 
 .PHONY: build
-build: installreqs ## Build PECOS (use PROFILE=debug|release|native, default: debug)
+build: installreqs build-selene ## Build PECOS (use PROFILE=debug|release|native, default: debug)
 	@echo "Building with profile: $(PROFILE_DESC)"
 	@$(SETUP_LLVM); $(UNSET_CONDA) cd python/pecos-rslib/ && \
 		RUSTFLAGS="$$RUSTFLAGS $(RUSTFLAGS_EXTRA)" \
 		uv run maturin develop --uv $(MATURIN_RELEASE_FLAG)
 	@$(UNSET_CONDA) uv pip install -e "./python/quantum-pecos[all]"
 	$(BUILD_FFI_CRATES)
+
+.PHONY: build-selene
+build-selene: ## Build and install Selene plugins for development
+	@echo "Building Selene plugins..."
+	@# Build Rust libraries (with GPU support if CUDA available)
+	@if command -v nvcc >/dev/null 2>&1 || [ -n "$$CUDA_PATH" ]; then \
+		echo "CUDA detected, building with GPU support..."; \
+		cargo build --release -p pecos-selene-quest --features gpu; \
+	else \
+		echo "CUDA not detected, building CPU-only..."; \
+		cargo build --release -p pecos-selene-quest; \
+	fi
+	@cargo build --release -p pecos-selene-qulacs -p pecos-selene-sparsestab -p pecos-selene-statevec
+	@# Copy libraries to Python package directories
+	@echo "Copying libraries to Python packages..."
+	@mkdir -p python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist/lib
+	@mkdir -p python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist/lib
+	@mkdir -p python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist/lib
+	@mkdir -p python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib
+	@cp target/release/libpecos_selene_quest.so python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist/lib/ 2>/dev/null || \
+		cp target/release/libpecos_selene_quest.dylib python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist/lib/ 2>/dev/null || \
+		cp target/release/pecos_selene_quest.dll python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist/lib/ 2>/dev/null || true
+	@cp target/release/libpecos_selene_qulacs.so python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist/lib/ 2>/dev/null || \
+		cp target/release/libpecos_selene_qulacs.dylib python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist/lib/ 2>/dev/null || \
+		cp target/release/pecos_selene_qulacs.dll python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist/lib/ 2>/dev/null || true
+	@cp target/release/libpecos_selene_sparsestab.so python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist/lib/ 2>/dev/null || \
+		cp target/release/libpecos_selene_sparsestab.dylib python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist/lib/ 2>/dev/null || \
+		cp target/release/pecos_selene_sparsestab.dll python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist/lib/ 2>/dev/null || true
+	@cp target/release/libpecos_selene_statevec.so python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib/ 2>/dev/null || \
+		cp target/release/libpecos_selene_statevec.dylib python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib/ 2>/dev/null || \
+		cp target/release/pecos_selene_statevec.dll python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib/ 2>/dev/null || true
+	@# Install Python packages in editable mode
+	@echo "Installing Selene plugins in editable mode..."
+	@$(UNSET_CONDA) uv pip install -e ./python/selene-plugins/pecos-selene-quest
+	@$(UNSET_CONDA) uv pip install -e ./python/selene-plugins/pecos-selene-qulacs
+	@$(UNSET_CONDA) uv pip install -e ./python/selene-plugins/pecos-selene-sparsestab
+	@$(UNSET_CONDA) uv pip install -e ./python/selene-plugins/pecos-selene-statevec
+	@echo "Selene plugins built and installed successfully"
 
 .PHONY: build-cuda
 build-cuda: installreqs ## Build PECOS with CUDA support (use PROFILE=debug|release|native, default: debug)
@@ -446,9 +484,15 @@ pytest-perf: build-release ## Run performance tests on pecos-rslib with release 
 pytest-dep: ## Run tests on the Python package only for optional dependencies. ASSUMES: previous build command
 	@$(ADD_LLVM_TO_PATH) uv run pytest ./python/quantum-pecos/tests/ --doctest-modules -m optional_dependency
 
+.PHONY: pytest-selene
+pytest-selene: ## Run tests for Selene plugins. ASSUMES: previous build command
+	@echo "Running Selene plugin tests..."
+	@$(ADD_LLVM_TO_PATH) uv run pytest ./python/selene-plugins/ -v
+	@echo "Selene plugin tests completed"
+
 .PHONY: pytest-all
-pytest-all: pytest pytest-numpy ## Run all tests (core + numpy compat) on the Python package. ASSUMES: previous build command
-	@echo "All Python tests completed (core + NumPy/SciPy compatibility)"
+pytest-all: pytest pytest-numpy pytest-selene ## Run all tests (core + numpy compat + selene) on the Python package. ASSUMES: previous build command
+	@echo "All Python tests completed (core + NumPy/SciPy compatibility + Selene plugins)"
 
 # .PHONY: pytest-doc
 # pydoctest:  ## Run doctests with pytest. ASSUMES: A build command was ran previously. ASSUMES: previous build command
@@ -671,6 +715,52 @@ go-lint: ## Run Go linting with go vet
 # Utility
 # -------
 
+.PHONY: clean-selene-plugins
+clean-selene-plugins:  ## Clean Selene plugin build artifacts
+ifeq ($(OS),Windows_NT)
+	@if command -v rm >/dev/null 2>&1; then \
+		$(MAKE) clean-selene-plugins-unix; \
+	else \
+		powershell -Command "exit 0" > NUL 2>&1 && $(MAKE) clean-selene-plugins-windows-ps || echo "Skipping Selene plugin cleanup on Windows cmd"; \
+	fi
+else
+	$(MAKE) clean-selene-plugins-unix
+endif
+
+.PHONY: clean-selene-plugins-unix
+clean-selene-plugins-unix:
+	@# Clean selene plugins _dist directories (contains compiled Rust libraries)
+	@rm -rf python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist 2>/dev/null || true
+	@rm -rf python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist 2>/dev/null || true
+	@rm -rf python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist 2>/dev/null || true
+	@rm -rf python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist 2>/dev/null || true
+	@# Clean selene plugins from venv to force reinstall
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_quest 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_quest*.dist-info 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_qulacs 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_qulacs*.dist-info 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_sparsestab 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_sparsestab*.dist-info 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_statevec 2>/dev/null || true
+	@rm -rf .venv/lib/python*/site-packages/pecos_selene_statevec*.dist-info 2>/dev/null || true
+
+.PHONY: clean-selene-plugins-windows-ps
+clean-selene-plugins-windows-ps:
+	@# Clean selene plugins _dist directories
+	@powershell -Command "if (Test-Path 'python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist') { Remove-Item -Recurse -Force 'python/selene-plugins/pecos-selene-quest/python/pecos_selene_quest/_dist' }"
+	@powershell -Command "if (Test-Path 'python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist') { Remove-Item -Recurse -Force 'python/selene-plugins/pecos-selene-qulacs/python/pecos_selene_qulacs/_dist' }"
+	@powershell -Command "if (Test-Path 'python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist') { Remove-Item -Recurse -Force 'python/selene-plugins/pecos-selene-sparsestab/python/pecos_selene_sparsestab/_dist' }"
+	@powershell -Command "if (Test-Path 'python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist') { Remove-Item -Recurse -Force 'python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist' }"
+	@# Clean selene plugins from venv
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_quest' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_quest*.dist-info' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_qulacs' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_qulacs*.dist-info' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_sparsestab' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_sparsestab*.dist-info' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_statevec' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+	@powershell -Command "Get-ChildItem -Path '.venv/lib' -Recurse -Directory -Filter 'pecos_selene_statevec*.dist-info' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
+
 .PHONY: clean
 clean:  ## Clean up caches and build artifacts
 ifeq ($(OS),Windows_NT)
@@ -685,7 +775,7 @@ else
 endif
 
 .PHONY: clean-unix
-clean-unix:
+clean-unix: clean-selene-plugins-unix
 	@rm -rf *.egg-info
 	@rm -rf dist
 	@/usr/bin/find . -type d -name "build" -exec rm -rf {} + 2>/dev/null || true
@@ -718,7 +808,7 @@ clean-unix:
 	@cargo clean
 
 .PHONY: clean-windows-ps
-clean-windows-ps:
+clean-windows-ps: clean-selene-plugins-windows-ps
 	@powershell -Command "if (Test-Path '*.egg-info') { Remove-Item -Recurse -Force *.egg-info }"
 	@powershell -Command "if (Test-Path 'dist') { Remove-Item -Recurse -Force dist }"
 	@powershell -Command "Get-ChildItem -Path . -Recurse -Directory -Filter 'build' | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"

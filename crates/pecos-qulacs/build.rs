@@ -66,15 +66,46 @@ fn setup_rerun_conditions() {
 /// Get the build profile from Cargo's environment
 /// Returns "debug", "release", or "native"
 ///
-/// Cargo sets PROFILE env var during build script execution:
+/// Note: Cargo's PROFILE env var only reports "debug" or "release" even for custom profiles
+/// (due to backward compatibility - see RFC 2678). Custom profiles inherit from these base
+/// profiles, so PROFILE reflects the parent. To detect custom profiles like "native", we
+/// check the `OUT_DIR` path which contains the actual profile directory name.
+///
+/// Profile behavior:
 /// - "debug" -> no C++ optimization, fast compile
 /// - "release" -> full optimization (-O3)
 /// - "native" -> full optimization + CPU-specific (-O3 -march=native)
 fn get_build_profile() -> String {
+    // First check OUT_DIR for custom profile name (e.g., target/native/build/...)
+    // Custom profiles get their own directory under target/
+    if let Ok(out_dir) = env::var("OUT_DIR") {
+        // OUT_DIR looks like: .../target/<profile>/build/<crate>-<hash>/out
+        // We want to extract <profile>
+        let parts: Vec<&str> = out_dir.split(std::path::MAIN_SEPARATOR).collect();
+        if let Some(target_idx) = parts.iter().position(|&p| p == "target")
+            && let Some(profile_name) = parts.get(target_idx + 1)
+        {
+            return match *profile_name {
+                "native" => "native",
+                "release" => "release",
+                "debug" => "debug",
+                _ => {
+                    // Unknown profile, fall back to PROFILE env var
+                    if env::var("PROFILE").as_deref() == Ok("release") {
+                        "release"
+                    } else {
+                        "debug"
+                    }
+                }
+            }
+            .to_string();
+        }
+    }
+
+    // Fallback to PROFILE env var (will be "debug" or "release")
     match env::var("PROFILE").as_deref() {
         Ok("release") => "release".to_string(),
-        Ok("native") => "native".to_string(),
-        _ => "debug".to_string(), // debug or anything else
+        _ => "debug".to_string(),
     }
 }
 
@@ -213,6 +244,10 @@ fn configure_build(
     }
     // On Windows and Linux, use the default compiler (MSVC on Windows, GCC on Linux)
 
+    // Get the build profile for optimization decisions
+    let profile = get_build_profile();
+    let is_release = profile == "release" || profile == "native";
+
     // Set compiler flags based on platform and compiler
     if is_windows {
         // MSVC-specific settings
@@ -233,34 +268,31 @@ fn configure_build(
         build.flag_if_supported("/external:anglebrackets"); // Treat angle-bracket includes as external
         build.flag_if_supported("/external:W0"); // Disable warnings for external headers
 
-        // Use standard optimization level - /bigobj should prevent compiler crashes
-        build.opt_level(2); // Maximize speed optimization (/O2)
+        // Use optimization level based on Cargo profile
+        if is_release {
+            build.opt_level(2); // Maximize speed optimization (/O2)
+        } else {
+            build.opt_level(0); // No optimization for debug builds
+        }
     } else {
         build.flag_if_supported("-std=c++14");
 
-        // Get build profile for optimization settings
-        let profile = get_build_profile();
-
+        // Use profile-based optimization settings
         match profile.as_str() {
             "native" => {
                 // Native profile: release optimizations + CPU-specific optimizations
-                // Use -O3 with workarounds for GCC 11 ICE bugs.
                 build.flag_if_supported("-O3");
-                build.flag_if_supported("-fno-tree-vectorize"); // Disable vectorization that triggers ICE
                 build.flag_if_supported("-march=native"); // CPU-specific optimizations
             }
             "release" => {
                 // Release profile: optimized build
-                // Use -O3 with workarounds for GCC 11 ICE bugs.
-                // The ICE occurs in tree-vect-loop.c during auto-vectorization of
-                // complex Boost/Eigen templates. Disabling vectorization prevents the crash.
                 build.flag_if_supported("-O3");
-                build.flag_if_supported("-fno-tree-vectorize"); // Disable vectorization that triggers ICE
             }
             _ => {
                 // Dev profile: no optimization flags for fastest compile times
             }
         }
+        // Debug builds use cc crate's default (no optimization flags)
 
         // Safe math optimizations (don't cause ICEs, provide modest speedup)
         // Applied to all profiles
@@ -285,8 +317,10 @@ fn configure_build(
         // On Linux, use system default (libstdc++) - no flag needed
     }
 
-    // Define preprocessor macros
-    build.define("EIGEN_NO_DEBUG", None);
+    // Define preprocessor macros - only disable Eigen debug checks in release mode
+    if is_release {
+        build.define("EIGEN_NO_DEBUG", None);
+    }
 }
 
 fn create_windows_boost_stub(out_dir: &Path) {

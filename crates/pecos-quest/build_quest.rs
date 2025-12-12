@@ -294,15 +294,46 @@ fn generate_quest_header(quest_dir: &Path) -> Result<()> {
 /// Get the build profile from Cargo's environment
 /// Returns "debug", "release", or "native"
 ///
-/// Cargo sets PROFILE env var during build script execution:
+/// Note: Cargo's PROFILE env var only reports "debug" or "release" even for custom profiles
+/// (due to backward compatibility - see RFC 2678). Custom profiles inherit from these base
+/// profiles, so PROFILE reflects the parent. To detect custom profiles like "native", we
+/// check the `OUT_DIR` path which contains the actual profile directory name.
+///
+/// Profile behavior:
 /// - "debug" -> no C++ optimization, fast compile
 /// - "release" -> full optimization (-O3)
 /// - "native" -> full optimization + CPU-specific (-O3 -march=native)
 fn get_build_profile() -> String {
+    // First check OUT_DIR for custom profile name (e.g., target/native/build/...)
+    // Custom profiles get their own directory under target/
+    if let Ok(out_dir) = env::var("OUT_DIR") {
+        // OUT_DIR looks like: .../target/<profile>/build/<crate>-<hash>/out
+        // We want to extract <profile>
+        let parts: Vec<&str> = out_dir.split(std::path::MAIN_SEPARATOR).collect();
+        if let Some(target_idx) = parts.iter().position(|&p| p == "target")
+            && let Some(profile_name) = parts.get(target_idx + 1)
+        {
+            return match *profile_name {
+                "native" => "native",
+                "release" => "release",
+                "debug" => "debug",
+                _ => {
+                    // Unknown profile, fall back to PROFILE env var
+                    if env::var("PROFILE").as_deref() == Ok("release") {
+                        "release"
+                    } else {
+                        "debug"
+                    }
+                }
+            }
+            .to_string();
+        }
+    }
+
+    // Fallback to PROFILE env var (will be "debug" or "release")
     match env::var("PROFILE").as_deref() {
         Ok("release") => "release".to_string(),
-        Ok("native") => "native".to_string(),
-        _ => "debug".to_string(), // debug or anything else
+        _ => "debug".to_string(),
     }
 }
 
@@ -616,11 +647,31 @@ fn build_cxx_bridge(quest_dir: &Path, out_dir: &Path) {
 
     build.compile("quest-bridge");
 
-    // Link GPU object files if they were compiled
+    // Add GPU object files to the static library so they're available to downstream cdylib crates
+    // Using cargo:rustc-link-arg only works for direct binaries, not for rlib dependencies
     if let Some(gpu_objs) = gpu_object_files {
+        let lib_path = out_dir.join("libquest-bridge.a");
+        info!(
+            "Adding GPU object files to static library: {}",
+            lib_path.display()
+        );
+
         for obj in &gpu_objs {
-            println!("cargo:rustc-link-arg={}", obj.display());
+            let status = Command::new("ar")
+                .arg("rcs") // r=insert, c=create if needed, s=index
+                .arg(&lib_path)
+                .arg(obj)
+                .status()
+                .expect("Failed to run ar command");
+
+            if !status.success() {
+                eprintln!("ERROR: Failed to add {} to static library", obj.display());
+                std::process::exit(1);
+            }
+            debug!("Added {} to static library", obj.display());
         }
+
+        info!("GPU object files added to static library successfully");
     }
 
     // On macOS, ensure the C++ standard library is linked correctly
