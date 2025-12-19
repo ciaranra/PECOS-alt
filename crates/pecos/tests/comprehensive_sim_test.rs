@@ -11,7 +11,9 @@
 // the License.
 
 //! Comprehensive tests for the simulation builder API with different program formats
-//! including QASM, PHIR/JSON, and QIR.
+//! including QASM, PHIR/JSON, and QIS.
+
+#![cfg(feature = "runtime")]
 
 use pecos::prelude::*;
 use pecos_engines::sim_builder;
