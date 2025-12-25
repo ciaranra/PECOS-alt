@@ -155,11 +155,19 @@ pub mod engines {
     pub use pecos_phir_json::{PhirJsonEngine, PhirJsonEngineBuilder, phir_json_engine};
 }
 
-/// Quantum simulation backends
+/// Quantum simulation backends and circuit representation
 ///
-/// This module provides builders and types for different quantum state simulation backends.
+/// This module provides builders and types for quantum state simulation backends
+/// as well as quantum circuit representation types.
 ///
-/// # Available Backends
+/// # Circuit Representation
+///
+/// - **`DagCircuit`**: DAG-based quantum circuit (nodes=gates, edges=qubit wires)
+/// - **`Gate`**: Quantum gate representation
+/// - **`GateType`**: Enum of supported gate types
+/// - **`QubitId`**: Qubit identifier
+///
+/// # Simulation Backends
 ///
 /// - **State Vector**: Full quantum state simulation via [`state_vector()`](state_vector)
 /// - **Sparse Stabilizer**: Efficient Clifford simulation via [`sparse_stabilizer()`](sparse_stabilizer)
@@ -167,19 +175,41 @@ pub mod engines {
 /// # Example
 ///
 /// ```rust
-/// use pecos::quantum;
+/// use pecos::quantum::{DagCircuit, Gate, QubitId};
 ///
-/// // Create a state vector quantum backend
-/// let qengine = quantum::state_vector();
+/// // Build a Bell state circuit
+/// let mut circuit = DagCircuit::new();
+/// let h = circuit.add_gate(Gate::h(&[0]));
+/// let cx = circuit.add_gate(Gate::cx(&[(0, 1)]));
+/// circuit.connect(h, cx, QubitId::from(0)).unwrap();
 ///
-/// // Or use sparse stabilizer for efficient Clifford simulation
-/// let qengine = quantum::sparse_stabilizer();
+/// // Or use simulation backends
+/// let qengine = pecos::quantum::state_vector();
 /// ```
-#[cfg(feature = "sim")]
+#[cfg(feature = "quantum")]
 pub mod quantum {
+    // Circuit representation from pecos-quantum
+    pub use pecos_quantum::{
+        Attribute, DagCircuit, DagWouldCycleError, Gate, GateType, QubitId, Tick, TickCircuit,
+    };
+
+    // HUGR conversion (requires hugr feature)
+    #[cfg(feature = "hugr")]
+    pub use pecos_quantum::hugr_convert::{
+        HugrConvertError, gate_type_to_hugr_op, hugr_op_to_gate_type, hugr_to_dag_circuit,
+        is_quantum_operation,
+    };
+
+    // Re-export read_hugr_envelope for parsing HUGR bytes
+    #[cfg(feature = "hugr")]
+    pub use pecos_hugr_qis::read_hugr_envelope;
+
+    // Simulation backends (require sim feature)
+    #[cfg(feature = "sim")]
     pub use pecos_engines::quantum::{
         QuantumEngine, SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate,
     };
+    #[cfg(feature = "sim")]
     pub use pecos_engines::quantum_engine_builder::{
         IntoQuantumEngineBuilder, SparseStabilizerEngineBuilder, StateVectorEngineBuilder,
         sparse_stabilizer, state_vector,
@@ -524,6 +554,8 @@ pub mod compare {
 /// # Main Types
 ///
 /// - **`Graph`** - Undirected graph with weighted edges
+/// - **`DiGraph`** - Directed graph
+/// - **`DAG`** - Directed acyclic graph with cycle checking
 ///
 /// # Available Functions
 ///
@@ -549,6 +581,52 @@ pub mod compare {
 #[cfg(feature = "num")]
 pub mod graph {
     pub use pecos_num::graph::*;
+}
+
+/// Directed graph data structure
+///
+/// This module provides the `DiGraph` type for directed graphs.
+/// Unlike `DAG`, this type allows cycles.
+///
+/// # Example
+///
+/// ```rust
+/// use pecos::digraph::DiGraph;
+///
+/// let mut g = DiGraph::new();
+/// let n0 = g.add_node();
+/// let n1 = g.add_node();
+/// g.add_edge(n0, n1);
+///
+/// assert_eq!(g.successors(n0), vec![n1]);
+/// assert_eq!(g.predecessors(n1), vec![n0]);
+/// ```
+#[cfg(feature = "num")]
+pub mod digraph {
+    pub use pecos_num::digraph::*;
+}
+
+/// Directed acyclic graph (DAG) data structure
+///
+/// This module provides the `DAG` type which enforces acyclicity at runtime.
+/// Adding an edge that would create a cycle returns an error.
+///
+/// # Example
+///
+/// ```rust
+/// use pecos::dag::DAG;
+///
+/// let mut g = DAG::new();
+/// let n0 = g.add_node();
+/// let n1 = g.add_node();
+/// g.add_edge(n0, n1).unwrap();
+///
+/// // Topological sort always succeeds for a DAG
+/// let order = g.topological_sort();
+/// ```
+#[cfg(feature = "num")]
+pub mod dag {
+    pub use pecos_num::dag::*;
 }
 
 /// Quantum error correction decoders

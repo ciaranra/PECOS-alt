@@ -1,0 +1,25 @@
+[package]
+name = "pecos-quantum"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Quantum computing primitives for PECOS, including DagCircuit."
+readme = "../../README.md"
+
+[dependencies]
+pecos-core.workspace = true
+pecos-num.workspace = true
+tket = { workspace = true, optional = true }
+log.workspace = true
+
+[features]
+default = []
+hugr = ["tket"]
+
+[lints]
+workspace = true

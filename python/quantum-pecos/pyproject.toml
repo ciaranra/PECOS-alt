@@ -31,6 +31,9 @@ dependencies = [
     "pecos-rslib==0.8.0.dev0",
     "phir>=0.3.3",
     "networkx>=2.1.0",
+    "guppylang>=0.21.0",
+    "hugr>=0.13.0",
+    "selene-sim~=0.2.0",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -53,10 +56,6 @@ documentation = "https://quantum-pecos.readthedocs.io"
 repository = "https://github.com/PECOS-packages/PECOS"
 
 [project.optional-dependencies]
-guppy = [
-    "guppylang>=0.21.0",  # Install guppylang first
-    "selene-sim~=0.2.0",  # Then selene-sim (dependency of guppylang)
-]
 stim = [
     "stim>=1.12.0",  # For Stim circuit conversion and interoperability
 ]
@@ -66,7 +65,6 @@ visualization = [
 ]
 all = [
     "quantum-pecos[visualization]",
-    "quantum-pecos[guppy]",
     "quantum-pecos[stim]",
 ]
 
@@ -84,7 +82,7 @@ cuda = [
 
 [dependency-groups]
 test = [
-    # Core testing dependencies - no numpy required
+    # Core testing dependencies
 ]
 numpy-compat = [
     "numpy>=1.15.0",  # NumPy compatibility tests - core functionality uses pecos.num

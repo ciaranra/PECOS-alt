@@ -9,6 +9,7 @@ license.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Provides simulators and related elements for PECOS simulations."
+readme = "../../README.md"
 
 [dependencies]
 pecos-core.workspace = true
