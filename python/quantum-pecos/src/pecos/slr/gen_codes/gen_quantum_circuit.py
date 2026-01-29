@@ -13,15 +13,27 @@
 
 from __future__ import annotations
 
+import warnings
+
 from pecos.circuits.quantum_circuit import QuantumCircuit
 from pecos.slr.gen_codes.generator import Generator
 
 
 class QuantumCircuitGenerator(Generator):
-    """Generate PECOS QuantumCircuit from SLR programs."""
+    """Generate PECOS QuantumCircuit from SLR programs.
+
+    .. deprecated::
+        Use :func:`pecos.slr.generate` with ``target="quantum_circuit"`` instead.
+    """
 
     def __init__(self):
         """Initialize the QuantumCircuit generator."""
+        warnings.warn(
+            "QuantumCircuitGenerator is deprecated. "
+            "Use pecos.slr.generate(prog, 'quantum_circuit') instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.circuit = QuantumCircuit()
         self.qubit_map = {}  # Maps (reg_name, index) to qubit_id
         self.next_qubit_id = 0
