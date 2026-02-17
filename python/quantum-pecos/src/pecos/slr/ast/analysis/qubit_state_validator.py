@@ -34,21 +34,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import TYPE_CHECKING
 
 from pecos.slr.ast.nodes import (
     AllocatorDecl,
     ForStmt,
-    GateKind,
     GateOp,
     IfStmt,
     MeasureOp,
     ParallelBlock,
     PrepareOp,
-    Program,
     RepeatStmt,
-    Statement,
     WhileStmt,
 )
+
+if TYPE_CHECKING:
+    from pecos.slr.ast.nodes import (
+        GateKind,
+        Program,
+        Statement,
+    )
 
 
 class ValidationSlotState(Enum):
@@ -86,7 +91,9 @@ class QubitStateTracker:
     """Tracks the preparation state of qubit slots through program execution."""
 
     # Map from (allocator_name, index) to current state
-    slot_states: dict[tuple[str, int], ValidationSlotState] = field(default_factory=dict)
+    slot_states: dict[tuple[str, int], ValidationSlotState] = field(
+        default_factory=dict,
+    )
 
     # Collected violations
     violations: list[StateViolation] = field(default_factory=list)
@@ -126,7 +133,7 @@ class QubitStateTracker:
                     position=self.position,
                     gate=gate,
                     location=location,
-                )
+                ),
             )
             return False
         return True

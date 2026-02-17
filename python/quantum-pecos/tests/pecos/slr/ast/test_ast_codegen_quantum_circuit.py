@@ -12,7 +12,6 @@
 """Tests for AST to QuantumCircuit code generator."""
 
 import pytest
-
 from pecos.circuits.quantum_circuit import QuantumCircuit
 from pecos.slr import Barrier, CReg, If, Main, QReg, Repeat, While
 from pecos.slr.ast import slr_to_ast
@@ -24,18 +23,16 @@ from pecos.slr.ast.codegen import (
 from pecos.slr.qeclib import qubit as qb
 
 
-def tick_to_dict(tick):
+def tick_to_dict(tick: object) -> dict[str, set]:
     """Convert TickView to a dict {gate_symbol: set(locations)}."""
-    result = {}
-    for symbol, locations, _ in tick.items():
-        result[symbol] = locations
-    return result
+    return {symbol: locations for symbol, locations, _ in tick.items()}
 
 
 class TestAstToQuantumCircuitBasic:
     """Basic code generation tests."""
 
-    def test_empty_program(self):
+    def test_empty_program(self) -> None:
+        """Empty program generates empty QuantumCircuit."""
         prog = Main()
         ast = slr_to_ast(prog)
 
@@ -44,7 +41,8 @@ class TestAstToQuantumCircuitBasic:
         assert isinstance(circuit, QuantumCircuit)
         assert len(circuit) == 0
 
-    def test_program_with_qreg(self):
+    def test_program_with_qreg(self) -> None:
+        """Program with QReg and gate generates non-empty circuit."""
         prog = Main(
             q := QReg("q", 2),
             qb.H(q[0]),
@@ -56,7 +54,8 @@ class TestAstToQuantumCircuitBasic:
         assert isinstance(circuit, QuantumCircuit)
         assert len(circuit) > 0
 
-    def test_string_output(self):
+    def test_string_output(self) -> None:
+        """String output function returns string representation."""
         prog = Main(
             q := QReg("q", 1),
             qb.H(q[0]),
@@ -71,7 +70,8 @@ class TestAstToQuantumCircuitBasic:
 class TestAstToQuantumCircuitGates:
     """Gate code generation tests."""
 
-    def test_hadamard_gate(self):
+    def test_hadamard_gate(self) -> None:
+        """Hadamard gate creates tick with H gate on correct qubit."""
         prog = Main(
             q := QReg("q", 1),
             qb.H(q[0]),
@@ -86,7 +86,8 @@ class TestAstToQuantumCircuitGates:
         assert "H" in tick
         assert 0 in tick["H"]
 
-    def test_pauli_gates(self):
+    def test_pauli_gates(self) -> None:
+        """Pauli gates each create separate tick."""
         prog = Main(
             q := QReg("q", 1),
             qb.X(q[0]),
@@ -100,7 +101,8 @@ class TestAstToQuantumCircuitGates:
         # Each gate is a separate tick
         assert len(circuit) == 3
 
-    def test_two_qubit_cx_gate(self):
+    def test_two_qubit_cx_gate(self) -> None:
+        """CX gate creates tick with control-target pair."""
         prog = Main(
             q := QReg("q", 2),
             qb.CX(q[0], q[1]),
@@ -115,7 +117,8 @@ class TestAstToQuantumCircuitGates:
         # CX stored as tuple (control, target)
         assert (0, 1) in tick["CX"]
 
-    def test_two_qubit_cz_gate(self):
+    def test_two_qubit_cz_gate(self) -> None:
+        """CZ gate creates tick with qubit pair."""
         prog = Main(
             q := QReg("q", 2),
             qb.CZ(q[0], q[1]),
@@ -129,7 +132,8 @@ class TestAstToQuantumCircuitGates:
         assert "CZ" in tick
         assert (0, 1) in tick["CZ"]
 
-    def test_multiple_gates_different_qubits(self):
+    def test_multiple_gates_different_qubits(self) -> None:
+        """Gates on different qubits each get their own tick."""
         prog = Main(
             q := QReg("q", 2),
             qb.H(q[0]),
@@ -146,7 +150,8 @@ class TestAstToQuantumCircuitGates:
 class TestAstToQuantumCircuitPrepMeasure:
     """Prep and measure code generation tests."""
 
-    def test_measurement(self):
+    def test_measurement(self) -> None:
+        """Measurement creates tick with Measure operation."""
         prog = Main(
             q := QReg("q", 1),
             c := CReg("c", 1),
@@ -161,7 +166,8 @@ class TestAstToQuantumCircuitPrepMeasure:
         assert "Measure" in tick
         assert 0 in tick["Measure"]
 
-    def test_prep_reset(self):
+    def test_prep_reset(self) -> None:
+        """Prep creates tick with RESET operation."""
         prog = Main(
             q := QReg("q", 1),
             qb.Prep(q[0]),
@@ -179,7 +185,8 @@ class TestAstToQuantumCircuitPrepMeasure:
 class TestAstToQuantumCircuitControlFlow:
     """Control flow code generation tests."""
 
-    def test_barrier_flushes_tick(self):
+    def test_barrier_flushes_tick(self) -> None:
+        """Barrier forces operations into separate ticks."""
         prog = Main(
             q := QReg("q", 2),
             qb.H(q[0]),
@@ -193,7 +200,8 @@ class TestAstToQuantumCircuitControlFlow:
         # H, then barrier flushes, then CX
         assert len(circuit) == 2
 
-    def test_repeat_unrolled(self):
+    def test_repeat_unrolled(self) -> None:
+        """Repeat unrolls into multiple gate ticks."""
         prog = Main(
             q := QReg("q", 1),
             Repeat(cond=3).block(
@@ -210,7 +218,8 @@ class TestAstToQuantumCircuitControlFlow:
             tick = tick_to_dict(circuit[i])
             assert "H" in tick
 
-    def test_while_raises_error(self):
+    def test_while_raises_error(self) -> None:
+        """While loop raises NotImplementedError for static circuits."""
         prog = Main(
             q := QReg("q", 1),
             c := CReg("c", 1),
@@ -227,7 +236,8 @@ class TestAstToQuantumCircuitControlFlow:
 class TestAstToQuantumCircuitParallel:
     """Parallel block tests."""
 
-    def test_parallel_gates_same_tick(self):
+    def test_parallel_gates_same_tick(self) -> None:
+        """Parallel gates are placed in the same tick."""
         from pecos.slr import Parallel
 
         prog = Main(
@@ -251,7 +261,8 @@ class TestAstToQuantumCircuitParallel:
 class TestAstToQuantumCircuitQEC:
     """QEC pattern code generation tests."""
 
-    def test_syndrome_extraction(self):
+    def test_syndrome_extraction(self) -> None:
+        """Syndrome extraction generates correct qubit indices."""
         prog = Main(
             data := QReg("data", 2),
             ancilla := QReg("ancilla", 1),
@@ -283,7 +294,8 @@ class TestAstToQuantumCircuitQEC:
 class TestAstToQuantumCircuitGenerator:
     """Tests for AstToQuantumCircuit generator class."""
 
-    def test_generator_reusable(self):
+    def test_generator_reusable(self) -> None:
+        """Generator can be reused for multiple programs."""
         generator = AstToQuantumCircuit()
 
         prog1 = Main(
@@ -305,7 +317,8 @@ class TestAstToQuantumCircuitGenerator:
         assert "H" in tick_to_dict(circuit1[0])
         assert "X" in tick_to_dict(circuit2[0])
 
-    def test_qubit_mapping(self):
+    def test_qubit_mapping(self) -> None:
+        """Generator creates correct qubit index mapping."""
         prog = Main(
             a := QReg("a", 2),
             b := QReg("b", 2),
@@ -327,7 +340,8 @@ class TestAstToQuantumCircuitGenerator:
 class TestAstToQuantumCircuitFullPipeline:
     """End-to-end tests: SLR -> AST -> QuantumCircuit."""
 
-    def test_bell_state_circuit(self):
+    def test_bell_state_circuit(self) -> None:
+        """Bell state generates H tick followed by CX tick."""
         prog = Main(
             q := QReg("q", 2),
             qb.H(q[0]),
@@ -344,7 +358,8 @@ class TestAstToQuantumCircuitFullPipeline:
         assert "H" in tick0
         assert "CX" in tick1
 
-    def test_ghz_state_circuit(self):
+    def test_ghz_state_circuit(self) -> None:
+        """GHZ state generates H tick followed by two CX ticks."""
         prog = Main(
             q := QReg("q", 3),
             qb.H(q[0]),
@@ -365,7 +380,8 @@ class TestAstToQuantumCircuitFullPipeline:
         assert "CX" in tick2
         assert (1, 2) in tick2["CX"]
 
-    def test_circuit_with_repeated_syndrome(self):
+    def test_circuit_with_repeated_syndrome(self) -> None:
+        """Repeated syndrome extraction unrolls to correct number of ticks."""
         prog = Main(
             data := QReg("data", 2),
             ancilla := QReg("ancilla", 1),

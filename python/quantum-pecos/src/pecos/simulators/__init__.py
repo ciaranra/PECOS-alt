@@ -44,7 +44,7 @@ from pecos.simulators.sparsesim import (
 )
 from pecos.simulators.statevec import StateVec
 
-# Attempt to import optional cuquantum and cupy packages
+# Attempt to import optional cuquantum and cupy packages for CuStateVec
 try:
     import cupy
     import cuquantum
@@ -52,13 +52,15 @@ try:
     from pecos.simulators.custatevec.state import (
         CuStateVec,
     )
+except ImportError:
+    CuStateVec = None
 
-    # wrapper for cuQuantum's cuStateVec
+# Attempt to import optional pytket-cutensornet for MPS simulator
+try:
     from pecos.simulators.mps_pytket import (
         MPS,
     )
 except ImportError:
-    CuStateVec = None
     MPS = None
 
 __all__ = [

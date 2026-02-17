@@ -30,6 +30,7 @@ Example:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from pecos.slr.ast.nodes import (
     AllocatorDecl,
@@ -37,22 +38,26 @@ from pecos.slr.ast.nodes import (
     BinaryExpr,
     BitExpr,
     BitRef,
-    Expression,
     ForStmt,
     GateOp,
     IfStmt,
     MeasureOp,
     ParallelBlock,
     PrepareOp,
-    Program,
     RegisterDecl,
     RepeatStmt,
-    SlotRef,
-    Statement,
     UnaryExpr,
     VarExpr,
     WhileStmt,
 )
+
+if TYPE_CHECKING:
+    from pecos.slr.ast.nodes import (
+        Expression,
+        Program,
+        SlotRef,
+        Statement,
+    )
 
 
 @dataclass

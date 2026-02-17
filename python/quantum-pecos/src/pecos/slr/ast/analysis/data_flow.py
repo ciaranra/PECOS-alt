@@ -34,27 +34,30 @@ Example:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from pecos.slr.ast.nodes import (
     AssignOp,
     BinaryExpr,
     BitExpr,
     BitRef,
-    Expression,
     ForStmt,
     GateOp,
     IfStmt,
     MeasureOp,
     ParallelBlock,
     PrepareOp,
-    Program,
     RepeatStmt,
-    SlotRef,
-    Statement,
     UnaryExpr,
-    VarExpr,
     WhileStmt,
 )
+
+if TYPE_CHECKING:
+    from pecos.slr.ast.nodes import (
+        Expression,
+        Program,
+        Statement,
+    )
 
 
 @dataclass
@@ -117,9 +120,7 @@ class DataFlowInfo:
         for use in self.uses:
             if use.position > first_consumption and use.position not in self.replaced_at:
                 # Check if there's a replacement between consumption and this use
-                replacements_between = [
-                    r for r in self.replaced_at if first_consumption < r < use.position
-                ]
+                replacements_between = [r for r in self.replaced_at if first_consumption < r < use.position]
                 if not replacements_between:
                     return True
 
@@ -157,17 +158,11 @@ class DataFlowResult:
 
     def elements_requiring_unpacking(self) -> set[tuple[str, int]]:
         """Get the set of array elements that require unpacking."""
-        return {
-            key for key, flow in self.element_flows.items()
-            if flow.requires_unpacking()
-        }
+        return {key for key, flow in self.element_flows.items() if flow.requires_unpacking()}
 
     def array_requires_unpacking(self, allocator: str) -> bool:
         """Check if an array requires unpacking based on data flow."""
-        for key, flow in self.element_flows.items():
-            if key[0] == allocator and flow.requires_unpacking():
-                return True
-        return False
+        return any(key[0] == allocator and flow.requires_unpacking() for key, flow in self.element_flows.items())
 
 
 class DataFlowAnalyzer:
@@ -288,7 +283,9 @@ class DataFlowAnalyzer:
             )
             flow.add_use(self.position, "expression", is_consuming=False)
             if self.in_conditional:
-                self.result.conditional_accesses.add((expr.ref.register, expr.ref.index))
+                self.result.conditional_accesses.add(
+                    (expr.ref.register, expr.ref.index),
+                )
         elif isinstance(expr, BinaryExpr):
             self._analyze_expression(expr.left)
             self._analyze_expression(expr.right)

@@ -30,11 +30,12 @@ Example:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pecos.slr.ast.nodes import (
     AssignOp,
     BinaryExpr,
     BitExpr,
-    Expression,
     ForStmt,
     GateKind,
     GateOp,
@@ -43,9 +44,7 @@ from pecos.slr.ast.nodes import (
     MeasureOp,
     ParallelBlock,
     PrepareOp,
-    Program,
     RepeatStmt,
-    Statement,
     UnaryExpr,
     VarExpr,
     WhileStmt,
@@ -56,6 +55,13 @@ from pecos.slr.ast.validation.base import (
     ValidationPass,
     ValidationResult,
 )
+
+if TYPE_CHECKING:
+    from pecos.slr.ast.nodes import (
+        Expression,
+        Program,
+        Statement,
+    )
 
 # Gates that require parameters
 PARAMETERIZED_GATES = frozenset({GateKind.RX, GateKind.RY, GateKind.RZ, GateKind.RZZ})
@@ -168,12 +174,11 @@ class TypeChecker(ValidationPass):
         if actual_arity != expected_arity:
             self.errors.append(
                 ValidationError(
-                    message=f"Gate {node.gate.name} expects {expected_arity} qubit(s), "
-                    f"got {actual_arity}",
+                    message=f"Gate {node.gate.name} expects {expected_arity} qubit(s), got {actual_arity}",
                     location=node.location,
                     severity=Severity.ERROR,
                     code="E201",
-                )
+                ),
             )
 
         # Check parameters
@@ -185,11 +190,14 @@ class TypeChecker(ValidationPass):
                         location=node.location,
                         severity=Severity.ERROR,
                         code="E202",
-                    )
+                    ),
                 )
             else:
                 for param in node.params:
-                    self._validate_numeric_expression(param, f"angle parameter for {node.gate.name}")
+                    self._validate_numeric_expression(
+                        param,
+                        f"angle parameter for {node.gate.name}",
+                    )
         else:
             if node.params:
                 self.warnings.append(
@@ -199,7 +207,7 @@ class TypeChecker(ValidationPass):
                         location=node.location,
                         severity=Severity.WARNING,
                         code="W201",
-                    )
+                    ),
                 )
 
     def _validate_numeric_expression(self, expr: Expression, context: str) -> None:
@@ -212,7 +220,7 @@ class TypeChecker(ValidationPass):
                         location=expr.location,
                         severity=Severity.ERROR,
                         code="E203",
-                    )
+                    ),
                 )
         elif isinstance(expr, VarExpr):
             # Variables could be numeric - can't check at compile time
@@ -229,7 +237,7 @@ class TypeChecker(ValidationPass):
                     location=expr.location,
                     severity=Severity.ERROR,
                     code="E204",
-                )
+                ),
             )
 
     def _validate_measure(self, node: MeasureOp) -> None:
@@ -243,7 +251,7 @@ class TypeChecker(ValidationPass):
                     location=node.location,
                     severity=Severity.ERROR,
                     code="E205",
-                )
+                ),
             )
 
     def _validate_assign(self, node: AssignOp) -> None:
@@ -293,7 +301,7 @@ class TypeChecker(ValidationPass):
                     location=node.location,
                     severity=Severity.ERROR,
                     code="E206",
-                )
+                ),
             )
         for stmt in node.body:
             self._validate_statement(stmt)

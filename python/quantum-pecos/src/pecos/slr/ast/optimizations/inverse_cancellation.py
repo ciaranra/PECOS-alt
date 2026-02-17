@@ -17,9 +17,13 @@ For example: S-Sdg, T-Tdg, SX-SXdg all cancel to identity.
 
 from __future__ import annotations
 
-from pecos.slr.ast.nodes import GateOp
+from typing import TYPE_CHECKING
+
 from pecos.slr.ast.optimizations.base import StatementListOptimizer
 from pecos.slr.ast.optimizations.gate_properties import get_inverse, targets_match
+
+if TYPE_CHECKING:
+    from pecos.slr.ast.nodes import GateOp
 
 
 class InverseCancellationPass(StatementListOptimizer):

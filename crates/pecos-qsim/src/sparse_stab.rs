@@ -15,7 +15,7 @@ use core::fmt::Debug;
 use core::mem;
 use pecos_core::{IndexableElement, RngManageable, Set, VecSet};
 use pecos_rng::rng_ext::RngProbabilityExt;
-use pecos_rng::{PecosRng, Rng, RngCore, SeedableRng};
+use pecos_rng::{PecosRng, Rng, SeedableRng};
 
 #[expect(clippy::module_name_repetitions)]
 pub type StdSparseStab = SparseStab<VecSet<usize>, usize>;
@@ -106,7 +106,7 @@ pub struct SparseStab<T, E, R = PecosRng>
 where
     T: for<'a> Set<'a, Element = E>,
     E: IndexableElement,
-    R: RngCore + SeedableRng + Rng + Debug,
+    R: Rng + SeedableRng + Debug,
 {
     pub(crate) num_qubits: usize,
     stabs: Gens<T, E>,
@@ -116,13 +116,13 @@ where
 impl<T, E, R> SparseStab<T, E, R>
 where
     E: IndexableElement,
-    R: RngCore + SeedableRng + Rng + Debug,
+    R: Rng + SeedableRng + Debug,
     T: for<'a> Set<'a, Element = E>,
 {
     #[inline]
     #[must_use]
     pub fn new(num_qubits: usize) -> Self {
-        let rng = R::from_os_rng();
+        let rng = rand::make_rng();
         Self::with_rng(num_qubits, rng)
     }
 
@@ -164,6 +164,27 @@ where
     #[inline]
     pub fn num_qubits(&self) -> usize {
         self.num_qubits
+    }
+
+    #[inline]
+    pub fn stabs(&self) -> &Gens<T, E> {
+        &self.stabs
+    }
+
+    #[inline]
+    pub fn destabs(&self) -> &Gens<T, E> {
+        &self.destabs
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn from_parts(num_qubits: usize, stabs: Gens<T, E>, destabs: Gens<T, E>) -> Self {
+        Self {
+            num_qubits,
+            stabs,
+            destabs,
+            rng: rand::make_rng(),
+        }
     }
 
     #[inline]
@@ -486,7 +507,7 @@ where
 impl<T, E, R> QuantumSimulator for SparseStab<T, E, R>
 where
     E: IndexableElement,
-    R: RngCore + SeedableRng + Rng + Debug,
+    R: Rng + SeedableRng + Debug,
     T: for<'a> Set<'a, Element = E>,
 {
     #[inline]
@@ -499,7 +520,7 @@ impl<T, E, R> CliffordGateable<E> for SparseStab<T, E, R>
 where
     T: for<'a> Set<'a, Element = E>,
     E: IndexableElement,
-    R: RngCore + SeedableRng + Rng + Debug,
+    R: Rng + SeedableRng + Debug,
 {
     // TODO: pub fun p(&mut self, pauli: &pauli, q: U) { todo!() }
     // TODO: pub fun m(&mut self, pauli: &pauli, q: U) -> bool { todo!() }
@@ -737,7 +758,7 @@ impl<T, E, R> RngManageable for SparseStab<T, E, R>
 where
     T: for<'a> Set<'a, Element = E>,
     E: IndexableElement,
-    R: RngCore + SeedableRng + Rng + Debug,
+    R: Rng + SeedableRng + Debug,
 {
     type Rng = R;
 
@@ -777,7 +798,7 @@ impl<T, E, R> StabilizerTableauSimulator for SparseStab<T, E, R>
 where
     T: for<'a> Set<'a, Element = E>,
     E: IndexableElement,
-    R: RngCore + SeedableRng + Rng + Debug,
+    R: Rng + SeedableRng + Debug,
 {
     fn stab_tableau(&self) -> String {
         Self::tableau_string(self.num_qubits, &self.stabs)

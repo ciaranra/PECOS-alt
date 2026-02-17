@@ -40,6 +40,7 @@ Examples::
     ...     h(q0)
     ...     cx(q0, q1)
     ...     return measure(q0), measure(q1)
+    ...
     >>>
     >>> ast = guppy_to_ast(bell)
     >>> # Use ast with SLR-AST analysis, optimization, or code generation
@@ -55,6 +56,7 @@ Examples::
     ...     if result:
     ...         x(q2)
     ...     return measure(q2)
+    ...
     >>>
     >>> ast = guppy_to_ast(conditional)
     >>> # AST contains IfStmt node for the conditional
@@ -70,6 +72,7 @@ Examples::
     ...         x(q)
     ...         count = count + 1
     ...     return measure(q)
+    ...
     >>>
     >>> ast = guppy_to_ast(loop_circuit)
     >>> # AST contains WhileStmt node for the loop
@@ -83,7 +86,6 @@ from typing import TYPE_CHECKING, Protocol
 from pecos.slr.ast.nodes import (
     AllocatorDecl,
     BitRef,
-    Declaration,
     GateKind,
     GateOp,
     IfStmt,
@@ -92,13 +94,17 @@ from pecos.slr.ast.nodes import (
     Program,
     RegisterDecl,
     SlotRef,
-    Statement,
     VarExpr,
     WhileStmt,
 )
 
 if TYPE_CHECKING:
     from hugr import Hugr, Node
+
+    from pecos.slr.ast.nodes import (
+        Declaration,
+        Statement,
+    )
 
 
 class CompiledPackage(Protocol):
@@ -180,8 +186,12 @@ class BlockInfo:
     node_idx: int
     parent_idx: int
     operations: list[dict] = field(default_factory=list)
-    outgoing_edges: list[tuple[int, int, int]] = field(default_factory=list)  # (port, target_block, target_port)
-    incoming_blocks: set[int] = field(default_factory=set)  # Block indices that have edges to this block
+    outgoing_edges: list[tuple[int, int, int]] = field(
+        default_factory=list,
+    )  # (port, target_block, target_port)
+    incoming_blocks: set[int] = field(
+        default_factory=set,
+    )  # Block indices that have edges to this block
 
 
 @dataclass
@@ -202,14 +212,16 @@ class CFGStructure:
     entry_block: int | None = None
     exit_block: int | None = None
     is_straight_line: bool = True
-    conditional_blocks: list[tuple[int, int, int, int]] = field(default_factory=list)  # (entry, then, else, continuation)
+    conditional_blocks: list[tuple[int, int, int, int]] = field(
+        default_factory=list,
+    )  # (entry, then, else, continuation)
     loops: list[LoopInfo] = field(default_factory=list)  # Detected loops
 
 
 class HugrToAstConverter:
     """Converts HUGR to SLR-AST Program."""
 
-    def __init__(self, hugr: Hugr):
+    def __init__(self, hugr: Hugr) -> None:
         """Initialize the converter.
 
         Args:
@@ -259,11 +271,14 @@ class HugrToAstConverter:
         # Create declarations
         decl_list: list[Declaration] = []
         if num_qubits > 0:
-            decl_list.append(AllocatorDecl(name=self.allocator_name, capacity=num_qubits))
+            decl_list.append(
+                AllocatorDecl(name=self.allocator_name, capacity=num_qubits),
+            )
 
         # Add classical register declarations for measurement results
-        for result_var in self.measurement_results.values():
-            decl_list.append(RegisterDecl(name=result_var, size=1, is_result=True))
+        decl_list.extend(
+            RegisterDecl(name=result_var, size=1, is_result=True) for result_var in self.measurement_results.values()
+        )
 
         declarations = tuple(decl_list)
 
@@ -297,7 +312,7 @@ class HugrToAstConverter:
                 for out_port, in_ports in self.hugr.outgoing_links(node):
                     for in_port in in_ports:
                         block.outgoing_edges.append(
-                            (out_port.offset, in_port.node.idx, in_port.offset)
+                            (out_port.offset, in_port.node.idx, in_port.offset),
                         )
 
             elif op_name == "ExitBlock":
@@ -331,21 +346,23 @@ class HugrToAstConverter:
                 continue
 
             if parent_idx in cfg.blocks:
-                op_def = data.op.op_def()
-                ext_name = op_def._extension.name if op_def._extension else None  # noqa: SLF001
-                ext_op_name = op_def.name
+                custom_op = data.op.to_custom_op()
+                ext_name = custom_op.extension
+                ext_op_name = custom_op.op_name
 
                 if ext_name in QUANTUM_EXTENSIONS and ext_op_name in ALL_QUANTUM_OPERATIONS:
                     incoming = self._get_incoming_connections(node)
                     outgoing = self._get_outgoing_connections(node)
 
-                    cfg.blocks[parent_idx].operations.append({
-                        "node_idx": node.idx,
-                        "op_name": ext_op_name,
-                        "parent_idx": parent_idx,
-                        "incoming": incoming,
-                        "outgoing": outgoing,
-                    })
+                    cfg.blocks[parent_idx].operations.append(
+                        {
+                            "node_idx": node.idx,
+                            "op_name": ext_op_name,
+                            "parent_idx": parent_idx,
+                            "incoming": incoming,
+                            "outgoing": outgoing,
+                        },
+                    )
 
         # Determine if straight-line or has control flow
         if len(cfg.blocks) == 1:
@@ -379,9 +396,7 @@ class HugrToAstConverter:
                     target_block = cfg.blocks[target]
 
                     # Verify it's a loop header (has incoming from before and after)
-                    has_forward_incoming = any(
-                        inc < target for inc in target_block.incoming_blocks
-                    )
+                    has_forward_incoming = any(inc < target for inc in target_block.incoming_blocks)
                     has_back_edge = block_idx in target_block.incoming_blocks
 
                     if has_forward_incoming and has_back_edge:
@@ -390,15 +405,20 @@ class HugrToAstConverter:
                         exit_block = self._find_loop_exit(cfg, target, body_blocks)
 
                         if exit_block is not None:
-                            cfg.loops.append(LoopInfo(
-                                header_block=target,
-                                body_blocks=body_blocks,
-                                exit_block=exit_block,
-                                back_edge_source=block_idx,
-                            ))
+                            cfg.loops.append(
+                                LoopInfo(
+                                    header_block=target,
+                                    body_blocks=body_blocks,
+                                    exit_block=exit_block,
+                                    back_edge_source=block_idx,
+                                ),
+                            )
 
     def _find_loop_body(
-        self, cfg: CFGStructure, header: int, back_edge_source: int
+        self,
+        cfg: CFGStructure,
+        header: int,
+        back_edge_source: int,
     ) -> list[int]:
         """Find all blocks that form the loop body.
 
@@ -453,7 +473,10 @@ class HugrToAstConverter:
         return body_blocks
 
     def _find_loop_exit(
-        self, cfg: CFGStructure, header: int, body_blocks: list[int]
+        self,
+        cfg: CFGStructure,
+        header: int,
+        body_blocks: list[int],
     ) -> int | None:
         """Find the exit block for a loop.
 
@@ -495,11 +518,7 @@ class HugrToAstConverter:
             return
 
         # Entry block should have exactly 2 outgoing edges to different blocks
-        block_edges = [
-            (port, target)
-            for port, target, _tport in entry.outgoing_edges
-            if target in cfg.blocks
-        ]
+        block_edges = [(port, target) for port, target, _tport in entry.outgoing_edges if target in cfg.blocks]
 
         if len(block_edges) == 2:
             # Port 0 = else branch, Port 1 = then branch (Guppy convention)
@@ -517,7 +536,7 @@ class HugrToAstConverter:
                 # Pick the first reachable common block
                 cont_block = min(continuation)
                 cfg.conditional_blocks.append(
-                    (cfg.entry_block, then_block, else_block, cont_block)
+                    (cfg.entry_block, then_block, else_block, cont_block),
                 )
 
     def _find_eventual_targets(self, cfg: CFGStructure, start_block: int) -> set[int]:
@@ -564,7 +583,7 @@ class HugrToAstConverter:
 
     def _check_for_loops(self) -> None:
         """Check for loop structures and raise error if found."""
-        for node, data in self.hugr.nodes():
+        for _node, data in self.hugr.nodes():
             if data.op.__class__.__name__ == "TailLoop":
                 msg = (
                     "HUGR contains TailLoop structure (while/for loop). "
@@ -640,8 +659,8 @@ class HugrToAstConverter:
         # Process conditional pattern
         for entry_idx, then_idx, else_idx, cont_idx in cfg.conditional_blocks:
             entry_block = cfg.blocks[entry_idx]
-            then_block = cfg.blocks[then_idx]
-            else_block = cfg.blocks[else_idx]
+            cfg.blocks[then_idx]
+            cfg.blocks[else_idx]
             cont_block = cfg.blocks[cont_idx]
 
             # Process entry block operations (before the conditional)
@@ -668,7 +687,12 @@ class HugrToAstConverter:
             else_stmts = self._build_branch_statements(cfg, else_idx, cont_idx)
 
             # Create IfStmt (always create it if we detected a conditional pattern)
-            if then_stmts or else_stmts or self._is_conditional_header(cfg, then_idx) or self._is_conditional_header(cfg, else_idx):
+            if (
+                then_stmts
+                or else_stmts
+                or self._is_conditional_header(cfg, then_idx)
+                or self._is_conditional_header(cfg, else_idx)
+            ):
                 # Use VarExpr for the condition
                 condition = VarExpr(name=condition_var)
                 if_stmt = IfStmt(
@@ -710,7 +734,10 @@ class HugrToAstConverter:
         return len(block_targets) == 2
 
     def _build_branch_statements(
-        self, cfg: CFGStructure, block_idx: int, stop_at: int
+        self,
+        cfg: CFGStructure,
+        block_idx: int,
+        stop_at: int,
     ) -> list[Statement]:
         """Build statements for a branch, handling nested conditionals.
 
@@ -736,11 +763,7 @@ class HugrToAstConverter:
         # Check if this block is a conditional header (nested conditional)
         if self._is_conditional_header(cfg, block_idx):
             # Get the branches
-            block_edges = [
-                (port, target)
-                for port, target, _tport in block.outgoing_edges
-                if target in cfg.blocks
-            ]
+            block_edges = [(port, target) for port, target, _tport in block.outgoing_edges if target in cfg.blocks]
             block_edges.sort(key=lambda x: x[0])
             nested_else = block_edges[0][1]
             nested_then = block_edges[1][1]
@@ -761,11 +784,19 @@ class HugrToAstConverter:
 
                 # Process nested then branch
                 self._map_block_input_qubits(block_idx, nested_then, cfg)
-                nested_then_stmts = self._build_branch_statements(cfg, nested_then, nested_cont)
+                nested_then_stmts = self._build_branch_statements(
+                    cfg,
+                    nested_then,
+                    nested_cont,
+                )
 
                 # Process nested else branch
                 self._map_block_input_qubits(block_idx, nested_else, cfg)
-                nested_else_stmts = self._build_branch_statements(cfg, nested_else, nested_cont)
+                nested_else_stmts = self._build_branch_statements(
+                    cfg,
+                    nested_else,
+                    nested_cont,
+                )
 
                 # Create nested IfStmt
                 if nested_then_stmts or nested_else_stmts:
@@ -773,7 +804,7 @@ class HugrToAstConverter:
                     nested_if = IfStmt(
                         condition=nested_condition,
                         then_body=tuple(nested_then_stmts),
-                        else_body=tuple(nested_else_stmts) if nested_else_stmts else None,
+                        else_body=(tuple(nested_else_stmts) if nested_else_stmts else None),
                     )
                     statements.append(nested_if)
 
@@ -781,7 +812,11 @@ class HugrToAstConverter:
                 if nested_cont != stop_at and nested_cont in cfg.blocks:
                     self._capture_block_output_qubits(nested_then)
                     self._map_block_input_qubits(nested_then, nested_cont, cfg)
-                    cont_stmts = self._build_branch_statements(cfg, nested_cont, stop_at)
+                    cont_stmts = self._build_branch_statements(
+                        cfg,
+                        nested_cont,
+                        stop_at,
+                    )
                     statements.extend(cont_stmts)
 
         return statements
@@ -850,12 +885,8 @@ class HugrToAstConverter:
             # For quantum loops, the condition is typically based on a measurement result
             # or a classical counter. Use a placeholder variable for now.
             condition_var = self._get_condition_variable()
-            if condition_var.startswith("m"):
-                # Measurement-based condition
-                condition = VarExpr(name=condition_var)
-            else:
-                # Default to a generic condition
-                condition = VarExpr(name="loop_condition")
+            # Use measurement variable if available, else generic condition
+            condition = VarExpr(name=condition_var) if condition_var.startswith("m") else VarExpr(name="loop_condition")
 
             while_stmt = WhileStmt(
                 condition=condition,
@@ -915,7 +946,10 @@ class HugrToAstConverter:
         self.block_output_qubit_ports[block_idx] = port_to_qubit
 
     def _map_block_input_qubits(
-        self, source_block_idx: int, target_block_idx: int, cfg: CFGStructure | None = None
+        self,
+        source_block_idx: int,
+        target_block_idx: int,
+        cfg: CFGStructure | None = None,
     ) -> None:
         """Map a block's Input node outputs to qubits from a source block.
 
@@ -928,8 +962,6 @@ class HugrToAstConverter:
             target_block_idx: The block whose Input node needs mapping.
             cfg: Optional CFG structure for edge lookup.
         """
-        from hugr import Node  # noqa: PLC0415
-
         input_node_idx = self.block_input_nodes.get(target_block_idx)
         if input_node_idx is None:
             return
@@ -977,16 +1009,16 @@ class HugrToAstConverter:
                 qubit_idx = self.qubit_allocations[node_idx]
                 self.node_to_qubit[node_idx] = qubit_idx
                 # Add Prepare operation
-                statements.append(PrepareOp(allocator=self.allocator_name, slots=(qubit_idx,)))
+                statements.append(
+                    PrepareOp(allocator=self.allocator_name, slots=(qubit_idx,)),
+                )
 
             elif op_name in GATE_OPERATIONS:
                 gate_kind = GATE_KIND_MAP[op_name]
                 qubit_indices = self._resolve_qubit_operands(op)
 
                 if qubit_indices:
-                    slot_refs = tuple(
-                        SlotRef(allocator=self.allocator_name, index=idx) for idx in qubit_indices
-                    )
+                    slot_refs = tuple(SlotRef(allocator=self.allocator_name, index=idx) for idx in qubit_indices)
                     statements.append(GateOp(gate=gate_kind, targets=slot_refs))
 
                     # Update node_to_qubit for outputs
@@ -996,9 +1028,7 @@ class HugrToAstConverter:
             elif op_name in MEASURE_OPERATIONS:
                 qubit_indices = self._resolve_qubit_operands(op)
                 if qubit_indices:
-                    slot_refs = tuple(
-                        SlotRef(allocator=self.allocator_name, index=idx) for idx in qubit_indices
-                    )
+                    slot_refs = tuple(SlotRef(allocator=self.allocator_name, index=idx) for idx in qubit_indices)
 
                     # Create result variable
                     result_var = f"m{self.next_result_idx}"
@@ -1154,12 +1184,12 @@ class HugrToAstConverter:
         Returns:
             List of (source_node_idx, source_port, dest_port) tuples.
         """
-        incoming = []
-        for in_port, out_ports in self.hugr.incoming_links(node):
-            for out_port in out_ports:
-                if in_port.offset >= 0 and out_port.offset >= 0:
-                    incoming.append((out_port.node.idx, out_port.offset, in_port.offset))
-        return incoming
+        return [
+            (out_port.node.idx, out_port.offset, in_port.offset)
+            for in_port, out_ports in self.hugr.incoming_links(node)
+            for out_port in out_ports
+            if in_port.offset >= 0 and out_port.offset >= 0
+        ]
 
     def _get_outgoing_connections(self, node: Node) -> list[tuple[int, int, int]]:
         """Get outgoing connections for a node.
@@ -1167,12 +1197,12 @@ class HugrToAstConverter:
         Returns:
             List of (source_port, dest_node_idx, dest_port) tuples.
         """
-        outgoing = []
-        for out_port, in_ports in self.hugr.outgoing_links(node):
-            for in_port in in_ports:
-                if out_port.offset >= 0 and in_port.offset >= 0:
-                    outgoing.append((out_port.offset, in_port.node.idx, in_port.offset))
-        return outgoing
+        return [
+            (out_port.offset, in_port.node.idx, in_port.offset)
+            for out_port, in_ports in self.hugr.outgoing_links(node)
+            for in_port in in_ports
+            if out_port.offset >= 0 and in_port.offset >= 0
+        ]
 
     def _extract_function_name(self) -> str:
         """Extract the function name from the HUGR."""

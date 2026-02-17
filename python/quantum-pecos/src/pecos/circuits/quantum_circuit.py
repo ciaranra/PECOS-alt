@@ -270,11 +270,7 @@ class QuantumCircuit(MutableSequence):
                 return list(obj)
             return obj
 
-        params_json = (
-            json.dumps({k: make_serializable(v) for k, v in params.items()})
-            if params
-            else ""
-        )
+        params_json = json.dumps({k: make_serializable(v) for k, v in params.items()}) if params else ""
 
         # Helper to store original symbol and params in metadata (idempotent - skips if qubit already used)
         def add_with_symbol(
@@ -595,11 +591,7 @@ class QuantumCircuit(MutableSequence):
             actual_tick = tick if tick >= 0 else logical_ticks + tick
 
             # If we're trying to access a tick that doesn't exist physically yet, create it
-            tick_handle = (
-                self._inner.tick()
-                if actual_tick >= physical_ticks
-                else self._inner.tick_at(actual_tick)
-            )
+            tick_handle = self._inner.tick() if actual_tick >= physical_ticks else self._inner.tick_at(actual_tick)
 
         for gate_symbol, gate_locations in gate_dict.items():
             if gate_locations:
@@ -684,7 +676,7 @@ class QuantumCircuit(MutableSequence):
                 gate_type_str = str(gate.gate_type)
                 # Extract gate type name from "GateType.H" format
                 if "." in gate_type_str:
-                    gate_type_str = gate_type_str.split(".")[-1]
+                    gate_type_str = gate_type_str.rsplit(".", maxsplit=1)[-1]
                 symbol = _GATETYPE_TO_SYMBOL.get(gate_type_str, gate_type_str)
 
             qubits = list(gate.qubits)
@@ -845,9 +837,7 @@ class QuantumCircuit(MutableSequence):
     def _fix_json_meta(meta: JSONDict) -> JSONDict:
         """Fix some of the type issues for converting json rep back to a QuantumCircuit."""
         if "var_output" in meta:
-            meta["var_output"] = {
-                int(k): tuple(v) for k, v in meta["var_output"].items()
-            }
+            meta["var_output"] = {int(k): tuple(v) for k, v in meta["var_output"].items()}
         return meta
 
     @classmethod
@@ -862,11 +852,7 @@ class QuantumCircuit(MutableSequence):
             sym = gate_dict["sym"]
 
             qubits = gate_dict["qubits"]
-            qubits = (
-                set(qubits)
-                if qubits and isinstance(qubits[0], int)
-                else {tuple(q) for q in qubits}
-            )
+            qubits = set(qubits) if qubits and isinstance(qubits[0], int) else {tuple(q) for q in qubits}
 
             meta = gate_dict["metadata"]
             meta = cls._fix_json_meta(meta)

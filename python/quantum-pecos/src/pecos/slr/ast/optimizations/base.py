@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from pecos.slr.ast.nodes import (
     ForStmt,
@@ -27,9 +28,13 @@ from pecos.slr.ast.nodes import (
     ParallelBlock,
     Program,
     RepeatStmt,
-    Statement,
     WhileStmt,
 )
+
+if TYPE_CHECKING:
+    from pecos.slr.ast.nodes import (
+        Statement,
+    )
 
 
 @dataclass
@@ -115,7 +120,10 @@ class StatementListOptimizer(OptimizationPass):
             passes_applied=[self.name],
         )
 
-    def _optimize_statements(self, statements: tuple[Statement, ...]) -> tuple[tuple[Statement, ...], int]:
+    def _optimize_statements(
+        self,
+        statements: tuple[Statement, ...],
+    ) -> tuple[tuple[Statement, ...], int]:
         """Optimize a sequence of statements.
 
         Scans for consecutive gate operations that can be cancelled or merged.

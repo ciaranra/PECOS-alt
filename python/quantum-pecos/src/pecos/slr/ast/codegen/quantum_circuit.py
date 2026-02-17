@@ -39,7 +39,6 @@ from pecos.slr.ast.nodes import (
     ParallelBlock,
     PermuteOp,
     PrepareOp,
-    Program,
     RegisterDecl,
     RepeatStmt,
     WhileStmt,
@@ -47,7 +46,10 @@ from pecos.slr.ast.nodes import (
 
 if TYPE_CHECKING:
     from pecos.circuits.quantum_circuit import QuantumCircuit
-    from pecos.slr.ast.nodes import Statement
+    from pecos.slr.ast.nodes import (
+        Program,
+        Statement,
+    )
 
 # Mapping from AST GateKind to QuantumCircuit gate names
 GATE_TO_QC: dict[GateKind, str] = {
@@ -162,7 +164,7 @@ class AstToQuantumCircuit:
         Returns:
             A QuantumCircuit object.
         """
-        from pecos.circuits.quantum_circuit import QuantumCircuit
+        from pecos.circuits.quantum_circuit import QuantumCircuit  # noqa: PLC0415
 
         self.context = QCCodeGenContext()
         self.circuit = QuantumCircuit()
@@ -226,9 +228,7 @@ class AstToQuantumCircuit:
                     parent_next_offset[parent] = 0
 
                 parent_offset = self.context.allocator_offsets.get(parent, 0)
-                self.context.allocator_offsets[decl.name] = (
-                    parent_offset + parent_next_offset[parent]
-                )
+                self.context.allocator_offsets[decl.name] = parent_offset + parent_next_offset[parent]
                 parent_next_offset[parent] += decl.capacity
 
     def _process_statement(self, stmt: Statement) -> None:
@@ -278,17 +278,25 @@ class AstToQuantumCircuit:
     def _process_two_qubit_gate(self, node: GateOp, gate_name: str) -> None:
         """Process a two-qubit gate."""
         if len(node.targets) >= 2:
-            q0 = self.context.get_qubit(node.targets[0].allocator, node.targets[0].index)
-            q1 = self.context.get_qubit(node.targets[1].allocator, node.targets[1].index)
+            q0 = self.context.get_qubit(
+                node.targets[0].allocator,
+                node.targets[0].index,
+            )
+            q1 = self.context.get_qubit(
+                node.targets[1].allocator,
+                node.targets[1].index,
+            )
             self._add_to_tick(gate_name, (q0, q1))
         elif len(node.targets) % 2 == 0:
             # Process pairs
             for i in range(0, len(node.targets), 2):
                 q0 = self.context.get_qubit(
-                    node.targets[i].allocator, node.targets[i].index
+                    node.targets[i].allocator,
+                    node.targets[i].index,
                 )
                 q1 = self.context.get_qubit(
-                    node.targets[i + 1].allocator, node.targets[i + 1].index
+                    node.targets[i + 1].allocator,
+                    node.targets[i + 1].index,
                 )
                 self._add_to_tick(gate_name, (q0, q1))
 
@@ -350,17 +358,14 @@ class AstToQuantumCircuit:
                 for stmt in node.body:
                     self._process_statement(stmt)
         else:
-            msg = (
-                f"Cannot unroll For loop with non-integer bounds: "
-                f"start={node.start}, stop={node.stop}"
-            )
-            raise ValueError(msg)
+            msg = f"Cannot unroll For loop with non-integer bounds: start={node.start}, stop={node.stop}"
+            raise TypeError(msg)
 
     def _process_repeat(self, node: RepeatStmt) -> None:
         """Process a repeat loop by unrolling."""
         if not isinstance(node.count, int):
             msg = f"Cannot unroll Repeat block with non-integer count: {node.count}"
-            raise ValueError(msg)
+            raise TypeError(msg)
 
         for _ in range(node.count):
             for stmt in node.body:

@@ -21,10 +21,10 @@ See docs/proposals/slr-qubit-allocators.md for full design documentation.
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Iterator
+    from collections.abc import Iterator
 
 
 class SlotState(Enum):
@@ -134,9 +134,9 @@ class QAlloc:
         self,
         capacity: int,
         *,
-        name: Optional[str] = None,
-        parent: Optional[QAlloc] = None,
-        _parent_indices: Optional[list[int]] = None,
+        name: str | None = None,
+        parent: QAlloc | None = None,
+        _parent_indices: list[int] | None = None,
     ) -> None:
         """Create a qubit allocator.
 
@@ -190,7 +190,7 @@ class QAlloc:
         return self.name
 
     @property
-    def parent(self) -> Optional[QAlloc]:
+    def parent(self) -> QAlloc | None:
         """Parent allocator, or None if this is a base allocator."""
         return self._parent
 
@@ -211,7 +211,7 @@ class QAlloc:
 
     # --- Child Allocator Creation ---
 
-    def child(self, size: int, *, name: Optional[str] = None) -> QAlloc:
+    def child(self, size: int, *, name: str | None = None) -> QAlloc:
         """Create a child allocator with `size` slots.
 
         Reserves `size` slots from this allocator's available pool.
@@ -352,26 +352,18 @@ class QAlloc:
 
     def all_prepared(self) -> bool:
         """Check if all non-reserved slots are prepared."""
-        return all(
-            self._slot_states[i] == SlotState.PREPARED
-            for i in range(self._capacity)
-            if i not in self._reserved
-        )
+        return all(self._slot_states[i] == SlotState.PREPARED for i in range(self._capacity) if i not in self._reserved)
 
     def prepared_count(self) -> int:
         """Count of prepared slots."""
         return sum(
-            1
-            for i in range(self._capacity)
-            if i not in self._reserved and self._slot_states[i] == SlotState.PREPARED
+            1 for i in range(self._capacity) if i not in self._reserved and self._slot_states[i] == SlotState.PREPARED
         )
 
     def unprepared_count(self) -> int:
         """Count of unprepared slots."""
         return sum(
-            1
-            for i in range(self._capacity)
-            if i not in self._reserved and self._slot_states[i] == SlotState.UNPREPARED
+            1 for i in range(self._capacity) if i not in self._reserved and self._slot_states[i] == SlotState.UNPREPARED
         )
 
     # --- Slot Access ---
@@ -431,10 +423,28 @@ class QAlloc:
 
         # Clear our slots back to parent's reserved set
         if self._parent is not None:
-            self._parent._reserved -= set(self._parent_indices)
-            self._parent._children.remove(self)
+            self._parent.unreserve_slots(self._parent_indices)
+            self._parent.unregister_child(self)
 
         self._released = True
+
+    # --- Parent/Child Coordination ---
+
+    def unreserve_slots(self, indices: list[int]) -> None:
+        """Release the given slot indices back to the available pool.
+
+        Called by child allocators when they are released.
+        Not intended for external use.
+        """
+        self._reserved -= set(indices)
+
+    def unregister_child(self, child: QAlloc) -> None:
+        """Remove a child allocator from this allocator's children list.
+
+        Called by child allocators when they are released.
+        Not intended for external use.
+        """
+        self._children.remove(child)
 
     # --- Validation Helpers ---
 

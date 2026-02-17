@@ -15,7 +15,6 @@ These tests verify that both paths produce equivalent output.
 """
 
 import pytest
-
 from pecos.slr import CReg, If, Main, Permute, QReg, Repeat
 from pecos.slr.ast import slr_to_ast
 from pecos.slr.ast.codegen import generate
@@ -38,8 +37,8 @@ def normalize_whitespace(s: str) -> str:
 def extract_gates_qasm(qasm: str) -> list[str]:
     """Extract gate operations from QASM, ignoring headers and declarations."""
     gates = []
-    for line in qasm.split("\n"):
-        line = line.strip().lower()
+    for raw_line in qasm.split("\n"):
+        line = raw_line.strip().lower()
         # Skip empty lines, headers, includes, declarations, comments
         if not line:
             continue
@@ -52,7 +51,7 @@ def extract_gates_qasm(qasm: str) -> list[str]:
 class TestQASMEquivalence:
     """Compare QASM output from direct SLR vs AST."""
 
-    def test_bell_state_qasm(self):
+    def test_bell_state_qasm(self) -> None:
         """Test Bell state produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 2),
@@ -65,7 +64,7 @@ class TestQASMEquivalence:
         ast_qasm = generate(ast, "qasm")
 
         # Direct SLR path
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -76,7 +75,7 @@ class TestQASMEquivalence:
         # Should have same gate sequence
         assert direct_gates == ast_gates, f"Direct: {direct_gates}\nAST: {ast_gates}"
 
-    def test_pauli_gates_qasm(self):
+    def test_pauli_gates_qasm(self) -> None:
         """Test Pauli gates produce equivalent QASM."""
         prog = Main(
             q := QReg("q", 3),
@@ -89,7 +88,7 @@ class TestQASMEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -98,7 +97,7 @@ class TestQASMEquivalence:
 
         assert direct_gates == ast_gates
 
-    def test_measurement_qasm(self):
+    def test_measurement_qasm(self) -> None:
         """Test measurement produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 1),
@@ -111,7 +110,7 @@ class TestQASMEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -128,7 +127,7 @@ class TestQASMEquivalence:
 class TestStimEquivalence:
     """Compare Stim output from direct SLR vs AST."""
 
-    def test_bell_state_stim(self):
+    def test_bell_state_stim(self) -> None:
         """Test Bell state produces equivalent Stim."""
         prog = Main(
             q := QReg("q", 2),
@@ -141,7 +140,7 @@ class TestStimEquivalence:
         ast_stim = generate(ast, "stim")
 
         # Direct SLR path
-        gen = StimGenerator()
+        gen = StimGenerator(_internal=True)
         gen.generate_block(prog)
         direct_stim = str(gen.get_circuit())
 
@@ -152,7 +151,7 @@ class TestStimEquivalence:
         # Should have same operations (order may differ slightly)
         assert direct_lines == ast_lines, f"Direct: {direct_lines}\nAST: {ast_lines}"
 
-    def test_clifford_gates_stim(self):
+    def test_clifford_gates_stim(self) -> None:
         """Test Clifford gates produce equivalent Stim."""
         prog = Main(
             q := QReg("q", 2),
@@ -165,7 +164,7 @@ class TestStimEquivalence:
         ast = slr_to_ast(prog)
         ast_stim = generate(ast, "stim")
 
-        gen = StimGenerator()
+        gen = StimGenerator(_internal=True)
         gen.generate_block(prog)
         direct_stim = str(gen.get_circuit())
 
@@ -178,7 +177,7 @@ class TestStimEquivalence:
 class TestGuppyEquivalence:
     """Compare Guppy output from direct SLR vs AST."""
 
-    def test_bell_state_guppy_structure(self):
+    def test_bell_state_guppy_structure(self) -> None:
         """Test Bell state produces structurally similar Guppy."""
         prog = Main(
             q := QReg("q", 2),
@@ -191,7 +190,7 @@ class TestGuppyEquivalence:
         ast_guppy = generate(ast, "guppy")
 
         # Direct SLR path
-        gen = GuppyGenerator()
+        gen = GuppyGenerator(_internal=True)
         gen.generate_block(prog)
         direct_guppy = gen.get_output()
 
@@ -210,7 +209,7 @@ class TestGuppyEquivalence:
 class TestQIREquivalence:
     """Compare QIR output from direct SLR vs AST."""
 
-    def test_bell_state_qir_structure(self):
+    def test_bell_state_qir_structure(self) -> None:
         """Test Bell state produces structurally similar QIR."""
         prog = Main(
             q := QReg("q", 2),
@@ -223,7 +222,7 @@ class TestQIREquivalence:
         ast_qir = generate(ast, "qir")
 
         # Direct SLR path
-        gen = QIRGenerator()
+        gen = QIRGenerator(_internal=True)
         gen.generate_block(prog)
         direct_qir = gen.get_output()
 
@@ -239,7 +238,7 @@ class TestQIREquivalence:
 class TestQuantumCircuitEquivalence:
     """Compare QuantumCircuit output from direct SLR vs AST."""
 
-    def test_bell_state_qc(self):
+    def test_bell_state_qc(self) -> None:
         """Test Bell state produces equivalent QuantumCircuit."""
         prog = Main(
             q := QReg("q", 2),
@@ -252,7 +251,7 @@ class TestQuantumCircuitEquivalence:
         ast_qc = generate(ast, "quantum_circuit")
 
         # Direct SLR path
-        gen = QuantumCircuitGenerator()
+        gen = QuantumCircuitGenerator(_internal=True)
         gen.generate_block(prog)
         direct_qc = gen.get_circuit()
 
@@ -262,17 +261,20 @@ class TestQuantumCircuitEquivalence:
 
         # Compare gate operations in each tick
         for tick_idx in range(len(direct_qc)):
-            direct_ops = set((sym, frozenset(locs) if isinstance(locs, set) else locs)
-                             for sym, locs, _ in direct_qc[tick_idx].items())
-            ast_ops = set((sym, frozenset(locs) if isinstance(locs, set) else locs)
-                          for sym, locs, _ in ast_qc[tick_idx].items())
+            direct_ops = {
+                (sym, frozenset(locs) if isinstance(locs, set) else locs)
+                for sym, locs, _ in direct_qc[tick_idx].items()
+            }
+            ast_ops = {
+                (sym, frozenset(locs) if isinstance(locs, set) else locs) for sym, locs, _ in ast_qc[tick_idx].items()
+            }
             assert direct_ops == ast_ops, f"Tick {tick_idx} mismatch: {direct_ops} vs {ast_ops}"
 
 
 class TestRepeatEquivalence:
     """Compare Repeat loop handling."""
 
-    def test_repeat_qasm(self):
+    def test_repeat_qasm(self) -> None:
         """Test Repeat produces equivalent QASM (unrolled)."""
         prog = Main(
             q := QReg("q", 1),
@@ -285,7 +287,7 @@ class TestRepeatEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -300,7 +302,7 @@ class TestRepeatEquivalence:
 class TestConditionalEquivalence:
     """Compare If statement handling."""
 
-    def test_if_statement_qasm(self):
+    def test_if_statement_qasm(self) -> None:
         """Test If produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 1),
@@ -316,7 +318,7 @@ class TestConditionalEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -328,7 +330,7 @@ class TestConditionalEquivalence:
 class TestMultipleRegistersEquivalence:
     """Compare handling of multiple registers."""
 
-    def test_two_registers_qasm(self):
+    def test_two_registers_qasm(self) -> None:
         """Test multiple registers produce equivalent QASM."""
         prog = Main(
             a := QReg("a", 2),
@@ -342,7 +344,7 @@ class TestMultipleRegistersEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -353,7 +355,7 @@ class TestMultipleRegistersEquivalence:
         assert len(direct_gates) == len(ast_gates)
         assert set(direct_gates) == set(ast_gates)
 
-    def test_two_registers_stim(self):
+    def test_two_registers_stim(self) -> None:
         """Test multiple registers produce equivalent Stim."""
         prog = Main(
             a := QReg("a", 2),
@@ -367,7 +369,7 @@ class TestMultipleRegistersEquivalence:
         ast = slr_to_ast(prog)
         ast_stim = generate(ast, "stim")
 
-        gen = StimGenerator()
+        gen = StimGenerator(_internal=True)
         gen.generate_block(prog)
         direct_stim = str(gen.get_circuit())
 
@@ -380,7 +382,7 @@ class TestMultipleRegistersEquivalence:
 class TestRotationGatesEquivalence:
     """Compare rotation gate handling."""
 
-    def test_rx_gate_qasm(self):
+    def test_rx_gate_qasm(self) -> None:
         """Test RX gate with parameter produces equivalent QASM."""
         import math
 
@@ -393,7 +395,7 @@ class TestRotationGatesEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -401,7 +403,7 @@ class TestRotationGatesEquivalence:
         assert "rx" in direct_qasm.lower()
         assert "rx" in ast_qasm.lower()
 
-    def test_ry_gate_qasm(self):
+    def test_ry_gate_qasm(self) -> None:
         """Test RY gate with parameter produces equivalent QASM."""
         import math
 
@@ -413,14 +415,14 @@ class TestRotationGatesEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
         assert "ry" in direct_qasm.lower()
         assert "ry" in ast_qasm.lower()
 
-    def test_rz_gate_qasm(self):
+    def test_rz_gate_qasm(self) -> None:
         """Test RZ gate with parameter produces equivalent QASM."""
         import math
 
@@ -432,14 +434,14 @@ class TestRotationGatesEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
         assert "rz" in direct_qasm.lower()
         assert "rz" in ast_qasm.lower()
 
-    def test_multiple_rotations_qasm(self):
+    def test_multiple_rotations_qasm(self) -> None:
         """Test multiple rotation gates produce equivalent QASM."""
         import math
 
@@ -453,7 +455,7 @@ class TestRotationGatesEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -474,7 +476,7 @@ class TestRotationGatesEquivalence:
 class TestNestedControlFlowEquivalence:
     """Compare nested control flow handling."""
 
-    def test_if_inside_repeat_qasm(self):
+    def test_if_inside_repeat_qasm(self) -> None:
         """Test If inside Repeat produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 1),
@@ -491,7 +493,7 @@ class TestNestedControlFlowEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -502,7 +504,7 @@ class TestNestedControlFlowEquivalence:
         assert direct_h_count == 2
         assert ast_h_count == 2
 
-    def test_repeat_inside_repeat_qasm(self):
+    def test_repeat_inside_repeat_qasm(self) -> None:
         """Test nested Repeat produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 1),
@@ -516,7 +518,7 @@ class TestNestedControlFlowEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -527,16 +529,18 @@ class TestNestedControlFlowEquivalence:
         assert direct_x_count == 6, f"Direct has {direct_x_count} X gates"
         assert ast_x_count == 6, f"AST has {ast_x_count} X gates"
 
-    def test_if_else_qasm(self):
+    def test_if_else_qasm(self) -> None:
         """Test If-Else produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 1),
             c := CReg("c", 1),
             qb.H(q[0]),
             qb.Measure(q[0]) > c[0],
-            If(c[0] == 1).Then(
+            If(c[0] == 1)
+            .Then(
                 qb.X(q[0]),
-            ).Else(
+            )
+            .Else(
                 qb.Z(q[0]),
             ),
         )
@@ -544,7 +548,7 @@ class TestNestedControlFlowEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -556,7 +560,7 @@ class TestNestedControlFlowEquivalence:
 class TestTGateEquivalence:
     """Compare T/Tdg gate handling."""
 
-    def test_t_gate_qasm(self):
+    def test_t_gate_qasm(self) -> None:
         """Test T gate produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 1),
@@ -566,7 +570,7 @@ class TestTGateEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -574,7 +578,7 @@ class TestTGateEquivalence:
         assert "t" in direct_qasm.lower() or "rz" in direct_qasm.lower()
         assert "t" in ast_qasm.lower() or "rz" in ast_qasm.lower()
 
-    def test_tdg_gate_qasm(self):
+    def test_tdg_gate_qasm(self) -> None:
         """Test Tdg gate produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 1),
@@ -584,7 +588,7 @@ class TestTGateEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -592,7 +596,7 @@ class TestTGateEquivalence:
         assert "tdg" in direct_qasm.lower() or "rz" in direct_qasm.lower()
         assert "tdg" in ast_qasm.lower() or "rz" in ast_qasm.lower()
 
-    def test_t_count_circuit_qasm(self):
+    def test_t_count_circuit_qasm(self) -> None:
         """Test circuit with multiple T gates produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 2),
@@ -606,7 +610,7 @@ class TestTGateEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -620,7 +624,7 @@ class TestTGateEquivalence:
 class TestSqrtGatesEquivalence:
     """Compare sqrt gate handling (SX, SY, SZ)."""
 
-    def test_sx_gate_qasm(self):
+    def test_sx_gate_qasm(self) -> None:
         """Test SX gate produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 1),
@@ -630,7 +634,7 @@ class TestSqrtGatesEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -641,7 +645,7 @@ class TestSqrtGatesEquivalence:
         assert has_direct
         assert has_ast
 
-    def test_sz_gate_stim(self):
+    def test_sz_gate_stim(self) -> None:
         """Test SZ gate produces equivalent Stim."""
         prog = Main(
             q := QReg("q", 1),
@@ -651,7 +655,7 @@ class TestSqrtGatesEquivalence:
         ast = slr_to_ast(prog)
         ast_stim = generate(ast, "stim")
 
-        gen = StimGenerator()
+        gen = StimGenerator(_internal=True)
         gen.generate_block(prog)
         direct_stim = str(gen.get_circuit())
 
@@ -663,7 +667,7 @@ class TestSqrtGatesEquivalence:
 class TestComplexCircuitEquivalence:
     """Compare more complex circuit patterns."""
 
-    def test_ghz_state_qasm(self):
+    def test_ghz_state_qasm(self) -> None:
         """Test GHZ state preparation produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 4),
@@ -676,7 +680,7 @@ class TestComplexCircuitEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -688,7 +692,7 @@ class TestComplexCircuitEquivalence:
         assert len(ast_gates) == 4
         assert direct_gates == ast_gates
 
-    def test_qft_like_circuit_qasm(self):
+    def test_qft_like_circuit_qasm(self) -> None:
         """Test QFT-like circuit produces equivalent QASM."""
         import math
 
@@ -704,7 +708,7 @@ class TestComplexCircuitEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 
@@ -715,7 +719,7 @@ class TestComplexCircuitEquivalence:
         assert direct_h == 3
         assert ast_h == 3
 
-    def test_repeated_measurement_qasm(self):
+    def test_repeated_measurement_qasm(self) -> None:
         """Test repeated measurement pattern produces equivalent QASM."""
         prog = Main(
             q := QReg("q", 1),
@@ -729,7 +733,7 @@ class TestComplexCircuitEquivalence:
         ast = slr_to_ast(prog)
         ast_qasm = generate(ast, "qasm")
 
-        gen = QASMGenerator(skip_headers=True)
+        gen = QASMGenerator(skip_headers=True, _internal=True)
         gen.generate_block(prog)
         direct_qasm = "\n".join(gen.output)
 

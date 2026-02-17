@@ -30,14 +30,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import fields, is_dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pecos.slr.ast.nodes import (
     AllocatorDecl,
     AllocatorTypeExpr,
     ArrayTypeExpr,
     AssignOp,
-    AstNode,
     BarrierOp,
     BinaryExpr,
     BinaryOp,
@@ -66,6 +65,11 @@ from pecos.slr.ast.nodes import (
     VarExpr,
     WhileStmt,
 )
+
+if TYPE_CHECKING:
+    from pecos.slr.ast.nodes import (
+        AstNode,
+    )
 
 # Mapping from class names to classes for deserialization
 _NODE_CLASSES: dict[str, type[AstNode]] = {
@@ -255,5 +259,5 @@ def json_to_ast(json_str: str) -> Program:
     result = dict_to_ast(data)
     if not isinstance(result, Program):
         msg = f"Expected Program, got {type(result).__name__}"
-        raise ValueError(msg)
+        raise ValueError(msg)  # noqa: TRY004
     return result

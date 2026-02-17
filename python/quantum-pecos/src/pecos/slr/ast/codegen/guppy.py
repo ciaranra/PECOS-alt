@@ -33,27 +33,18 @@ from typing import TYPE_CHECKING
 
 from pecos.slr.ast.nodes import (
     AllocatorDecl,
-    AssignOp,
-    BarrierOp,
     BinaryExpr,
     BinaryOp,
     BitExpr,
     BitRef,
-    CommentOp,
     ForStmt,
     GateKind,
-    GateOp,
     IfStmt,
     LiteralExpr,
     MeasureOp,
     ParallelBlock,
-    PermuteOp,
-    PrepareOp,
-    Program,
     RegisterDecl,
     RepeatStmt,
-    ReturnOp,
-    SlotRef,
     UnaryExpr,
     UnaryOp,
     VarExpr,
@@ -62,7 +53,18 @@ from pecos.slr.ast.nodes import (
 from pecos.slr.ast.visitor import BaseVisitor
 
 if TYPE_CHECKING:
-    from pecos.slr.ast.nodes import AstNode, Expression
+    from pecos.slr.ast.nodes import (
+        AssignOp,
+        BarrierOp,
+        CommentOp,
+        Expression,
+        GateOp,
+        PermuteOp,
+        PrepareOp,
+        Program,
+        ReturnOp,
+        SlotRef,
+    )
 
 
 # Mapping from AST GateKind to Guppy function names
@@ -102,6 +104,10 @@ GATE_TO_GUPPY: dict[GateKind, str] = {
     GateKind.SYYdg: "quantum.syydg",
     GateKind.SZZdg: "quantum.szzdg",
     GateKind.RZZ: "quantum.rzz",
+    # Controlled rotation gates
+    GateKind.CRX: "quantum.crx",
+    GateKind.CRY: "quantum.cry",
+    GateKind.CRZ: "quantum.crz",
     # Face rotations
     GateKind.F: "quantum.f",
     GateKind.Fdg: "quantum.fdg",
@@ -141,11 +147,19 @@ class CodeGenContext:
 
     indent_level: int = 0
     allocators: dict[str, int] = field(default_factory=dict)  # name -> capacity
-    allocator_parents: dict[str, str | None] = field(default_factory=dict)  # name -> parent
-    allocator_offsets: dict[str, int] = field(default_factory=dict)  # name -> offset in parent
+    allocator_parents: dict[str, str | None] = field(
+        default_factory=dict,
+    )  # name -> parent
+    allocator_offsets: dict[str, int] = field(
+        default_factory=dict,
+    )  # name -> offset in parent
     registers: dict[str, int] = field(default_factory=dict)  # name -> size
-    measured_slots: set[tuple[str, int]] = field(default_factory=set)  # (allocator, index)
-    measurement_vars: list[str] = field(default_factory=list)  # variable names for results
+    measured_slots: set[tuple[str, int]] = field(
+        default_factory=set,
+    )  # (allocator, index)
+    measurement_vars: list[str] = field(
+        default_factory=list,
+    )  # variable names for results
 
     def indent(self) -> str:
         """Return current indentation string."""
@@ -168,10 +182,7 @@ class CodeGenContext:
         if name not in self.allocators:
             return False
         capacity = self.allocators[name]
-        for i in range(capacity):
-            if (name, i) not in self.measured_slots:
-                return False
-        return True
+        return all((name, i) in self.measured_slots for i in range(capacity))
 
     def get_root_allocator(self, name: str) -> str:
         """Get the root allocator for a given allocator name."""
@@ -303,11 +314,7 @@ class AstToGuppy(BaseVisitor[list[str]]):
                 self._scan_for_measurements(stmt.then_body)
                 if stmt.else_body:
                     self._scan_for_measurements(stmt.else_body)
-            elif isinstance(stmt, (ForStmt, WhileStmt)):
-                self._scan_for_measurements(stmt.body)
-            elif isinstance(stmt, RepeatStmt):
-                self._scan_for_measurements(stmt.body)
-            elif isinstance(stmt, ParallelBlock):
+            elif isinstance(stmt, (ForStmt, WhileStmt, RepeatStmt, ParallelBlock)):
                 self._scan_for_measurements(stmt.body)
 
     def _calculate_allocator_offsets(self, node: Program) -> None:
@@ -321,9 +328,8 @@ class AstToGuppy(BaseVisitor[list[str]]):
 
         # Root allocators have offset 0
         for decl in node.declarations:
-            if isinstance(decl, AllocatorDecl):
-                if decl.parent is None:
-                    self.context.allocator_offsets[decl.name] = 0
+            if isinstance(decl, AllocatorDecl) and decl.parent is None:
+                self.context.allocator_offsets[decl.name] = 0
 
         if node.allocator and node.allocator.parent is None:
             self.context.allocator_offsets[node.allocator.name] = 0
@@ -339,9 +345,7 @@ class AstToGuppy(BaseVisitor[list[str]]):
                 parent_offset = self.context.allocator_offsets.get(parent, 0)
 
                 # This child's offset is parent's offset + next available slot
-                self.context.allocator_offsets[decl.name] = (
-                    parent_offset + parent_next_offset[parent]
-                )
+                self.context.allocator_offsets[decl.name] = parent_offset + parent_next_offset[parent]
 
                 # Reserve space in parent
                 parent_next_offset[parent] += decl.capacity
@@ -362,11 +366,10 @@ class AstToGuppy(BaseVisitor[list[str]]):
                     continue
                 params.append(f"{decl.name}: array[qubit, {decl.capacity}] @owned")
 
-        if node.allocator:
-            if node.allocator.parent is None:
-                params.append(
-                    f"{node.allocator.name}: array[qubit, {node.allocator.capacity}] @owned"
-                )
+        if node.allocator and node.allocator.parent is None:
+            params.append(
+                f"{node.allocator.name}: array[qubit, {node.allocator.capacity}] @owned",
+            )
 
         return ", ".join(params)
 
@@ -383,14 +386,14 @@ class AstToGuppy(BaseVisitor[list[str]]):
                 if not self.context.is_allocator_fully_consumed(decl.name):
                     return_types.append(f"array[qubit, {decl.capacity}]")
 
-        if node.allocator:
-            if not self.context.is_allocator_fully_consumed(node.allocator.name):
-                return_types.append(f"array[qubit, {node.allocator.capacity}]")
+        if node.allocator and not self.context.is_allocator_fully_consumed(
+            node.allocator.name,
+        ):
+            return_types.append(f"array[qubit, {node.allocator.capacity}]")
 
         # Add measurement results (bools)
         if self.context.measurement_vars:
-            for _ in self.context.measurement_vars:
-                return_types.append("bool")
+            return_types.extend("bool" for _ in self.context.measurement_vars)
 
         if not return_types:
             return "None"
@@ -411,9 +414,10 @@ class AstToGuppy(BaseVisitor[list[str]]):
                 if not self.context.is_allocator_fully_consumed(decl.name):
                     return_values.append(decl.name)
 
-        if node.allocator:
-            if not self.context.is_allocator_fully_consumed(node.allocator.name):
-                return_values.append(node.allocator.name)
+        if node.allocator and not self.context.is_allocator_fully_consumed(
+            node.allocator.name,
+        ):
+            return_values.append(node.allocator.name)
 
         # Return measurement results
         return_values.extend(self.context.measurement_vars)
@@ -425,11 +429,11 @@ class AstToGuppy(BaseVisitor[list[str]]):
 
     # === Declarations ===
 
-    def visit_allocator_decl(self, node: AllocatorDecl) -> list[str]:
+    def visit_allocator_decl(self, _node: AllocatorDecl) -> list[str]:
         """Allocator declarations are handled at program level."""
         return []
 
-    def visit_register_decl(self, node: RegisterDecl) -> list[str]:
+    def visit_register_decl(self, _node: RegisterDecl) -> list[str]:
         """Register declarations are handled at program level."""
         return []
 
@@ -453,11 +457,10 @@ class AstToGuppy(BaseVisitor[list[str]]):
         if node.gate.arity == 1:
             target = targets[0]
             return [f"{self.context.indent()}{target} = {gate_func}({target})"]
-        else:
-            # Two-qubit gates return a tuple
-            return [
-                f"{self.context.indent()}{targets[0]}, {targets[1]} = {gate_func}({args})"
-            ]
+        # Two-qubit gates return a tuple
+        return [
+            f"{self.context.indent()}{targets[0]}, {targets[1]} = {gate_func}({args})",
+        ]
 
     def visit_prepare(self, node: PrepareOp) -> list[str]:
         """Generate prepare/reset operation."""
@@ -466,7 +469,7 @@ class AstToGuppy(BaseVisitor[list[str]]):
         if node.slots is None:
             # Prepare all - would need array iteration
             lines.append(
-                f"{self.context.indent()}# Prepare all slots in {node.allocator}"
+                f"{self.context.indent()}# Prepare all slots in {node.allocator}",
             )
         else:
             for slot in node.slots:
@@ -474,7 +477,7 @@ class AstToGuppy(BaseVisitor[list[str]]):
                 # In Guppy, qubits start in |0⟩ state from allocation
                 # For re-preparation after measurement, we'd use reset
                 lines.append(
-                    f"{self.context.indent()}{ref} = quantum.reset({ref})"
+                    f"{self.context.indent()}{ref} = quantum.reset({ref})",
                 )
 
         return lines
@@ -500,7 +503,7 @@ class AstToGuppy(BaseVisitor[list[str]]):
                 var_name = f"_m{i}"
 
             lines.append(
-                f"{self.context.indent()}{var_name} = quantum.measure({target_ref})"
+                f"{self.context.indent()}{var_name} = quantum.measure({target_ref})",
             )
 
         return lines
@@ -509,10 +512,7 @@ class AstToGuppy(BaseVisitor[list[str]]):
 
     def visit_assign(self, node: AssignOp) -> list[str]:
         """Generate assignment operation."""
-        if isinstance(node.target, BitRef):
-            target = f"{node.target.register}[{node.target.index}]"
-        else:
-            target = str(node.target)
+        target = f"{node.target.register}[{node.target.index}]" if isinstance(node.target, BitRef) else str(node.target)
 
         value = self._render_expression(node.value)
         return [f"{self.context.indent()}{target} = {value}"]
@@ -557,7 +557,9 @@ class AstToGuppy(BaseVisitor[list[str]]):
         lines = []
 
         if len(node.sources) != len(node.targets):
-            lines.append(f"{self.context.indent()}# ERROR: Permute sources/targets length mismatch")
+            lines.append(
+                f"{self.context.indent()}# ERROR: Permute sources/targets length mismatch",
+            )
             return lines
 
         if len(node.sources) == 0:
@@ -665,11 +667,11 @@ class AstToGuppy(BaseVisitor[list[str]]):
         if node.step:
             step = self._render_expression(node.step)
             lines.append(
-                f"{self.context.indent()}for {node.variable} in range({start}, {stop}, {step}):"
+                f"{self.context.indent()}for {node.variable} in range({start}, {stop}, {step}):",
             )
         else:
             lines.append(
-                f"{self.context.indent()}for {node.variable} in range({start}, {stop}):"
+                f"{self.context.indent()}for {node.variable} in range({start}, {stop}):",
             )
 
         self.context.push_indent()
@@ -749,10 +751,10 @@ class AstToGuppy(BaseVisitor[list[str]]):
 
     # === Type expressions ===
 
-    def visit_qubit_type(self, node) -> list[str]:
+    def visit_qubit_type(self, _node: object) -> list[str]:
         return ["qubit"]
 
-    def visit_bit_type(self, node) -> list[str]:
+    def visit_bit_type(self, _node: object) -> list[str]:
         return ["bool"]
 
     def visit_array_type(self, node) -> list[str]:
@@ -783,7 +785,8 @@ class AstToGuppy(BaseVisitor[list[str]]):
         if isinstance(expr, VarExpr):
             return expr.name
         if isinstance(expr, BitExpr):
-            return f"{expr.ref.register}[{expr.ref.index}]"
+            # Use underscore naming to match measurement variable names
+            return f"{expr.ref.register}_{expr.ref.index}"
         if isinstance(expr, BinaryExpr):
             return self._render_binary(expr)
         if isinstance(expr, UnaryExpr):

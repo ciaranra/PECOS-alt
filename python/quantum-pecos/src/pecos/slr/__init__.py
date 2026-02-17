@@ -85,6 +85,11 @@ from typing import TYPE_CHECKING
 from pecos.slr import ast, qeclib
 from pecos.slr.block import Block
 from pecos.slr.cond_block import If, Repeat
+from pecos.slr.gen_codes.guppy.qubit_state_validator import (
+    QubitStateValidator,
+    StateViolation,
+    validate_qubit_states,
+)
 from pecos.slr.loop_block import For, While
 from pecos.slr.main import Main
 from pecos.slr.main import (
@@ -92,16 +97,11 @@ from pecos.slr.main import (
 )
 from pecos.slr.misc import Barrier, Comment, Parallel, Permute, Return
 from pecos.slr.qalloc import QAlloc, QubitRef, SlotState
-from pecos.slr.gen_codes.guppy.qubit_state_validator import (
-    QubitStateValidator,
-    StateViolation,
-    validate_qubit_states,
-)
 from pecos.slr.slr_converter import SlrConverter
 from pecos.slr.types import Array
 from pecos.slr.types import Bit as BitType
 from pecos.slr.types import Qubit as QubitType
-from pecos.slr.vars import Bit, CReg, QReg, Qubit, Vars
+from pecos.slr.vars import Bit, CReg, LoopVar, QReg, Qubit, Vars
 
 if TYPE_CHECKING:
     from pecos.circuits import QuantumCircuit
@@ -148,9 +148,10 @@ def generate(
         >>> qasm = generate(prog, "qasm")
         >>> print(qasm)
     """
-    from pecos.slr.ast import slr_to_ast
-    from pecos.slr.ast.codegen import generate as ast_generate
-    from pecos.slr.ast.validation import validate as ast_validate
+    # Lazy imports to avoid circular dependencies
+    from pecos.slr.ast import slr_to_ast  # noqa: PLC0415
+    from pecos.slr.ast.codegen import generate as ast_generate  # noqa: PLC0415
+    from pecos.slr.ast.validation import validate as ast_validate  # noqa: PLC0415
 
     # Convert SLR to AST
     program_ast = slr_to_ast(program)
@@ -165,6 +166,7 @@ def generate(
     # Generate code
     return ast_generate(program_ast, target)
 
+
 __all__ = [
     "SLR",
     "Array",
@@ -176,30 +178,31 @@ __all__ = [
     "Comment",
     "For",
     "If",
+    "LoopVar",
     "Main",
     "Parallel",
     "Permute",
     # Qubit allocator (new)
     "QAlloc",
-    "QubitRef",
-    "SlotState",
-    # State validation
-    "QubitStateValidator",
-    "StateViolation",
-    "validate_qubit_states",
     # Legacy register (kept for compatibility)
     "QReg",
     "Qubit",
+    "QubitRef",
+    # State validation
+    "QubitStateValidator",
     "QubitType",
     "Repeat",
     "Return",
+    "SlotState",
     "SlrConverter",
+    "StateViolation",
     "Vars",
     "While",
-    # Code generation (recommended)
-    "generate",
     # AST module
     "ast",
+    # Code generation (recommended)
+    "generate",
     # QEC library
     "qeclib",
+    "validate_qubit_states",
 ]

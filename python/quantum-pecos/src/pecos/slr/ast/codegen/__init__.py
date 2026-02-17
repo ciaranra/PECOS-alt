@@ -24,6 +24,7 @@ Example with validation:
     >>> result = generate_with_validation(ast, target="qasm")
     >>> if result.valid:
     ...     print(result.code)
+    ...
 """
 
 from pecos.slr.ast.codegen.base import CodegenOptions, CodegenResult
@@ -99,15 +100,16 @@ def generate_with_validation(
         >>> if result.valid:
         ...     print(result.code)
         ...     print(f"T-count: {result.t_count.t_count}")
+        ...
     """
-    from pecos.slr.ast.analysis import (
+    from pecos.slr.ast.analysis import (  # noqa: PLC0415
         analyze_connectivity,
         analyze_depth,
         analyze_parallelism,
         analyze_t_count,
         count_resources,
     )
-    from pecos.slr.ast.validation import validate
+    from pecos.slr.ast.validation import validate  # noqa: PLC0415
 
     # Validate
     validation_result = validate(program)
@@ -148,14 +150,14 @@ def generate_with_options(
     Returns:
         CodegenResult with code and requested metadata.
     """
-    from pecos.slr.ast.analysis import (
+    from pecos.slr.ast.analysis import (  # noqa: PLC0415
         analyze_connectivity,
         analyze_depth,
         analyze_parallelism,
         analyze_t_count,
         count_resources,
     )
-    from pecos.slr.ast.validation import validate
+    from pecos.slr.ast.validation import validate  # noqa: PLC0415
 
     if options is None:
         options = CodegenOptions()
@@ -190,28 +192,28 @@ def generate_with_options(
 
 
 __all__ = [
+    # Guppy code generation
+    "AstToGuppy",
+    # QASM code generation
+    "AstToQasm",
+    # QIR code generation
+    "AstToQir",
+    # QuantumCircuit code generation
+    "AstToQuantumCircuit",
+    # Stim code generation
+    "AstToStim",
     # Base classes
     "CodegenOptions",
     "CodegenResult",
+    "ast_to_guppy",
+    "ast_to_qasm",
+    "ast_to_qir",
+    "ast_to_quantum_circuit",
+    "ast_to_quantum_circuit_str",
+    "ast_to_stim",
+    "ast_to_stim_str",
     # Convenience functions
     "generate",
     "generate_with_options",
     "generate_with_validation",
-    # Guppy code generation
-    "AstToGuppy",
-    "ast_to_guppy",
-    # QASM code generation
-    "AstToQasm",
-    "ast_to_qasm",
-    # Stim code generation
-    "AstToStim",
-    "ast_to_stim",
-    "ast_to_stim_str",
-    # QuantumCircuit code generation
-    "AstToQuantumCircuit",
-    "ast_to_quantum_circuit",
-    "ast_to_quantum_circuit_str",
-    # QIR code generation
-    "AstToQir",
-    "ast_to_qir",
 ]

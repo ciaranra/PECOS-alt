@@ -28,41 +28,44 @@ Example:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from pecos.slr.ast.nodes import (
     AllocatorDecl,
-    AssignOp,
-    BarrierOp,
     BinaryExpr,
     BinaryOp,
     BitExpr,
     BitRef,
-    CommentOp,
-    ForStmt,
     GateKind,
-    GateOp,
-    IfStmt,
     LiteralExpr,
-    MeasureOp,
-    ParallelBlock,
-    PermuteOp,
-    PrepareOp,
-    Program,
     RegisterDecl,
-    RepeatStmt,
-    ReturnOp,
-    SlotRef,
     UnaryExpr,
     UnaryOp,
     VarExpr,
-    WhileStmt,
 )
 from pecos.slr.ast.visitor import BaseVisitor
 
 if TYPE_CHECKING:
-    from pecos.slr.ast.nodes import Expression
+    from pecos.slr.ast.nodes import (
+        AssignOp,
+        BarrierOp,
+        CommentOp,
+        Expression,
+        ForStmt,
+        GateOp,
+        IfStmt,
+        MeasureOp,
+        ParallelBlock,
+        PermuteOp,
+        PrepareOp,
+        Program,
+        RepeatStmt,
+        ReturnOp,
+        SlotRef,
+        WhileStmt,
+    )
 
 
 # Mapping from AST GateKind to QASM gate names
@@ -102,6 +105,10 @@ GATE_TO_QASM: dict[GateKind, str] = {
     GateKind.SYYdg: "SYYdg",
     GateKind.SZZdg: "SZZdg",
     GateKind.RZZ: "rzz",
+    # Controlled rotation gates
+    GateKind.CRX: "crx",
+    GateKind.CRY: "cry",
+    GateKind.CRZ: "crz",
     # Face rotations (decomposed)
     GateKind.F: None,  # Handled specially
     GateKind.Fdg: None,
@@ -134,10 +141,18 @@ class QasmContext:
     """Context for QASM code generation."""
 
     allocators: dict[str, int] = field(default_factory=dict)  # name -> size
-    allocator_parents: dict[str, str | None] = field(default_factory=dict)  # name -> parent
-    allocator_offsets: dict[str, int] = field(default_factory=dict)  # name -> offset in parent
+    allocator_parents: dict[str, str | None] = field(
+        default_factory=dict,
+    )  # name -> parent
+    allocator_offsets: dict[str, int] = field(
+        default_factory=dict,
+    )  # name -> offset in parent
     registers: dict[str, int] = field(default_factory=dict)  # name -> size
     condition: str | None = None  # Current if condition
+    # Permutation map: (allocator, index) -> (new_allocator, new_index)
+    permutation_map: dict[tuple[str, int], tuple[str, int]] = field(
+        default_factory=dict,
+    )
 
     def get_root_allocator(self, name: str) -> str:
         """Get the root allocator for a given allocator name."""
@@ -150,6 +165,16 @@ class QasmContext:
         """Get the absolute index in the root allocator."""
         offset = self.allocator_offsets.get(allocator, 0)
         return offset + index
+
+    def apply_permutation(self, allocator: str, index: int) -> tuple[str, int]:
+        """Apply permutation to get the actual (allocator, index) for a qubit reference.
+
+        Performs a single lookup - the permutation_map maps logical to physical.
+        """
+        key = (allocator, index)
+        if key in self.permutation_map:
+            return self.permutation_map[key]
+        return key
 
 
 class AstToQasm(BaseVisitor[list[str]]):
@@ -211,13 +236,12 @@ class AstToQasm(BaseVisitor[list[str]]):
 
     def visit_program(self, node: Program) -> list[str]:
         """Generate code for a complete program."""
-        lines = []
+        lines: list[str] = []
 
         # Header
         if self.include_header:
             lines.append("OPENQASM 2.0;")
-            for inc in self.includes:
-                lines.append(f'include "{inc}";')
+            lines.extend(f'include "{inc}";' for inc in self.includes)
 
         # First pass: collect all allocator info
         for decl in node.declarations:
@@ -272,18 +296,16 @@ class AstToQasm(BaseVisitor[list[str]]):
                     parent_next_offset[parent] = 0
 
                 parent_offset = self.context.allocator_offsets.get(parent, 0)
-                self.context.allocator_offsets[decl.name] = (
-                    parent_offset + parent_next_offset[parent]
-                )
+                self.context.allocator_offsets[decl.name] = parent_offset + parent_next_offset[parent]
                 parent_next_offset[parent] += decl.capacity
 
     # === Declarations ===
 
-    def visit_allocator_decl(self, node: AllocatorDecl) -> list[str]:
+    def visit_allocator_decl(self, _node: AllocatorDecl) -> list[str]:
         """Allocator declarations are handled at program level."""
         return []
 
-    def visit_register_decl(self, node: RegisterDecl) -> list[str]:
+    def visit_register_decl(self, _node: RegisterDecl) -> list[str]:
         """Register declarations are handled at program level."""
         return []
 
@@ -376,7 +398,9 @@ class AstToQasm(BaseVisitor[list[str]]):
             if i < len(node.results):
                 result = node.results[i]
                 result_ref = f"{result.register}[{result.index}]"
-                lines.append(self._maybe_conditional(f"measure {target_ref} -> {result_ref};"))
+                lines.append(
+                    self._maybe_conditional(f"measure {target_ref} -> {result_ref};"),
+                )
             else:
                 # Measurement without result storage
                 lines.append(self._maybe_conditional(f"measure {target_ref};"))
@@ -387,55 +411,234 @@ class AstToQasm(BaseVisitor[list[str]]):
 
     def visit_assign(self, node: AssignOp) -> list[str]:
         """Generate assignment operation."""
-        if isinstance(node.target, BitRef):
-            target = f"{node.target.register}[{node.target.index}]"
-        else:
-            target = str(node.target)
+        target = f"{node.target.register}[{node.target.index}]" if isinstance(node.target, BitRef) else str(node.target)
 
         value = self._render_expression(node.value)
         return [self._maybe_conditional(f"{target} = {value};")]
 
     def visit_barrier(self, node: BarrierOp) -> list[str]:
         """Generate barrier operation."""
-        if node.allocators:
-            qubits = ", ".join(node.allocators)
-        else:
-            # Barrier on all qubits
-            qubits = ", ".join(self.context.allocators.keys())
-
+        qubits = ", ".join(node.allocators) if node.allocators else ", ".join(self.context.allocators.keys())
         return [f"barrier {qubits};"]
 
     def visit_comment(self, node: CommentOp) -> list[str]:
-        """Generate comment."""
-        if node.text:
-            return [f"// {node.text}"]
-        return []
+        """Generate comment.
 
-    def visit_return(self, node: ReturnOp) -> list[str]:
+        Handles multi-line comments by splitting on newlines and prefixing
+        each non-empty line with '//'. Empty lines become just '//'.
+        """
+        if not node.text:
+            return []
+
+        lines = node.text.split("\n")
+        result = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped:
+                result.append(f"// {stripped}")
+            else:
+                result.append("//")
+        return result
+
+    def visit_return(self, _node: ReturnOp) -> list[str]:
         """Return is not a QASM concept - ignored."""
         return []
 
     def visit_permute(self, node: PermuteOp) -> list[str]:
-        """Handle permutation by updating internal permutation map.
+        """Handle permutation.
 
-        QASM doesn't have a permute instruction, so this updates the
-        internal mapping used for subsequent qubit references.
+        For classical bits: generates actual swap code with a temp register.
+        For qubits: updates internal permutation map for tracking.
         """
+        lines: list[str] = []
+
+        def parse_ref(ref: str) -> tuple[str, int] | None:
+            """Parse 'name[index]' into (name, index) tuple.
+
+            Returns None for whole register references (no index).
+            """
+            match = re.match(r"(\w+)\[(\d+)\]", ref)
+            if match:
+                return (match.group(1), int(match.group(2)))
+            return None  # Whole register reference
+
+        if not node.sources:
+            return lines
+
+        # Check if this is a whole register permutation (no indices)
+        first_parsed = parse_ref(node.sources[0])
+        if first_parsed is None:
+            # Whole register permutation
+            first_name = node.sources[0]
+            if first_name in self.context.registers:
+                return self._generate_classical_register_permute(node)
+            return self._generate_qubit_register_permute(node, parse_ref)
+
+        # Check if this is a classical bit permutation
+        is_classical = first_parsed[0] in self.context.registers
+
+        if is_classical:
+            return self._generate_classical_bit_permute(node, parse_ref)
+        return self._generate_qubit_permute(node, parse_ref)
+
+    def _generate_classical_register_permute(self, node: PermuteOp) -> list[str]:
+        """Generate XOR swap for whole classical register permutation."""
         lines = []
 
-        if node.add_comment and node.sources:
-            names = ", ".join(node.sources)
-            lines.append(f"// Permute: {names} <-> {', '.join(node.targets)}")
+        # For now, handle the simple case of swapping two registers
+        if len(node.sources) == 2:
+            reg_a = node.sources[0]
+            reg_b = node.sources[1]
 
-        # Update the permutation map in context
-        # For each source->target pair, remap qubit references
+            # XOR swap
+            lines.append(f"{reg_a} = {reg_a} ^ {reg_b};")
+            lines.append(f"{reg_b} = {reg_b} ^ {reg_a};")
+            lines.append(f"{reg_a} = {reg_a} ^ {reg_b};")
+
+            if node.add_comment:
+                lines.append(f"// Permutation: {reg_a} <-> {reg_b}")
+
+        return lines
+
+    def _generate_classical_bit_permute(
+        self,
+        node: PermuteOp,
+        _parse_ref: object,
+    ) -> list[str]:
+        """Generate actual swap operations for classical bit permutation."""
+        lines: list[str] = []
+
+        # Build mapping from source to target
+        perm_map = dict(zip(node.sources, node.targets, strict=False))
+
+        # Find all cycles in the permutation
+        visited: set[str] = set()
+        cycles = []
+
+        for start in node.sources:
+            if start in visited:
+                continue
+
+            cycle = [start]
+            visited.add(start)
+
+            next_elem = perm_map[start]
+            while next_elem != start:
+                cycle.append(next_elem)
+                visited.add(next_elem)
+                next_elem = perm_map.get(next_elem, start)
+
+            # Skip cycles of length 1 (elements that map to themselves)
+            if len(cycle) > 1:
+                cycles.append(cycle)
+
+        # If there are cycles, we need a temporary bit
+        if cycles:
+            lines.append("creg _bit_swap[1];")
+
+            for cycle in cycles:
+                # Save first element to temp
+                lines.append(f"_bit_swap[0] = {cycle[0]};")
+
+                # Shift elements: each gets value of next in cycle
+                lines.extend(f"{cycle[i]} = {cycle[i + 1]};" for i in range(len(cycle) - 1))
+
+                # Last element gets the saved value
+                lines.append(f"{cycle[-1]} = _bit_swap[0];")
+
+        # Add comment describing the permutation
+        if node.add_comment:
+            perm_strs = [f"{s} -> {t}" for s, t in zip(node.sources, node.targets, strict=False)]
+            lines.append(f"// Permutation: {', '.join(perm_strs)}")
+
+        return lines
+
+    def _generate_qubit_register_permute(
+        self,
+        node: PermuteOp,
+        _parse_ref: object,
+    ) -> list[str]:
+        """Update permutation map for whole qubit register permutation.
+
+        Uses composition semantics to preserve existing mappings.
+        """
+        lines: list[str] = []
+
+        if node.add_comment and node.sources:
+            lines.append(f"// Permutation: {' <-> '.join(node.sources)}")
+
+        # For whole register swap, create mappings for all elements
+        if len(node.sources) == 2:
+            reg_a = node.sources[0]
+            reg_b = node.sources[1]
+            size_a = self.context.allocators.get(reg_a, 0)
+            size_b = self.context.allocators.get(reg_b, 0)
+
+            if size_a == size_b and size_a > 0:
+                # Build new permutation
+                new_perm: dict[tuple[str, int], tuple[str, int]] = {}
+                for i in range(size_a):
+                    new_perm[(reg_a, i)] = (reg_b, i)
+                    new_perm[(reg_b, i)] = (reg_a, i)
+
+                # Compose with existing permutation map
+                # Update existing mappings
+                composed: dict[tuple[str, int], tuple[str, int]] = {
+                    src: new_perm.get(intermediate, intermediate)
+                    for src, intermediate in self.context.permutation_map.items()
+                }
+
+                # Add new mappings only if source is not already mapped
+                composed.update(
+                    {src: dst for src, dst in new_perm.items() if src not in self.context.permutation_map},
+                )
+
+                self.context.permutation_map = composed
+
+        return lines
+
+    def _generate_qubit_permute(
+        self,
+        node: PermuteOp,
+        parse_ref: object,
+    ) -> list[str]:
+        """Update permutation map for qubit permutation (no physical ops).
+
+        Uses composition semantics: existing mappings are updated if their
+        destination is being remapped, but new mappings only added if the
+        source is not already mapped.
+        """
+        lines: list[str] = []
+
+        if node.add_comment and node.sources:
+            perm_strs = [f"{s} -> {t}" for s, t in zip(node.sources, node.targets, strict=False)]
+            lines.append(f"// Permutation: {', '.join(perm_strs)}")
+
+        # Build the new permutation: src -> where tgt currently points
+        new_perm: dict[tuple[str, int], tuple[str, int]] = {}
         for src, tgt in zip(node.sources, node.targets, strict=False):
-            # Swap the mappings for src and tgt allocators
-            # This affects how get_qubit_name() resolves references
-            if hasattr(self.context, "permutation_map"):
-                # Store the swap
-                self.context.permutation_map[src] = tgt
-                self.context.permutation_map[tgt] = src
+            src_key = parse_ref(src)
+            tgt_key = parse_ref(tgt)
+
+            if src_key is None or tgt_key is None:
+                continue
+
+            # Where does tgt currently point? That's where src should now point
+            tgt_physical = self.context.apply_permutation(*tgt_key)
+            new_perm[src_key] = tgt_physical
+
+        # Compose with existing permutation map
+        # Update existing mappings: if destination is in new_perm, follow the chain
+        composed: dict[tuple[str, int], tuple[str, int]] = {
+            src: new_perm.get(intermediate, intermediate) for src, intermediate in self.context.permutation_map.items()
+        }
+
+        # Add new mappings only if source is not already in existing map
+        composed.update(
+            {src: dst for src, dst in new_perm.items() if src not in self.context.permutation_map},
+        )
+
+        self.context.permutation_map = composed
 
         return lines
 
@@ -469,11 +672,11 @@ class AstToQasm(BaseVisitor[list[str]]):
 
         return lines
 
-    def visit_while(self, node: WhileStmt) -> list[str]:
+    def visit_while(self, _node: WhileStmt) -> list[str]:
         """While loops are not supported in QASM 2.0."""
         return ["// ERROR: While loops not supported in QASM 2.0"]
 
-    def visit_for(self, node: ForStmt) -> list[str]:
+    def visit_for(self, _node: ForStmt) -> list[str]:
         """For loops are not supported in QASM 2.0."""
         return ["// ERROR: For loops not supported in QASM 2.0"]
 
@@ -533,10 +736,10 @@ class AstToQasm(BaseVisitor[list[str]]):
 
     # === Type expressions ===
 
-    def visit_qubit_type(self, node) -> list[str]:
+    def visit_qubit_type(self, _node: object) -> list[str]:
         return ["qubit"]
 
-    def visit_bit_type(self, node) -> list[str]:
+    def visit_bit_type(self, _node: object) -> list[str]:
         return ["bit"]
 
     def visit_array_type(self, node) -> list[str]:
@@ -551,10 +754,16 @@ class AstToQasm(BaseVisitor[list[str]]):
         """Render a slot reference as array access.
 
         For child allocators, translates to root allocator with computed offset.
+        Applies permutation if one is in effect.
         """
+        # First get the root allocator and absolute index
         root = self.context.get_root_allocator(node.allocator)
         abs_index = self.context.get_absolute_index(node.allocator, node.index)
-        return f"{root}[{abs_index}]"
+
+        # Apply permutation if one exists for this qubit
+        actual_root, actual_index = self.context.apply_permutation(root, abs_index)
+
+        return f"{actual_root}[{actual_index}]"
 
     def _render_expression(self, expr: Expression) -> str:
         """Render an expression to a string."""
@@ -563,7 +772,9 @@ class AstToQasm(BaseVisitor[list[str]]):
         if isinstance(expr, VarExpr):
             return expr.name
         if isinstance(expr, BitExpr):
-            return f"{expr.ref.register}[{expr.ref.index}]"
+            # Apply permutation to bit references (for mixed qubit/classical permutations)
+            reg, idx = self.context.apply_permutation(expr.ref.register, expr.ref.index)
+            return f"{reg}[{idx}]"
         if isinstance(expr, BinaryExpr):
             return self._render_binary(expr)
         if isinstance(expr, UnaryExpr):

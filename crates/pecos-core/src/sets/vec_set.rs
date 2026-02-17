@@ -61,6 +61,12 @@ impl<E: Element> VecSet<E> {
     pub fn iter(&self) -> Iter<'_, E> {
         self.elements.iter()
     }
+
+    #[inline]
+    #[must_use]
+    pub fn elements(&self) -> &[E] {
+        &self.elements
+    }
 }
 
 impl<E: Element> Default for VecSet<E> {

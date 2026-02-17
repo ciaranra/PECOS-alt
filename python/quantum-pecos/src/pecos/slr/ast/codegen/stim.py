@@ -39,17 +39,18 @@ from pecos.slr.ast.nodes import (
     ParallelBlock,
     PermuteOp,
     PrepareOp,
-    Program,
     RegisterDecl,
     RepeatStmt,
-    SlotRef,
     WhileStmt,
 )
 
 if TYPE_CHECKING:
     import stim
 
-    from pecos.slr.ast.nodes import Statement
+    from pecos.slr.ast.nodes import (
+        Program,
+        Statement,
+    )
 
 # Mapping from AST GateKind to Stim gate names
 GATE_TO_STIM: dict[GateKind, str] = {
@@ -162,7 +163,7 @@ class AstToStim:
         Returns:
             A stim.Circuit object.
         """
-        import stim
+        import stim  # noqa: PLC0415
 
         self.context = StimCodeGenContext()
         self.circuit = stim.Circuit()
@@ -223,9 +224,7 @@ class AstToStim:
                     parent_next_offset[parent] = 0
 
                 parent_offset = self.context.allocator_offsets.get(parent, 0)
-                self.context.allocator_offsets[decl.name] = (
-                    parent_offset + parent_next_offset[parent]
-                )
+                self.context.allocator_offsets[decl.name] = parent_offset + parent_next_offset[parent]
                 parent_next_offset[parent] += decl.capacity
 
     def _process_statement(self, stmt: Statement) -> None:
@@ -266,33 +265,37 @@ class AstToStim:
 
     def _process_single_qubit_gate(self, node: GateOp, stim_gate: str) -> None:
         """Process a single-qubit gate."""
-        qubits = [
-            self.context.get_qubit(t.allocator, t.index) for t in node.targets
-        ]
+        qubits = [self.context.get_qubit(t.allocator, t.index) for t in node.targets]
         self.circuit.append_operation(stim_gate, qubits)
 
     def _process_two_qubit_gate(self, node: GateOp, stim_gate: str) -> None:
         """Process a two-qubit gate."""
         if len(node.targets) >= 2:
-            q0 = self.context.get_qubit(node.targets[0].allocator, node.targets[0].index)
-            q1 = self.context.get_qubit(node.targets[1].allocator, node.targets[1].index)
+            q0 = self.context.get_qubit(
+                node.targets[0].allocator,
+                node.targets[0].index,
+            )
+            q1 = self.context.get_qubit(
+                node.targets[1].allocator,
+                node.targets[1].index,
+            )
             self.circuit.append_operation(stim_gate, [q0, q1])
         elif len(node.targets) % 2 == 0:
             # Process pairs
             for i in range(0, len(node.targets), 2):
                 q0 = self.context.get_qubit(
-                    node.targets[i].allocator, node.targets[i].index
+                    node.targets[i].allocator,
+                    node.targets[i].index,
                 )
                 q1 = self.context.get_qubit(
-                    node.targets[i + 1].allocator, node.targets[i + 1].index
+                    node.targets[i + 1].allocator,
+                    node.targets[i + 1].index,
                 )
                 self.circuit.append_operation(stim_gate, [q0, q1])
 
     def _process_measure(self, node: MeasureOp) -> None:
         """Process a measurement operation."""
-        qubits = [
-            self.context.get_qubit(t.allocator, t.index) for t in node.targets
-        ]
+        qubits = [self.context.get_qubit(t.allocator, t.index) for t in node.targets]
         self.circuit.append_operation("M", qubits)
         self.context.measurement_count += len(qubits)
 
@@ -344,7 +347,7 @@ class AstToStim:
 
     def _process_repeat(self, node: RepeatStmt) -> None:
         """Process a repeat loop using Stim's REPEAT block."""
-        import stim
+        import stim  # noqa: PLC0415
 
         if node.count <= 0:
             return

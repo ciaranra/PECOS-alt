@@ -17,6 +17,8 @@ For example: RX(a) + RX(b) = RX(a+b).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pecos.slr.ast.nodes import (
     BinaryExpr,
     BinaryOp,
@@ -27,11 +29,15 @@ from pecos.slr.ast.nodes import (
     ParallelBlock,
     Program,
     RepeatStmt,
-    Statement,
     WhileStmt,
 )
 from pecos.slr.ast.optimizations.base import OptimizationPass, OptimizationResult
 from pecos.slr.ast.optimizations.gate_properties import is_rotation_gate, targets_match
+
+if TYPE_CHECKING:
+    from pecos.slr.ast.nodes import (
+        Statement,
+    )
 
 
 class RotationMergingPass(OptimizationPass):
@@ -80,7 +86,10 @@ class RotationMergingPass(OptimizationPass):
             passes_applied=[self.name],
         )
 
-    def _optimize_statements(self, statements: tuple[Statement, ...]) -> tuple[tuple[Statement, ...], int]:
+    def _optimize_statements(
+        self,
+        statements: tuple[Statement, ...],
+    ) -> tuple[tuple[Statement, ...], int]:
         """Merge consecutive rotation gates in a sequence of statements."""
         result: list[Statement] = []
         merged = 0

@@ -60,7 +60,9 @@ class QubitStateTracker:
     """
 
     # Map from (array_name, index) to current state
-    slot_states: dict[tuple[str, int], ValidationSlotState] = field(default_factory=dict)
+    slot_states: dict[tuple[str, int], ValidationSlotState] = field(
+        default_factory=dict,
+    )
 
     # Collected violations
     violations: list[StateViolation] = field(default_factory=list)
@@ -95,7 +97,7 @@ class QubitStateTracker:
                     gate_name=gate_name,
                     message=f"Gate '{gate_name}' applied to unprepared qubit. "
                     f"Call prepare() before applying gates.",
-                )
+                ),
             )
             return False
         return True
@@ -177,7 +179,7 @@ class QubitStateValidator:
 
     def _initialize_prepared(self, variable_context: dict[str, Any]) -> None:
         """Mark all qubits as initially prepared (legacy mode)."""
-        for name, var in variable_context.items():
+        for var in variable_context.values():
             if hasattr(var, "size") and hasattr(var, "sym"):
                 # Check if it's a quantum register
                 var_type = type(var).__name__
@@ -257,11 +259,7 @@ class QubitStateValidator:
         # Reset to state before if and validate else
         self.tracker.slot_states = dict(state_before)
 
-        if (
-            hasattr(if_block, "else_block")
-            and if_block.else_block
-            and hasattr(if_block.else_block, "ops")
-        ):
+        if hasattr(if_block, "else_block") and if_block.else_block and hasattr(if_block.else_block, "ops"):
             for op in if_block.else_block.ops:
                 self._validate_operation(op, variable_context)
 
@@ -308,11 +306,7 @@ class QubitStateValidator:
 
     def _has_reg_and_index(self, qarg: Any) -> bool:
         """Check if a qubit argument has reg and index attributes."""
-        return (
-            hasattr(qarg, "reg")
-            and hasattr(qarg.reg, "sym")
-            and hasattr(qarg, "index")
-        )
+        return hasattr(qarg, "reg") and hasattr(qarg.reg, "sym") and hasattr(qarg, "index")
 
 
 def validate_qubit_states(

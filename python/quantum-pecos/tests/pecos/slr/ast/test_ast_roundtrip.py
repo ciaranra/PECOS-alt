@@ -18,7 +18,6 @@ This catches subtle bugs where generated code compiles but produces wrong result
 """
 
 import pytest
-
 from pecos.slr import Barrier, CReg, If, Main, Parallel, QReg, Repeat
 from pecos.slr.ast import slr_to_ast
 from pecos.slr.ast.codegen import (
@@ -28,18 +27,15 @@ from pecos.slr.ast.codegen import (
 from pecos.slr.qeclib import qubit as qb
 
 
-def tick_to_dict(tick):
+def tick_to_dict(tick: object) -> dict[str, set]:
     """Convert TickView to a dict {gate_symbol: set(locations)}."""
-    result = {}
-    for symbol, locations, _ in tick.items():
-        result[symbol] = locations
-    return result
+    return {symbol: locations for symbol, locations, _ in tick.items()}
 
 
 class TestRoundTripStructure:
     """Tests that verify structure is preserved through the pipeline."""
 
-    def test_gate_count_preserved(self):
+    def test_gate_count_preserved(self) -> None:
         """Verify gate count is preserved through conversion."""
         prog = Main(
             q := QReg("q", 3),
@@ -61,11 +57,11 @@ class TestRoundTripStructure:
         assert resources.two_qubit_gates == 2  # 2 CX gates
         assert resources.total_gates == 5
 
-    def test_qubit_count_preserved(self):
+    def test_qubit_count_preserved(self) -> None:
         """Verify qubit count is preserved through conversion."""
         prog = Main(
-            a := QReg("a", 3),
-            b := QReg("b", 2),
+            _a := QReg("a", 3),
+            _b := QReg("b", 2),
         )
 
         ast = slr_to_ast(prog)
@@ -76,7 +72,7 @@ class TestRoundTripStructure:
 
         assert resources.qubit_count == 5
 
-    def test_measurement_count_preserved(self):
+    def test_measurement_count_preserved(self) -> None:
         """Verify measurement count is preserved through conversion."""
         prog = Main(
             q := QReg("q", 3),
@@ -98,7 +94,7 @@ class TestRoundTripStructure:
 class TestRoundTripQASM:
     """Round-trip tests through QASM generation."""
 
-    def test_bell_state_qasm_structure(self):
+    def test_bell_state_qasm_structure(self) -> None:
         """Test Bell state generates correct QASM structure."""
         prog = Main(
             q := QReg("q", 2),
@@ -111,15 +107,15 @@ class TestRoundTripQASM:
 
         # Verify essential QASM elements
         lines = qasm.strip().split("\n")
-        non_empty = [l.strip() for l in lines if l.strip()]
+        non_empty = [line.strip() for line in lines if line.strip()]
 
         # Should have: header, include, qreg, h, cx
-        assert any("OPENQASM" in l for l in non_empty)
-        assert any("qreg q[2]" in l for l in non_empty)
-        assert any("h q[0]" in l for l in non_empty)
-        assert any("cx q[0], q[1]" in l for l in non_empty)
+        assert any("OPENQASM" in line for line in non_empty)
+        assert any("qreg q[2]" in line for line in non_empty)
+        assert any("h q[0]" in line for line in non_empty)
+        assert any("cx q[0], q[1]" in line for line in non_empty)
 
-    def test_ghz_state_qasm_structure(self):
+    def test_ghz_state_qasm_structure(self) -> None:
         """Test GHZ state generates correct QASM structure."""
         prog = Main(
             q := QReg("q", 3),
@@ -135,7 +131,7 @@ class TestRoundTripQASM:
         assert "cx q[0], q[1]" in qasm
         assert "cx q[1], q[2]" in qasm
 
-    def test_qec_syndrome_qasm_structure(self):
+    def test_qec_syndrome_qasm_structure(self) -> None:
         """Test QEC syndrome extraction generates correct QASM."""
         prog = Main(
             data := QReg("data", 2),
@@ -159,7 +155,7 @@ class TestRoundTripQASM:
         assert "cx data[1], ancilla[0]" in qasm
         assert "measure ancilla[0] -> c[0]" in qasm
 
-    def test_conditional_qasm_structure(self):
+    def test_conditional_qasm_structure(self) -> None:
         """Test conditional operations generate correct QASM."""
         prog = Main(
             q := QReg("q", 1),
@@ -174,7 +170,7 @@ class TestRoundTripQASM:
 
         assert "if(c[0] == 1) x q[0]" in qasm
 
-    def test_repeat_unrolled_qasm(self):
+    def test_repeat_unrolled_qasm(self) -> None:
         """Test repeat loops are unrolled in QASM."""
         prog = Main(
             q := QReg("q", 1),
@@ -193,7 +189,7 @@ class TestRoundTripQASM:
 class TestRoundTripGuppy:
     """Round-trip tests through Guppy generation."""
 
-    def test_bell_state_guppy_structure(self):
+    def test_bell_state_guppy_structure(self) -> None:
         """Test Bell state generates correct Guppy structure."""
         prog = Main(
             q := QReg("q", 2),
@@ -212,7 +208,7 @@ class TestRoundTripGuppy:
         assert "quantum.h" in guppy
         assert "quantum.cx" in guppy
 
-    def test_measurement_guppy_structure(self):
+    def test_measurement_guppy_structure(self) -> None:
         """Test measurement generates correct Guppy structure."""
         prog = Main(
             q := QReg("q", 1),
@@ -230,10 +226,12 @@ class TestRoundTripStim:
     """Round-trip tests through Stim generation."""
 
     @pytest.fixture
-    def stim(self):
+    def _require_stim(self) -> object:
+        """Skip tests if stim is not available."""
         return pytest.importorskip("stim")
 
-    def test_bell_state_stim_simulation(self, stim):
+    @pytest.mark.usefixtures("_require_stim")
+    def test_bell_state_stim_simulation(self) -> None:
         """Test Bell state can be simulated with Stim."""
         from pecos.slr.ast.codegen import ast_to_stim
 
@@ -258,7 +256,8 @@ class TestRoundTripStim:
         for sample in samples:
             assert sample[0] == sample[1], "Bell state qubits should be correlated"
 
-    def test_ghz_state_stim_simulation(self, stim):
+    @pytest.mark.usefixtures("_require_stim")
+    def test_ghz_state_stim_simulation(self) -> None:
         """Test GHZ state can be simulated with Stim."""
         from pecos.slr.ast.codegen import ast_to_stim
 
@@ -282,11 +281,10 @@ class TestRoundTripStim:
 
         # GHZ state should have all qubits the same
         for sample in samples:
-            assert (
-                sample[0] == sample[1] == sample[2]
-            ), "GHZ state qubits should all be correlated"
+            assert sample[0] == sample[1] == sample[2], "GHZ state qubits should all be correlated"
 
-    def test_repeat_block_preserved(self, stim):
+    @pytest.mark.usefixtures("_require_stim")
+    def test_repeat_block_preserved(self) -> None:
         """Test repeat blocks are preserved in Stim."""
         from pecos.slr.ast.codegen import ast_to_stim_str
 
@@ -307,7 +305,7 @@ class TestRoundTripStim:
 class TestRoundTripQuantumCircuit:
     """Round-trip tests through QuantumCircuit generation."""
 
-    def test_bell_state_quantum_circuit_structure(self):
+    def test_bell_state_quantum_circuit_structure(self) -> None:
         """Test Bell state generates correct QuantumCircuit structure."""
         from pecos.slr.ast.codegen import ast_to_quantum_circuit
 
@@ -333,7 +331,7 @@ class TestRoundTripQuantumCircuit:
         assert "CX" in tick1
         assert (0, 1) in tick1["CX"]
 
-    def test_parallel_operations_same_tick(self):
+    def test_parallel_operations_same_tick(self) -> None:
         """Test parallel operations are in same tick."""
         from pecos.slr.ast.codegen import ast_to_quantum_circuit
 
@@ -360,10 +358,12 @@ class TestRoundTripQIR:
     """Round-trip tests through QIR generation."""
 
     @pytest.fixture
-    def llvm(self):
+    def _require_llvm(self) -> object:
+        """Skip tests if LLVM is not available."""
         return pytest.importorskip("pecos_rslib.llvm")
 
-    def test_bell_state_qir_structure(self, llvm):
+    @pytest.mark.usefixtures("_require_llvm")
+    def test_bell_state_qir_structure(self) -> None:
         """Test Bell state generates valid QIR."""
         from pecos.slr.ast.codegen import ast_to_qir
 
@@ -382,7 +382,8 @@ class TestRoundTripQIR:
         assert "__quantum__qis__cnot__body" in qir
         assert "ret void" in qir
 
-    def test_qir_qubit_count_attribute(self, llvm):
+    @pytest.mark.usefixtures("_require_llvm")
+    def test_qir_qubit_count_attribute(self) -> None:
         """Test QIR includes correct qubit count attribute."""
         from pecos.slr.ast.codegen import ast_to_qir
 
@@ -396,7 +397,8 @@ class TestRoundTripQIR:
 
         assert 'required_num_qubits"="5"' in qir
 
-    def test_qir_measurement_count_attribute(self, llvm):
+    @pytest.mark.usefixtures("_require_llvm")
+    def test_qir_measurement_count_attribute(self) -> None:
         """Test QIR includes correct measurement count attribute."""
         from pecos.slr.ast.codegen import ast_to_qir
 
@@ -417,7 +419,7 @@ class TestRoundTripQIR:
 class TestRoundTripConsistency:
     """Tests that verify consistency across different generators."""
 
-    def test_same_qubit_order_all_generators(self):
+    def test_same_qubit_order_all_generators(self) -> None:
         """Test that all generators use consistent qubit ordering."""
         prog = Main(
             a := QReg("a", 2),
@@ -440,7 +442,7 @@ class TestRoundTripConsistency:
         assert "a[0]" in guppy
         assert "b[0]" in guppy
 
-    def test_gate_sequence_preserved_all_generators(self):
+    def test_gate_sequence_preserved_all_generators(self) -> None:
         """Test that gate sequence is preserved in all generators."""
         prog = Main(
             q := QReg("q", 1),
@@ -469,7 +471,7 @@ class TestRoundTripConsistency:
 class TestRoundTripEdgeCases:
     """Edge case tests for round-trip generation."""
 
-    def test_empty_program_all_generators(self):
+    def test_empty_program_all_generators(self) -> None:
         """Test empty program works with all generators."""
         from pecos.slr.ast.codegen import (
             ast_to_quantum_circuit,
@@ -487,7 +489,7 @@ class TestRoundTripEdgeCases:
         assert isinstance(guppy, str)
         assert len(qc) == 0
 
-    def test_deeply_nested_repeat(self):
+    def test_deeply_nested_repeat(self) -> None:
         """Test deeply nested repeat blocks."""
         prog = Main(
             q := QReg("q", 1),
@@ -504,7 +506,7 @@ class TestRoundTripEdgeCases:
         # Should have 2 * 2 = 4 H gates when unrolled
         assert qasm.count("h q[0]") == 4
 
-    def test_all_single_qubit_gates(self):
+    def test_all_single_qubit_gates(self) -> None:
         """Test all supported single qubit gates."""
         prog = Main(
             q := QReg("q", 1),
@@ -527,7 +529,7 @@ class TestRoundTripEdgeCases:
         assert isinstance(qasm, str)
         assert isinstance(guppy, str)
 
-    def test_all_two_qubit_gates(self):
+    def test_all_two_qubit_gates(self) -> None:
         """Test all supported two qubit gates."""
         prog = Main(
             q := QReg("q", 2),
@@ -540,7 +542,7 @@ class TestRoundTripEdgeCases:
 
         # Should not raise errors
         qasm = ast_to_qasm(ast)
-        guppy = ast_to_guppy(ast)
+        ast_to_guppy(ast)
 
         assert "cx" in qasm.lower()
         assert "cz" in qasm.lower()
