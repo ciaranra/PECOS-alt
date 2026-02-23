@@ -65,21 +65,32 @@
 
 mod circuit;
 mod dag_circuit;
+pub mod operator_matrix;
 mod tick_circuit;
+pub mod tick_circuit_soa;
 
 #[cfg(feature = "hugr")]
 pub mod hugr_convert;
 
 pub use circuit::{Circuit, CircuitMut, GateHandle, GateView};
-pub use dag_circuit::{Attribute, DagCircuit, MeasureHandle, PrepHandle};
+pub use dag_circuit::{
+    Attribute, DagCircuit, DagTraversalIndex, MeasureHandle, PrepHandle, TraversalWorkBuffers,
+};
 pub use tick_circuit::{
     QubitConflictError, Tick, TickCircuit, TickHandle, TickMeasureHandle, TickPrepHandle,
+};
+pub use tick_circuit_soa::{
+    CircuitIndexes, GateBatch, GateId, GateStorage, MetadataStorage, TickBatches, TickCircuitSoA,
+    TickCircuitSoABuilder, TickGateGroups,
 };
 
 // Re-export commonly used types from dependencies
 pub use pecos_core::gate_type::GateType;
 pub use pecos_core::{Gate, Nanoseconds, QubitId};
 pub use pecos_num::dag::DagWouldCycleError;
+
+// Re-export operator matrix trait for convenient method-style matrix conversion
+pub use operator_matrix::ToMatrix;
 
 // Re-export HUGR types when the feature is enabled
 #[cfg(feature = "hugr")]

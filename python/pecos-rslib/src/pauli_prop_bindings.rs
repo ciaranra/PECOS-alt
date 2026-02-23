@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 /// It's particularly useful for fault propagation and stabilizer simulations.
 #[pyclass(name = "PauliProp", module = "pecos_rslib")]
 pub struct PyPauliProp {
-    inner: StdPauliProp,
+    inner: PauliProp,
     num_qubits: Option<usize>,
     track_sign: bool,
 }
@@ -68,13 +68,13 @@ impl PyPauliProp {
     pub fn new(num_qubits: Option<usize>, track_sign: bool) -> Self {
         let inner = if track_sign {
             if let Some(n) = num_qubits {
-                StdPauliProp::with_sign_tracking(n)
+                PauliProp::with_sign_tracking(n)
             } else {
                 // Default to tracking with 0 qubits if not specified
-                StdPauliProp::with_sign_tracking(0)
+                PauliProp::with_sign_tracking(0)
             }
         } else {
-            StdPauliProp::new()
+            PauliProp::new()
         };
 
         PyPauliProp {
@@ -190,7 +190,7 @@ impl PyPauliProp {
         self.inner.sparse_string()
     }
 
-    /// Get the dense string representation (for `StdPauliProp`)
+    /// Get the dense string representation (for `PauliProp`)
     pub fn dense_string(&self) -> String {
         self.inner.dense_string()
     }
@@ -209,47 +209,47 @@ impl PyPauliProp {
 
     /// Apply Hadamard gate
     pub fn h(&mut self, qubit: usize) {
-        self.inner.h(qubit);
+        self.inner.h(&[QubitId(qubit)]);
     }
 
     /// Apply S gate (sqrt(Z))
     pub fn sz(&mut self, qubit: usize) {
-        self.inner.sz(qubit);
+        self.inner.sz(&[QubitId(qubit)]);
     }
 
     /// Apply sqrt(X) gate
     pub fn sx(&mut self, qubit: usize) {
-        self.inner.sx(qubit);
+        self.inner.sx(&[QubitId(qubit)]);
     }
 
     /// Apply sqrt(Y) gate
     pub fn sy(&mut self, qubit: usize) {
-        self.inner.sy(qubit);
+        self.inner.sy(&[QubitId(qubit)]);
     }
 
     /// Apply CNOT/CX gate
     pub fn cx(&mut self, control: usize, target: usize) {
-        self.inner.cx(control, target);
+        self.inner.cx(&[QubitId(control), QubitId(target)]);
     }
 
     /// Apply CY gate
     pub fn cy(&mut self, control: usize, target: usize) {
-        self.inner.cy(control, target);
+        self.inner.cy(&[QubitId(control), QubitId(target)]);
     }
 
     /// Apply CZ gate
     pub fn cz(&mut self, control: usize, target: usize) {
-        self.inner.cz(control, target);
+        self.inner.cz(&[QubitId(control), QubitId(target)]);
     }
 
     /// Apply SWAP gate
     pub fn swap(&mut self, q1: usize, q2: usize) {
-        self.inner.swap(q1, q2);
+        self.inner.swap(&[QubitId(q1), QubitId(q2)]);
     }
 
     /// Measure in Z basis
     pub fn mz(&mut self, qubit: usize) -> bool {
-        self.inner.mz(qubit).outcome
+        self.inner.mz(&[QubitId(qubit)])[0].outcome
     }
 
     /// Check if this is the identity operator

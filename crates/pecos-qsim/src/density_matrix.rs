@@ -14,7 +14,7 @@ use super::arbitrary_rotation_gateable::ArbitraryRotationGateable;
 use super::clifford_gateable::{CliffordGateable, MeasurementResult};
 use super::quantum_simulator::QuantumSimulator;
 use super::state_vec::StateVec;
-use pecos_core::RngManageable;
+use pecos_core::{Angle64, QubitId, RngManageable};
 use pecos_rng::{PecosRng, Rng, RngExt, SeedableRng};
 
 use core::fmt::{Debug, Display, Formatter, Write};
@@ -59,7 +59,7 @@ impl DensityMatrix {
     /// use pecos_qsim::DensityMatrix;
     ///
     /// // Initialize a 3-qubit density matrix in the |000⟩⟨000| state
-    /// let density_matrix = DensityMatrix::new(3);
+    /// let mut density_matrix = DensityMatrix::new(3);
     ///
     /// // Confirm the state is |000⟩⟨000|
     /// let prob = density_matrix.probability(0);
@@ -107,7 +107,7 @@ where
     ///
     /// # Examples
     /// ```rust
-    /// use pecos_qsim::{QuantumSimulator, DensityMatrix};
+    /// use pecos_qsim::{QuantumSimulator, DensityMatrix, qid, qid2};
     /// let state = DensityMatrix::new(2);
     /// let num = state.num_qubits();
     /// assert_eq!(num, 2);
@@ -177,11 +177,11 @@ where
     ///
     /// # Examples
     /// ```rust
-    /// use pecos_qsim::{DensityMatrix, CliffordGateable};
+    /// use pecos_qsim::{DensityMatrix, CliffordGateable, qid, qid2};
     ///
     /// // Create a Bell state
     /// let mut state = DensityMatrix::new(2);
-    /// state.h(0).cx(0, 1);
+    /// state.h(&qid(0)).cx(&qid2(0, 1));
     ///
     /// // Get the density matrix representation
     /// let rho = state.get_density_matrix();
@@ -194,10 +194,27 @@ where
     /// ```
     #[inline]
     #[must_use]
-    pub fn get_density_matrix(&self) -> Vec<Vec<Complex64>> {
-        let n = self.num_physical_qubits;
-        let dim = 1 << n;
+    pub fn get_density_matrix(&mut self) -> Vec<Vec<Complex64>> {
         let sv = self.state_vector.state();
+        Self::density_matrix_from_state_vec(&sv, self.num_physical_qubits)
+    }
+
+    /// Get the density matrix without flushing pending gates.
+    ///
+    /// This method is used for Display since Display requires &self.
+    /// WARNING: May return stale data if gates are pending.
+    fn get_density_matrix_no_flush(&self) -> Vec<Vec<Complex64>> {
+        let sv = self.state_vector.state_no_flush();
+        Self::density_matrix_from_state_vec(&sv, self.num_physical_qubits)
+    }
+
+    /// Helper to compute density matrix from a state vector.
+    fn density_matrix_from_state_vec(
+        sv: &[Complex64],
+        num_physical_qubits: usize,
+    ) -> Vec<Vec<Complex64>> {
+        let n = num_physical_qubits;
+        let dim = 1 << n;
 
         // Initialize density matrix with zeros
         let mut rho = vec![vec![Complex64::new(0.0, 0.0); dim]; dim];
@@ -239,11 +256,11 @@ where
     ///
     /// # Examples
     /// ```rust
-    /// use pecos_qsim::{DensityMatrix, CliffordGateable};
+    /// use pecos_qsim::{DensityMatrix, CliffordGateable, qid, qid2};
     ///
     /// // Create a Bell state
     /// let mut state = DensityMatrix::new(2);
-    /// state.h(0).cx(0, 1);
+    /// state.h(&qid(0)).cx(&qid2(0, 1));
     ///
     /// // Print the density matrix with 6 decimal places
     /// let matrix_str = state.density_matrix_to_string(6, 1e-10);
@@ -251,14 +268,26 @@ where
     /// ```
     #[inline]
     #[must_use]
-    pub fn density_matrix_to_string(&self, precision: usize, threshold: f64) -> String {
+    pub fn density_matrix_to_string(&mut self, precision: usize, threshold: f64) -> String {
         let rho = self.get_density_matrix();
+        Self::format_density_matrix(&rho, precision, threshold)
+    }
+
+    /// Format density matrix to string without flushing pending gates.
+    /// Used by Display since Display requires &self.
+    fn density_matrix_to_string_no_flush(&self, precision: usize, threshold: f64) -> String {
+        let rho = self.get_density_matrix_no_flush();
+        Self::format_density_matrix(&rho, precision, threshold)
+    }
+
+    /// Helper to format a density matrix to string.
+    fn format_density_matrix(rho: &[Vec<Complex64>], precision: usize, threshold: f64) -> String {
         let dim = rho.len();
 
         let mut result = String::with_capacity(dim * dim * (precision + 8));
         result.push_str("Density matrix (ρ):\n");
 
-        for rho_row in &rho {
+        for rho_row in rho {
             result.push('[');
             for (col, val) in rho_row.iter().enumerate() {
                 // Apply threshold to small values
@@ -316,18 +345,18 @@ where
     ///
     /// # Examples
     /// ```rust
-    /// use pecos_qsim::{DensityMatrix, CliffordGateable};
+    /// use pecos_qsim::{DensityMatrix, CliffordGateable, qid, qid2};
     ///
     /// // Create a Bell state
     /// let mut state = DensityMatrix::new(2);
-    /// state.h(0).cx(0, 1);
+    /// state.h(&qid(0)).cx(&qid2(0, 1));
     ///
     /// // Get the flattened density matrix
     /// let flat_rho = state.get_flattened_density_matrix();
     /// ```
     #[inline]
     #[must_use]
-    pub fn get_flattened_density_matrix(&self) -> Vec<Complex64> {
+    pub fn get_flattened_density_matrix(&mut self) -> Vec<Complex64> {
         self.get_density_matrix().into_iter().flatten().collect()
     }
 
@@ -343,7 +372,7 @@ where
     /// Code will panic if `basis_state` >= `2^num_qubits` (i.e., if the basis state index is too large for the number of qubits)
     #[inline]
     #[must_use]
-    pub fn probability(&self, basis_state: usize) -> f64 {
+    pub fn probability(&mut self, basis_state: usize) -> f64 {
         assert!(basis_state < 1 << self.num_physical_qubits);
 
         // In the Choi representation, the diagonal elements of the density matrix
@@ -351,13 +380,16 @@ where
         let n = self.num_physical_qubits;
         let basis_mask = (1 << n) - 1;
 
+        // Get state once and cache it
+        let sv = self.state_vector.state();
+
         // Calculate probability by summing appropriate elements
         let mut prob = 0.0;
         for i in 0..(1 << n) {
             // Map to the corresponding index in the state vector
             // For the element ρ_{basis_state,basis_state} in density matrix
             let state_idx = ((basis_state & basis_mask) << n) | (i & basis_mask);
-            prob += self.state_vector.state()[state_idx].norm_sqr();
+            prob += sv[state_idx].norm_sqr();
         }
 
         prob
@@ -372,7 +404,7 @@ where
     /// * `f64` - The purity of the quantum state
     #[inline]
     #[must_use]
-    pub fn purity(&self) -> f64 {
+    pub fn purity(&mut self) -> f64 {
         // Purity = Tr(rho^2) = sum_{i,j} |rho[i][j]|^2
         self.get_density_matrix()
             .iter()
@@ -389,7 +421,7 @@ where
     /// * `bool` - True if the state is pure, false otherwise
     #[inline]
     #[must_use]
-    pub fn is_pure(&self) -> bool {
+    pub fn is_pure(&mut self) -> bool {
         const TOLERANCE: f64 = 1e-10;
         (self.purity() - 1.0).abs() < TOLERANCE
     }
@@ -419,7 +451,8 @@ where
         new_state[idx] = Complex64::new(1.0, 0.0);
 
         // Update the state vector
-        *self.state_vector_mut() = StateVec::from_state(new_state, self.state_vector.rng().clone());
+        let new_sv = StateVec::from_state(new_state, self.state_vector.rng().clone());
+        *self.state_vector_mut() = new_sv;
 
         self
     }
@@ -437,7 +470,7 @@ where
 
         // Apply Hadamard gates to all qubits
         for q in 0..n {
-            self.h(q);
+            self.h(&[QubitId(q)]);
         }
 
         self
@@ -471,7 +504,8 @@ where
         }
 
         // Update the state vector
-        *self.state_vector_mut() = StateVec::from_state(new_state, self.state_vector.rng().clone());
+        let new_sv = StateVec::from_state(new_state, self.state_vector.rng().clone());
+        *self.state_vector_mut() = new_sv;
 
         self
     }
@@ -580,7 +614,8 @@ where
             }
         }
 
-        *self.state_vector_mut() = StateVec::from_state(new_state, self.state_vector.rng().clone());
+        let new_sv = StateVec::from_state(new_state, self.state_vector.rng().clone());
+        *self.state_vector_mut() = new_sv;
     }
 
     /// Apply a amplitude damping noise channel to a qubit
@@ -608,11 +643,11 @@ where
         // E_0 = |0⟩⟨0| + sqrt(1 - gamma) |1⟩⟨1|
         // E_1 = sqrt(gamma) |0⟩⟨1|
 
-        // Create a copy of the current state
-        let original_state = self.clone();
+        // Get the current state vector values
+        let n = self.num_physical_qubits;
+        let original_sv = self.state_vector.state();
 
         // Reset state first
-        let n = self.num_physical_qubits;
         let sv_size = 1 << (2 * n);
         let mut new_state = vec![num_complex::Complex64::new(0.0, 0.0); sv_size];
 
@@ -638,27 +673,24 @@ where
                     let j_with_0 = j & !qubit_mask;
 
                     // Apply damping
-                    new_state[idx_i_j] +=
-                        (1.0 - gamma) * original_state.state_vector().state()[idx_i_j];
-                    new_state[(i_with_0 << n) | j_with_0] +=
-                        gamma * original_state.state_vector().state()[idx_i_j];
+                    new_state[idx_i_j] += (1.0 - gamma) * original_sv[idx_i_j];
+                    new_state[(i_with_0 << n) | j_with_0] += gamma * original_sv[idx_i_j];
                 } else if i_has_1 && !j_has_1 {
                     // Case |1⟩⟨0| -> sqrt(1-gamma)|1⟩⟨0|
-                    new_state[idx_i_j] +=
-                        (1.0 - gamma).sqrt() * original_state.state_vector().state()[idx_i_j];
+                    new_state[idx_i_j] += (1.0 - gamma).sqrt() * original_sv[idx_i_j];
                 } else if !i_has_1 && j_has_1 {
                     // Case |0⟩⟨1| -> sqrt(1-gamma)|0⟩⟨1|
-                    new_state[idx_i_j] +=
-                        (1.0 - gamma).sqrt() * original_state.state_vector().state()[idx_i_j];
+                    new_state[idx_i_j] += (1.0 - gamma).sqrt() * original_sv[idx_i_j];
                 } else {
                     // Case |0⟩⟨0| -> |0⟩⟨0| + damping from |1⟩ states (added above)
-                    new_state[idx_i_j] += original_state.state_vector().state()[idx_i_j];
+                    new_state[idx_i_j] += original_sv[idx_i_j];
                 }
             }
         }
 
         // Update the state vector
-        *self.state_vector_mut() = StateVec::from_state(new_state, self.state_vector.rng().clone());
+        let new_sv = StateVec::from_state(new_state, self.state_vector.rng().clone());
+        *self.state_vector_mut() = new_sv;
 
         self
     }
@@ -689,11 +721,11 @@ where
         // E_0 = |0⟩⟨0| + sqrt(1 - lambda) |1⟩⟨1|
         // E_1 = sqrt(lambda) |1⟩⟨1|
 
-        // Create a copy of the current state
-        let original_state = self.clone();
+        // Get the current state vector values
+        let n = self.num_physical_qubits;
+        let original_sv = self.state_vector.state();
 
         // Reset state first
-        let n = self.num_physical_qubits;
         let sv_size = 1 << (2 * n);
         let mut new_state = vec![num_complex::Complex64::new(0.0, 0.0); sv_size];
 
@@ -715,17 +747,17 @@ where
 
                 if i_has_1 == j_has_1 {
                     // Diagonal elements are preserved
-                    new_state[idx_i_j] += original_state.state_vector().state()[idx_i_j];
+                    new_state[idx_i_j] += original_sv[idx_i_j];
                 } else {
                     // Off-diagonal elements involving the qubit get damped
-                    new_state[idx_i_j] +=
-                        (1.0 - lambda).sqrt() * original_state.state_vector().state()[idx_i_j];
+                    new_state[idx_i_j] += (1.0 - lambda).sqrt() * original_sv[idx_i_j];
                 }
             }
         }
 
         // Update the state vector
-        *self.state_vector_mut() = StateVec::from_state(new_state, self.state_vector.rng().clone());
+        let new_sv = StateVec::from_state(new_state, self.state_vector.rng().clone());
+        *self.state_vector_mut() = new_sv;
 
         self
     }
@@ -850,17 +882,17 @@ where
     ///
     /// # Examples
     /// ```rust
-    /// use pecos_qsim::{DensityMatrix, CliffordGateable};
+    /// use pecos_qsim::{DensityMatrix, CliffordGateable, qid, qid2};
     ///
     /// // Create a Bell state
     /// let mut state = DensityMatrix::new(2);
-    /// state.h(0).cx(0, 1);
+    /// state.h(&qid(0)).cx(&qid2(0, 1));
     ///
     /// // Print the density matrix with default formatting
     /// println!("{}", state);
     /// ```
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.density_matrix_to_string(4, 1e-10))
+        write!(f, "{}", self.density_matrix_to_string_no_flush(4, 1e-10))
     }
 }
 
@@ -912,47 +944,53 @@ where
     }
 }
 
-impl<R> CliffordGateable<usize> for DensityMatrix<R>
+impl<R> CliffordGateable for DensityMatrix<R>
 where
     R: Rng + SeedableRng + Debug + Clone,
 {
-    /// Apply the Hadamard gate to the given qubit
+    /// Apply the Hadamard gate to the given qubits
     ///
     /// # Arguments
-    /// * `qubit` - Target qubit
+    /// * `qubits` - Target qubits
     ///
     /// # Returns
     /// * `&mut Self` - Returns self for method chaining
     #[inline]
-    fn h(&mut self, qubit: usize) -> &mut Self {
+    fn h(&mut self, qubits: &[QubitId]) -> &mut Self {
         let n = self.num_physical_qubits;
 
-        // Apply H to the system qubit
-        self.state_vector_mut().h(qubit);
+        for &q in qubits {
+            let qubit = q.index();
+            // Apply H to the system qubit
+            self.state_vector_mut().h(&[QubitId(qubit)]);
 
-        // Apply H* (= H since H is Hermitian) to the environment qubit
-        self.state_vector_mut().h(qubit + n);
+            // Apply H* (= H since H is Hermitian) to the environment qubit
+            self.state_vector_mut().h(&[QubitId(qubit + n)]);
+        }
 
         self
     }
 
-    /// Apply the S gate (√Z) to the given qubit
+    /// Apply the S gate to the given qubits
     ///
     /// # Arguments
-    /// * `qubit` - Target qubit
+    /// * `qubits` - Target qubits
     ///
     /// # Returns
     /// * `&mut Self` - Returns self for method chaining
     #[inline]
-    fn sz(&mut self, qubit: usize) -> &mut Self {
+    fn sz(&mut self, qubits: &[QubitId]) -> &mut Self {
         let n = self.num_physical_qubits;
 
-        // Apply S to the system qubit
-        self.state_vector_mut().sz(qubit);
+        for &q in qubits {
+            let qubit = q.index();
+            // Apply S to the system qubit
+            self.state_vector_mut().sz(&[QubitId(qubit)]);
 
-        // For the environment qubit, we need S* which is S†
-        // S† is the inverse of S, which is implemented as szdag in the state vector
-        self.state_vector_mut().szdg(qubit + n);
+            // For the environment qubit, we need S* which is S dagger
+            // S dagger is the inverse of S, which is implemented as szdg in the state vector
+            self.state_vector_mut().szdg(&[QubitId(qubit + n)]);
+        }
 
         self
     }
@@ -960,123 +998,149 @@ where
     /// Apply the controlled-X (CNOT) gate
     ///
     /// # Arguments
-    /// * `control` - Control qubit
-    /// * `target` - Target qubit
+    /// * `qubits` - Pairs of (control, target) qubits
     ///
     /// # Returns
     /// * `&mut Self` - Returns self for method chaining
     #[inline]
-    fn cx(&mut self, control: usize, target: usize) -> &mut Self {
+    fn cx(&mut self, qubits: &[QubitId]) -> &mut Self {
+        debug_assert!(
+            qubits.len().is_multiple_of(2),
+            "CX requires pairs of qubits"
+        );
         let n = self.num_physical_qubits;
 
-        // Apply CX to the system qubits
-        self.state_vector_mut().cx(control, target);
+        for pair in qubits.chunks_exact(2) {
+            let control = pair[0].index();
+            let target = pair[1].index();
 
-        // Apply CX* to the environment qubits
-        // CX is real so CX* = CX
-        self.state_vector_mut().cx(control + n, target + n);
+            // Apply CX to the system qubits
+            self.state_vector_mut()
+                .cx(&[QubitId(control), QubitId(target)]);
+
+            // Apply CX* to the environment qubits
+            // CX is real so CX* = CX
+            self.state_vector_mut()
+                .cx(&[QubitId(control + n), QubitId(target + n)]);
+        }
 
         self
     }
 
-    /// Measure a qubit in the Z basis and collapse the state
+    /// Measure qubits in the Z basis and collapse the state
     ///
     /// # Arguments
-    /// * `qubit` - The qubit to measure
+    /// * `qubits` - The qubits to measure
     ///
     /// # Returns
-    /// * `MeasurementResult` - Contains the outcome and whether it was deterministic
+    /// * `Vec<MeasurementResult>` - Contains the outcome and whether it was deterministic for each qubit
     #[inline]
-    fn mz(&mut self, qubit: usize) -> MeasurementResult {
-        // First calculate the probabilities of measuring 0 and 1
-        let n = self.num_physical_qubits;
-        let mut prob_one = 0.0;
+    fn mz(&mut self, qubits: &[QubitId]) -> Vec<MeasurementResult> {
+        let mut results = Vec::with_capacity(qubits.len());
 
-        // Calculate probability of measuring 1
-        for i in 0..(1 << n) {
-            if (i & (1 << qubit)) != 0 {
-                // This is a state where qubit is 1
-                prob_one += self.probability(i);
+        for &q in qubits {
+            let qubit = q.index();
+            // First calculate the probabilities of measuring 0 and 1
+            let n = self.num_physical_qubits;
+            let mut prob_one = 0.0;
+
+            // Calculate probability of measuring 1
+            for i in 0..(1 << n) {
+                if (i & (1 << qubit)) != 0 {
+                    // This is a state where qubit is 1
+                    prob_one += self.probability(i);
+                }
             }
-        }
 
-        // Determine if measurement is deterministic
-        let is_deterministic = !(1e-10..=1.0 - 1e-10).contains(&prob_one);
+            // Determine if measurement is deterministic
+            let is_deterministic = !(1e-10..=1.0 - 1e-10).contains(&prob_one);
 
-        // Determine outcome
-        let outcome = if is_deterministic {
-            prob_one > 0.5
-        } else {
-            self.state_vector.rng_mut().random_range(0.0..1.0) < prob_one
-        };
+            // Determine outcome
+            let outcome = if is_deterministic {
+                prob_one > 0.5
+            } else {
+                self.state_vector.rng_mut().random_range(0.0..1.0) < prob_one
+            };
 
-        // Apply the measurement projection: ρ → P_m ρ P_m / Tr(P_m ρ P_m)
-        // In the Choi representation, index (row << n) | col corresponds to ρ_{row,col}
-        // The projector P_m zeros out rows/cols where the measured qubit doesn't match outcome
-        let qubit_mask = 1 << qubit;
-        let target_bit = if outcome { qubit_mask } else { 0 };
+            // Apply the measurement projection: rho -> P_m rho P_m / Tr(P_m rho P_m)
+            // In the Choi representation, index (row << n) | col corresponds to rho_{row,col}
+            // The projector P_m zeros out rows/cols where the measured qubit doesn't match outcome
+            let qubit_mask = 1 << qubit;
+            let target_bit = if outcome { qubit_mask } else { 0 };
 
-        let sv = self.state_vector.state();
-        let sv_size = 1 << (2 * n);
+            let sv = self.state_vector.state();
+            let sv_size = 1 << (2 * n);
 
-        // Create new state with projected amplitudes
-        let mut new_state = vec![Complex64::new(0.0, 0.0); sv_size];
-        let mut norm_sq = 0.0;
+            // Create new state with projected amplitudes
+            let mut new_state = vec![Complex64::new(0.0, 0.0); sv_size];
+            let mut norm_sq = 0.0;
 
-        for idx in 0..sv_size {
-            let row = idx >> n;
-            let col = idx & ((1 << n) - 1);
+            for idx in 0..sv_size {
+                let row = idx >> n;
+                let col = idx & ((1 << n) - 1);
 
-            // Check if both row and column have the correct qubit value
-            let row_matches = (row & qubit_mask) == target_bit;
-            let col_matches = (col & qubit_mask) == target_bit;
+                // Check if both row and column have the correct qubit value
+                let row_matches = (row & qubit_mask) == target_bit;
+                let col_matches = (col & qubit_mask) == target_bit;
 
-            if row_matches && col_matches {
-                new_state[idx] = sv[idx];
-                norm_sq += sv[idx].norm_sqr();
+                if row_matches && col_matches {
+                    new_state[idx] = sv[idx];
+                    norm_sq += sv[idx].norm_sqr();
+                }
             }
-        }
 
-        // Renormalize the state
-        if norm_sq > 1e-15 {
-            let norm = norm_sq.sqrt();
-            for amplitude in &mut new_state {
-                *amplitude /= norm;
+            // Renormalize the state
+            if norm_sq > 1e-15 {
+                let norm = norm_sq.sqrt();
+                for amplitude in &mut new_state {
+                    *amplitude /= norm;
+                }
             }
+
+            // Update the state vector
+            let new_sv = StateVec::from_state(new_state, self.state_vector.rng().clone());
+            *self.state_vector_mut() = new_sv;
+
+            results.push(MeasurementResult {
+                outcome,
+                is_deterministic,
+            });
         }
 
-        // Update the state vector
-        *self.state_vector_mut() = StateVec::from_state(new_state, self.state_vector.rng().clone());
-
-        MeasurementResult {
-            outcome,
-            is_deterministic,
-        }
+        results
     }
 }
 
-impl<R> ArbitraryRotationGateable<usize> for DensityMatrix<R>
+impl<R> ArbitraryRotationGateable for DensityMatrix<R>
 where
     R: Rng + SeedableRng + Debug + Clone,
 {
     /// Apply a rotation around the X-axis
     ///
     /// # Arguments
-    /// * `theta` - Rotation angle in radians
-    /// * `qubit` - Target qubit
+    /// * `theta` - Rotation angle
+    /// * `qubits` - Target qubits
     ///
     /// # Returns
     /// * `&mut Self` - Returns self for method chaining
     #[inline]
-    fn rx(&mut self, theta: f64, qubit: usize) -> &mut Self {
+    fn rx(&mut self, theta: Angle64, qubits: &[QubitId]) -> &mut Self {
         let n = self.num_physical_qubits;
 
-        // Apply RX to the system qubit
-        self.state_vector_mut().rx(theta, qubit);
+        for &q in qubits {
+            let qubit = q.index();
+            let sys_qubits = [QubitId(qubit)];
+            let env_qubits = [QubitId(qubit + n)];
 
-        // Apply RX* to the environment qubit
-        // For RX, RX* is RX(-theta)
-        self.state_vector_mut().rx(-theta, qubit + n);
+            // Apply RX to the system qubit
+            self.state_vector_mut().rx(theta, &sys_qubits);
+
+            // Apply RX* to the environment qubit
+            // RX(-theta) = Z * RX(theta) * Z
+            self.state_vector_mut().z(&env_qubits);
+            self.state_vector_mut().rx(theta, &env_qubits);
+            self.state_vector_mut().z(&env_qubits);
+        }
 
         self
     }
@@ -1084,21 +1148,27 @@ where
     /// Apply a rotation around the Y-axis
     ///
     /// # Arguments
-    /// * `theta` - Rotation angle in radians
-    /// * `qubit` - Target qubit
+    /// * `theta` - Rotation angle
+    /// * `qubits` - Target qubits
     ///
     /// # Returns
     /// * `&mut Self` - Returns self for method chaining
     #[inline]
-    fn ry(&mut self, theta: f64, qubit: usize) -> &mut Self {
+    fn ry(&mut self, theta: Angle64, qubits: &[QubitId]) -> &mut Self {
         let n = self.num_physical_qubits;
 
-        // Apply RY to the system qubit
-        self.state_vector_mut().ry(theta, qubit);
+        for &q in qubits {
+            let qubit = q.index();
+            let sys_qubits = [QubitId(qubit)];
+            let env_qubits = [QubitId(qubit + n)];
 
-        // Apply RY* to the environment qubit
-        // RY is a real matrix, so RY* = RY
-        self.state_vector_mut().ry(theta, qubit + n);
+            // Apply RY to the system qubit
+            self.state_vector_mut().ry(theta, &sys_qubits);
+
+            // Apply RY* to the environment qubit
+            // RY is a real matrix, so RY* = RY
+            self.state_vector_mut().ry(theta, &env_qubits);
+        }
 
         self
     }
@@ -1106,21 +1176,29 @@ where
     /// Apply a rotation around the Z-axis
     ///
     /// # Arguments
-    /// * `theta` - Rotation angle in radians
-    /// * `qubit` - Target qubit
+    /// * `theta` - Rotation angle
+    /// * `qubits` - Target qubits
     ///
     /// # Returns
     /// * `&mut Self` - Returns self for method chaining
     #[inline]
-    fn rz(&mut self, theta: f64, qubit: usize) -> &mut Self {
+    fn rz(&mut self, theta: Angle64, qubits: &[QubitId]) -> &mut Self {
         let n = self.num_physical_qubits;
 
-        // Apply RZ to the system qubit
-        self.state_vector_mut().rz(theta, qubit);
+        for &q in qubits {
+            let qubit = q.index();
+            let sys_qubits = [QubitId(qubit)];
+            let env_qubits = [QubitId(qubit + n)];
 
-        // Apply RZ* to the environment qubit
-        // For RZ, RZ* is RZ(-theta)
-        self.state_vector_mut().rz(-theta, qubit + n);
+            // Apply RZ to the system qubit
+            self.state_vector_mut().rz(theta, &sys_qubits);
+
+            // Apply RZ* to the environment qubit
+            // RZ(-theta) = X * RZ(theta) * X
+            self.state_vector_mut().x(&env_qubits);
+            self.state_vector_mut().rz(theta, &env_qubits);
+            self.state_vector_mut().x(&env_qubits);
+        }
 
         self
     }
@@ -1129,34 +1207,53 @@ where
     ///
     /// # Arguments
     /// * `theta` - Rotation angle
-    /// * `qubit1` - First qubit
-    /// * `qubit2` - Second qubit
+    /// * `qubits` - Pairs of qubits
     ///
     /// # Returns
     /// * `&mut Self` - Returns self for method chaining
     #[inline]
-    fn rzz(&mut self, theta: f64, qubit1: usize, qubit2: usize) -> &mut Self {
+    fn rzz(&mut self, theta: Angle64, qubits: &[QubitId]) -> &mut Self {
+        debug_assert!(
+            qubits.len().is_multiple_of(2),
+            "RZZ requires pairs of qubits"
+        );
         let n = self.num_physical_qubits;
 
-        // Apply RZZ to the system qubits
-        self.state_vector_mut().rzz(theta, qubit1, qubit2);
+        for pair in qubits.chunks_exact(2) {
+            let q1 = pair[0].index();
+            let q2 = pair[1].index();
+            let sys_pairs = [QubitId(q1), QubitId(q2)];
+            let env_pairs = [QubitId(q1 + n), QubitId(q2 + n)];
 
-        // Apply RZZ* to the environment qubits
-        // For RZZ, RZZ* is RZZ(-theta)
-        self.state_vector_mut().rzz(-theta, qubit1 + n, qubit2 + n);
+            // Apply RZZ to the system qubits
+            self.state_vector_mut().rzz(theta, &sys_pairs);
+
+            // Apply RZZ* to the environment qubits
+            // RZZ(-theta) = (X tensor I) * RZZ(theta) * (X tensor I)
+            self.state_vector_mut().x(&[env_pairs[0]]);
+            self.state_vector_mut().rzz(theta, &env_pairs);
+            self.state_vector_mut().x(&[env_pairs[0]]);
+        }
 
         self
+    }
+}
+
+impl crate::density_matrix_test_utils::DensityMatrixSimulator for DensityMatrix {
+    fn with_seed(num_qubits: usize, seed: u64) -> Self {
+        DensityMatrix::with_seed(num_qubits, seed)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pecos_core::{qid, qid2};
 
     #[test]
     fn test_new_density_matrix() {
         // Create a new 1-qubit density matrix
-        let dm = DensityMatrix::new(1);
+        let mut dm = DensityMatrix::new(1);
 
         // Check that it represents |0⟩⟨0|
         assert!((dm.probability(0) - 1.0).abs() < 1e-10);
@@ -1210,14 +1307,14 @@ mod tests {
         let mut dm = DensityMatrix::new(1);
 
         // Apply X to |0⟩⟨0|
-        dm.x(0);
+        dm.x(&qid(0));
 
         // Check state is |1⟩⟨1|
         assert!(dm.probability(0) < 1e-10);
         assert!((dm.probability(1) - 1.0).abs() < 1e-10);
 
         // Apply X again to return to |0⟩⟨0|
-        dm.x(0);
+        dm.x(&qid(0));
 
         // Check state is |0⟩⟨0|
         assert!((dm.probability(0) - 1.0).abs() < 1e-10);
@@ -1230,14 +1327,14 @@ mod tests {
         let mut dm = DensityMatrix::new(1);
 
         // Apply H to |0⟩⟨0|
-        dm.h(0);
+        dm.h(&qid(0));
 
         // Check probabilities are 0.5 for both outcomes
         assert!((dm.probability(0) - 0.5).abs() < 1e-10);
         assert!((dm.probability(1) - 0.5).abs() < 1e-10);
 
         // Apply H again to return to |0⟩⟨0|
-        dm.h(0);
+        dm.h(&qid(0));
 
         // Check state is |0⟩⟨0|
         assert!((dm.probability(0) - 1.0).abs() < 1e-10);
@@ -1250,7 +1347,7 @@ mod tests {
         let mut dm = DensityMatrix::new(2);
 
         // Create Bell state |Φ+⟩ = (|00⟩ + |11⟩)/√2
-        dm.h(0).cx(0, 1);
+        dm.h(&qid(0)).cx(&qid2(0, 1));
 
         // Check probabilities
         assert!((dm.probability(0) - 0.5).abs() < 1e-10);

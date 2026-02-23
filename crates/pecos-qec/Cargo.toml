@@ -11,5 +11,19 @@ categories.workspace = true
 description = "Quantum error correction utilities for PECOS"
 readme = "README.md"
 
+[dependencies]
+ndarray.workspace = true
+pecos-core = { path = "../pecos-core" }
+pecos-decoder-core = { path = "../pecos-decoder-core" }
+pecos-quantum = { path = "../pecos-quantum" }
+pecos-qsim = { path = "../pecos-qsim" }
+pecos-rng = { path = "../pecos-rng" }
+rand.workspace = true
+rand_core.workspace = true
+rayon.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+wide.workspace = true
+
 [lints]
 workspace = true

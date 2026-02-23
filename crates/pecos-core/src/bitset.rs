@@ -118,6 +118,46 @@ impl BitSet {
         !was_present
     }
 
+    /// Toggle an index in the set (insert if absent, remove if present).
+    ///
+    /// This is equivalent to XOR with a single-element set but without
+    /// creating a temporary `BitSet`.
+    ///
+    /// Returns `true` if the index is now present, `false` if it was removed.
+    #[inline]
+    pub fn toggle(&mut self, index: usize) -> bool {
+        let word_idx = index / 64;
+        let bit_idx = index % 64;
+        let mask = 1u64 << bit_idx;
+
+        // Extend if necessary
+        if word_idx >= self.words.len() {
+            self.words.resize(word_idx + 1, 0);
+        }
+
+        self.words[word_idx] ^= mask;
+        (self.words[word_idx] & mask) != 0
+    }
+
+    /// Toggle an index without bounds checking.
+    ///
+    /// # Safety
+    /// The caller must ensure the `BitSet` was created with sufficient capacity
+    /// via `with_capacity(max_index)` where `max_index > index`.
+    ///
+    /// This is an optimization for hot paths like CX gate implementation where
+    /// we know all `BitSets` are pre-sized to `num_qubits`.
+    #[inline]
+    pub fn toggle_unchecked(&mut self, index: usize) {
+        let word_idx = index / 64;
+        let bit_idx = index % 64;
+        // SAFETY: Caller guarantees capacity is sufficient
+        // Use get_unchecked_mut for maximum performance
+        unsafe {
+            *self.words.get_unchecked_mut(word_idx) ^= 1u64 << bit_idx;
+        }
+    }
+
     /// Remove an index from the set.
     ///
     /// Returns `true` if the index was present, `false` otherwise.
@@ -170,6 +210,23 @@ impl BitSet {
         for w in &mut self.words {
             *w = 0;
         }
+    }
+
+    /// Take the contents of this set, leaving it empty but with capacity preserved.
+    ///
+    /// Unlike `std::mem::take`, this preserves the allocated capacity of the source
+    /// set, which is important for performance when the set will be reused.
+    ///
+    /// This is used in measurement operations where we take a row's contents
+    /// but the row will be populated again in subsequent operations.
+    #[inline]
+    #[must_use]
+    pub fn take_clearing(&mut self) -> Self {
+        // Swap words with an empty Vec, leaving capacity in self
+        let taken_words = std::mem::take(&mut self.words);
+        // Restore capacity by creating a zeroed Vec of the same length
+        self.words = vec![0u64; taken_words.len()];
+        Self { words: taken_words }
     }
 
     /// XOR (symmetric difference) with another set, in place.
@@ -239,6 +296,96 @@ impl BitSet {
     pub fn words_mut(&mut self) -> &mut [u64] {
         &mut self.words
     }
+
+    /// XOR (toggle) each index from an iterator into this set.
+    ///
+    /// This is useful for cross-type operations where the source is not a `BitSet`
+    /// (e.g., iterating over a `VecSet` and `XORing` into a `BitSet`).
+    #[inline]
+    pub fn xor_assign_iter(&mut self, iter: impl Iterator<Item = usize>) {
+        for index in iter {
+            self.toggle(index);
+        }
+    }
+
+    /// XOR (toggle) each index from a slice into this set.
+    ///
+    /// Optimized version with inlined toggle logic.
+    #[inline]
+    pub fn xor_assign_slice(&mut self, indices: &[usize]) {
+        for &index in indices {
+            let word_idx = index / 64;
+            let bit_idx = index % 64;
+
+            if word_idx >= self.words.len() {
+                self.words.resize(word_idx + 1, 0);
+            }
+            self.words[word_idx] ^= 1u64 << bit_idx;
+        }
+    }
+
+    /// XOR indices that are present in both `iter` and `other` into this set.
+    ///
+    /// This is useful for cross-type sign propagation where `other` is a different set type.
+    /// For each index in `iter`, if it's also in `other`, toggle it in `self`.
+    #[inline]
+    pub fn xor_intersection_iter(&mut self, iter: impl Iterator<Item = usize>, other: &Self) {
+        for index in iter {
+            if other.contains(index) {
+                self.toggle(index);
+            }
+        }
+    }
+
+    /// XOR indices from a slice that are present in `other` into this set.
+    ///
+    /// Optimized version with inlined contains and toggle.
+    #[inline]
+    pub fn xor_intersection_slice(&mut self, indices: &[usize], other: &Self) {
+        for &index in indices {
+            let word_idx = index / 64;
+            let bit_idx = index % 64;
+            let mask = 1u64 << bit_idx;
+
+            // Check if index is in other (inlined contains)
+            let in_other = word_idx < other.words.len() && (other.words[word_idx] & mask) != 0;
+
+            if in_other {
+                // Toggle in self (inlined toggle)
+                if word_idx >= self.words.len() {
+                    self.words.resize(word_idx + 1, 0);
+                }
+                self.words[word_idx] ^= mask;
+            }
+        }
+    }
+
+    /// Count elements present in both `iter` and this set.
+    ///
+    /// This is useful for cross-type intersection counting.
+    #[inline]
+    pub fn intersection_count_iter(&self, iter: impl Iterator<Item = usize>) -> usize {
+        iter.filter(|&index| self.contains(index)).count()
+    }
+
+    /// Count elements from a slice that are present in this set.
+    ///
+    /// Optimized version with inlined contains check.
+    #[inline]
+    #[must_use]
+    pub fn intersection_count_slice(&self, indices: &[usize]) -> usize {
+        let mut count = 0;
+        for &index in indices {
+            let word_idx = index / 64;
+            let bit_idx = index % 64;
+            if word_idx < self.words.len()
+                && (unsafe { *self.words.get_unchecked(word_idx) } & (1u64 << bit_idx)) != 0
+            {
+                count += 1;
+            }
+        }
+        count
+    }
 }
 
 impl FromIterator<usize> for BitSet {
@@ -301,6 +448,14 @@ impl std::ops::BitXorAssign<&BitSet> for BitSet {
     }
 }
 
+// Implement BitXorAssign for single element (toggle)
+impl std::ops::BitXorAssign<&usize> for BitSet {
+    #[inline]
+    fn bitxor_assign(&mut self, rhs: &usize) {
+        self.toggle(*rhs);
+    }
+}
+
 // Implement BitXor for convenient ^ syntax
 impl std::ops::BitXor for &BitSet {
     type Output = BitSet;
@@ -308,6 +463,125 @@ impl std::ops::BitXor for &BitSet {
     #[inline]
     fn bitxor(self, rhs: Self) -> Self::Output {
         self.symmetric_difference(rhs)
+    }
+}
+
+// Implement IndexSet for BitSet
+impl crate::index_set::IndexSet for BitSet {
+    type Iter<'a> = BitSetIter<'a>;
+
+    #[inline]
+    fn new() -> Self {
+        Self::new()
+    }
+
+    #[inline]
+    fn with_capacity(max_index: usize) -> Self {
+        Self::with_capacity(max_index)
+    }
+
+    #[inline]
+    fn insert(&mut self, index: usize) -> bool {
+        Self::insert(self, index)
+    }
+
+    #[inline]
+    fn remove(&mut self, index: usize) -> bool {
+        Self::remove(self, index)
+    }
+
+    #[inline]
+    fn contains(&self, index: usize) -> bool {
+        Self::contains(self, index)
+    }
+
+    #[inline]
+    fn toggle(&mut self, index: usize) {
+        Self::toggle(self, index);
+    }
+
+    #[inline]
+    fn toggle_unchecked(&mut self, index: usize) {
+        Self::toggle_unchecked(self, index);
+    }
+
+    #[inline]
+    fn xor_assign(&mut self, other: &Self) {
+        self.symmetric_difference_update(other);
+    }
+
+    #[inline]
+    fn iter(&self) -> Self::Iter<'_> {
+        Self::iter(self)
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        Self::is_empty(self)
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        Self::len(self)
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        Self::clear(self);
+    }
+
+    #[inline]
+    fn take_clearing(&mut self) -> Self {
+        Self::take_clearing(self)
+    }
+
+    #[inline]
+    fn intersection_count(&self, other: &Self) -> usize {
+        let min_len = self.words.len().min(other.words.len());
+        let mut count = 0;
+        for i in 0..min_len {
+            count += (self.words[i] & other.words[i]).count_ones() as usize;
+        }
+        count
+    }
+
+    #[inline]
+    fn xor_intersection_into(&self, other: &Self, target: &mut Self) {
+        let min_len = self.words.len().min(other.words.len());
+        // Ensure target has enough words
+        if target.words.len() < min_len {
+            target.words.resize(min_len, 0);
+        }
+        for i in 0..min_len {
+            let intersection = self.words[i] & other.words[i];
+            if i < target.words.len() {
+                target.words[i] ^= intersection;
+            }
+        }
+    }
+
+    #[inline]
+    fn xor_symmetric_difference_into(&self, other: &Self, target: &mut Self) {
+        let max_len = self.words.len().max(other.words.len());
+        // Ensure target has enough words
+        if target.words.len() < max_len {
+            target.words.resize(max_len, 0);
+        }
+        // XOR elements that are in self XOR other into target
+        for i in 0..max_len {
+            let self_word = if i < self.words.len() {
+                self.words[i]
+            } else {
+                0
+            };
+            let other_word = if i < other.words.len() {
+                other.words[i]
+            } else {
+                0
+            };
+            let symmetric_diff = self_word ^ other_word;
+            target.words[i] ^= symmetric_diff;
+        }
     }
 }
 

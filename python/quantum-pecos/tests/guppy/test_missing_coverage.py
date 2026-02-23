@@ -56,12 +56,12 @@ def decode_integer_results(results: list[int], n_bits: int) -> list[tuple[bool, 
     return decoded
 
 
-def get_measurements(results: dict, expected_count: int = 1) -> list:  # noqa: ARG001
+def get_measurements(results: dict, _expected_count: int = 1) -> list:
     """Extract measurements from results dict, handling new format.
 
     Args:
-        results: The results dict from sim().run().to_dict()
-        expected_count: Expected number of measurements (for tuple returns)
+        results: The results dict from sim().run()
+        _expected_count: Expected number of measurements (for tuple returns)
 
     Returns:
         List of measurements (either single values or tuples)
@@ -558,7 +558,7 @@ class TestQuantumErrorHandling:
 
         # Run the test with more shots for statistical stability
         results = sim(Guppy(error_handling_test)).qubits(2).quantum(state_vector()).seed(42).run(1000).to_dict()
-        measurements = get_measurements(results, expected_count=2)
+        measurements = get_measurements(results)
 
         # The measurements are captured in order: m1 (measurement_0), m2 (measurement_1)
         # The relationship between m1 and success is: success = NOT m1

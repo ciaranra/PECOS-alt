@@ -1,4 +1,5 @@
 // Copyright 2024 The PECOS Developers
+use pecos::core::BitSet;
 use pecos::prelude::*;
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -17,7 +18,7 @@ use pyo3::types::{PyAny, PyDict, PyList, PySet, PyTuple};
 
 #[pyclass(name = "SparseSim", module = "pecos_rslib")]
 pub struct PySparseSim {
-    inner: SparseStab<VecSet<usize>, usize>,
+    inner: SparseStab,
 }
 
 #[pymethods]
@@ -25,7 +26,7 @@ impl PySparseSim {
     #[new]
     fn new(num_qubits: usize) -> Self {
         PySparseSim {
-            inner: SparseStab::<VecSet<usize>, usize>::new(num_qubits),
+            inner: SparseStab::new(num_qubits),
         }
     }
 
@@ -47,80 +48,81 @@ impl PySparseSim {
         location: usize,
         params: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<u8>> {
+        let q = &[QubitId(location)];
         match symbol {
             // No-op gates
             "I" => Ok(None),
             // Pauli gates
             "X" => {
-                self.inner.x(location);
+                self.inner.x(q);
                 Ok(None)
             }
             "Y" => {
-                self.inner.y(location);
+                self.inner.y(q);
                 Ok(None)
             }
             "Z" => {
-                self.inner.z(location);
+                self.inner.z(q);
                 Ok(None)
             }
             "H" | "H1" | "H+z+x" => {
-                self.inner.h(location);
+                self.inner.h(q);
                 Ok(None)
             }
             "H2" | "H-z-x" => {
-                self.inner.h2(location);
+                self.inner.h2(q);
                 Ok(None)
             }
             "H3" | "H+y-z" => {
-                self.inner.h3(location);
+                self.inner.h3(q);
                 Ok(None)
             }
             "H4" | "H-y-z" => {
-                self.inner.h4(location);
+                self.inner.h4(q);
                 Ok(None)
             }
             "H5" | "H-x+y" => {
-                self.inner.h5(location);
+                self.inner.h5(q);
                 Ok(None)
             }
             "H6" | "H-x-y" => {
-                self.inner.h6(location);
+                self.inner.h6(q);
                 Ok(None)
             }
             "F" | "F1" => {
-                self.inner.f(location);
+                self.inner.f(q);
                 Ok(None)
             }
             "Fdg" | "F1d" | "F1dg" => {
-                self.inner.fdg(location);
+                self.inner.fdg(q);
                 Ok(None)
             }
             "F2" => {
-                self.inner.f2(location);
+                self.inner.f2(q);
                 Ok(None)
             }
             "F2dg" | "F2d" => {
-                self.inner.f2dg(location);
+                self.inner.f2dg(q);
                 Ok(None)
             }
             "F3" => {
-                self.inner.f3(location);
+                self.inner.f3(q);
                 Ok(None)
             }
             "F3dg" | "F3d" => {
-                self.inner.f3dg(location);
+                self.inner.f3dg(q);
                 Ok(None)
             }
             "F4" => {
-                self.inner.f4(location);
+                self.inner.f4(q);
                 Ok(None)
             }
             "F4dg" | "F4d" => {
-                self.inner.f4dg(location);
+                self.inner.f4dg(q);
                 Ok(None)
             }
             "PZ" => {
-                self.inner.pz(location);
+                self.inner.pz(q);
                 Ok(None)
             }
             "PZForced" => {
@@ -136,14 +138,15 @@ impl PySparseSim {
                     })?
                     .call_method0("__bool__")?
                     .extract::<bool>()?;
+                // pz_forced is an inherent method still using old API
                 self.inner.pz_forced(location, forced_value);
                 Ok(None)
             }
             "MZ" | "MX" | "MY" | "MZForced" => {
                 let result = match symbol {
-                    "MZ" => self.inner.mz(location),
-                    "MX" => self.inner.mx(location),
-                    "MY" => self.inner.my(location),
+                    "MZ" => self.inner.mz(q).into_iter().next().unwrap(),
+                    "MX" => self.inner.mx(q).into_iter().next().unwrap(),
+                    "MY" => self.inner.my(q).into_iter().next().unwrap(),
                     "MZForced" => {
                         let forced_value = params
                             .ok_or_else(|| {
@@ -159,6 +162,7 @@ impl PySparseSim {
                             })?
                             .call_method0("__bool__")?
                             .extract::<bool>()?;
+                        // mz_forced is an inherent method still using old API
                         self.inner.mz_forced(location, forced_value)
                     }
                     _ => unreachable!(),
@@ -167,27 +171,27 @@ impl PySparseSim {
             }
             // Gate aliases - alternative names for common gates
             "Q" | "SX" | "SqrtX" => {
-                self.inner.sx(location);
+                self.inner.sx(q);
                 Ok(None)
             }
             "Qd" | "SXdg" | "SqrtXd" | "SqrtXdg" => {
-                self.inner.sxdg(location);
+                self.inner.sxdg(q);
                 Ok(None)
             }
             "R" | "SY" | "SqrtY" => {
-                self.inner.sy(location);
+                self.inner.sy(q);
                 Ok(None)
             }
             "Rd" | "SYdg" | "SqrtYd" | "SqrtYdg" => {
-                self.inner.sydg(location);
+                self.inner.sydg(q);
                 Ok(None)
             }
             "S" | "SZ" | "SqrtZ" => {
-                self.inner.sz(location);
+                self.inner.sz(q);
                 Ok(None)
             }
             "Sd" | "SZdg" | "SqrtZd" | "SqrtZdg" => {
-                self.inner.szdg(location);
+                self.inner.szdg(q);
                 Ok(None)
             }
             // Initialization aliases
@@ -199,38 +203,38 @@ impl PySparseSim {
                 {
                     let forced_int: i32 = forced_item.extract()?;
                     if forced_int != -1 {
-                        // Use forced measurement approach
+                        // Use forced measurement approach (inherent method)
                         let forced_value = forced_int != 0;
                         let result = self.inner.mz_forced(location, forced_value);
                         // If measured |1>, flip to |0>
                         if result.outcome {
-                            self.inner.x(location);
+                            self.inner.x(q);
                         }
                         return Ok(None);
                     }
                 }
                 // No forced_outcome or forced_outcome==-1, use native preparation
-                self.inner.pz(location);
+                self.inner.pz(q);
                 Ok(None)
             }
             "Init -Z" | "init |1>" | "leak |1>" | "unleak |1>" | "PnZ" => {
-                self.inner.pnz(location);
+                self.inner.pnz(q);
                 Ok(None)
             }
             "Init +X" | "init |+>" | "PX" => {
-                self.inner.px(location);
+                self.inner.px(q);
                 Ok(None)
             }
             "Init -X" | "init |->" | "PnX" => {
-                self.inner.pnx(location);
+                self.inner.pnx(q);
                 Ok(None)
             }
             "Init +Y" | "init |+i>" | "PY" => {
-                self.inner.py(location);
+                self.inner.py(q);
                 Ok(None)
             }
             "Init -Y" | "init |-i>" | "PnY" => {
-                self.inner.pny(location);
+                self.inner.pny(q);
                 Ok(None)
             }
             // Measurement aliases
@@ -239,22 +243,22 @@ impl PySparseSim {
                 if let Some(params) = params
                     && let Ok(Some(forced_item)) = params.get_item("forced_outcome")
                 {
-                    // Has forced_outcome, use forced measurement
+                    // Has forced_outcome, use forced measurement (inherent method)
                     let forced_int: i32 = forced_item.extract()?;
                     let forced_value = forced_int != 0;
                     let result = self.inner.mz_forced(location, forced_value);
                     return Ok(Some(u8::from(result.outcome)));
                 }
                 // No forced_outcome, use regular measurement
-                let result = self.inner.mz(location);
+                let result = self.inner.mz(q).into_iter().next().unwrap();
                 Ok(Some(u8::from(result.outcome)))
             }
             "Measure +X" => {
-                let result = self.inner.mx(location);
+                let result = self.inner.mx(q).into_iter().next().unwrap();
                 Ok(Some(u8::from(result.outcome)))
             }
             "Measure +Y" => {
-                let result = self.inner.my(location);
+                let result = self.inner.my(q).into_iter().next().unwrap();
                 Ok(Some(u8::from(result.outcome)))
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
@@ -278,50 +282,51 @@ impl PySparseSim {
 
         let q1: usize = location.get_item(0)?.extract()?;
         let q2: usize = location.get_item(1)?.extract()?;
+        let pair = &[QubitId(q1), QubitId(q2)];
 
         match symbol {
             "CX" | "CNOT" => {
-                self.inner.cx(q1, q2);
+                self.inner.cx(pair);
                 Ok(None)
             }
             "CY" => {
-                self.inner.cy(q1, q2);
+                self.inner.cy(pair);
                 Ok(None)
             }
             "CZ" => {
-                self.inner.cz(q1, q2);
+                self.inner.cz(pair);
                 Ok(None)
             }
             "SXX" | "SqrtXX" => {
-                self.inner.sxx(q1, q2);
+                self.inner.sxx(pair);
                 Ok(None)
             }
             "SXXdg" | "SqrtXXd" | "SqrtXXdg" => {
-                self.inner.sxxdg(q1, q2);
+                self.inner.sxxdg(pair);
                 Ok(None)
             }
             "SYY" | "SqrtYY" => {
-                self.inner.syy(q1, q2);
+                self.inner.syy(pair);
                 Ok(None)
             }
             "SYYdg" | "SqrtYYd" | "SqrtYYdg" => {
-                self.inner.syydg(q1, q2);
+                self.inner.syydg(pair);
                 Ok(None)
             }
             "SZZ" | "SqrtZZ" => {
-                self.inner.szz(q1, q2);
+                self.inner.szz(pair);
                 Ok(None)
             }
             "SZZdg" | "SqrtZZd" | "SqrtZZdg" => {
-                self.inner.szzdg(q1, q2);
+                self.inner.szzdg(pair);
                 Ok(None)
             }
             "SWAP" => {
-                self.inner.swap(q1, q2);
+                self.inner.swap(pair);
                 Ok(None)
             }
             "G2" | "G" => {
-                self.inner.g(q1, q2);
+                self.inner.g(pair);
                 Ok(None)
             }
             // Two-qubit gate aliases
@@ -512,31 +517,30 @@ impl PySparseSim {
         let num_qubits = self.inner.num_qubits();
 
         // Helper closure to serialize a Gens into a Python dict
-        let serialize_gens = |gens: &Gens<VecSet<usize>, usize>| -> PyResult<Py<PyDict>> {
+        let serialize_gens = |gens: &Gens| -> PyResult<Py<PyDict>> {
             let dict = PyDict::new(py);
 
-            let vecset_to_list = |sets: &[VecSet<usize>]| -> PyResult<Py<PyList>> {
+            let bitset_to_list = |sets: &[BitSet]| -> PyResult<Py<PyList>> {
                 let items: Vec<Py<PyList>> = sets
                     .iter()
                     .map(|s| {
-                        let elems: Vec<usize> = s.elements().to_vec();
+                        let elems: Vec<usize> = s.iter().collect();
                         Ok(PyList::new(py, &elems)?.unbind())
                     })
                     .collect::<PyResult<_>>()?;
                 Ok(PyList::new(py, &items)?.unbind())
             };
 
-            dict.set_item("col_x", vecset_to_list(&gens.col_x)?)?;
-            dict.set_item("col_z", vecset_to_list(&gens.col_z)?)?;
-            dict.set_item("row_x", vecset_to_list(&gens.row_x)?)?;
-            dict.set_item("row_z", vecset_to_list(&gens.row_z)?)?;
+            dict.set_item("col_x", bitset_to_list(&gens.col_x)?)?;
+            dict.set_item("col_z", bitset_to_list(&gens.col_z)?)?;
+            dict.set_item("row_x", bitset_to_list(&gens.row_x)?)?;
+            dict.set_item("row_z", bitset_to_list(&gens.row_z)?)?;
 
-            let set_to_list = |s: &VecSet<usize>| -> Py<PyList> {
-                let elems: Vec<usize> = s.elements().to_vec();
+            let set_to_list = |s: &BitSet| -> Py<PyList> {
+                let elems: Vec<usize> = s.iter().collect();
                 PyList::new(py, &elems).unwrap().unbind()
             };
 
-            dict.set_item("sign", set_to_list(&gens.sign))?;
             dict.set_item("signs_minus", set_to_list(&gens.signs_minus))?;
             dict.set_item("signs_i", set_to_list(&gens.signs_i))?;
 
@@ -571,8 +575,8 @@ impl PySparseSim {
         stabs_dict: &Bound<'_, PyDict>,
         destabs_dict: &Bound<'_, PyDict>,
     ) -> PyResult<Self> {
-        let deserialize_gens = |dict: &Bound<'_, PyDict>| -> PyResult<Gens<VecSet<usize>, usize>> {
-            let list_to_vecsets = |key: &str| -> PyResult<Vec<VecSet<usize>>> {
+        let deserialize_gens = |dict: &Bound<'_, PyDict>| -> PyResult<Gens> {
+            let list_to_bitsets = |key: &str| -> PyResult<Vec<BitSet>> {
                 let list: Bound<'_, PyList> = dict
                     .get_item(key)?
                     .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyKeyError, _>(key.to_string()))?
@@ -580,13 +584,13 @@ impl PySparseSim {
                 let mut result = Vec::with_capacity(list.len());
                 for item in list.iter() {
                     let inner_list: Vec<usize> = item.extract()?;
-                    let set: VecSet<usize> = inner_list.into_iter().collect();
+                    let set: BitSet = inner_list.into_iter().collect();
                     result.push(set);
                 }
                 Ok(result)
             };
 
-            let list_to_vecset = |key: &str| -> PyResult<VecSet<usize>> {
+            let list_to_bitset = |key: &str| -> PyResult<BitSet> {
                 let list = dict.get_item(key)?.ok_or_else(|| {
                     PyErr::new::<pyo3::exceptions::PyKeyError, _>(key.to_string())
                 })?;
@@ -596,22 +600,22 @@ impl PySparseSim {
 
             Ok(Gens::from_parts(
                 num_qubits,
-                list_to_vecsets("col_x")?,
-                list_to_vecsets("col_z")?,
-                list_to_vecsets("row_x")?,
-                list_to_vecsets("row_z")?,
-                list_to_vecset("sign")?,
-                list_to_vecset("signs_minus")?,
-                list_to_vecset("signs_i")?,
+                list_to_bitsets("col_x")?,
+                list_to_bitsets("col_z")?,
+                list_to_bitsets("row_x")?,
+                list_to_bitsets("row_z")?,
+                list_to_bitset("signs_minus")?,
+                list_to_bitset("signs_i")?,
             ))
         };
 
         let stabs = deserialize_gens(stabs_dict)?;
         let destabs = deserialize_gens(destabs_dict)?;
 
-        Ok(PySparseSim {
-            inner: SparseStab::from_parts(num_qubits, stabs, destabs),
-        })
+        let mut inner = SparseStab::new(num_qubits);
+        *inner.stabs_mut() = stabs;
+        *inner.destabs_mut() = destabs;
+        Ok(PySparseSim { inner })
     }
 
     /// Returns the raw gens data (`col_x`, `col_z`, `row_x`, `row_z`) for stabs or destabs.
@@ -621,8 +625,8 @@ impl PySparseSim {
         } else {
             self.inner.destabs()
         };
-        let to_vecs = |sets: &[VecSet<usize>]| -> Vec<Vec<usize>> {
-            sets.iter().map(|s| s.elements().to_vec()).collect()
+        let to_vecs = |sets: &[BitSet]| -> Vec<Vec<usize>> {
+            sets.iter().map(|s| s.iter().collect()).collect()
         };
         (
             to_vecs(&gens.col_x),

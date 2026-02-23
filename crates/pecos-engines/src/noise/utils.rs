@@ -210,37 +210,29 @@ impl NoiseUtils {
             // Rotation gates - angles are now stored in gate.angles field
             GateType::RX if !gate.angles.is_empty() => {
                 let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
-                builder.add_rx(gate.angles[0].to_radians(), &qubits_usize);
+                builder.add_rx(gate.angles[0], &qubits_usize);
             }
             GateType::RY if !gate.angles.is_empty() => {
                 let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
-                builder.add_ry(gate.angles[0].to_radians(), &qubits_usize);
+                builder.add_ry(gate.angles[0], &qubits_usize);
             }
             GateType::RZ if !gate.angles.is_empty() => {
                 let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
-                builder.add_rz(gate.angles[0].to_radians(), &qubits_usize);
+                builder.add_rz(gate.angles[0], &qubits_usize);
             }
             GateType::RZZ if gate.qubits.len() >= 2 && !gate.angles.is_empty() => {
-                builder.add_rzz(
-                    gate.angles[0].to_radians(),
-                    &[*gate.qubits[0]],
-                    &[*gate.qubits[1]],
-                );
+                builder.add_rzz(gate.angles[0], &[*gate.qubits[0]], &[*gate.qubits[1]]);
             }
             GateType::R1XY if gate.angles.len() >= 2 => {
                 let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
-                builder.add_r1xy(
-                    gate.angles[0].to_radians(),
-                    gate.angles[1].to_radians(),
-                    &qubits_usize,
-                );
+                builder.add_r1xy(gate.angles[0], gate.angles[1], &qubits_usize);
             }
             GateType::U if gate.angles.len() >= 3 => {
                 let qubits_usize: Vec<usize> = gate.qubits.iter().map(|q| **q).collect();
                 builder.add_u(
-                    gate.angles[0].to_radians(),
-                    gate.angles[1].to_radians(),
-                    gate.angles[2].to_radians(),
+                    gate.angles[0],
+                    gate.angles[1],
+                    gate.angles[2],
                     &qubits_usize,
                 );
             }
@@ -442,7 +434,7 @@ mod tests {
         // Should have one Prep gate
         assert_eq!(parsed_gates.len(), 1);
         assert_eq!(parsed_gates[0].gate_type, GateType::Prep);
-        assert_eq!(parsed_gates[0].qubits, vec![QubitId(0)]);
+        assert_eq!(parsed_gates[0].qubits.as_slice(), &[QubitId(0)]);
 
         // Test preparation to |1⟩
         let mut builder = NoiseUtils::create_quantum_builder();
@@ -453,9 +445,9 @@ mod tests {
         // Should have two gates: Prep followed by X
         assert_eq!(parsed_gates.len(), 2);
         assert_eq!(parsed_gates[0].gate_type, GateType::Prep);
-        assert_eq!(parsed_gates[0].qubits, vec![QubitId(1)]);
+        assert_eq!(parsed_gates[0].qubits.as_slice(), &[QubitId(1)]);
         assert_eq!(parsed_gates[1].gate_type, GateType::X);
-        assert_eq!(parsed_gates[1].qubits, vec![QubitId(1)]);
+        assert_eq!(parsed_gates[1].qubits.as_slice(), &[QubitId(1)]);
     }
 
     #[test]

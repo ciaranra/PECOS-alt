@@ -17,10 +17,10 @@ including CNOT gates, controlled gates, and other entangling operations using CU
 
 from __future__ import annotations
 
+import cmath
 from typing import TYPE_CHECKING
 
 import cupy as cp
-import numpy as np
 
 if TYPE_CHECKING:
     from pecos.simulators.custatevec.state import CuStateVec
@@ -293,24 +293,25 @@ def RZZ(
         raise ValueError(msg)
     theta = angles[0]
 
+    t = float(theta)
     matrix = cp.asarray(
         [
-            np.exp(-1j * theta / 2),
+            cmath.exp(-1j * t / 2),
             0,
             0,
             0,
             0,
-            np.exp(1j * theta / 2),
+            cmath.exp(1j * t / 2),
             0,
             0,
             0,
             0,
-            np.exp(1j * theta / 2),
+            cmath.exp(1j * t / 2),
             0,
             0,
             0,
             0,
-            np.exp(-1j * theta / 2),
+            cmath.exp(-1j * t / 2),
         ],
         dtype=state.cp_type,
     )

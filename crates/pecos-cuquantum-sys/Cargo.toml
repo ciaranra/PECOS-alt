@@ -1,0 +1,29 @@
+[package]
+name = "pecos-cuquantum-sys"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Raw FFI bindings to NVIDIA cuQuantum SDK"
+keywords = ["quantum", "cuda", "nvidia", "cuquantum", "ffi"]
+categories = ["external-ffi-bindings", "science"]
+readme = "README.md"
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.71"
+pecos-build = { path = "../pecos-build" }
+log.workspace = true
+env_logger.workspace = true
+
+[features]
+default = []
+# Generate bindings at build time (requires cuQuantum headers)
+runtime-bindgen = []
+
+[package.metadata.docs.rs]
+# Don't try to build docs on docs.rs (no CUDA/cuQuantum available)
+targets = []

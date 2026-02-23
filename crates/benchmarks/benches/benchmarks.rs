@@ -13,25 +13,46 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 
 mod modules {
-    pub mod element_ops;
+    pub mod allocation_overhead;
+    pub mod dem_sampler;
+    pub mod dod_statevec;
     // TODO: pub mod hadamard_ops;
+    #[cfg(feature = "gpu-sims")]
+    pub mod gpu_influence_sampler;
     pub mod measurement_sampling;
     pub mod noise_models;
     // TODO: pub mod pauli_ops;
     pub mod rng;
     pub mod set_ops;
+    pub mod sparse_state_vec;
+    pub mod stabilizer_sims;
+    pub mod state_vec_sims;
     pub mod surface_code;
+    pub mod trig;
 }
 
-use modules::{element_ops, measurement_sampling, noise_models, rng, set_ops, surface_code};
+#[cfg(feature = "gpu-sims")]
+use modules::gpu_influence_sampler;
+use modules::{
+    allocation_overhead, dem_sampler, dod_statevec, measurement_sampling, noise_models, rng,
+    set_ops, sparse_state_vec, stabilizer_sims, state_vec_sims, surface_code, trig,
+};
 
 fn all_benchmarks(c: &mut Criterion) {
-    element_ops::benchmarks(c);
+    allocation_overhead::benchmarks(c);
+    dem_sampler::benchmarks(c);
+    dod_statevec::benchmarks(c);
+    #[cfg(feature = "gpu-sims")]
+    gpu_influence_sampler::benchmarks(c);
     measurement_sampling::benchmarks(c);
     noise_models::benchmarks(c);
     rng::benchmarks(c);
     set_ops::benchmarks(c);
+    sparse_state_vec::benchmarks(c);
+    stabilizer_sims::benchmarks(c);
+    state_vec_sims::benchmarks(c);
     surface_code::benchmarks(c);
+    trig::benchmarks(c);
     // TODO: pauli_ops::benchmarks(c);
     // TODO: hadamard_ops::benchmarks(c);
 }

@@ -10,7 +10,7 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-use crate::{IndexableElement, Pauli, PauliOperator, Phase, QuarterPhase, Set};
+use crate::{Pauli, PauliOperator, Phase, QuarterPhase, Set};
 use std::ops::{BitAnd, BitOr, BitXor};
 
 /// Represents a Pauli operator with positions for X and Z components.
@@ -23,7 +23,7 @@ use std::ops::{BitAnd, BitOr, BitXor};
 /// - Positions in both are affected by the Y operator.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Debug, PartialEq)]
-pub struct PauliSparse<T: for<'a> Set<'a>> {
+pub struct PauliSparse<T: for<'a> Set<'a, Element = usize>> {
     phase: QuarterPhase,
     x_positions: T,
     z_positions: T,
@@ -31,7 +31,7 @@ pub struct PauliSparse<T: for<'a> Set<'a>> {
 
 impl<T> Default for PauliSparse<T>
 where
-    T: for<'a> Set<'a> + Default,
+    T: for<'a> Set<'a, Element = usize> + Default,
 {
     fn default() -> Self {
         Self {
@@ -42,11 +42,77 @@ where
     }
 }
 
-impl<E, T> PauliSparse<T>
+impl<T> PauliSparse<T>
 where
-    T: for<'a> Set<'a, Element = E> + FromIterator<E>,
+    T: for<'a> Set<'a, Element = usize>,
+{
+    /// Returns a reference to the X positions set.
+    ///
+    /// Positions in `x_positions` are affected by the X operator.
+    /// Positions in both `x_positions` and `z_positions` are affected by Y.
+    #[inline]
+    #[must_use]
+    pub fn x_set(&self) -> &T {
+        &self.x_positions
+    }
+
+    /// Returns a reference to the Z positions set.
+    ///
+    /// Positions in `z_positions` are affected by the Z operator.
+    /// Positions in both `x_positions` and `z_positions` are affected by Y.
+    #[inline]
+    #[must_use]
+    pub fn z_set(&self) -> &T {
+        &self.z_positions
+    }
+
+    /// Creates a `PauliSparse` directly from X and Z position sets.
+    ///
+    /// This is the most efficient way to create a `PauliSparse` when you already
+    /// have the X and Z sets (e.g., from a stabilizer tableau). Y operators are
+    /// represented as positions present in both sets.
+    ///
+    /// # Parameters
+    /// - `phase`: The phase of the Pauli operator (`+1`, `-1`, `+i`, or `-i`).
+    /// - `x_positions`: Set of positions with X component.
+    /// - `z_positions`: Set of positions with Z component.
+    ///
+    /// # Examples
+    /// ```
+    /// use pecos_core::{PauliSparse, QuarterPhase, VecSet};
+    ///
+    /// let x_set = VecSet::from_iter([0, 1]);
+    /// let z_set = VecSet::from_iter([1, 2]);  // qubit 1 has Y (both X and Z)
+    ///
+    /// let pauli = PauliSparse::from_xz_sets(QuarterPhase::PlusOne, x_set, z_set);
+    /// ```
+    #[must_use]
+    pub fn from_xz_sets(phase: QuarterPhase, x_positions: T, z_positions: T) -> Self {
+        Self {
+            phase,
+            x_positions,
+            z_positions,
+        }
+    }
+
+    /// Returns `true` if this is the identity operator (no X, Y, or Z components).
+    #[inline]
+    #[must_use]
+    pub fn is_identity(&self) -> bool {
+        self.x_positions.is_empty() && self.z_positions.is_empty()
+    }
+
+    /// Sets the phase of this Pauli operator.
+    #[inline]
+    pub fn set_phase(&mut self, phase: QuarterPhase) {
+        self.phase = phase;
+    }
+}
+
+impl<T> PauliSparse<T>
+where
+    T: for<'a> Set<'a, Element = usize> + FromIterator<usize>,
     for<'a> &'a T: BitOr<Output = T>,
-    E: IndexableElement,
 {
     /// Initializes a new empty Pauli operator, which is equivalent to the identity.
     #[must_use]
@@ -93,7 +159,12 @@ where
     ///
     /// # Panics
     /// This function does not panic under normal usage.
-    pub fn with_operators(phase: QuarterPhase, x: &[E], y: &[E], z: &[E]) -> Result<Self, String> {
+    pub fn with_operators(
+        phase: QuarterPhase,
+        x: &[usize],
+        y: &[usize],
+        z: &[usize],
+    ) -> Result<Self, String> {
         let mut x_set: T = x.iter().copied().collect();
         let mut z_set: T = z.iter().copied().collect();
 
@@ -116,11 +187,10 @@ where
 
 // TODO: Consider making a clear distinction between mutation in place and not
 
-impl<E, T> PauliOperator for PauliSparse<T>
+impl<T> PauliOperator for PauliSparse<T>
 where
-    T: for<'a> Set<'a, Element = E> + FromIterator<E>,
+    T: for<'a> Set<'a, Element = usize> + FromIterator<usize>,
     for<'a> &'a T: BitAnd<Output = T> + BitXor<Output = T>,
-    E: IndexableElement,
 {
     fn phase(&self) -> QuarterPhase {
         self.phase
@@ -128,18 +198,12 @@ where
 
     /// Returns the X positions as a sorted `Vec<usize>`.
     fn x_positions(&self) -> Vec<usize> {
-        self.x_positions
-            .iter()
-            .map(super::super::element::IndexableElement::to_index)
-            .collect()
+        self.x_positions.iter().copied().collect()
     }
 
     /// Returns the Z positions as a sorted `Vec<usize>`.
     fn z_positions(&self) -> Vec<usize> {
-        self.z_positions
-            .iter()
-            .map(super::super::element::IndexableElement::to_index)
-            .collect()
+        self.z_positions.iter().copied().collect()
     }
 
     /// Multiplies two `SetPauli` operators and returns the result.
@@ -208,11 +272,11 @@ where
         let mut z_positions = T::default();
 
         match pauli {
-            Pauli::X => x_positions.insert(E::from_index(qubit)),
-            Pauli::Z => z_positions.insert(E::from_index(qubit)),
+            Pauli::X => x_positions.insert(qubit),
+            Pauli::Z => z_positions.insert(qubit),
             Pauli::Y => {
-                x_positions.insert(E::from_index(qubit));
-                z_positions.insert(E::from_index(qubit));
+                x_positions.insert(qubit);
+                z_positions.insert(qubit);
             }
             Pauli::I => {} // Identity does not affect any positions
         }
@@ -307,5 +371,53 @@ mod tests {
             PauliSparse::<VecSet<usize>>::with_operators(QuarterPhase::PlusOne, &[1], &[], &[0])
                 .unwrap();
         assert!(!p1.commutes_with(&p2));
+    }
+
+    #[test]
+    fn test_from_xz_sets() {
+        let x_set = VecSet::from_iter([0usize, 1]);
+        let z_set = VecSet::from_iter([1usize, 2]);
+
+        let pauli = PauliSparse::from_xz_sets(QuarterPhase::MinusOne, x_set, z_set);
+
+        assert_eq!(pauli.phase(), QuarterPhase::MinusOne);
+        assert_sets_equal(pauli.x_set(), &VecSet::from_iter([0usize, 1]));
+        assert_sets_equal(pauli.z_set(), &VecSet::from_iter([1usize, 2]));
+        // Qubit 1 has Y (in both sets), weight should be 3
+        assert_eq!(pauli.weight(), 3);
+    }
+
+    #[test]
+    fn test_set_accessors() {
+        let pauli =
+            PauliSparse::with_operators(QuarterPhase::PlusOne, &[0usize, 1], &[2usize], &[3usize])
+                .unwrap();
+
+        // x_set should contain 0, 1, 2 (x positions + y position)
+        assert_sets_equal(pauli.x_set(), &VecSet::from_iter([0usize, 1, 2]));
+        // z_set should contain 2, 3 (z position + y position)
+        assert_sets_equal(pauli.z_set(), &VecSet::from_iter([2usize, 3]));
+    }
+
+    #[test]
+    fn test_is_identity() {
+        let identity = PauliSparse::<VecSet<usize>>::new();
+        assert!(identity.is_identity());
+
+        let not_identity =
+            PauliSparse::<VecSet<usize>>::with_operators(QuarterPhase::PlusOne, &[0], &[], &[])
+                .unwrap();
+        assert!(!not_identity.is_identity());
+    }
+
+    #[test]
+    fn test_set_phase() {
+        let mut pauli =
+            PauliSparse::<VecSet<usize>>::with_operators(QuarterPhase::PlusOne, &[0], &[], &[])
+                .unwrap();
+        assert_eq!(pauli.phase(), QuarterPhase::PlusOne);
+
+        pauli.set_phase(QuarterPhase::MinusI);
+        assert_eq!(pauli.phase(), QuarterPhase::MinusI);
     }
 }

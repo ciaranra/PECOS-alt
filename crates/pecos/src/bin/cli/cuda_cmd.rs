@@ -1,7 +1,6 @@
 //! Implementation of the `cuda` subcommand
 
 use pecos_build::Result;
-use pecos_build::cuda::installer::{install_cuda, uninstall_cuda};
 use pecos_build::cuda::{
     find_cuda, get_cuda_version, get_pecos_cuda_dir, is_valid_cuda_installation,
 };
@@ -10,20 +9,12 @@ use pecos_build::errors::Error;
 /// Run the cuda subcommand
 pub fn run(command: super::CudaCommands) -> Result<()> {
     match command {
-        super::CudaCommands::Install { force } => run_install(force),
         super::CudaCommands::Check { quiet } => run_check(quiet),
         super::CudaCommands::Find { export } => run_find(export),
         super::CudaCommands::Version => run_version(),
-        super::CudaCommands::Uninstall => run_uninstall(),
         super::CudaCommands::Validate { path } => run_validate(path),
         super::CudaCommands::SetupPython => run_setup_python(),
     }
-}
-
-/// Install CUDA Toolkit
-fn run_install(force: bool) -> Result<()> {
-    install_cuda(force)?;
-    Ok(())
 }
 
 /// Check if CUDA is available
@@ -47,7 +38,7 @@ fn run_check(quiet: bool) -> Result<()> {
         if !quiet {
             eprintln!("cuda: not found");
             eprintln!();
-            eprintln!("Install with: pecos cuda install");
+            eprintln!("Install with: pecos install cuda");
             eprintln!("Or set CUDA_PATH to your system CUDA installation");
         }
         Err(Error::Cuda("CUDA not available".to_string()))
@@ -67,7 +58,7 @@ fn run_find(export: bool) -> Result<()> {
     } else {
         eprintln!("CUDA not found");
         eprintln!();
-        eprintln!("Install with: pecos cuda install");
+        eprintln!("Install with: pecos install cuda");
         Err(Error::Cuda("CUDA not found".to_string()))
     }
 }
@@ -95,11 +86,6 @@ fn run_version() -> Result<()> {
         eprintln!("CUDA not found");
         Err(Error::Cuda("CUDA not found".to_string()))
     }
-}
-
-/// Uninstall local CUDA
-fn run_uninstall() -> Result<()> {
-    uninstall_cuda()
 }
 
 /// Validate CUDA installation
@@ -192,7 +178,7 @@ fn run_setup_python() -> Result<()> {
         eprintln!("Error: CUDA toolkit not found.");
         eprintln!();
         eprintln!("Install CUDA toolkit first with:");
-        eprintln!("  pecos cuda install");
+        eprintln!("  pecos install cuda");
         eprintln!();
         eprintln!("Or set CUDA_PATH to your system CUDA installation.");
         return Err(Error::Cuda(

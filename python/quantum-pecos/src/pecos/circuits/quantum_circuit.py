@@ -444,7 +444,7 @@ class QuantumCircuit(MutableSequence):
                             result.meta("_symbol", symbol)
                             if params_json:
                                 result.meta("_params", params_json)
-                        except QubitConflictError:  # noqa: PERF203
+                        except QubitConflictError:
                             pass  # Qubit already initialized in this tick
                 else:
                     try:
@@ -466,7 +466,7 @@ class QuantumCircuit(MutableSequence):
                             result.meta("_symbol", symbol)
                             if params_json:
                                 result.meta("_params", params_json)
-                        except QubitConflictError:  # noqa: PERF203
+                        except QubitConflictError:
                             pass  # Qubit already measured in this tick
                 else:
                     try:
@@ -1002,7 +1002,7 @@ class TickView:
     @property
     def active_qudits(self) -> set[Location]:
         """Returns the active qudits for this tick."""
-        tick = self._circuit._inner.get_tick(self._tick_idx)  # noqa: SLF001
+        tick = self._circuit._inner.get_tick(self._tick_idx)
         if tick is None:
             return set()
 
@@ -1053,10 +1053,10 @@ class TickView:
         gate_dict: GateDict = symbol if locations is None else {symbol: locations}  # type: ignore[assignment]
 
         if gate_dict:
-            tick_handle = self._circuit._inner.tick_at(self._tick_idx)  # noqa: SLF001
+            tick_handle = self._circuit._inner.tick_at(self._tick_idx)
             for gate_symbol, gate_locations in gate_dict.items():
                 if gate_locations:
-                    self._circuit._add_gate_to_tick(  # noqa: SLF001
+                    self._circuit._add_gate_to_tick(
                         tick_handle,
                         gate_symbol,
                         gate_locations,
@@ -1078,7 +1078,7 @@ class TickView:
             else:
                 qubits.append(loc)
 
-        self._circuit._inner.discard(qubits, self._tick_idx)  # noqa: SLF001
+        self._circuit._inner.discard(qubits, self._tick_idx)
         return self
 
     def items(
@@ -1086,7 +1086,7 @@ class TickView:
         _tick: None = None,
     ) -> Iterator[tuple[str, set[Location], JSONDict]]:
         """Generator to return a dictionary-like iter."""
-        yield from self._circuit._iter_tick(self._tick_idx)  # noqa: SLF001
+        yield from self._circuit._iter_tick(self._tick_idx)
 
     def __str__(self) -> str:
         """Return string representation of the tick."""

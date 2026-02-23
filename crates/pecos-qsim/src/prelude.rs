@@ -10,7 +10,7 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-pub use pecos_core::{IndexableElement, VecSet};
+pub use pecos_core::VecSet;
 
 pub use crate::{
     arbitrary_rotation_gateable::ArbitraryRotationGateable,
@@ -18,13 +18,14 @@ pub use crate::{
     coin_toss::CoinToss,
     gens::Gens,
     measurement_sampler::{MeasurementSampler, SampleResult, SequentialMeasurementSampler},
-    pauli_prop::{PauliProp, StdPauliProp},
+    pauli_prop::PauliProp,
     quantum_simulator::QuantumSimulator,
     sign_algebra::{PhaseSign, SignAlgebra, SymbolicSign},
-    sparse_stab::{SparseStab, StdSparseStab},
+    sparse_stab::SparseStab,
     stabilizer_tableau::StabilizerTableauSimulator,
     state_vec::StateVec,
     symbolic_sparse_stab::{
-        MeasurementHistory, StdSymbolicSparseStab, SymbolicMeasurementResult, SymbolicSparseStab,
+        MeasurementHistory, SymbolicMeasurementResult, SymbolicSparseStabVecSet,
     },
+    symbolic_sparse_stab_bitset::SymbolicSparseStab,
 };

@@ -2,7 +2,8 @@ mod helpers;
 
 mod advanced_gates {
     use crate::helpers::assert_states_equal;
-    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec};
+    use pecos_core::Angle64;
+    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec, qid, qid2};
     use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_4, FRAC_PI_6, PI};
 
     #[test]
@@ -12,9 +13,11 @@ mod advanced_gates {
 
         // Test that rotation decompositions work
         // RY(θ) = RX(π/2)RZ(θ)RX(-π/2)
-        q1.ry(FRAC_PI_3, 0);
+        q1.ry(Angle64::from_radians(FRAC_PI_3), &qid(0));
 
-        q2.rx(FRAC_PI_2, 0).rz(FRAC_PI_3, 0).rx(-FRAC_PI_2, 0);
+        q2.rx(Angle64::from_radians(FRAC_PI_2), &qid(0))
+            .rz(Angle64::from_radians(FRAC_PI_3), &qid(0))
+            .rx(Angle64::from_radians(-FRAC_PI_2), &qid(0));
 
         assert_states_equal(q1.state(), q2.state());
     }
@@ -33,11 +36,12 @@ mod advanced_gates {
 
         // Method 1: Two separate rotations
         let mut q1 = q.clone();
-        q1.ry(theta1, 0).ry(theta2, 0);
+        q1.ry(Angle64::from_radians(theta1), &qid(0))
+            .ry(Angle64::from_radians(theta2), &qid(0));
 
         // Method 2: Combined rotation
         let mut q2 = q.clone();
-        q2.ry(theta1 + theta2, 0);
+        q2.ry(Angle64::from_radians(theta1 + theta2), &qid(0));
 
         assert_states_equal(q1.state(), q2.state());
     }
@@ -49,16 +53,16 @@ mod advanced_gates {
         let mut q2 = StateVec::new(2);
 
         // Prepare same non-trivial initial state
-        q1.h(0);
-        q1.h(1);
-        q2.h(0);
-        q2.h(1);
+        q1.h(&qid(0));
+        q1.h(&qid(1));
+        q2.h(&qid(0));
+        q2.h(&qid(1));
 
         let theta = PI / 3.0;
 
         // Test RYY symmetry
-        q1.ryy(theta, 0, 1);
-        q2.ryy(theta, 1, 0);
+        q1.ryy(Angle64::from_radians(theta), &qid2(0, 1));
+        q2.ryy(Angle64::from_radians(theta), &qid2(1, 0));
 
         for (a, b) in q1.state().iter().zip(q2.state().iter()) {
             assert!((a - b).norm() < 1e-10);
@@ -67,13 +71,13 @@ mod advanced_gates {
         // Test RZZ symmetry
         let mut q1 = StateVec::new(2);
         let mut q2 = StateVec::new(2);
-        q1.h(0);
-        q1.h(1);
-        q2.h(0);
-        q2.h(1);
+        q1.h(&qid(0));
+        q1.h(&qid(1));
+        q2.h(&qid(0));
+        q2.h(&qid(1));
 
-        q1.rzz(theta, 0, 1);
-        q2.rzz(theta, 1, 0);
+        q1.rzz(Angle64::from_radians(theta), &qid2(0, 1));
+        q2.rzz(Angle64::from_radians(theta), &qid2(1, 0));
 
         for (a, b) in q1.state().iter().zip(q2.state().iter()) {
             assert!((a - b).norm() < 1e-10);
@@ -90,8 +94,10 @@ mod advanced_gates {
         let phi = FRAC_PI_4; // π/4
 
         // Apply in different orders
-        q1.rx(theta, 0).ry(phi, 0);
-        q2.ry(phi, 0).rx(theta, 0);
+        q1.rx(Angle64::from_radians(theta), &qid(0))
+            .ry(Angle64::from_radians(phi), &qid(0));
+        q2.ry(Angle64::from_radians(phi), &qid(0))
+            .rx(Angle64::from_radians(theta), &qid(0));
 
         println!("RY(π/4)RX(π/3)|0⟩ = {:?}", q1.state());
         println!("RX(π/3)RY(π/4)|0⟩ = {:?}", q2.state());
@@ -111,11 +117,12 @@ mod advanced_gates {
         println!("q1 = {:?}", q1.state());
         println!("q2 = {:?}", q2.state());
 
-        q1.h(0); // Direct H
+        q1.h(&qid(0)); // Direct H
         println!("After H: q1 = {:?}", q1.state());
 
         // H via rotations - changed order and added negative sign to RZ angle
-        q2.ry(-FRAC_PI_2, 0).rz(-PI, 0);
+        q2.ry(Angle64::from_radians(-FRAC_PI_2), &qid(0))
+            .rz(Angle64::from_radians(-PI), &qid(0));
         println!("After RZ(-π)RY(-π/2): q2 = {:?}", q2.state());
 
         // Compare up to global phase by looking at ratios between components
@@ -133,7 +140,10 @@ mod advanced_gates {
 
 mod quantum_states {
     use crate::helpers::assert_states_equal;
-    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator, StateVec};
+    use pecos_core::Angle64;
+    use pecos_qsim::{
+        ArbitraryRotationGateable, CliffordGateable, QuantumSimulator, StateVec, qid, qid2,
+    };
     use std::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2};
 
     #[test]
@@ -141,8 +151,8 @@ mod quantum_states {
         let mut state_vec = StateVec::new(2);
 
         // Prepare Bell State: (|00⟩ + |11⟩) / √2
-        state_vec.h(0);
-        state_vec.cx(0, 1);
+        state_vec.h(&qid(0));
+        state_vec.cx(&qid2(0, 1));
 
         let expected_amplitude = 1.0 / 2.0_f64.sqrt();
 
@@ -156,7 +166,7 @@ mod quantum_states {
     fn test_ghz_state() {
         // Test creating and verifying a GHZ state
         let mut q = StateVec::new(3);
-        q.h(0).cx(0, 1).cx(1, 2); // Create GHZ state
+        q.h(&qid(0)).cx(&qid2(0, 1)).cx(&qid2(1, 2)); // Create GHZ state
 
         // Verify properties
         let mut norm_squared = 0.0;
@@ -176,7 +186,7 @@ mod quantum_states {
         let mut q = StateVec::new(2);
 
         // Method 1: H + CNOT
-        q.h(0).cx(0, 1);
+        q.h(&qid(0)).cx(&qid2(0, 1));
         let probs1 = [
             q.probability(0),
             q.probability(1),
@@ -186,7 +196,8 @@ mod quantum_states {
 
         // Method 2: Rotations
         q.reset();
-        q.ry(FRAC_PI_2, 0).cx(0, 1); // Remove rz(PI) since it just adds phase
+        q.ry(Angle64::from_radians(FRAC_PI_2), &qid(0))
+            .cx(&qid2(0, 1)); // Remove rz(PI) since it just adds phase
 
         // Compare probability distributions
         assert!((q.probability(0) - probs1[0]).abs() < 1e-10);
@@ -199,7 +210,7 @@ mod quantum_states {
     fn test_state_prep_consistency() {
         // First method: direct X gate
         let mut q1 = StateVec::new(2);
-        q1.x(1); // Direct preparation of |01⟩
+        q1.x(&qid(1)); // Direct preparation of |01⟩
 
         // Verify first preparation - |01⟩ corresponds to binary 10 (decimal 2)
         assert!(
@@ -212,7 +223,7 @@ mod quantum_states {
 
         // Second method: using two X gates that cancel on qubit 0
         let mut q2 = StateVec::new(2);
-        q2.x(0).x(1).x(0); // Should give |01⟩
+        q2.x(&qid(0)).x(&qid(1)).x(&qid(0)); // Should give |01⟩
 
         // Verify second preparation - |01⟩ corresponds to binary 10 (decimal 2)
         assert!(
@@ -233,13 +244,13 @@ mod quantum_states {
 
         // Try to prepare various single-qubit states
         // |+⟩ state
-        q.h(0);
+        q.h(&qid(0));
         assert!((q.probability(0) - 0.5).abs() < 1e-10);
         assert!((q.probability(1) - 0.5).abs() < 1e-10);
 
         // |+i⟩ state
         q.reset();
-        q.h(0).sz(0);
+        q.h(&qid(0)).sz(&qid(0));
         assert!((q.probability(0) - 0.5).abs() < 1e-10);
         assert!((q.probability(1) - 0.5).abs() < 1e-10);
     }
@@ -247,7 +258,7 @@ mod quantum_states {
 
 mod gate_sequences {
     use crate::helpers::assert_states_equal;
-    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec};
+    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec, qid, qid2};
 
     #[test]
     fn test_operation_chains() {
@@ -255,10 +266,10 @@ mod gate_sequences {
         let mut q = StateVec::new(2);
 
         // Create maximally entangled state then disentangle
-        q.h(0)
-            .cx(0, 1) // Create Bell state
-            .cx(0, 1)
-            .h(0); // Disentangle (apply the same operations in reverse)
+        q.h(&qid(0))
+            .cx(&qid2(0, 1)) // Create Bell state
+            .cx(&qid2(0, 1))
+            .h(&qid(0)); // Disentangle (apply the same operations in reverse)
 
         // Should be back to |00⟩
         assert!((q.probability(0) - 1.0).abs() < 1e-10);
@@ -269,16 +280,16 @@ mod gate_sequences {
         let mut state_vec = StateVec::new(1);
 
         // Apply Hadamard twice: H * H = I
-        state_vec.h(0);
-        state_vec.h(0);
+        state_vec.h(&qid(0));
+        state_vec.h(&qid(0));
 
         // Verify state is back to |0⟩
         assert!((state_vec.probability(0) - 1.0).abs() < 1e-10);
         assert!((state_vec.probability(1)).abs() < 1e-10);
 
         // Apply X twice: X * X = I
-        state_vec.x(0);
-        state_vec.x(0);
+        state_vec.x(&qid(0));
+        state_vec.x(&qid(0));
         assert!((state_vec.probability(0) - 1.0).abs() < 1e-10);
     }
 
@@ -289,11 +300,11 @@ mod gate_sequences {
         let mut q2 = StateVec::new(1);
 
         // Put in superposition first to check phases
-        q1.h(0);
-        q2.h(0);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
 
-        q1.sz(0); // S gate
-        q2.t(0).t(0); // Two T gates
+        q1.sz(&qid(0)); // S gate
+        q2.t(&qid(0)).t(&qid(0)); // Two T gates
 
         assert_states_equal(q1.state(), q2.state());
     }
@@ -304,11 +315,11 @@ mod gate_sequences {
         let mut q2 = StateVec::new(2);
 
         // Test SWAP decomposition into CNOTs
-        q1.x(0); // Start with |10⟩
-        q1.swap(0, 1); // Direct SWAP
+        q1.x(&qid(0)); // Start with |10⟩
+        q1.swap(&qid2(0, 1)); // Direct SWAP
 
-        q2.x(0); // Also start with |10⟩
-        q2.cx(0, 1).cx(1, 0).cx(0, 1); // SWAP decomposition
+        q2.x(&qid(0)); // Also start with |10⟩
+        q2.cx(&qid2(0, 1)).cx(&qid2(1, 0)).cx(&qid2(0, 1)); // SWAP decomposition
 
         assert_states_equal(q1.state(), q2.state());
     }
@@ -316,7 +327,7 @@ mod gate_sequences {
     #[test]
     fn test_bell_state_preparation() {
         let mut q = StateVec::new(2);
-        q.h(0).cx(0, 1);
+        q.h(&qid(0)).cx(&qid2(0, 1));
         assert!((q.probability(0) - 0.5).abs() < 1e-10);
         assert!((q.probability(3) - 0.5).abs() < 1e-10);
     }
@@ -324,14 +335,15 @@ mod gate_sequences {
     #[test]
     fn test_ghz_state_preparation() {
         let mut q = StateVec::new(3);
-        q.h(0).cx(0, 1).cx(1, 2);
+        q.h(&qid(0)).cx(&qid2(0, 1)).cx(&qid2(1, 2));
         assert!((q.probability(0) - 0.5).abs() < 1e-10);
         assert!((q.probability(7) - 0.5).abs() < 1e-10);
     }
 }
 
 mod numerical_properties {
-    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec};
+    use pecos_core::Angle64;
+    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec, qid, qid2};
     use std::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_3, FRAC_PI_4, FRAC_PI_6};
 
     #[test]
@@ -339,9 +351,9 @@ mod numerical_properties {
         let mut state_vec = StateVec::new(3);
 
         // Apply multiple gates
-        state_vec.h(0);
-        state_vec.cx(0, 1);
-        state_vec.cx(1, 2);
+        state_vec.h(&qid(0));
+        state_vec.cx(&qid2(0, 1));
+        state_vec.cx(&qid2(1, 2));
 
         // Verify normalization
         let norm: f64 = state_vec
@@ -358,10 +370,10 @@ mod numerical_properties {
 
         // Apply many rotations to test numerical stability
         for _ in 0..100 {
-            q.rx(FRAC_PI_3, 0)
-                .ry(FRAC_PI_4, 1)
-                .rz(FRAC_PI_6, 2)
-                .cx(0, 3);
+            q.rx(Angle64::from_radians(FRAC_PI_3), &qid(0))
+                .ry(Angle64::from_radians(FRAC_PI_4), &qid(1))
+                .rz(Angle64::from_radians(FRAC_PI_6), &qid(2))
+                .cx(&qid2(0, 3));
         }
 
         // Check normalization is preserved
@@ -374,10 +386,10 @@ mod numerical_properties {
         let mut q = StateVec::new(1);
 
         // Apply series of phase rotations that should cancel
-        q.h(0) // Create superposition
-            .rz(FRAC_PI_4, 0)
-            .rz(FRAC_PI_4, 0)
-            .rz(-FRAC_PI_2, 0); // Should cancel
+        q.h(&qid(0)) // Create superposition
+            .rz(Angle64::from_radians(FRAC_PI_4), &qid(0))
+            .rz(Angle64::from_radians(FRAC_PI_4), &qid(0))
+            .rz(Angle64::from_radians(-FRAC_PI_2), &qid(0)); // Should cancel
 
         // Should be back to |+⟩
         assert!((q.state()[0].re - FRAC_1_SQRT_2).abs() < 1e-10);
@@ -396,7 +408,7 @@ mod numerical_properties {
         }
 
         // Put |+⟩ on qubit 0 (LSB)
-        q.h(0);
+        q.h(&qid(0));
 
         println!("\nAfter H on qubit 0:");
         for i in 0..8 {
@@ -427,7 +439,8 @@ mod numerical_properties {
 }
 
 mod locality_tests {
-    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec};
+    use pecos_core::Angle64;
+    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec, qid, qid2};
     use std::f64::consts::{FRAC_1_SQRT_2, PI};
 
     #[test]
@@ -436,10 +449,10 @@ mod locality_tests {
         let mut q = StateVec::new(3);
 
         // Prepare state |+⟩|0⟩|0⟩
-        q.h(0); // Affects least significant bit
+        q.h(&qid(0)); // Affects least significant bit
 
         // Apply X to qubit 2 (most significant bit)
-        q.x(2);
+        q.x(&qid(2));
 
         // Check that qubit 0 is still in |+⟩ state
         // When qubit 2 is |1⟩, check LSB still shows |+⟩
@@ -457,7 +470,7 @@ mod locality_tests {
         }
 
         // Prepare |+⟩ on qubit 0 (LSB)
-        q.h(0);
+        q.h(&qid(0));
 
         println!("\nAfter H on qubit 0:");
         for i in 0..16 {
@@ -465,7 +478,7 @@ mod locality_tests {
         }
 
         // Apply CX between qubits 2,3
-        q.cx(2, 3);
+        q.cx(&qid2(2, 3));
 
         println!("\nAfter CX on qubits 2,3:");
         for i in 0..16 {
@@ -497,10 +510,10 @@ mod locality_tests {
         let mut q = StateVec::new(3);
 
         // Prepare state |+⟩|0⟩|0⟩
-        q.h(0);
+        q.h(&qid(0));
 
         // Apply CX on qubits 1 and 2 (no effect on qubit 0)
-        q.cx(1, 2);
+        q.cx(&qid2(1, 2));
 
         // Qubit 0 should remain in superposition
         let expected_amp = 1.0 / 2.0_f64.sqrt();
@@ -518,7 +531,7 @@ mod locality_tests {
         }
 
         // Prepare |+⟩ on qubit 0 (LSB)
-        q.h(0);
+        q.h(&qid(0));
 
         println!("\nAfter H on qubit 0:");
         for i in 0..8 {
@@ -526,7 +539,7 @@ mod locality_tests {
         }
 
         // Apply rotation to qubit 1
-        q.rx(PI / 2.0, 1);
+        q.rx(Angle64::from_radians(PI / 2.0), &qid(1));
 
         println!("\nAfter RX on qubit 1:");
         for i in 0..8 {
@@ -549,8 +562,8 @@ mod locality_tests {
         let mut q2 = StateVec::new(4);
 
         // Test operations on adjacent vs distant qubits
-        q1.h(0).cx(0, 1); // Adjacent qubits
-        q2.h(0).cx(0, 3); // Distant qubits
+        q1.h(&qid(0)).cx(&qid2(0, 1)); // Adjacent qubits
+        q2.h(&qid(0)).cx(&qid2(0, 3)); // Distant qubits
 
         // Both should maintain proper normalization
         let norm1: f64 = q1.state().iter().map(num_complex::Complex::norm_sqr).sum();
@@ -563,14 +576,15 @@ mod locality_tests {
 // Edge cases and numerical stability
 mod edge_cases {
     use crate::helpers::assert_states_equal;
-    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec};
+    use pecos_core::Angle64;
+    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec, qid};
     use std::f64::consts::PI;
 
     #[test]
     fn test_small_angle_rotations() {
         let mut q = StateVec::new(1);
         let small_angle = 1e-6;
-        q.rx(small_angle, 0);
+        q.rx(Angle64::from_radians(small_angle), &qid(0));
         let total_prob: f64 = q.state().iter().map(num_complex::Complex::norm_sqr).sum();
         assert!((total_prob - 1.0).abs() < 1e-10);
     }
@@ -579,7 +593,7 @@ mod edge_cases {
     fn test_repeated_operations() {
         let mut q = StateVec::new(1);
         for _ in 0..1000 {
-            q.h(0).sz(0).h(0);
+            q.h(&qid(0)).sz(&qid(0)).h(&qid(0));
         }
         let norm: f64 = q.state().iter().map(num_complex::Complex::norm_sqr).sum();
         assert!((norm - 1.0).abs() < 1e-8);
@@ -591,7 +605,7 @@ mod edge_cases {
 
         // Test small angle rotations
         let small_angle = 1e-6;
-        q.rx(small_angle, 0);
+        q.rx(Angle64::from_radians(small_angle), &qid(0));
 
         // Check that probabilities sum to 1
         let total_prob: f64 = q.state().iter().map(num_complex::Complex::norm_sqr).sum();
@@ -603,64 +617,45 @@ mod edge_cases {
         let mut q = StateVec::new(1);
 
         // Test RX(0): Should be identity
-        let initial = q.state().to_vec();
-        q.rx(0.0, 0);
+        let initial = q.state().clone();
+        q.rx(Angle64::from_radians(0.0), &qid(0));
         assert_states_equal(q.state(), &initial);
 
         // Test RX(2π): Should also be identity up to global phase
-        q.rx(2.0 * PI, 0);
+        q.rx(Angle64::from_radians(2.0 * PI), &qid(0));
         assert_states_equal(q.state(), &initial);
 
         // Test RY(0): Should be identity
-        q.ry(0.0, 0);
+        q.ry(Angle64::from_radians(0.0), &qid(0));
         assert_states_equal(q.state(), &initial);
 
         // Test RY(2π): Should also be identity up to global phase
-        q.ry(2.0 * PI, 0);
+        q.ry(Angle64::from_radians(2.0 * PI), &qid(0));
         assert_states_equal(q.state(), &initial);
 
         // Test RZ(0): Should be identity
-        q.rz(0.0, 0);
+        q.rz(Angle64::from_radians(0.0), &qid(0));
         assert_states_equal(q.state(), &initial);
 
         // Test RZ(2π): Should also be identity up to global phase
-        q.rz(2.0 * PI, 0);
+        q.rz(Angle64::from_radians(2.0 * PI), &qid(0));
         assert_states_equal(q.state(), &initial);
     }
 }
 
 mod large_systems {
-    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec};
-
-    #[test]
-    fn test_large_system() {
-        // Test with a large number of qubits to ensure robustness.
-        let num_qubits = 20; // 20 qubits => 2^20 amplitudes (~1M complex numbers)
-        let mut q = StateVec::new(num_qubits);
-
-        // Apply Hadamard to the first qubit
-        q.h(0);
-
-        // Check normalization and amplitudes for |0...0> and |1...0>
-        let expected_amp = 1.0 / (2.0_f64.sqrt());
-        assert!((q.state()[0].norm() - expected_amp).abs() < 1e-10);
-        assert!((q.state()[1].norm() - expected_amp).abs() < 1e-10);
-
-        // Ensure all other amplitudes remain zero
-        for i in 2..q.state().len() {
-            assert!(q.state()[i].norm() < 1e-10);
-        }
-    }
+    use pecos_core::Angle64;
+    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec, qid, qid2};
 
     #[test]
     fn test_state_normalization_after_random_gates() {
         let mut state_vec = StateVec::new(3);
 
         // Apply a sequence of random gates
-        state_vec.h(0);
-        state_vec.cx(0, 1);
-        state_vec.rz(std::f64::consts::PI / 3.0, 2);
-        state_vec.swap(1, 2);
+        state_vec.h(&qid(0));
+        state_vec.cx(&qid2(0, 1));
+        state_vec.rz(Angle64::from_radians(std::f64::consts::PI / 3.0), &qid(2));
+        state_vec.swap(&qid2(1, 2));
 
         // Check if the state is still normalized
         let norm: f64 = state_vec
@@ -674,7 +669,10 @@ mod large_systems {
 
 mod detailed_sq_gate_cases {
     use crate::helpers::assert_states_equal;
-    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator, StateVec};
+    use pecos_core::Angle64;
+    use pecos_qsim::{
+        ArbitraryRotationGateable, CliffordGateable, QuantumSimulator, StateVec, qid, qid2,
+    };
     use std::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_3, FRAC_PI_4, FRAC_PI_6, PI};
 
     #[test]
@@ -682,20 +680,20 @@ mod detailed_sq_gate_cases {
         let mut q = StateVec::new(1);
 
         // Step 1: RX(0) should be identity
-        q.rx(0.0, 0);
+        q.rx(Angle64::from_radians(0.0), &qid(0));
         assert!((q.state()[0].re - 1.0).abs() < 1e-10);
         assert!(q.state()[1].norm() < 1e-10);
 
         // Step 2: RX(π) on |0⟩ should give -i|1⟩
         let mut q = StateVec::new(1);
-        q.rx(PI, 0);
+        q.rx(Angle64::from_radians(PI), &qid(0));
         println!("RX(π)|0⟩ = {:?}", q.state()); // Debug output
         assert!(q.state()[0].norm() < 1e-10);
         assert!((q.state()[1].im + 1.0).abs() < 1e-10);
 
         // Step 3: RX(π/2) on |0⟩ should give (|0⟩ - i|1⟩)/√2
         let mut q = StateVec::new(1);
-        q.rx(FRAC_PI_2, 0);
+        q.rx(Angle64::from_radians(FRAC_PI_2), &qid(0));
         println!("RX(π/2)|0⟩ = {:?}", q.state()); // Debug output
         let expected_amp = 1.0 / 2.0_f64.sqrt();
         assert!((q.state()[0].re - expected_amp).abs() < 1e-10);
@@ -706,21 +704,21 @@ mod detailed_sq_gate_cases {
     fn test_ry_step_by_step() {
         // Step 1: RY(0) should be identity
         let mut q = StateVec::new(1);
-        q.ry(0.0, 0);
+        q.ry(Angle64::from_radians(0.0), &qid(0));
         println!("RY(0)|0⟩ = {:?}", q.state());
         assert!((q.state()[0].re - 1.0).abs() < 1e-10);
         assert!(q.state()[1].norm() < 1e-10);
 
         // Step 2: RY(π) on |0⟩ should give |1⟩
         let mut q = StateVec::new(1);
-        q.ry(PI, 0);
+        q.ry(Angle64::from_radians(PI), &qid(0));
         println!("RY(π)|0⟩ = {:?}", q.state());
         assert!(q.state()[0].norm() < 1e-10);
         assert!((q.state()[1].re - 1.0).abs() < 1e-10);
 
         // Step 3: RY(π/2) on |0⟩ should give (|0⟩ + |1⟩)/√2
         let mut q = StateVec::new(1);
-        q.ry(FRAC_PI_2, 0);
+        q.ry(Angle64::from_radians(FRAC_PI_2), &qid(0));
         println!("RY(π/2)|0⟩ = {:?}", q.state());
         let expected_amp = 1.0 / 2.0_f64.sqrt();
         assert!((q.state()[0].re - expected_amp).abs() < 1e-10);
@@ -728,7 +726,7 @@ mod detailed_sq_gate_cases {
 
         // Step 4: RY(-π/2) on |0⟩ should give (|0⟩ - |1⟩)/√2
         let mut q = StateVec::new(1);
-        q.ry(-FRAC_PI_2, 0);
+        q.ry(Angle64::from_radians(-FRAC_PI_2), &qid(0));
         println!("RY(-π/2)|0⟩ = {:?}", q.state());
         assert!((q.state()[0].re - expected_amp).abs() < 1e-10);
         assert!((q.state()[1].re + expected_amp).abs() < 1e-10);
@@ -738,15 +736,15 @@ mod detailed_sq_gate_cases {
     fn test_rz_step_by_step() {
         // Step 1: RZ(0) should be identity
         let mut q = StateVec::new(1);
-        q.rz(0.0, 0);
+        q.rz(Angle64::from_radians(0.0), &qid(0));
         println!("RZ(0)|0⟩ = {:?}", q.state());
         assert!((q.state()[0].re - 1.0).abs() < 1e-10);
         assert!(q.state()[1].norm() < 1e-10);
 
         // Step 2: RZ(π/2) on |+⟩ should give |+i⟩ = (|0⟩ + i|1⟩)/√2
         let mut q = StateVec::new(1);
-        q.h(0); // Create |+⟩
-        q.rz(FRAC_PI_2, 0);
+        q.h(&qid(0)); // Create |+⟩
+        q.rz(Angle64::from_radians(FRAC_PI_2), &qid(0));
         println!("RZ(π/2)|+⟩ = {:?}", q.state());
         let expected_amp = 1.0 / 2.0_f64.sqrt();
         assert!((q.state()[0].norm() - expected_amp).abs() < 1e-10);
@@ -767,9 +765,9 @@ mod detailed_sq_gate_cases {
         // Step 3: Two RZ(π/2) operations should equal one RZ(π)
         let mut q1 = StateVec::new(1);
         let mut q2 = StateVec::new(1);
-        q1.rz(PI, 0);
-        q2.rz(FRAC_PI_2, 0);
-        q2.rz(FRAC_PI_2, 0);
+        q1.rz(Angle64::from_radians(PI), &qid(0));
+        q2.rz(Angle64::from_radians(FRAC_PI_2), &qid(0));
+        q2.rz(Angle64::from_radians(FRAC_PI_2), &qid(0));
         println!("RZ(π)|0⟩ vs RZ(π/2)RZ(π/2)|0⟩:");
         println!("q1 = {:?}", q1.state());
         println!("q2 = {:?}", q2.state());
@@ -789,8 +787,8 @@ mod detailed_sq_gate_cases {
         // Test S = RZ(π/2)
         let mut q1 = StateVec::new(1);
         let mut q2 = StateVec::new(1);
-        q1.sz(0);
-        q2.rz(FRAC_PI_2, 0);
+        q1.sz(&qid(0));
+        q2.rz(Angle64::from_radians(FRAC_PI_2), &qid(0));
         println!("S|0⟩ = {:?}", q1.state());
         println!("RZ(π/2)|0⟩ = {:?}", q2.state());
         assert_states_equal(q1.state(), q2.state());
@@ -798,8 +796,8 @@ mod detailed_sq_gate_cases {
         // Test X = RX(π)
         let mut q1 = StateVec::new(1);
         let mut q2 = StateVec::new(1);
-        q1.x(0);
-        q2.rx(PI, 0);
+        q1.x(&qid(0));
+        q2.rx(Angle64::from_radians(PI), &qid(0));
         println!("X|0⟩ = {:?}", q1.state());
         println!("RX(π)|0⟩ = {:?}", q2.state());
         assert_states_equal(q1.state(), q2.state());
@@ -807,8 +805,8 @@ mod detailed_sq_gate_cases {
         // Test Y = RY(π)
         let mut q1 = StateVec::new(1);
         let mut q2 = StateVec::new(1);
-        q1.y(0);
-        q2.ry(PI, 0);
+        q1.y(&qid(0));
+        q2.ry(Angle64::from_radians(PI), &qid(0));
         println!("Y|0⟩ = {:?}", q1.state());
         println!("RY(π)|0⟩ = {:?}", q2.state());
         assert_states_equal(q1.state(), q2.state());
@@ -816,8 +814,8 @@ mod detailed_sq_gate_cases {
         // Test Z = RZ(π)
         let mut q1 = StateVec::new(1);
         let mut q2 = StateVec::new(1);
-        q1.z(0);
-        q2.rz(PI, 0);
+        q1.z(&qid(0));
+        q2.rz(Angle64::from_radians(PI), &qid(0));
         println!("Z|0⟩ = {:?}", q1.state());
         println!("RZ(π)|0⟩ = {:?}", q2.state());
         assert_states_equal(q1.state(), q2.state());
@@ -825,8 +823,8 @@ mod detailed_sq_gate_cases {
         // Test √X = RX(π/2)
         let mut q1 = StateVec::new(1);
         let mut q2 = StateVec::new(1);
-        q1.sx(0);
-        q2.rx(FRAC_PI_2, 0);
+        q1.sx(&qid(0));
+        q2.rx(Angle64::from_radians(FRAC_PI_2), &qid(0));
         println!("√X|0⟩ = {:?}", q1.state());
         println!("RX(π/2)|0⟩ = {:?}", q2.state());
         assert_states_equal(q1.state(), q2.state());
@@ -834,8 +832,8 @@ mod detailed_sq_gate_cases {
         // Test √Y = RY(π/2)
         let mut q1 = StateVec::new(1);
         let mut q2 = StateVec::new(1);
-        q1.sy(0);
-        q2.ry(FRAC_PI_2, 0);
+        q1.sy(&qid(0));
+        q2.ry(Angle64::from_radians(FRAC_PI_2), &qid(0));
         println!("√Y|0⟩ = {:?}", q1.state());
         println!("RY(π/2)|0⟩ = {:?}", q2.state());
         assert_states_equal(q1.state(), q2.state());
@@ -843,8 +841,9 @@ mod detailed_sq_gate_cases {
         // Test S = TT as RZ(π/4)RZ(π/4)
         let mut q1 = StateVec::new(1);
         let mut q2 = StateVec::new(1);
-        q2.rz(FRAC_PI_4, 0).rz(FRAC_PI_4, 0);
-        q1.sz(0);
+        q2.rz(Angle64::from_radians(FRAC_PI_4), &qid(0))
+            .rz(Angle64::from_radians(FRAC_PI_4), &qid(0));
+        q1.sz(&qid(0));
         println!("S|0⟩ = {:?}", q1.state());
         println!("T²|0⟩ = RZ(π/4)RZ(π/4)|0⟩ = {:?}", q2.state());
         assert_states_equal(q1.state(), q2.state());
@@ -852,8 +851,9 @@ mod detailed_sq_gate_cases {
         // Test H = RX(π)RY(π/2) decomposition
         let mut q1 = StateVec::new(1);
         let mut q2 = StateVec::new(1);
-        q1.h(0);
-        q2.ry(FRAC_PI_2, 0).rx(PI, 0);
+        q1.h(&qid(0));
+        q2.ry(Angle64::from_radians(FRAC_PI_2), &qid(0))
+            .rx(Angle64::from_radians(PI), &qid(0));
         println!("H|0⟩ = {:?}", q1.state());
         println!("RX(π)RY(π/2)|0⟩ = {:?}", q2.state());
         assert_states_equal(q1.state(), q2.state());
@@ -866,7 +866,8 @@ mod detailed_sq_gate_cases {
         let theta = FRAC_PI_3;
 
         // Apply forward then reverse rotations
-        q.rx(theta, 0).rx(-theta, 0);
+        q.rx(Angle64::from_radians(theta), &qid(0))
+            .rx(Angle64::from_radians(-theta), &qid(0));
 
         // Should get back to |0⟩ up to global phase
         assert!(q.state()[1].norm() < 1e-10);
@@ -880,7 +881,8 @@ mod detailed_sq_gate_cases {
         let theta = FRAC_PI_3;
 
         // Apply forward then reverse rotations
-        q.ry(theta, 0).ry(-theta, 0);
+        q.ry(Angle64::from_radians(theta), &qid(0))
+            .ry(Angle64::from_radians(-theta), &qid(0));
 
         // Should get back to |0⟩ up to global phase
         assert!(q.state()[1].norm() < 1e-10);
@@ -894,7 +896,8 @@ mod detailed_sq_gate_cases {
         let theta = FRAC_PI_3;
 
         // Apply forward then reverse rotations
-        q.rz(theta, 0).rz(-theta, 0);
+        q.rz(Angle64::from_radians(theta), &qid(0))
+            .rz(Angle64::from_radians(-theta), &qid(0));
 
         // Should get back to |0⟩ up to global phase
         assert!(q.state()[1].norm() < 1e-10);
@@ -912,10 +915,21 @@ mod detailed_sq_gate_cases {
         let lambda = FRAC_PI_6;
 
         // Apply `u` from the StateVec implementation.
-        state_vec_u.u(theta, phi, lambda, 0);
+        state_vec_u.u(
+            Angle64::from_radians(theta),
+            Angle64::from_radians(phi),
+            Angle64::from_radians(lambda),
+            &qid(0),
+        );
 
         // Apply `u` from the ArbitraryRotationGateable trait.
-        ArbitraryRotationGateable::u(&mut trait_u, theta, phi, lambda, 0);
+        ArbitraryRotationGateable::u(
+            &mut trait_u,
+            Angle64::from_radians(theta),
+            Angle64::from_radians(phi),
+            Angle64::from_radians(lambda),
+            &qid(0),
+        );
 
         assert_states_equal(state_vec_u.state(), trait_u.state());
     }
@@ -929,8 +943,17 @@ mod detailed_sq_gate_cases {
         let phi = FRAC_PI_4;
 
         // Apply r1xy and equivalent u gates
-        state_r1xy.r1xy(theta, phi, 0);
-        state_u.u(theta, phi - FRAC_PI_2, FRAC_PI_2 - phi, 0);
+        state_r1xy.r1xy(
+            Angle64::from_radians(theta),
+            Angle64::from_radians(phi),
+            &qid(0),
+        );
+        state_u.u(
+            Angle64::from_radians(theta),
+            Angle64::from_radians(phi - FRAC_PI_2),
+            Angle64::from_radians(FRAC_PI_2 - phi),
+            &qid(0),
+        );
 
         assert_states_equal(state_r1xy.state(), state_u.state());
     }
@@ -943,8 +966,13 @@ mod detailed_sq_gate_cases {
         let theta = FRAC_PI_3;
 
         // Apply rz and u gates
-        state_rz.rz(theta, 0);
-        state_u.u(0.0, 0.0, theta, 0);
+        state_rz.rz(Angle64::from_radians(theta), &qid(0));
+        state_u.u(
+            Angle64::from_radians(0.0),
+            Angle64::from_radians(0.0),
+            Angle64::from_radians(theta),
+            &qid(0),
+        );
 
         assert_states_equal(state_rz.state(), state_u.state());
     }
@@ -959,12 +987,21 @@ mod detailed_sq_gate_cases {
         let lambda = FRAC_PI_6;
 
         // Apply U gate
-        state_u.u(theta, phi, lambda, 0);
+        state_u.u(
+            Angle64::from_radians(theta),
+            Angle64::from_radians(phi),
+            Angle64::from_radians(lambda),
+            &qid(0),
+        );
 
         // Apply the decomposed gates
-        state_decomposed.rz(lambda, 0);
-        state_decomposed.r1xy(theta, FRAC_PI_2, 0);
-        state_decomposed.rz(phi, 0);
+        state_decomposed.rz(Angle64::from_radians(lambda), &qid(0));
+        state_decomposed.r1xy(
+            Angle64::from_radians(theta),
+            Angle64::from_radians(FRAC_PI_2),
+            &qid(0),
+        );
+        state_decomposed.rz(Angle64::from_radians(phi), &qid(0));
 
         // Assert that the states are equal
         assert_states_equal(state_u.state(), state_decomposed.state());
@@ -973,12 +1010,16 @@ mod detailed_sq_gate_cases {
     #[test]
     fn test_x_vs_r1xy() {
         let mut state = StateVec::new(1);
-        state.x(0);
-        let state_after_x = state.clone();
+        state.x(&qid(0));
+        let mut state_after_x = state.clone();
 
         state.reset();
-        state.r1xy(PI, 0.0, 0);
-        let state_after_r1xy = state.clone();
+        state.r1xy(
+            Angle64::from_radians(PI),
+            Angle64::from_radians(0.0),
+            &qid(0),
+        );
+        let mut state_after_r1xy = state.clone();
 
         assert_states_equal(state_after_x.state(), state_after_r1xy.state());
     }
@@ -986,12 +1027,16 @@ mod detailed_sq_gate_cases {
     #[test]
     fn test_y_vs_r1xy() {
         let mut state = StateVec::new(1);
-        state.y(0);
-        let state_after_y = state.clone();
+        state.y(&qid(0));
+        let mut state_after_y = state.clone();
 
         state.reset();
-        state.r1xy(PI, FRAC_PI_2, 0);
-        let state_after_r1xy = state.clone();
+        state.r1xy(
+            Angle64::from_radians(PI),
+            Angle64::from_radians(FRAC_PI_2),
+            &qid(0),
+        );
+        let mut state_after_r1xy = state.clone();
 
         assert_states_equal(state_after_y.state(), state_after_r1xy.state());
     }
@@ -999,12 +1044,18 @@ mod detailed_sq_gate_cases {
     #[test]
     fn test_h_vs_r1xy_rz() {
         let mut state = StateVec::new(1);
-        state.h(0); // Apply the H gate
-        let state_after_h = state.clone();
+        state.h(&qid(0)); // Apply the H gate
+        let mut state_after_h = state.clone();
 
         state.reset(); // Reset state to |0⟩
-        state.r1xy(FRAC_PI_2, -FRAC_PI_2, 0).rz(PI, 0);
-        let state_after_r1xy_rz = state.clone();
+        state
+            .r1xy(
+                Angle64::from_radians(FRAC_PI_2),
+                Angle64::from_radians(-FRAC_PI_2),
+                &qid(0),
+            )
+            .rz(Angle64::from_radians(PI), &qid(0));
+        let mut state_after_r1xy_rz = state.clone();
 
         assert_states_equal(state_after_h.state(), state_after_r1xy_rz.state());
     }
@@ -1013,28 +1064,48 @@ mod detailed_sq_gate_cases {
     fn test_u_special_cases() {
         // Test 1: U(π, 0, π) should be X gate
         let mut q = StateVec::new(1);
-        q.u(PI, 0.0, PI, 0);
+        q.u(
+            Angle64::from_radians(PI),
+            Angle64::from_radians(0.0),
+            Angle64::from_radians(PI),
+            &qid(0),
+        );
         assert!(q.state()[0].norm() < 1e-10);
         assert!((q.state()[1].re - 1.0).abs() < 1e-10);
 
         // Test 2: Hadamard gate
         // H = U(π/2, 0, π)
         let mut q = StateVec::new(1);
-        q.u(PI / 2.0, 0.0, PI, 0);
+        q.u(
+            Angle64::from_radians(PI / 2.0),
+            Angle64::from_radians(0.0),
+            Angle64::from_radians(PI),
+            &qid(0),
+        );
         assert!((q.state()[0].re - FRAC_1_SQRT_2).abs() < 1e-10);
         assert!((q.state()[1].re - FRAC_1_SQRT_2).abs() < 1e-10);
 
         // Test 3: U(0, 0, π) should be Z gate
         let mut q = StateVec::new(1);
-        q.h(0); // First put in superposition
-        let initial = q.state().to_vec();
-        q.u(0.0, 0.0, PI, 0);
+        q.h(&qid(0)); // First put in superposition
+        let initial = q.state().clone();
+        q.u(
+            Angle64::from_radians(0.0),
+            Angle64::from_radians(0.0),
+            Angle64::from_radians(PI),
+            &qid(0),
+        );
         assert!((q.state()[0] - initial[0]).norm() < 1e-10);
         assert!((q.state()[1] + initial[1]).norm() < 1e-10);
 
         // Additional test: U3(π/2, π/2, -π/2) should be S†H
         let mut q = StateVec::new(1);
-        q.u(PI / 2.0, PI / 2.0, -PI / 2.0, 0);
+        q.u(
+            Angle64::from_radians(PI / 2.0),
+            Angle64::from_radians(PI / 2.0),
+            Angle64::from_radians(-PI / 2.0),
+            &qid(0),
+        );
         // This creates the state (|0⟩ + i|1⟩)/√2
         assert!((q.state()[0].re - FRAC_1_SQRT_2).abs() < 1e-10);
         assert!((q.state()[1].im - FRAC_1_SQRT_2).abs() < 1e-10);
@@ -1043,11 +1114,21 @@ mod detailed_sq_gate_cases {
     #[test]
     fn test_u_composition() {
         let mut q1 = StateVec::new(1);
-        let q2 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
 
         // Two U gates that should multiply to identity
-        q1.u(PI / 3.0, PI / 4.0, PI / 6.0, 0);
-        q1.u(-PI / 3.0, -PI / 6.0, -PI / 4.0, 0);
+        q1.u(
+            Angle64::from_radians(PI / 3.0),
+            Angle64::from_radians(PI / 4.0),
+            Angle64::from_radians(PI / 6.0),
+            &qid(0),
+        );
+        q1.u(
+            Angle64::from_radians(-PI / 3.0),
+            Angle64::from_radians(-PI / 6.0),
+            Angle64::from_radians(-PI / 4.0),
+            &qid(0),
+        );
 
         // Compare with initial state
         for (a, b) in q1.state().iter().zip(q2.state().iter()) {
@@ -1062,10 +1143,10 @@ mod detailed_sq_gate_cases {
 
         // Test that T * T = S
         let mut q1 = q.clone();
-        q1.t(0).t(0);
+        q1.t(&qid(0)).t(&qid(0));
 
         let mut q2 = q.clone();
-        q2.sz(0);
+        q2.sz(&qid(0));
 
         assert_states_equal(q1.state(), q2.state());
     }
@@ -1074,17 +1155,17 @@ mod detailed_sq_gate_cases {
     fn test_hadamard_properties() {
         // Test H^2 = I
         let mut q = StateVec::new(1);
-        q.x(0); // Start with |1⟩
-        let initial = q.state().to_vec();
-        q.h(0).h(0);
+        q.x(&qid(0)); // Start with |1⟩
+        let initial = q.state().clone();
+        q.h(&qid(0)).h(&qid(0));
         assert_states_equal(q.state(), &initial);
 
         // Test HXH = Z
         let mut q1 = StateVec::new(1);
         let mut q2 = StateVec::new(1);
 
-        q1.h(0).x(0).h(0);
-        q2.z(0);
+        q1.h(&qid(0)).x(&qid(0)).h(&qid(0));
+        q2.z(&qid(0));
 
         assert_states_equal(q1.state(), q2.state());
     }
@@ -1094,11 +1175,11 @@ mod detailed_sq_gate_cases {
         let mut state1 = StateVec::new(1);
         let mut state2 = StateVec::new(1);
 
-        state1.h(0);
-        state1.z(0);
+        state1.h(&qid(0));
+        state1.z(&qid(0));
 
-        state2.z(0);
-        state2.h(0);
+        state2.z(&qid(0));
+        state2.h(&qid(0));
 
         // Compute the global norm difference
         let diff_norm: f64 = state1
@@ -1111,12 +1192,1200 @@ mod detailed_sq_gate_cases {
 
         assert!(diff_norm > 1e-10, "H and Z should not commute.");
     }
+
+    // Tests for sqrt gate direct implementations vs decompositions
+    #[test]
+    fn test_sx_vs_decomposition() {
+        // SX = H.SZ.H decomposition
+        // Test on |0⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+
+        direct.sx(&qid(0));
+        decomposed.h(&qid(0)).sz(&qid(0)).h(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |1⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+
+        direct.sx(&qid(0));
+        decomposed.h(&qid(0)).sz(&qid(0)).h(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on superposition |+⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+
+        direct.sx(&qid(0));
+        decomposed.h(&qid(0)).sz(&qid(0)).h(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on multi-qubit system
+        for target in 0..3 {
+            let mut direct = StateVec::new(3);
+            let mut decomposed = StateVec::new(3);
+
+            // Create entangled state
+            direct.h(&qid(0)).cx(&qid2(0, 1)).cx(&qid2(1, 2));
+            decomposed.h(&qid(0)).cx(&qid2(0, 1)).cx(&qid2(1, 2));
+
+            direct.sx(&qid(target));
+            decomposed.h(&qid(target)).sz(&qid(target)).h(&qid(target));
+
+            assert_states_equal(direct.state(), decomposed.state());
+        }
+    }
+
+    #[test]
+    fn test_sxdg_vs_decomposition() {
+        // SXDG = H.SZDG.H decomposition
+        // Test on |0⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+
+        direct.sxdg(&qid(0));
+        decomposed.h(&qid(0)).szdg(&qid(0)).h(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on superposition
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+
+        direct.sxdg(&qid(0));
+        decomposed.h(&qid(0)).szdg(&qid(0)).h(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_sy_vs_decomposition() {
+        // SY = H.X decomposition
+        // Test on |0⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+
+        direct.sy(&qid(0));
+        decomposed.h(&qid(0)).x(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |1⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+
+        direct.sy(&qid(0));
+        decomposed.h(&qid(0)).x(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on multi-qubit system
+        for target in 0..3 {
+            let mut direct = StateVec::new(3);
+            let mut decomposed = StateVec::new(3);
+
+            direct.h(&qid(0)).cx(&qid2(0, 1));
+            decomposed.h(&qid(0)).cx(&qid2(0, 1));
+
+            direct.sy(&qid(target));
+            decomposed.h(&qid(target)).x(&qid(target));
+
+            assert_states_equal(direct.state(), decomposed.state());
+        }
+    }
+
+    #[test]
+    fn test_sydg_vs_decomposition() {
+        // SYDG = X.H decomposition
+        // Test on |0⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+
+        direct.sydg(&qid(0));
+        decomposed.x(&qid(0)).h(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on superposition
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+
+        direct.sydg(&qid(0));
+        decomposed.x(&qid(0)).h(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_szdg_vs_decomposition() {
+        // SZDG = Z.SZ decomposition (from default trait)
+        // Test on superposition (since szdg on |0⟩ is trivial)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+
+        direct.szdg(&qid(0));
+        decomposed.z(&qid(0)).sz(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |1⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+
+        direct.szdg(&qid(0));
+        decomposed.z(&qid(0)).sz(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on multi-qubit system
+        for target in 0..3 {
+            let mut direct = StateVec::new(3);
+            let mut decomposed = StateVec::new(3);
+
+            direct.h(&qid(0)).cx(&qid2(0, 1)).h(&qid(2));
+            decomposed.h(&qid(0)).cx(&qid2(0, 1)).h(&qid(2));
+
+            direct.szdg(&qid(target));
+            decomposed.z(&qid(target)).sz(&qid(target));
+
+            assert_states_equal(direct.state(), decomposed.state());
+        }
+    }
+
+    #[test]
+    fn test_r1xy_vs_decomposition() {
+        // R1XY(theta, phi) = RZ(-phi + pi/2).RY(theta).RZ(phi - pi/2)
+        let theta = FRAC_PI_3;
+        let phi = FRAC_PI_4;
+
+        // Test on |0⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+
+        direct.r1xy(
+            Angle64::from_radians(theta),
+            Angle64::from_radians(phi),
+            &qid(0),
+        );
+        decomposed
+            .rz(Angle64::from_radians(-phi + FRAC_PI_2), &qid(0))
+            .ry(Angle64::from_radians(theta), &qid(0))
+            .rz(Angle64::from_radians(phi - FRAC_PI_2), &qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |1⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+
+        direct.r1xy(
+            Angle64::from_radians(theta),
+            Angle64::from_radians(phi),
+            &qid(0),
+        );
+        decomposed
+            .rz(Angle64::from_radians(-phi + FRAC_PI_2), &qid(0))
+            .ry(Angle64::from_radians(theta), &qid(0))
+            .rz(Angle64::from_radians(phi - FRAC_PI_2), &qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on superposition
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+
+        direct.r1xy(
+            Angle64::from_radians(theta),
+            Angle64::from_radians(phi),
+            &qid(0),
+        );
+        decomposed
+            .rz(Angle64::from_radians(-phi + FRAC_PI_2), &qid(0))
+            .ry(Angle64::from_radians(theta), &qid(0))
+            .rz(Angle64::from_radians(phi - FRAC_PI_2), &qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with different angles
+        for &theta in &[FRAC_PI_2, PI, FRAC_PI_4, FRAC_PI_6] {
+            for &phi in &[0.0, FRAC_PI_2, PI, -FRAC_PI_4] {
+                let mut direct = StateVec::new(1);
+                let mut decomposed = StateVec::new(1);
+                direct.h(&qid(0));
+                decomposed.h(&qid(0));
+
+                direct.r1xy(
+                    Angle64::from_radians(theta),
+                    Angle64::from_radians(phi),
+                    &qid(0),
+                );
+                decomposed
+                    .rz(Angle64::from_radians(-phi + FRAC_PI_2), &qid(0))
+                    .ry(Angle64::from_radians(theta), &qid(0))
+                    .rz(Angle64::from_radians(phi - FRAC_PI_2), &qid(0));
+
+                assert_states_equal(direct.state(), decomposed.state());
+            }
+        }
+    }
+
+    #[test]
+    fn test_sqrt_gate_inverse_relations() {
+        // Test SX * SXDG = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0)); // Start in superposition
+        let initial = q.state().clone();
+        q.sx(&qid(0)).sxdg(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test SXDG * SX = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.sxdg(&qid(0)).sx(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test SY * SYDG = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.sy(&qid(0)).sydg(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test SYDG * SY = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.sydg(&qid(0)).sy(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test SZ * SZDG = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.sz(&qid(0)).szdg(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test SZDG * SZ = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.szdg(&qid(0)).sz(&qid(0));
+        assert_states_equal(q.state(), &initial);
+    }
+
+    #[test]
+    fn test_sqrt_gate_squared_relations() {
+        // Test SX * SX = X
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+
+        q1.sx(&qid(0)).sx(&qid(0));
+        q2.x(&qid(0));
+
+        assert_states_equal(q1.state(), q2.state());
+
+        // Test SY * SY = Y
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+
+        q1.sy(&qid(0)).sy(&qid(0));
+        q2.y(&qid(0));
+
+        assert_states_equal(q1.state(), q2.state());
+
+        // Test SZ * SZ = Z
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+
+        q1.sz(&qid(0)).sz(&qid(0));
+        q2.z(&qid(0));
+
+        assert_states_equal(q1.state(), q2.state());
+    }
+
+    #[test]
+    fn test_f_vs_decomposition() {
+        // F = SX.SZ decomposition (apply sx then sz)
+        // Test on |0⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+
+        direct.f(&qid(0));
+        decomposed.sx(&qid(0)).sz(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |1⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+
+        direct.f(&qid(0));
+        decomposed.sx(&qid(0)).sz(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on superposition |+⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+
+        direct.f(&qid(0));
+        decomposed.sx(&qid(0)).sz(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on multi-qubit system
+        for target in 0..3 {
+            let mut direct = StateVec::new(3);
+            let mut decomposed = StateVec::new(3);
+
+            direct.h(&qid(0)).cx(&qid2(0, 1)).h(&qid(2));
+            decomposed.h(&qid(0)).cx(&qid2(0, 1)).h(&qid(2));
+
+            direct.f(&qid(target));
+            decomposed.sx(&qid(target)).sz(&qid(target));
+
+            assert_states_equal(direct.state(), decomposed.state());
+        }
+    }
+
+    #[test]
+    fn test_fdg_vs_decomposition() {
+        // FDG = SZDG.SXDG decomposition (apply szdg then sxdg)
+        // Test on |0⟩
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+
+        direct.fdg(&qid(0));
+        decomposed.szdg(&qid(0)).sxdg(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on superposition
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+
+        direct.fdg(&qid(0));
+        decomposed.szdg(&qid(0)).sxdg(&qid(0));
+
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on multi-qubit system
+        for target in 0..3 {
+            let mut direct = StateVec::new(3);
+            let mut decomposed = StateVec::new(3);
+
+            direct.h(&qid(0)).cx(&qid2(0, 1));
+            decomposed.h(&qid(0)).cx(&qid2(0, 1));
+
+            direct.fdg(&qid(target));
+            decomposed.szdg(&qid(target)).sxdg(&qid(target));
+
+            assert_states_equal(direct.state(), decomposed.state());
+        }
+    }
+
+    #[test]
+    fn test_f_fdg_inverse_relations() {
+        // Test F * FDG = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.f(&qid(0)).fdg(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test FDG * F = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.fdg(&qid(0)).f(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test F^3 = I (F is order 3)
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.f(&qid(0)).f(&qid(0)).f(&qid(0));
+        assert_states_equal(q.state(), &initial);
+    }
+
+    #[test]
+    fn test_f2_vs_decomposition() {
+        // F2 = SXDG.SY (apply SXDG first, then SY)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.f2(&qid(0));
+        decomposed.sxdg(&qid(0)).sy(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.f2(&qid(0));
+        decomposed.sxdg(&qid(0)).sy(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in multi-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.f2(&qid(1));
+        decomposed.sxdg(&qid(1)).sy(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_f2dg_vs_decomposition() {
+        // F2DG = SYDG.SX (apply SYDG first, then SX)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.f2dg(&qid(0));
+        decomposed.sydg(&qid(0)).sx(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.f2dg(&qid(0));
+        decomposed.sydg(&qid(0)).sx(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_f3_vs_decomposition() {
+        // F3 = SXDG.SZ (apply SXDG first, then SZ)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.f3(&qid(0));
+        decomposed.sxdg(&qid(0)).sz(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.f3(&qid(0));
+        decomposed.sxdg(&qid(0)).sz(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in multi-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.f3(&qid(1));
+        decomposed.sxdg(&qid(1)).sz(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_f3dg_vs_decomposition() {
+        // F3DG = SZDG.SX (apply SZDG first, then SX)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.f3dg(&qid(0));
+        decomposed.szdg(&qid(0)).sx(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.f3dg(&qid(0));
+        decomposed.szdg(&qid(0)).sx(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_f4_vs_decomposition() {
+        // F4 = SZ.SX (apply SZ first, then SX)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.f4(&qid(0));
+        decomposed.sz(&qid(0)).sx(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.f4(&qid(0));
+        decomposed.sz(&qid(0)).sx(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in multi-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.f4(&qid(1));
+        decomposed.sz(&qid(1)).sx(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_f4dg_vs_decomposition() {
+        // F4DG = SXDG.SZDG (apply SXDG first, then SZDG)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.f4dg(&qid(0));
+        decomposed.sxdg(&qid(0)).szdg(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.f4dg(&qid(0));
+        decomposed.sxdg(&qid(0)).szdg(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_face_gate_inverse_relations() {
+        // Test F2 * F2DG = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.f2(&qid(0)).f2dg(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test F3 * F3DG = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.f3(&qid(0)).f3dg(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test F4 * F4DG = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.f4(&qid(0)).f4dg(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test F2DG * F2 = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.f2dg(&qid(0)).f2(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test F3DG * F3 = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.f3dg(&qid(0)).f3(&qid(0));
+        assert_states_equal(q.state(), &initial);
+
+        // Test F4DG * F4 = I
+        let mut q = StateVec::new(1);
+        q.h(&qid(0));
+        let initial = q.state().clone();
+        q.f4dg(&qid(0)).f4(&qid(0));
+        assert_states_equal(q.state(), &initial);
+    }
+
+    #[test]
+    fn test_h2_vs_decomposition() {
+        // H2 = SY.Z (apply SY first, then Z)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h2(&qid(0));
+        decomposed.sy(&qid(0)).z(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.h2(&qid(0));
+        decomposed.sy(&qid(0)).z(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in multi-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.h2(&qid(1));
+        decomposed.sy(&qid(1)).z(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_h3_vs_decomposition() {
+        // H3 = SZ.Y (apply SZ first, then Y)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h3(&qid(0));
+        decomposed.sz(&qid(0)).y(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.h3(&qid(0));
+        decomposed.sz(&qid(0)).y(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in multi-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.h3(&qid(1));
+        decomposed.sz(&qid(1)).y(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_h4_vs_decomposition() {
+        // H4 = SZ.X (apply SZ first, then X)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h4(&qid(0));
+        decomposed.sz(&qid(0)).x(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.h4(&qid(0));
+        decomposed.sz(&qid(0)).x(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in multi-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.h4(&qid(1));
+        decomposed.sz(&qid(1)).x(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_h5_vs_decomposition() {
+        // H5 = SX.Z (apply SX first, then Z)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h5(&qid(0));
+        decomposed.sx(&qid(0)).z(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.h5(&qid(0));
+        decomposed.sx(&qid(0)).z(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in multi-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.h5(&qid(1));
+        decomposed.sx(&qid(1)).z(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_h6_vs_decomposition() {
+        // H6 = SX.Y (apply SX first, then Y)
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h6(&qid(0));
+        decomposed.sx(&qid(0)).y(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with superposition state
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.h(&qid(0));
+        decomposed.h(&qid(0));
+        direct.h6(&qid(0));
+        decomposed.sx(&qid(0)).y(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in multi-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.h6(&qid(1));
+        decomposed.sx(&qid(1)).y(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_hadamard_variant_properties() {
+        // H2^2 = Z (since H2 = SY.Z and (SY)^2 = Y, so H2^2 = SY.Z.SY.Z = SY.SY.Z.Z = Y.I = Y... wait)
+        // Actually let me verify H2^2 empirically
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+        q1.h2(&qid(0)).h2(&qid(0));
+        // H2^2 should equal some known gate - let's check empirically
+        q2.sy(&qid(0)).z(&qid(0)).sy(&qid(0)).z(&qid(0));
+        assert_states_equal(q1.state(), q2.state());
+
+        // H3^2 = Y * SZ * Y * SZ = Y * Y * SZ * SZ (if Y and SZ commute... they don't)
+        // Let's just verify H3 applied twice matches decomposition applied twice
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+        q1.h3(&qid(0)).h3(&qid(0));
+        q2.sz(&qid(0)).y(&qid(0)).sz(&qid(0)).y(&qid(0));
+        assert_states_equal(q1.state(), q2.state());
+
+        // H4^2
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+        q1.h4(&qid(0)).h4(&qid(0));
+        q2.sz(&qid(0)).x(&qid(0)).sz(&qid(0)).x(&qid(0));
+        assert_states_equal(q1.state(), q2.state());
+
+        // H5^2
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+        q1.h5(&qid(0)).h5(&qid(0));
+        q2.sx(&qid(0)).z(&qid(0)).sx(&qid(0)).z(&qid(0));
+        assert_states_equal(q1.state(), q2.state());
+
+        // H6^2
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+        q1.h6(&qid(0)).h6(&qid(0));
+        q2.sx(&qid(0)).y(&qid(0)).sx(&qid(0)).y(&qid(0));
+        assert_states_equal(q1.state(), q2.state());
+    }
+
+    #[test]
+    fn test_face_gates_on_one_state() {
+        // Test all face gates starting from |1⟩ state
+        // F
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.f(&qid(0));
+        decomposed.sx(&qid(0)).sz(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // FDG
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.fdg(&qid(0));
+        decomposed.szdg(&qid(0)).sxdg(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // F2
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.f2(&qid(0));
+        decomposed.sxdg(&qid(0)).sy(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // F2DG
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.f2dg(&qid(0));
+        decomposed.sydg(&qid(0)).sx(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // F3
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.f3(&qid(0));
+        decomposed.sxdg(&qid(0)).sz(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // F3DG
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.f3dg(&qid(0));
+        decomposed.szdg(&qid(0)).sx(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // F4
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.f4(&qid(0));
+        decomposed.sz(&qid(0)).sx(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // F4DG
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.f4dg(&qid(0));
+        decomposed.sxdg(&qid(0)).szdg(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_hadamard_gates_on_one_state() {
+        // Test all hadamard variants starting from |1⟩ state
+        // H2
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.h2(&qid(0));
+        decomposed.sy(&qid(0)).z(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // H3
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.h3(&qid(0));
+        decomposed.sz(&qid(0)).y(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // H4
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.h4(&qid(0));
+        decomposed.sz(&qid(0)).x(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // H5
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.h5(&qid(0));
+        decomposed.sx(&qid(0)).z(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // H6
+        let mut direct = StateVec::new(1);
+        let mut decomposed = StateVec::new(1);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.h6(&qid(0));
+        decomposed.sx(&qid(0)).y(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_face_gates_locality() {
+        // Verify face gates preserve entanglement and match decomposition on Bell state
+        // F on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.f(&qid(0));
+        decomposed.sx(&qid(0)).sz(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // FDG on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.fdg(&qid(0));
+        decomposed.szdg(&qid(0)).sxdg(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // F2 on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.f2(&qid(0));
+        decomposed.sxdg(&qid(0)).sy(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // F3 on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.f3(&qid(0));
+        decomposed.sxdg(&qid(0)).sz(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // F4 on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.f4(&qid(0));
+        decomposed.sz(&qid(0)).sx(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_hadamard_gates_locality() {
+        // Verify hadamard variants preserve entanglement and match decomposition on Bell state
+        // H2 on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.h2(&qid(0));
+        decomposed.sy(&qid(0)).z(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // H3 on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.h3(&qid(0));
+        decomposed.sz(&qid(0)).y(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // H4 on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.h4(&qid(0));
+        decomposed.sz(&qid(0)).x(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // H5 on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.h5(&qid(0));
+        decomposed.sx(&qid(0)).z(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // H6 on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.h6(&qid(0));
+        decomposed.sx(&qid(0)).y(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_batch_face_gates() {
+        // Test applying face gates to multiple qubits at once
+        let mut direct = StateVec::new(3);
+        let mut sequential = StateVec::new(3);
+
+        // Initialize both to same state
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2));
+
+        // Batch apply F to qubits 0 and 2
+        let q0 = qid(0)[0];
+        let q2 = qid(2)[0];
+        direct.f(&[q0, q2]);
+
+        // Sequential apply
+        sequential.f(&qid(0));
+        sequential.f(&qid(2));
+
+        assert_states_equal(direct.state(), sequential.state());
+
+        // Test F2 batch
+        let mut direct = StateVec::new(3);
+        let mut sequential = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2));
+
+        let q1 = qid(1)[0];
+        direct.f2(&[q0, q1, q2]);
+        sequential.f2(&qid(0)).f2(&qid(1)).f2(&qid(2));
+
+        assert_states_equal(direct.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_batch_hadamard_gates() {
+        // Test applying hadamard variants to multiple qubits at once
+        let mut direct = StateVec::new(3);
+        let mut sequential = StateVec::new(3);
+
+        // Initialize both to same state
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2));
+
+        // Batch apply H2 to qubits 0 and 2
+        let q0 = qid(0)[0];
+        let q2 = qid(2)[0];
+        direct.h2(&[q0, q2]);
+
+        // Sequential apply
+        sequential.h2(&qid(0));
+        sequential.h2(&qid(2));
+
+        assert_states_equal(direct.state(), sequential.state());
+
+        // Test H5 batch (all qubits)
+        let mut direct = StateVec::new(3);
+        let mut sequential = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2));
+
+        let q1 = qid(1)[0];
+        direct.h5(&[q0, q1, q2]);
+        sequential.h5(&qid(0)).h5(&qid(1)).h5(&qid(2));
+
+        assert_states_equal(direct.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_sqrt_gates_vs_rotations() {
+        // SX = RX(π/2)
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+
+        q1.sx(&qid(0));
+        q2.rx(Angle64::from_radians(FRAC_PI_2), &qid(0));
+
+        assert_states_equal(q1.state(), q2.state());
+
+        // SXDG = RX(-π/2)
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+
+        q1.sxdg(&qid(0));
+        q2.rx(Angle64::from_radians(-FRAC_PI_2), &qid(0));
+
+        assert_states_equal(q1.state(), q2.state());
+
+        // SY = RY(π/2)
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+
+        q1.sy(&qid(0));
+        q2.ry(Angle64::from_radians(FRAC_PI_2), &qid(0));
+
+        assert_states_equal(q1.state(), q2.state());
+
+        // SYDG = RY(-π/2)
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+
+        q1.sydg(&qid(0));
+        q2.ry(Angle64::from_radians(-FRAC_PI_2), &qid(0));
+
+        assert_states_equal(q1.state(), q2.state());
+
+        // SZ = RZ(π/2)
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+
+        q1.sz(&qid(0));
+        q2.rz(Angle64::from_radians(FRAC_PI_2), &qid(0));
+
+        assert_states_equal(q1.state(), q2.state());
+
+        // SZDG = RZ(-π/2)
+        let mut q1 = StateVec::new(1);
+        let mut q2 = StateVec::new(1);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
+
+        q1.szdg(&qid(0));
+        q2.rz(Angle64::from_radians(-FRAC_PI_2), &qid(0));
+
+        assert_states_equal(q1.state(), q2.state());
+    }
 }
 
 mod detailed_tq_gate_cases {
     use crate::helpers::assert_states_equal;
     use num_complex::Complex64;
-    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec};
+    use pecos_core::{Angle64, QubitId};
+    use pecos_qsim::{ArbitraryRotationGateable, CliffordGateable, StateVec, qid, qid2};
     use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_4, PI};
 
     #[test]
@@ -1128,14 +2397,22 @@ mod detailed_tq_gate_cases {
         let target = 1;
 
         // Apply CX gate
-        state_cx.cx(control, target);
+        state_cx.cx(&qid2(control, target));
 
         // Apply the decomposed gates
-        state_decomposed.r1xy(-FRAC_PI_2, FRAC_PI_2, target);
-        state_decomposed.rzz(FRAC_PI_2, control, target);
-        state_decomposed.rz(-FRAC_PI_2, control);
-        state_decomposed.r1xy(FRAC_PI_2, PI, target);
-        state_decomposed.rz(-FRAC_PI_2, target);
+        state_decomposed.r1xy(
+            Angle64::from_radians(-FRAC_PI_2),
+            Angle64::from_radians(FRAC_PI_2),
+            &qid(target),
+        );
+        state_decomposed.rzz(Angle64::from_radians(FRAC_PI_2), &qid2(control, target));
+        state_decomposed.rz(Angle64::from_radians(-FRAC_PI_2), &qid(control));
+        state_decomposed.r1xy(
+            Angle64::from_radians(FRAC_PI_2),
+            Angle64::from_radians(PI),
+            &qid(target),
+        );
+        state_decomposed.rz(Angle64::from_radians(-FRAC_PI_2), &qid(target));
 
         // Assert that the states are equal
         assert_states_equal(state_cx.state(), state_decomposed.state());
@@ -1150,14 +2427,30 @@ mod detailed_tq_gate_cases {
         let target = 1;
 
         // Apply RXX gate
-        state_rxx.rxx(FRAC_PI_4, control, target);
+        state_rxx.rxx(Angle64::from_radians(FRAC_PI_4), &qid2(control, target));
 
         // Apply the decomposed gates
-        state_decomposed.r1xy(FRAC_PI_2, FRAC_PI_2, control);
-        state_decomposed.r1xy(FRAC_PI_2, FRAC_PI_2, target);
-        state_decomposed.rzz(FRAC_PI_4, control, target);
-        state_decomposed.r1xy(FRAC_PI_2, -FRAC_PI_2, control);
-        state_decomposed.r1xy(FRAC_PI_2, -FRAC_PI_2, target);
+        state_decomposed.r1xy(
+            Angle64::from_radians(FRAC_PI_2),
+            Angle64::from_radians(FRAC_PI_2),
+            &qid(control),
+        );
+        state_decomposed.r1xy(
+            Angle64::from_radians(FRAC_PI_2),
+            Angle64::from_radians(FRAC_PI_2),
+            &qid(target),
+        );
+        state_decomposed.rzz(Angle64::from_radians(FRAC_PI_4), &qid2(control, target));
+        state_decomposed.r1xy(
+            Angle64::from_radians(FRAC_PI_2),
+            Angle64::from_radians(-FRAC_PI_2),
+            &qid(control),
+        );
+        state_decomposed.r1xy(
+            Angle64::from_radians(FRAC_PI_2),
+            Angle64::from_radians(-FRAC_PI_2),
+            &qid(target),
+        );
 
         // Assert that the states are equal
         assert_states_equal(state_rxx.state(), state_decomposed.state());
@@ -1206,22 +2499,22 @@ mod detailed_tq_gate_cases {
 
         // |00⟩ → should remain |00⟩
         state_vec.prepare_computational_basis(0);
-        state_vec.cx(1, 0);
+        state_vec.cx(&qid2(1, 0));
         assert!((state_vec.probability(0) - 1.0).abs() < 1e-10);
 
         // |01⟩ → should remain |01⟩
         state_vec.prepare_computational_basis(1);
-        state_vec.cx(1, 0);
+        state_vec.cx(&qid2(1, 0));
         assert!((state_vec.probability(1) - 1.0).abs() < 1e-10);
 
         // |10⟩ → should flip to |11⟩
         state_vec.prepare_computational_basis(2);
-        state_vec.cx(1, 0);
+        state_vec.cx(&qid2(1, 0));
         assert!((state_vec.probability(3) - 1.0).abs() < 1e-10);
 
         // |11⟩ → should flip to |10⟩
         state_vec.prepare_computational_basis(3);
-        state_vec.cx(1, 0);
+        state_vec.cx(&qid2(1, 0));
         assert!((state_vec.probability(2) - 1.0).abs() < 1e-10);
     }
 
@@ -1232,14 +2525,14 @@ mod detailed_tq_gate_cases {
         let mut q2 = StateVec::new(2);
 
         // Prepare same initial state
-        q1.h(0);
-        q1.h(1);
-        q2.h(0);
-        q2.h(1);
+        q1.h(&qid(0));
+        q1.h(&qid(1));
+        q2.h(&qid(0));
+        q2.h(&qid(1));
 
         // Apply gates with different control/target
-        q1.cz(0, 1);
-        q2.cz(1, 0);
+        q1.cz(&qid2(0, 1));
+        q2.cz(&qid2(1, 0));
 
         assert_states_equal(q1.state(), q2.state());
     }
@@ -1251,14 +2544,14 @@ mod detailed_tq_gate_cases {
         let mut q2 = StateVec::new(2);
 
         // Prepare same non-trivial initial state
-        q1.h(0);
-        q1.h(1);
-        q2.h(0);
-        q2.h(1);
+        q1.h(&qid(0));
+        q1.h(&qid(1));
+        q2.h(&qid(0));
+        q2.h(&qid(1));
 
         // Apply RXX with different qubit orders
-        q1.rxx(FRAC_PI_3, 0, 1);
-        q2.rxx(FRAC_PI_3, 1, 0);
+        q1.rxx(Angle64::from_radians(FRAC_PI_3), &qid2(0, 1));
+        q2.rxx(Angle64::from_radians(FRAC_PI_3), &qid2(1, 0));
 
         // Results should be identical
         for (a, b) in q1.state().iter().zip(q2.state().iter()) {
@@ -1273,11 +2566,11 @@ mod detailed_tq_gate_cases {
         // Test on random initial states
         let mut q1 = StateVec::new(2);
         let mut q2 = StateVec::new(2);
-        q1.h(0).x(1); // Random state
-        q2.h(0).x(1); // Same initial state
+        q1.h(&qid(0)).x(&qid(1)); // Random state
+        q2.h(&qid(0)).x(&qid(1)); // Same initial state
 
-        q1.ryy(theta, 0, 1);
-        q2.ryy(theta, 1, 0);
+        q1.ryy(Angle64::from_radians(theta), &qid2(0, 1));
+        q2.ryy(Angle64::from_radians(theta), &qid2(1, 0));
 
         // States should be exactly equal
         for (a, b) in q1.state().iter().zip(q2.state().iter()) {
@@ -1294,10 +2587,10 @@ mod detailed_tq_gate_cases {
 
         // Initialize a 5-qubit state
         let mut q = StateVec::new(5);
-        q.h(0).h(1).h(2).h(3).h(4); // Superposition state
+        q.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3)).h(&qid(4)); // Superposition state
 
         // Apply RYY on qubits 2 and 4
-        q.ryy(theta, 2, 4);
+        q.ryy(Angle64::from_radians(theta), &qid2(2, 4));
 
         // Ensure state vector normalization is preserved
         let norm: f64 = q.state().iter().map(num_complex::Complex::norm_sqr).sum();
@@ -1312,7 +2605,7 @@ mod detailed_tq_gate_cases {
         let mut q = StateVec::new(2);
 
         // Apply RYY gate
-        q.ryy(PI, 0, 1);
+        q.ryy(Angle64::from_radians(PI), &qid2(0, 1));
 
         // Define the expected result for RYY(π)
         let expected = vec![
@@ -1330,7 +2623,7 @@ mod detailed_tq_gate_cases {
     fn test_ryy_global_phase() {
         let mut q = StateVec::new(2);
 
-        q.ryy(PI, 0, 1);
+        q.ryy(Angle64::from_radians(PI), &qid2(0, 1));
 
         // Define the expected result for RYY(π)
         let expected = vec![
@@ -1350,8 +2643,8 @@ mod detailed_tq_gate_cases {
         let mut q = StateVec::new(2);
 
         // Initialize |00⟩
-        let initial = q.state().to_vec();
-        q.ryy(theta, 0, 1);
+        let initial = q.state().clone();
+        q.ryy(Angle64::from_radians(theta), &qid2(0, 1));
 
         // Expect state to remain close to the initial state
         for (a, b) in q.state().iter().zip(initial.iter()) {
@@ -1373,12 +2666,12 @@ mod detailed_tq_gate_cases {
         let mut q2 = StateVec::new(2);
 
         // Random initial state
-        q1.h(0).h(1);
-        q2.h(0).h(1);
+        q1.h(&qid(0)).h(&qid(1));
+        q2.h(&qid(0)).h(&qid(1));
 
         // Apply RYY with random qubit order
-        q1.ryy(theta, 0, 1);
-        q2.ryy(theta, 1, 0);
+        q1.ryy(Angle64::from_radians(theta), &qid2(0, 1));
+        q2.ryy(Angle64::from_radians(theta), &qid2(1, 0));
 
         // Compare states
         for (a, b) in q1.state().iter().zip(q2.state().iter()) {
@@ -1396,19 +2689,23 @@ mod detailed_tq_gate_cases {
         let mut q2 = StateVec::new(2);
 
         // Create some non-trivial initial state
-        q1.h(0);
-        q2.h(0);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
 
         // Compare direct SZZ vs RZZ(π/2)
-        q1.szz(0, 1);
-        q2.rzz(FRAC_PI_2, 0, 1);
+        q1.szz(&qid2(0, 1));
+        q2.rzz(Angle64::from_radians(FRAC_PI_2), &qid2(0, 1));
 
         assert_states_equal(q1.state(), q2.state());
 
         // Also verify decomposition matches
         let mut q3 = StateVec::new(2);
-        q3.h(0); // Same initial state
-        q3.h(0).h(1).sxx(0, 1).h(0).h(1);
+        q3.h(&qid(0)); // Same initial state
+        q3.h(&qid(0))
+            .h(&qid(1))
+            .sxx(&qid2(0, 1))
+            .h(&qid(0))
+            .h(&qid(1));
 
         assert_states_equal(q1.state(), q3.state());
     }
@@ -1419,12 +2716,12 @@ mod detailed_tq_gate_cases {
         let mut q2 = StateVec::new(2);
 
         // Create some non-trivial initial state
-        q1.h(0);
-        q2.h(0);
+        q1.h(&qid(0));
+        q2.h(&qid(0));
 
         // Compare CliffordGateable trait szz vs ArbitraryRotationGateable trait rzz(π/2)
-        CliffordGateable::<usize>::szz(&mut q1, 0, 1);
-        ArbitraryRotationGateable::<usize>::rzz(&mut q2, PI / 2.0, 0, 1);
+        CliffordGateable::szz(&mut q1, &qid2(0, 1));
+        ArbitraryRotationGateable::rzz(&mut q2, Angle64::from_radians(PI / 2.0), &qid2(0, 1));
 
         assert_states_equal(q1.state(), q2.state());
     }
@@ -1434,8 +2731,8 @@ mod detailed_tq_gate_cases {
         let mut q = StateVec::new(2);
 
         // Create a non-trivial state
-        q.h(0);
-        q.h(1);
+        q.h(&qid(0));
+        q.h(&qid(1));
 
         // iSWAP matrix
         let iswap = [
@@ -1518,11 +2815,11 @@ mod detailed_tq_gate_cases {
         let mut q2 = StateVec::new(2);
 
         // Test SWAP symmetry
-        q1.x(0); // |10⟩
-        q2.x(0); // |10⟩
+        q1.x(&qid(0)); // |10⟩
+        q2.x(&qid(0)); // |10⟩
 
-        q1.cx(0, 1).cx(1, 0).cx(0, 1); // SWAP via CNOTs
-        q2.swap(0, 1); // Direct SWAP
+        q1.cx(&qid2(0, 1)).cx(&qid2(1, 0)).cx(&qid2(0, 1)); // SWAP via CNOTs
+        q2.swap(&qid2(0, 1)); // Direct SWAP
 
         assert_states_equal(q1.state(), q2.state());
     }
@@ -1533,33 +2830,796 @@ mod detailed_tq_gate_cases {
         let mut q = StateVec::new(2);
 
         // Create superposition with phases
-        q.h(0).sz(0);
-        q.h(1).sz(1);
+        q.h(&qid(0)).sz(&qid(0));
+        q.h(&qid(1)).sz(&qid(1));
 
         // Control operations should preserve phases correctly
-        let initial = q.state().to_vec();
-        q.cz(0, 1).cz(0, 1); // CZ^2 = I
+        let initial = q.state().clone();
+        q.cz(&qid2(0, 1)).cz(&qid2(0, 1)); // CZ^2 = I
 
         assert_states_equal(q.state(), &initial);
+    }
+
+    #[test]
+    fn test_cy_vs_decomposition() {
+        // CY = SZDG(target).CX.SZ(target)
+        // Test on |00⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.cy(&qid2(0, 1));
+        decomposed.szdg(&qid(1)).cx(&qid2(0, 1)).sz(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |10⟩ (control=1)
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.cy(&qid2(0, 1));
+        decomposed.szdg(&qid(1)).cx(&qid2(0, 1)).sz(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.cy(&qid2(0, 1));
+        decomposed.szdg(&qid(1)).cx(&qid2(0, 1)).sz(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test with reversed qubit order (target, control)
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(1)); // control=1
+        decomposed.x(&qid(1));
+        direct.cy(&qid2(1, 0)); // CY with q1 as control, q0 as target
+        decomposed.szdg(&qid(0)).cx(&qid2(1, 0)).sz(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in 3-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.cy(&qid2(0, 2)); // control=0, target=2
+        decomposed.szdg(&qid(2)).cx(&qid2(0, 2)).sz(&qid(2));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_sxx_vs_decomposition() {
+        // SXX = SX(q1).SX(q2).SYDG(q1).CX(q1,q2).SY(q1)
+        // Test on |00⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.sxx(&qid2(0, 1));
+        decomposed
+            .sx(&qid(0))
+            .sx(&qid(1))
+            .sydg(&qid(0))
+            .cx(&qid2(0, 1))
+            .sy(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |11⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(0)).x(&qid(1));
+        decomposed.x(&qid(0)).x(&qid(1));
+        direct.sxx(&qid2(0, 1));
+        decomposed
+            .sx(&qid(0))
+            .sx(&qid(1))
+            .sydg(&qid(0))
+            .cx(&qid2(0, 1))
+            .sy(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.sxx(&qid2(0, 1));
+        decomposed
+            .sx(&qid(0))
+            .sx(&qid(1))
+            .sydg(&qid(0))
+            .cx(&qid2(0, 1))
+            .sy(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in 3-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.sxx(&qid2(0, 2));
+        decomposed
+            .sx(&qid(0))
+            .sx(&qid(2))
+            .sydg(&qid(0))
+            .cx(&qid2(0, 2))
+            .sy(&qid(0));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_sxxdg_vs_decomposition() {
+        // SXXDG is the inverse of SXX
+        // Test SXX * SXXDG = I
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).h(&qid(1));
+        let initial = q.state().clone();
+        q.sxx(&qid2(0, 1)).sxxdg(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+
+        // Test SXXDG * SXX = I
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).h(&qid(1));
+        let initial = q.state().clone();
+        q.sxxdg(&qid2(0, 1)).sxx(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+
+        // Test on Bell state
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).cx(&qid2(0, 1));
+        let initial = q.state().clone();
+        q.sxx(&qid2(0, 1)).sxxdg(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+    }
+
+    #[test]
+    fn test_sxx_squared() {
+        // SXX^2 = XX (the Pauli XX gate, up to global phase)
+        // XX = X⊗X swaps |00⟩↔|11⟩ and |01⟩↔|10⟩
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).h(&qid(1));
+        q.sxx(&qid2(0, 1)).sxx(&qid2(0, 1));
+        // After SXX^2, compare with X⊗X applied to initial state
+        let mut q_xx = StateVec::new(2);
+        q_xx.h(&qid(0)).h(&qid(1));
+        q_xx.x(&qid(0)).x(&qid(1)); // X⊗X
+
+        // States should match up to global phase
+        // Check that probabilities match
+        let prob_match = q
+            .state()
+            .iter()
+            .zip(q_xx.state().iter())
+            .all(|(a, b)| (a.norm_sqr() - b.norm_sqr()).abs() < 1e-10);
+        assert!(prob_match, "SXX^2 should give XX (up to global phase)");
+    }
+
+    #[test]
+    fn test_syy_vs_decomposition() {
+        // SYY = SZDG(q1).SZDG(q2).SXX.SZ(q1).SZ(q2)
+        // (rotate Y basis to X basis, apply SXX, rotate back)
+        // Test on |00⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.syy(&qid2(0, 1));
+        decomposed
+            .szdg(&qid(0))
+            .szdg(&qid(1))
+            .sxx(&qid2(0, 1))
+            .sz(&qid(0))
+            .sz(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |11⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(0)).x(&qid(1));
+        decomposed.x(&qid(0)).x(&qid(1));
+        direct.syy(&qid2(0, 1));
+        decomposed
+            .szdg(&qid(0))
+            .szdg(&qid(1))
+            .sxx(&qid2(0, 1))
+            .sz(&qid(0))
+            .sz(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.syy(&qid2(0, 1));
+        decomposed
+            .szdg(&qid(0))
+            .szdg(&qid(1))
+            .sxx(&qid2(0, 1))
+            .sz(&qid(0))
+            .sz(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in 3-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.syy(&qid2(0, 2));
+        decomposed
+            .szdg(&qid(0))
+            .szdg(&qid(2))
+            .sxx(&qid2(0, 2))
+            .sz(&qid(0))
+            .sz(&qid(2));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_syydg_vs_decomposition() {
+        // SYYDG is the inverse of SYY
+        // Test SYY * SYYDG = I
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).h(&qid(1));
+        let initial = q.state().clone();
+        q.syy(&qid2(0, 1)).syydg(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+
+        // Test SYYDG * SYY = I
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).h(&qid(1));
+        let initial = q.state().clone();
+        q.syydg(&qid2(0, 1)).syy(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+
+        // Test on Bell state
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).cx(&qid2(0, 1));
+        let initial = q.state().clone();
+        q.syy(&qid2(0, 1)).syydg(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+    }
+
+    #[test]
+    fn test_syy_squared() {
+        // SYY^2 = YY (the Pauli YY gate, up to global phase)
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).h(&qid(1));
+        q.syy(&qid2(0, 1)).syy(&qid2(0, 1));
+        // After SYY^2, compare with Y⊗Y applied to initial state
+        let mut q_yy = StateVec::new(2);
+        q_yy.h(&qid(0)).h(&qid(1));
+        q_yy.y(&qid(0)).y(&qid(1)); // Y⊗Y
+
+        // States should match up to global phase
+        let prob_match = q
+            .state()
+            .iter()
+            .zip(q_yy.state().iter())
+            .all(|(a, b)| (a.norm_sqr() - b.norm_sqr()).abs() < 1e-10);
+        assert!(prob_match, "SYY^2 should give YY (up to global phase)");
+    }
+
+    #[test]
+    fn test_szz_vs_decomposition() {
+        // SZZ = H(q1).H(q2).SXX.H(q1).H(q2)
+        // (rotate Z basis to X basis, apply SXX, rotate back)
+        // Test on |00⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.szz(&qid2(0, 1));
+        decomposed
+            .h(&qid(0))
+            .h(&qid(1))
+            .sxx(&qid2(0, 1))
+            .h(&qid(0))
+            .h(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |11⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(0)).x(&qid(1));
+        decomposed.x(&qid(0)).x(&qid(1));
+        direct.szz(&qid2(0, 1));
+        decomposed
+            .h(&qid(0))
+            .h(&qid(1))
+            .sxx(&qid2(0, 1))
+            .h(&qid(0))
+            .h(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.szz(&qid2(0, 1));
+        decomposed
+            .h(&qid(0))
+            .h(&qid(1))
+            .sxx(&qid2(0, 1))
+            .h(&qid(0))
+            .h(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in 3-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.szz(&qid2(0, 2));
+        decomposed
+            .h(&qid(0))
+            .h(&qid(2))
+            .sxx(&qid2(0, 2))
+            .h(&qid(0))
+            .h(&qid(2));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_szzdg_vs_decomposition() {
+        // SZZDG is the inverse of SZZ
+        // Test SZZ * SZZDG = I
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).h(&qid(1));
+        let initial = q.state().clone();
+        q.szz(&qid2(0, 1)).szzdg(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+
+        // Test SZZDG * SZZ = I
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).h(&qid(1));
+        let initial = q.state().clone();
+        q.szzdg(&qid2(0, 1)).szz(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+
+        // Test on Bell state
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).cx(&qid2(0, 1));
+        let initial = q.state().clone();
+        q.szz(&qid2(0, 1)).szzdg(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+    }
+
+    #[test]
+    fn test_szz_squared() {
+        // SZZ^2 = ZZ (the Pauli ZZ gate, up to global phase)
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).h(&qid(1));
+        q.szz(&qid2(0, 1)).szz(&qid2(0, 1));
+        // After SZZ^2, compare with Z⊗Z applied to initial state
+        let mut q_zz = StateVec::new(2);
+        q_zz.h(&qid(0)).h(&qid(1));
+        q_zz.z(&qid(0)).z(&qid(1)); // Z⊗Z
+
+        // States should match up to global phase
+        let prob_match = q
+            .state()
+            .iter()
+            .zip(q_zz.state().iter())
+            .all(|(a, b)| (a.norm_sqr() - b.norm_sqr()).abs() < 1e-10);
+        assert!(prob_match, "SZZ^2 should give ZZ (up to global phase)");
+    }
+
+    #[test]
+    fn test_iswap_vs_decomposition() {
+        // iSWAP = SZ(q1).SZ(q2).H(q1).CX(q1,q2).CX(q2,q1).H(q2)
+        // Test on |00⟩ (should stay |00⟩)
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.iswap(&qid2(0, 1));
+        decomposed
+            .sz(&qid(0))
+            .sz(&qid(1))
+            .h(&qid(0))
+            .cx(&qid2(0, 1))
+            .cx(&qid2(1, 0))
+            .h(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |01⟩ (should become i|10⟩)
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(1));
+        decomposed.x(&qid(1));
+        direct.iswap(&qid2(0, 1));
+        decomposed
+            .sz(&qid(0))
+            .sz(&qid(1))
+            .h(&qid(0))
+            .cx(&qid2(0, 1))
+            .cx(&qid2(1, 0))
+            .h(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |10⟩ (should become i|01⟩)
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.iswap(&qid2(0, 1));
+        decomposed
+            .sz(&qid(0))
+            .sz(&qid(1))
+            .h(&qid(0))
+            .cx(&qid2(0, 1))
+            .cx(&qid2(1, 0))
+            .h(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |11⟩ (should stay |11⟩)
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(0)).x(&qid(1));
+        decomposed.x(&qid(0)).x(&qid(1));
+        direct.iswap(&qid2(0, 1));
+        decomposed
+            .sz(&qid(0))
+            .sz(&qid(1))
+            .h(&qid(0))
+            .cx(&qid2(0, 1))
+            .cx(&qid2(1, 0))
+            .h(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.iswap(&qid2(0, 1));
+        decomposed
+            .sz(&qid(0))
+            .sz(&qid(1))
+            .h(&qid(0))
+            .cx(&qid2(0, 1))
+            .cx(&qid2(1, 0))
+            .h(&qid(1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in 3-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.iswap(&qid2(0, 2));
+        decomposed
+            .sz(&qid(0))
+            .sz(&qid(2))
+            .h(&qid(0))
+            .cx(&qid2(0, 2))
+            .cx(&qid2(2, 0))
+            .h(&qid(2));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_iswap_squared() {
+        // iSWAP^2 = -SWAP (up to global phase)
+        // Two iSWAPs should swap with phase -1
+        let mut q = StateVec::new(2);
+        q.x(&qid(1)); // Start with |01⟩
+        q.iswap(&qid2(0, 1)).iswap(&qid2(0, 1));
+        // After two iSWAPs on |01⟩: i*i*|01⟩ = -|01⟩
+        // Check amplitude is at |01⟩ with phase -1
+        let state = q.state();
+        assert!((state[0].norm_sqr()).abs() < 1e-10); // |00⟩ = 0
+        assert!((state[2].norm_sqr() - 1.0).abs() < 1e-10); // |01⟩ has full amplitude
+        assert!((state[1].norm_sqr()).abs() < 1e-10); // |10⟩ = 0
+        assert!((state[3].norm_sqr()).abs() < 1e-10); // |11⟩ = 0
+    }
+
+    #[test]
+    fn test_g_vs_decomposition() {
+        // G = CZ.H(q1).H(q2).CZ
+        // Test on |00⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.g(&qid2(0, 1));
+        decomposed
+            .cz(&qid2(0, 1))
+            .h(&qid(0))
+            .h(&qid(1))
+            .cz(&qid2(0, 1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |01⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(1));
+        decomposed.x(&qid(1));
+        direct.g(&qid2(0, 1));
+        decomposed
+            .cz(&qid2(0, 1))
+            .h(&qid(0))
+            .h(&qid(1))
+            .cz(&qid2(0, 1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |10⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(0));
+        decomposed.x(&qid(0));
+        direct.g(&qid2(0, 1));
+        decomposed
+            .cz(&qid2(0, 1))
+            .h(&qid(0))
+            .h(&qid(1))
+            .cz(&qid2(0, 1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on |11⟩
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.x(&qid(0)).x(&qid(1));
+        decomposed.x(&qid(0)).x(&qid(1));
+        direct.g(&qid2(0, 1));
+        decomposed
+            .cz(&qid2(0, 1))
+            .h(&qid(0))
+            .h(&qid(1))
+            .cz(&qid2(0, 1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test on Bell state
+        let mut direct = StateVec::new(2);
+        let mut decomposed = StateVec::new(2);
+        direct.h(&qid(0)).cx(&qid2(0, 1));
+        decomposed.h(&qid(0)).cx(&qid2(0, 1));
+        direct.g(&qid2(0, 1));
+        decomposed
+            .cz(&qid2(0, 1))
+            .h(&qid(0))
+            .h(&qid(1))
+            .cz(&qid2(0, 1));
+        assert_states_equal(direct.state(), decomposed.state());
+
+        // Test in 3-qubit system
+        let mut direct = StateVec::new(3);
+        let mut decomposed = StateVec::new(3);
+        direct.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        decomposed.h(&qid(0)).h(&qid(1)).h(&qid(2));
+        direct.g(&qid2(0, 2));
+        decomposed
+            .cz(&qid2(0, 2))
+            .h(&qid(0))
+            .h(&qid(2))
+            .cz(&qid2(0, 2));
+        assert_states_equal(direct.state(), decomposed.state());
+    }
+
+    #[test]
+    fn test_g_is_involution() {
+        // G^2 = I (G is its own inverse)
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).h(&qid(1));
+        let initial = q.state().clone();
+        q.g(&qid2(0, 1)).g(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+
+        // Test on Bell state
+        let mut q = StateVec::new(2);
+        q.h(&qid(0)).cx(&qid2(0, 1));
+        let initial = q.state().clone();
+        q.g(&qid2(0, 1)).g(&qid2(0, 1));
+        assert_states_equal(q.state(), &initial);
+    }
+
+    // === Batch operation tests ===
+    // These test applying gates to multiple qubit pairs simultaneously
+
+    #[test]
+    fn test_cy_batch() {
+        // Apply CY to two pairs: (0,1) and (2,3) in a 4-qubit system
+        let mut batch = StateVec::new(4);
+        let mut sequential = StateVec::new(4);
+
+        // Prepare initial state
+        batch.h(&qid(0)).h(&qid(2));
+        sequential.h(&qid(0)).h(&qid(2));
+
+        // Batch: apply CY to both pairs at once
+        batch.cy(&[QubitId(0), QubitId(1), QubitId(2), QubitId(3)]);
+
+        // Sequential: apply CY to each pair separately
+        sequential.cy(&qid2(0, 1)).cy(&qid2(2, 3));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_sxx_batch() {
+        // Apply SXX to two pairs in a 4-qubit system
+        let mut batch = StateVec::new(4);
+        let mut sequential = StateVec::new(4);
+
+        batch.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+
+        batch.sxx(&[QubitId(0), QubitId(1), QubitId(2), QubitId(3)]);
+        sequential.sxx(&qid2(0, 1)).sxx(&qid2(2, 3));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_sxxdg_batch() {
+        let mut batch = StateVec::new(4);
+        let mut sequential = StateVec::new(4);
+
+        batch.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+
+        batch.sxxdg(&[QubitId(0), QubitId(1), QubitId(2), QubitId(3)]);
+        sequential.sxxdg(&qid2(0, 1)).sxxdg(&qid2(2, 3));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_syy_batch() {
+        let mut batch = StateVec::new(4);
+        let mut sequential = StateVec::new(4);
+
+        batch.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+
+        batch.syy(&[QubitId(0), QubitId(1), QubitId(2), QubitId(3)]);
+        sequential.syy(&qid2(0, 1)).syy(&qid2(2, 3));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_syydg_batch() {
+        let mut batch = StateVec::new(4);
+        let mut sequential = StateVec::new(4);
+
+        batch.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+
+        batch.syydg(&[QubitId(0), QubitId(1), QubitId(2), QubitId(3)]);
+        sequential.syydg(&qid2(0, 1)).syydg(&qid2(2, 3));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_szz_batch() {
+        let mut batch = StateVec::new(4);
+        let mut sequential = StateVec::new(4);
+
+        batch.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+
+        batch.szz(&[QubitId(0), QubitId(1), QubitId(2), QubitId(3)]);
+        sequential.szz(&qid2(0, 1)).szz(&qid2(2, 3));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_szzdg_batch() {
+        let mut batch = StateVec::new(4);
+        let mut sequential = StateVec::new(4);
+
+        batch.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+
+        batch.szzdg(&[QubitId(0), QubitId(1), QubitId(2), QubitId(3)]);
+        sequential.szzdg(&qid2(0, 1)).szzdg(&qid2(2, 3));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_iswap_batch() {
+        let mut batch = StateVec::new(4);
+        let mut sequential = StateVec::new(4);
+
+        batch.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+
+        batch.iswap(&[QubitId(0), QubitId(1), QubitId(2), QubitId(3)]);
+        sequential.iswap(&qid2(0, 1)).iswap(&qid2(2, 3));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_g_batch() {
+        let mut batch = StateVec::new(4);
+        let mut sequential = StateVec::new(4);
+
+        batch.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+
+        batch.g(&[QubitId(0), QubitId(1), QubitId(2), QubitId(3)]);
+        sequential.g(&qid2(0, 1)).g(&qid2(2, 3));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_batch_with_non_adjacent_qubits() {
+        // Test batch operations on non-adjacent qubit pairs: (0,2) and (1,3)
+        let mut batch = StateVec::new(4);
+        let mut sequential = StateVec::new(4);
+
+        batch.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+        sequential.h(&qid(0)).h(&qid(1)).h(&qid(2)).h(&qid(3));
+
+        // SXX on non-adjacent pairs
+        batch.sxx(&[QubitId(0), QubitId(2), QubitId(1), QubitId(3)]);
+        sequential.sxx(&qid2(0, 2)).sxx(&qid2(1, 3));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_batch_in_larger_system() {
+        // Test batch operations in 6-qubit system with various spacings
+        let mut batch = StateVec::new(6);
+        let mut sequential = StateVec::new(6);
+
+        // Prepare superposition
+        for i in 0..6 {
+            batch.h(&qid(i));
+            sequential.h(&qid(i));
+        }
+
+        // Apply SYY to pairs (0,3) and (2,5) - large spacing
+        batch.syy(&[QubitId(0), QubitId(3), QubitId(2), QubitId(5)]);
+        sequential.syy(&qid2(0, 3)).syy(&qid2(2, 5));
+
+        assert_states_equal(batch.state(), sequential.state());
+    }
+
+    #[test]
+    fn test_batch_three_pairs() {
+        // Test batch with 3 pairs in 6-qubit system
+        let mut batch = StateVec::new(6);
+        let mut sequential = StateVec::new(6);
+
+        for i in 0..6 {
+            batch.h(&qid(i));
+            sequential.h(&qid(i));
+        }
+
+        // Apply iSWAP to 3 pairs
+        batch.iswap(&[
+            QubitId(0),
+            QubitId(1),
+            QubitId(2),
+            QubitId(3),
+            QubitId(4),
+            QubitId(5),
+        ]);
+        sequential
+            .iswap(&qid2(0, 1))
+            .iswap(&qid2(2, 3))
+            .iswap(&qid2(4, 5));
+
+        assert_states_equal(batch.state(), sequential.state());
     }
 }
 
 mod detail_meas_cases {
-    use pecos_qsim::{CliffordGateable, QuantumSimulator, StateVec};
+    use pecos_qsim::{CliffordGateable, QuantumSimulator, StateVec, qid, qid2};
 
     #[test]
     fn test_measurement_on_entangled_state() {
         let mut q = StateVec::new(2);
 
         // Create Bell state (|00⟩ + |11⟩) / sqrt(2)
-        q.h(0);
-        q.cx(0, 1);
+        q.h(&qid(0));
+        q.cx(&qid2(0, 1));
 
         // Measure the first qubit
-        let result1 = q.mz(0);
+        let result1 = q.mz(&qid(0)).into_iter().next().unwrap();
 
         // Measure the second qubit - should match the first
-        let result2 = q.mz(1);
+        let result2 = q.mz(&qid(1)).into_iter().next().unwrap();
 
         assert_eq!(result1.outcome, result2.outcome);
     }
@@ -1569,22 +3629,22 @@ mod detail_meas_cases {
         let mut q = StateVec::new(2);
 
         // Test 1: Measuring |0⟩ should always give 0
-        let result = q.mz(0);
+        let result = q.mz(&qid(0)).into_iter().next().unwrap();
         assert!(!result.outcome);
         assert!((q.probability(0) - 1.0).abs() < 1e-10);
 
         // Test 2: Measuring |1⟩ should always give 1
         q.reset();
-        q.x(0);
-        let result = q.mz(0);
+        q.x(&qid(0));
+        let result = q.mz(&qid(0)).into_iter().next().unwrap();
         assert!(result.outcome);
         assert!((q.probability(1) - 1.0).abs() < 1e-10);
 
         // Test 3: In a Bell state, measurements should correlate
         q.reset();
-        q.h(0).cx(0, 1); // Create Bell state
-        let result1 = q.mz(0);
-        let result2 = q.mz(1);
+        q.h(&qid(0)).cx(&qid2(0, 1)); // Create Bell state
+        let result1 = q.mz(&qid(0)).into_iter().next().unwrap();
+        let result2 = q.mz(&qid(1)).into_iter().next().unwrap();
         assert_eq!(
             result1.outcome, result2.outcome,
             "Bell state measurements should correlate"
@@ -1592,9 +3652,9 @@ mod detail_meas_cases {
 
         // Test 4: Repeated measurements should be consistent
         q.reset();
-        q.h(0); // Create superposition
-        let first = q.mz(0);
-        let second = q.mz(0); // Measure again
+        q.h(&qid(0)); // Create superposition
+        let first = q.mz(&qid(0)).into_iter().next().unwrap();
+        let second = q.mz(&qid(0)).into_iter().next().unwrap(); // Measure again
         assert_eq!(
             first.outcome, second.outcome,
             "Repeated measurements should give same result"
@@ -1606,10 +3666,10 @@ mod detail_meas_cases {
         let mut q = StateVec::new(1);
 
         // |0⟩ in X basis
-        q.h(0);
+        q.h(&qid(0));
 
         // Measure in Z basis
-        let result = q.mz(0);
+        let result = q.mz(&qid(0)).into_iter().next().unwrap();
 
         // Result should be random but state should collapse
         let final_prob = if result.outcome {

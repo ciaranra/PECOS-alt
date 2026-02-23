@@ -374,7 +374,7 @@ impl ByteMessageBuilder {
     /// # Panics
     ///
     /// This function will panic if the qubits1 and qubits2 arrays do not have the same length.
-    pub fn add_rzz(&mut self, theta: f64, qubits1: &[usize], qubits2: &[usize]) -> &mut Self {
+    pub fn add_rzz(&mut self, theta: Angle64, qubits1: &[usize], qubits2: &[usize]) -> &mut Self {
         assert_eq!(
             qubits1.len(),
             qubits2.len(),
@@ -385,7 +385,7 @@ impl ByteMessageBuilder {
             .zip(qubits2.iter())
             .map(|(&q1, &q2)| (q1, q2))
             .collect();
-        let gate = Gate::rzz(Angle64::from_radians(theta), &pairs);
+        let gate = Gate::rzz(theta, &pairs);
         self.add_gate_command(&gate);
         self
     }
@@ -442,31 +442,28 @@ impl ByteMessageBuilder {
     }
 
     /// Add an RZ gate
-    pub fn add_rz(&mut self, theta: f64, qubits: &[usize]) -> &mut Self {
-        let gate = Gate::rz(Angle64::from_radians(theta), qubits);
+    pub fn add_rz(&mut self, theta: Angle64, qubits: &[usize]) -> &mut Self {
+        let gate = Gate::rz(theta, qubits);
         self.add_gate_command(&gate);
         self
     }
 
     /// Add an R1XY gate
-    pub fn add_r1xy(&mut self, theta: f64, phi: f64, qubits: &[usize]) -> &mut Self {
-        let gate = Gate::r1xy(
-            Angle64::from_radians(theta),
-            Angle64::from_radians(phi),
-            qubits,
-        );
+    pub fn add_r1xy(&mut self, theta: Angle64, phi: Angle64, qubits: &[usize]) -> &mut Self {
+        let gate = Gate::r1xy(theta, phi, qubits);
         self.add_gate_command(&gate);
         self
     }
 
     /// Add a U gate
-    pub fn add_u(&mut self, theta: f64, phi: f64, lambda: f64, qubits: &[usize]) -> &mut Self {
-        let gate = Gate::u(
-            Angle64::from_radians(theta),
-            Angle64::from_radians(phi),
-            Angle64::from_radians(lambda),
-            qubits,
-        );
+    pub fn add_u(
+        &mut self,
+        theta: Angle64,
+        phi: Angle64,
+        lambda: Angle64,
+        qubits: &[usize],
+    ) -> &mut Self {
+        let gate = Gate::u(theta, phi, lambda, qubits);
         self.add_gate_command(&gate);
         self
     }
@@ -527,37 +524,37 @@ impl ByteMessageBuilder {
     /// Add an SZ (S) gate
     pub fn add_sz(&mut self, qubits: &[usize]) -> &mut Self {
         // S gate is RZ(π/2)
-        self.add_rz(std::f64::consts::FRAC_PI_2, qubits)
+        self.add_rz(Angle64::QUARTER_TURN, qubits)
     }
 
     /// Add an `SZdg` (S†) gate
     pub fn add_szdg(&mut self, qubits: &[usize]) -> &mut Self {
         // S† gate is RZ(-π/2)
-        self.add_rz(-std::f64::consts::FRAC_PI_2, qubits)
+        self.add_rz(-Angle64::QUARTER_TURN, qubits)
     }
 
     /// Add a T gate
     pub fn add_t(&mut self, qubits: &[usize]) -> &mut Self {
         // T gate is RZ(π/4)
-        self.add_rz(std::f64::consts::FRAC_PI_4, qubits)
+        self.add_rz(Angle64::QUARTER_TURN / 2u64, qubits)
     }
 
     /// Add a Tdg (T†) gate
     pub fn add_tdg(&mut self, qubits: &[usize]) -> &mut Self {
         // T† gate is RZ(-π/4)
-        self.add_rz(-std::f64::consts::FRAC_PI_4, qubits)
+        self.add_rz(-(Angle64::QUARTER_TURN / 2u64), qubits)
     }
 
     /// Add an RX gate
-    pub fn add_rx(&mut self, theta: f64, qubits: &[usize]) -> &mut Self {
-        let gate = Gate::rx(Angle64::from_radians(theta), qubits);
+    pub fn add_rx(&mut self, theta: Angle64, qubits: &[usize]) -> &mut Self {
+        let gate = Gate::rx(theta, qubits);
         self.add_gate_command(&gate);
         self
     }
 
     /// Add an RY gate
-    pub fn add_ry(&mut self, theta: f64, qubits: &[usize]) -> &mut Self {
-        let gate = Gate::ry(Angle64::from_radians(theta), qubits);
+    pub fn add_ry(&mut self, theta: Angle64, qubits: &[usize]) -> &mut Self {
+        let gate = Gate::ry(theta, qubits);
         self.add_gate_command(&gate);
         self
     }
@@ -771,11 +768,11 @@ mod tests {
         // Verify the commands
         assert_eq!(commands.len(), 3);
         assert_eq!(commands[0].gate_type, GateType::H);
-        assert_eq!(commands[0].qubits, vec![QubitId(0)]);
+        assert_eq!(commands[0].qubits.as_slice(), &[QubitId(0)]);
         assert_eq!(commands[1].gate_type, GateType::CX);
-        assert_eq!(commands[1].qubits, vec![QubitId(0), QubitId(1)]);
+        assert_eq!(commands[1].qubits.as_slice(), &[QubitId(0), QubitId(1)]);
         assert_eq!(commands[2].gate_type, GateType::Measure);
-        assert_eq!(commands[2].qubits, vec![QubitId(2)]);
+        assert_eq!(commands[2].qubits.as_slice(), &[QubitId(2)]);
     }
 
     #[test]
@@ -805,8 +802,8 @@ mod tests {
         builder.add_x(&[1]);
         builder.add_y(&[2]);
         builder.add_z(&[3]);
-        builder.add_rz(0.5, &[4]);
-        builder.add_r1xy(0.1, 0.2, &[5]);
+        builder.add_rz(Angle64::from_radians(0.5), &[4]);
+        builder.add_r1xy(Angle64::from_radians(0.1), Angle64::from_radians(0.2), &[5]);
         builder.add_measurements(&[6]);
 
         // Build the message
@@ -881,7 +878,7 @@ mod tests {
         assert_eq!(commands.len(), 3);
         for i in 0..3 {
             assert_eq!(commands[i].gate_type, GateType::Measure);
-            assert_eq!(commands[i].qubits, vec![QubitId(qubits[i])]);
+            assert_eq!(commands[i].qubits.as_slice(), &[QubitId(qubits[i])]);
         }
     }
 
@@ -905,7 +902,7 @@ mod tests {
         assert_eq!(commands.len(), 3);
         for i in 0..3 {
             assert_eq!(commands[i].gate_type, GateType::MeasureLeaked);
-            assert_eq!(commands[i].qubits, vec![QubitId(qubits[i])]);
+            assert_eq!(commands[i].qubits.as_slice(), &[QubitId(qubits[i])]);
         }
     }
 

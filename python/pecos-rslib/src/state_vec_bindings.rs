@@ -1,4 +1,5 @@
 // Copyright 2024 The PECOS Developers
+use crate::dtypes::AngleParam;
 use pecos::prelude::*;
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -62,25 +63,26 @@ impl PyStateVec {
         location: usize,
         params: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<u8>> {
+        let q = &[QubitId(location)];
         match symbol {
             "X" => {
-                self.inner.x(location);
+                self.inner.x(q);
                 Ok(None)
             }
             "Y" => {
-                self.inner.y(location);
+                self.inner.y(q);
                 Ok(None)
             }
             "Z" => {
-                self.inner.z(location);
+                self.inner.z(q);
                 Ok(None)
             }
             "RX" => {
                 if let Some(params) = params {
                     match params.get_item("angle") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angle) = py_any.extract::<f64>() {
-                                self.inner.rx(angle, location);
+                            if let Ok(angle) = py_any.extract::<AngleParam>() {
+                                self.inner.rx(angle.0, q);
                             } else {
                                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                     "Expected a valid angle parameter for RX gate",
@@ -103,8 +105,8 @@ impl PyStateVec {
                 if let Some(params) = params {
                     match params.get_item("angle") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angle) = py_any.extract::<f64>() {
-                                self.inner.ry(angle, location);
+                            if let Ok(angle) = py_any.extract::<AngleParam>() {
+                                self.inner.ry(angle.0, q);
                             } else {
                                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                     "Expected a valid angle parameter for RY gate",
@@ -127,8 +129,8 @@ impl PyStateVec {
                 if let Some(params) = params {
                     match params.get_item("angle") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angle) = py_any.extract::<f64>() {
-                                self.inner.rz(angle, location);
+                            if let Ok(angle) = py_any.extract::<AngleParam>() {
+                                self.inner.rz(angle.0, q);
                             } else {
                                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                     "Expected a valid angle parameter for RZ gate",
@@ -151,10 +153,9 @@ impl PyStateVec {
                 if let Some(params) = params {
                     match params.get_item("angles") {
                         Ok(Some(py_any)) => {
-                            // Extract as a sequence of f64 values
-                            if let Ok(angles) = py_any.extract::<Vec<f64>>() {
+                            if let Ok(angles) = py_any.extract::<Vec<AngleParam>>() {
                                 if angles.len() >= 2 {
-                                    self.inner.r1xy(angles[0], angles[1], location);
+                                    self.inner.r1xy(angles[0].0, angles[1].0, q);
                                 } else {
                                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                         "R1XY gate requires two angle parameters",
@@ -185,7 +186,12 @@ impl PyStateVec {
                             // Extract as a sequence of f64 values
                             if let Ok(angles) = py_any.extract::<Vec<f64>>() {
                                 if angles.len() >= 3 {
-                                    self.inner.u(angles[0], angles[1], angles[2], location);
+                                    self.inner.u(
+                                        Angle64::from_radians(angles[0]),
+                                        Angle64::from_radians(angles[1]),
+                                        Angle64::from_radians(angles[2]),
+                                        q,
+                                    );
                                 } else {
                                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                         "U gate requires three angle parameters (theta, phi, lambda)",
@@ -211,131 +217,131 @@ impl PyStateVec {
             }
 
             "T" => {
-                self.inner.t(location);
+                self.inner.t(q);
                 Ok(None)
             }
 
             "Tdg" => {
-                self.inner.tdg(location);
+                self.inner.tdg(q);
                 Ok(None)
             }
 
             "H" | "H1" | "H+z+x" => {
-                self.inner.h(location);
+                self.inner.h(q);
                 Ok(None)
             }
             "H2" | "H-z-x" => {
-                self.inner.h2(location);
+                self.inner.h2(q);
                 Ok(None)
             }
             "H3" | "H+y-z" => {
-                self.inner.h3(location);
+                self.inner.h3(q);
                 Ok(None)
             }
             "H4" | "H-y-z" => {
-                self.inner.h4(location);
+                self.inner.h4(q);
                 Ok(None)
             }
             "H5" | "H-x+y" => {
-                self.inner.h5(location);
+                self.inner.h5(q);
                 Ok(None)
             }
             "H6" | "H-x-y" => {
-                self.inner.h6(location);
+                self.inner.h6(q);
                 Ok(None)
             }
             "F" | "F1" => {
-                self.inner.f(location);
+                self.inner.f(q);
                 Ok(None)
             }
             "Fdg" | "F1d" | "F1dg" => {
-                self.inner.fdg(location);
+                self.inner.fdg(q);
                 Ok(None)
             }
             "F2" => {
-                self.inner.f2(location);
+                self.inner.f2(q);
                 Ok(None)
             }
             "F2dg" | "F2d" => {
-                self.inner.f2dg(location);
+                self.inner.f2dg(q);
                 Ok(None)
             }
             "F3" => {
-                self.inner.f3(location);
+                self.inner.f3(q);
                 Ok(None)
             }
             "F3dg" | "F3d" => {
-                self.inner.f3dg(location);
+                self.inner.f3dg(q);
                 Ok(None)
             }
             "F4" => {
-                self.inner.f4(location);
+                self.inner.f4(q);
                 Ok(None)
             }
             "F4dg" | "F4d" => {
-                self.inner.f4dg(location);
+                self.inner.f4dg(q);
                 Ok(None)
             }
             "MZ" | "Measure" | "Measure +Z" | "measure Z" => {
-                let result = self.inner.mz(location);
+                let result = self.inner.mz(q).into_iter().next().unwrap();
                 Ok(Some(u8::from(result.outcome)))
             }
             "MX" | "Measure +X" => {
-                let result = self.inner.mx(location);
+                let result = self.inner.mx(q).into_iter().next().unwrap();
                 Ok(Some(u8::from(result.outcome)))
             }
             "MY" | "Measure +Y" => {
-                let result = self.inner.my(location);
+                let result = self.inner.my(q).into_iter().next().unwrap();
                 Ok(Some(u8::from(result.outcome)))
             }
             // Gate aliases - alternative names for common gates
             "I" => Ok(None), // Identity gate - no operation
             "Q" | "SX" | "SqrtX" => {
-                self.inner.sx(location);
+                self.inner.sx(q);
                 Ok(None)
             }
             "Qd" | "SXdg" | "SqrtXd" => {
-                self.inner.sxdg(location);
+                self.inner.sxdg(q);
                 Ok(None)
             }
             "R" | "SY" | "SqrtY" => {
-                self.inner.sy(location);
+                self.inner.sy(q);
                 Ok(None)
             }
             "Rd" | "SYdg" | "SqrtYd" => {
-                self.inner.sydg(location);
+                self.inner.sydg(q);
                 Ok(None)
             }
             "S" | "SZ" | "SqrtZ" => {
-                self.inner.sz(location);
+                self.inner.sz(q);
                 Ok(None)
             }
             "Sd" | "SZdg" | "SqrtZd" => {
-                self.inner.szdg(location);
+                self.inner.szdg(q);
                 Ok(None)
             }
             "Init" | "Init +Z" | "init |0>" | "leak" | "leak |0>" | "unleak |0>" | "PZ" => {
-                self.inner.pz(location);
+                self.inner.pz(q);
                 Ok(None)
             }
             "Init -Z" | "init |1>" | "leak |1>" | "unleak |1>" | "PnZ" => {
-                self.inner.pnz(location);
+                self.inner.pnz(q);
                 Ok(None)
             }
             "Init +X" | "init |+>" | "PX" => {
-                self.inner.px(location);
+                self.inner.px(q);
                 Ok(None)
             }
             "Init -X" | "init |->" | "PnX" => {
-                self.inner.pnx(location);
+                self.inner.pnx(q);
                 Ok(None)
             }
             "Init +Y" | "init |+i>" | "PY" => {
-                self.inner.py(location);
+                self.inner.py(q);
                 Ok(None)
             }
             "Init -Y" | "init |-i>" | "PnY" => {
-                self.inner.pny(location);
+                self.inner.pny(q);
                 Ok(None)
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
@@ -367,58 +373,59 @@ impl PyStateVec {
 
         let q1: usize = location.get_item(0)?.extract()?;
         let q2: usize = location.get_item(1)?.extract()?;
+        let pair = &[QubitId(q1), QubitId(q2)];
 
         match symbol {
             "CX" | "CNOT" => {
-                self.inner.cx(q1, q2);
+                self.inner.cx(pair);
                 Ok(None)
             }
             "CY" => {
-                self.inner.cy(q1, q2);
+                self.inner.cy(pair);
                 Ok(None)
             }
             "CZ" => {
-                self.inner.cz(q1, q2);
+                self.inner.cz(pair);
                 Ok(None)
             }
             "SXX" | "SqrtXX" => {
-                self.inner.sxx(q1, q2);
+                self.inner.sxx(pair);
                 Ok(None)
             }
             "SXXdg" | "SqrtXXd" | "SqrtXXdg" => {
-                self.inner.sxxdg(q1, q2);
+                self.inner.sxxdg(pair);
                 Ok(None)
             }
             "SYY" | "SqrtYY" => {
-                self.inner.syy(q1, q2);
+                self.inner.syy(pair);
                 Ok(None)
             }
             "SYYdg" | "SqrtYYd" | "SqrtYYdg" => {
-                self.inner.syydg(q1, q2);
+                self.inner.syydg(pair);
                 Ok(None)
             }
             "SZZ" | "SqrtZZ" => {
-                self.inner.szz(q1, q2);
+                self.inner.szz(pair);
                 Ok(None)
             }
             "SZZdg" | "SqrtZZd" | "SqrtZZdg" => {
-                self.inner.szzdg(q1, q2);
+                self.inner.szzdg(pair);
                 Ok(None)
             }
             "SWAP" => {
-                self.inner.swap(q1, q2);
+                self.inner.swap(pair);
                 Ok(None)
             }
             "G2" | "G" => {
-                self.inner.g(q1, q2);
+                self.inner.g(pair);
                 Ok(None)
             }
             "RXX" => {
                 if let Some(params) = params {
                     match params.get_item("angle") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angle) = py_any.extract::<f64>() {
-                                self.inner.rxx(angle, q1, q2);
+                            if let Ok(angle) = py_any.extract::<AngleParam>() {
+                                self.inner.rxx(angle.0, pair);
                             } else {
                                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                     "Expected a valid angle parameter for RXX gate",
@@ -441,8 +448,8 @@ impl PyStateVec {
                 if let Some(params) = params {
                     match params.get_item("angle") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angle) = py_any.extract::<f64>() {
-                                self.inner.ryy(angle, q1, q2);
+                            if let Ok(angle) = py_any.extract::<AngleParam>() {
+                                self.inner.ryy(angle.0, pair);
                             } else {
                                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                     "Expected a valid angle parameter for RYY gate",
@@ -465,8 +472,8 @@ impl PyStateVec {
                 if let Some(params) = params {
                     match params.get_item("angle") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angle) = py_any.extract::<f64>() {
-                                self.inner.rzz(angle, q1, q2);
+                            if let Ok(angle) = py_any.extract::<AngleParam>() {
+                                self.inner.rzz(angle.0, pair);
                             } else {
                                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                     "Expected a valid angle parameter for RZZ gate",
@@ -490,10 +497,14 @@ impl PyStateVec {
                 if let Some(params) = params {
                     match params.get_item("angles") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angles) = py_any.extract::<Vec<f64>>() {
+                            if let Ok(angles) = py_any.extract::<Vec<AngleParam>>() {
                                 if angles.len() >= 3 {
-                                    self.inner
-                                        .rzzryyrxx(angles[0], angles[1], angles[2], q1, q2);
+                                    self.inner.rzzryyrxx(
+                                        angles[0].0,
+                                        angles[1].0,
+                                        angles[2].0,
+                                        pair,
+                                    );
                                 } else {
                                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                         "RZZRYYRXX gate requires three angle parameters",
@@ -524,10 +535,14 @@ impl PyStateVec {
                 if let Some(params) = params {
                     match params.get_item("angles") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angles) = py_any.extract::<Vec<f64>>() {
+                            if let Ok(angles) = py_any.extract::<Vec<AngleParam>>() {
                                 if angles.len() >= 3 {
-                                    self.inner
-                                        .rzzryyrxx(angles[0], angles[1], angles[2], q1, q2);
+                                    self.inner.rzzryyrxx(
+                                        angles[0].0,
+                                        angles[1].0,
+                                        angles[2].0,
+                                        pair,
+                                    );
                                 } else {
                                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                         "R2XXYYZZ gate requires three angle parameters",
@@ -600,11 +615,11 @@ impl PyStateVec {
     /// Provides direct access to the current state vector as a Python property
     #[getter]
     #[allow(clippy::items_after_statements)] // Use statements for type imports are clearer when near usage
-    fn vector(&self, py: Python<'_>) -> PyResult<Py<Array>> {
+    fn vector(&mut self, py: Python<'_>) -> PyResult<Py<Array>> {
         // Convert the state vector to a 1D complex ndarray
         use ndarray::Array1;
         let state = self.inner.state();
-        let complex_array: Vec<num_complex::Complex64> = state.to_vec();
+        let complex_array: Vec<num_complex::Complex64> = state.clone();
         let nd_array = Array1::from(complex_array);
 
         // Create ArrayData from the ndarray
@@ -621,7 +636,7 @@ impl PyStateVec {
     /// Each entry is |amplitude|^2 for the corresponding basis state.
     #[getter]
     #[allow(clippy::items_after_statements)]
-    fn probabilities(&self, py: Python<'_>) -> PyResult<Py<Array>> {
+    fn probabilities(&mut self, py: Python<'_>) -> PyResult<Py<Array>> {
         use ndarray::Array1;
 
         let state = self.inner.state();
@@ -635,7 +650,7 @@ impl PyStateVec {
     }
 
     /// Get the probability of measuring a specific basis state.
-    fn probability(&self, basis_state: usize) -> PyResult<f64> {
+    fn probability(&mut self, basis_state: usize) -> PyResult<f64> {
         let state = self.inner.state();
         if basis_state >= state.len() {
             return Err(pyo3::exceptions::PyIndexError::new_err(format!(
@@ -655,7 +670,7 @@ impl PyStateVec {
     /// 1. Uses Rust's built-in `reverse_bits()` (often a single CPU instruction)
     /// 2. Avoids Python string formatting and parsing
     /// 3. Performs all indexing operations in contiguous Rust memory
-    fn vector_big_endian(&self, py: Python<'_>) -> PyResult<Py<Array>> {
+    fn vector_big_endian(&mut self, py: Python<'_>) -> PyResult<Py<Array>> {
         use crate::pecos_array::ArrayData;
         use ndarray::Array1;
 
@@ -773,7 +788,7 @@ impl PyStateVec {
         Ok(results.into())
     }
 
-    fn __reduce__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+    fn __reduce__<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         let state = self.inner.state();
         // Serialize state vector as raw little-endian bytes (16 bytes per Complex64: 2 x f64)
         let mut bytes = Vec::with_capacity(state.len() * 16);

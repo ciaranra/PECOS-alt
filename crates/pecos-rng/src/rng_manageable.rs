@@ -16,8 +16,7 @@
 //! - [`RngManageable`]: A trait for components that can have their RNG replaced or reseeded
 //! - [`derive_seed`]: A function for deriving related seeds from a base seed
 
-use crate::{PecosRng, SeedableRng};
-use rand_core::Rng as RngTrait;
+use crate::{PecosRng, Rng, SeedableRng};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -102,7 +101,7 @@ pub fn derive_seed(base_seed: u64, purpose: &str) -> u64 {
 /// ```
 pub trait RngManageable {
     /// The type of random number generator used by this component.
-    type Rng: RngTrait + SeedableRng;
+    type Rng: Rng + SeedableRng;
 
     /// Replace the random number generator with a new one.
     ///

@@ -25,6 +25,10 @@ arange = "arange"
 nd = "nd"
 # delocate is a macOS wheel repair tool (delocate-wheel command)
 delocate = "delocate"
+# Short for "numerator" in fraction/ratio macros
+numer = "numer"
+# Quantum gate sequence: S gate, H gate, S gate
+SHS = "SHS"
 # Gate name breakdown notation uses partial words like C(ontrolled), R(otation)
 ontrolled = "ontrolled"
 otation = "otation"

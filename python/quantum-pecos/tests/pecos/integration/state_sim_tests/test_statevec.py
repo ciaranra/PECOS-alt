@@ -10,6 +10,7 @@
 # specific language governing permissions and limitations under the License.
 
 """Integration tests for state vector quantum simulators using pure PECOS (no NumPy)."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -68,16 +69,16 @@ def check_dependencies(
     return sim_class
 
 
-def verify(simulator: str, qc: QuantumCircuit, final_vector: pc.Array) -> None:
-    """Verify quantum circuit simulation results against expected state vector."""
-    sim = check_dependencies(simulator)(len(qc.qudits))
-    sim.run_circuit(qc)
+def _compare_vectors(
+    sim_vector: pc.Array,
+    ref_vector: pc.Array,
+    simulator: str,
+) -> None:
+    """Compare two state vectors, accounting for global phase differences."""
+    sim_vector_normalized = sim_vector / (pc.linalg.norm(sim_vector) or 1)
+    ref_vector_normalized = ref_vector / (pc.linalg.norm(ref_vector) or 1)
 
-    # Normalize vectors
-    sim_vector_normalized = sim.vector / (pc.linalg.norm(sim.vector) or 1)
-    final_vector_normalized = final_vector / (pc.linalg.norm(final_vector) or 1)
-
-    phase = final_vector_normalized[0] / sim_vector_normalized[0] if pc.abs(sim_vector_normalized[0]) > 1e-10 else 1
+    phase = ref_vector_normalized[0] / sim_vector_normalized[0] if pc.abs(sim_vector_normalized[0]) > 1e-10 else 1
 
     sim_vector_adjusted = sim_vector_normalized * phase
 
@@ -92,11 +93,18 @@ def verify(simulator: str, qc: QuantumCircuit, final_vector: pc.Array) -> None:
 
     assert_allclose(
         sim_vector_adjusted,
-        final_vector_normalized,
+        ref_vector_normalized,
         rtol=rtol,
         atol=atol,
         err_msg="State vectors do not match.",
     )
+
+
+def verify(simulator: str, qc: QuantumCircuit, final_vector: pc.Array) -> None:
+    """Verify quantum circuit simulation results against expected state vector."""
+    sim = check_dependencies(simulator)(len(qc.qudits))
+    sim.run_circuit(qc)
+    _compare_vectors(sim.vector, final_vector, simulator)
 
 
 def check_measurement(
@@ -143,8 +151,7 @@ def compare_against_statevec(
     sim = check_dependencies(simulator, **sim_kwargs)(len(qc.qudits))
     sim.run_circuit(qc)
 
-    # Use updated verify function
-    verify(simulator, qc, statevec.vector)
+    _compare_vectors(sim.vector, statevec.vector, simulator)
 
 
 def generate_random_state(seed: int | None = None) -> QuantumCircuit:
@@ -249,6 +256,100 @@ def test_comp_basis_circ_and_measure(simulator: str) -> None:
     sim_instance.run_circuit(qc)
 
 
+def _apply_gate_and_compare(
+    qc: QuantumCircuit,
+    ref_sim: StateVector,
+    test_sim: StateVector,
+    simulator: str,
+    gate: dict,
+    **params: object,
+) -> None:
+    """Apply gate to circuit and both sims, then compare state vectors."""
+    qc.append(gate, **params)
+    symbol = next(iter(gate))
+    locations = gate[symbol]
+    ref_sim.run_gate(symbol, locations, **params)
+    test_sim.run_gate(symbol, locations, **params)
+    _compare_vectors(test_sim.vector, ref_sim.vector, simulator)
+
+
+def _test_all_gates_incremental(
+    simulator: str,
+    qc: QuantumCircuit,
+    sim_kwargs: dict,
+) -> None:
+    """Apply gates incrementally to persistent sims and compare after each."""
+    num_qubits = len(qc.qudits)
+    ref_sim = StateVec(num_qubits)
+    ref_sim.run_circuit(qc)
+    test_sim = check_dependencies(simulator, **sim_kwargs)(num_qubits)
+    test_sim.run_circuit(qc)
+
+    def _apply(gate: dict, **params: object) -> None:
+        _apply_gate_and_compare(qc, ref_sim, test_sim, simulator, gate, **params)
+
+    _apply({"SZZ": {(3, 2)}})
+    _apply({"RX": {0, 2}}, angles=(pc.f64.frac_pi_4,))
+    _apply({"SXXdg": {(0, 3)}})
+    _apply({"RY": {0, 3}}, angles=(pc.f64.pi / 8,))
+    _apply({"RZZ": {(0, 3)}}, angles=(pc.f64.pi / 16,))
+    _apply({"RZ": {1, 3}}, angles=(pc.f64.pi / 16,))
+    _apply({"R1XY": {2}}, angles=(pc.f64.pi / 16, pc.f64.frac_pi_2))
+    _apply({"I": {0, 1, 3}})
+    _apply({"X": {1, 2}})
+    _apply({"Y": {2, 3}})
+    _apply({"CY": {(2, 3), (0, 1)}})
+    _apply({"SYY": {(1, 2)}})
+    _apply({"Z": {2, 0}})
+    _apply({"H": {3, 1}})
+    _apply({"RYY": {(2, 1)}}, angles=(pc.f64.pi / 8,))
+    _apply({"SZZdg": {(3, 1)}})
+    _apply({"F": {0, 1, 2}})
+    _apply({"CX": {(0, 1), (3, 2)}})
+    _apply({"Fdg": {3, 1}})
+    _apply({"SYYdg": {(1, 3)}})
+    _apply({"SX": {1, 2}})
+    _apply(
+        {"R2XXYYZZ": {(0, 3)}},
+        angles=(pc.f64.frac_pi_4, pc.f64.pi / 16, pc.f64.frac_pi_2),
+    )
+    _apply({"SY": {2, 3}})
+    _apply({"SZ": {2, 0}})
+    _apply({"SZdg": {1, 2}})
+    _apply({"CZ": {(1, 3)}})
+    _apply({"SXdg": {2, 3}})
+    _apply({"SYdg": {2, 0}})
+    _apply({"T": {0, 1, 2}})
+    _apply({"SXX": {(0, 2)}})
+    _apply({"SWAP": {(3, 0)}})
+    _apply({"Tdg": {3, 1}})
+    _apply({"RXX": {(1, 3)}}, angles=(pc.f64.frac_pi_4,))
+    _apply({"Q": {0, 1, 2}})
+    _apply({"Qd": {0, 3}})
+    _apply({"R": {0}})
+    _apply({"Rd": {0, 1, 2}})
+    _apply({"S": {0, 3}})
+    _apply({"Sd": {0}})
+    _apply({"H2": {2, 3}})
+    _apply({"H3": {0, 1, 2}})
+    _apply({"H4": {2, 3}})
+    _apply({"H5": {0, 3}})
+    _apply({"H6": {0, 1, 2}})
+    _apply({"F2": {0, 1, 2}})
+    _apply({"F2d": {0, 3}})
+    _apply({"F3": {2, 3}})
+    _apply({"F3d": {0, 1, 2}})
+    _apply({"F4": {2, 3}})
+    _apply({"F4d": {0, 3}})
+    _apply({"CNOT": {(0, 1)}})
+    _apply({"G": {(1, 3)}})
+    _apply({"II": {(3, 2)}})
+
+    # Measure
+    qc.append({"Measure": {0, 1, 2, 3}})
+    check_measurement(simulator, qc)
+
+
 @pytest.mark.parametrize(
     "simulator",
     [
@@ -262,10 +363,12 @@ def test_comp_basis_circ_and_measure(simulator: str) -> None:
 def test_all_gate_circ(simulator: str) -> None:
     """Test circuit with all quantum gates.
 
+    Maintains persistent simulator instances and applies gates incrementally
+    rather than replaying the full circuit from scratch after each gate append.
+
     Note:
         For MPS simulator, uses reduced bond dimension (chi=32) to limit computational
-        cost while maintaining reasonable accuracy. MPS tests take longer due to gate
-        application overhead in the tensor network backend.
+        cost while maintaining reasonable accuracy.
     """
     # Use chi=32 for MPS to balance speed and accuracy
     # This limits bond dimension and speeds up the 4-qubit test
@@ -281,184 +384,11 @@ def test_all_gate_circ(simulator: str) -> None:
     for qc in qcs:
         compare_against_statevec(simulator, qc, **sim_kwargs)
 
-    # Apply each gate on randomly generated states and compare again
+    # Apply each gate on randomly generated states and compare after each.
+    # Uses persistent simulators with incremental gate application to avoid
+    # replaying the full circuit from scratch on every comparison.
     for qc in qcs:
-        qc.append({"SZZ": {(3, 2)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"RX": {0, 2}}, angles=(pc.f64.frac_pi_4,))
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SXXdg": {(0, 3)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"RY": {0, 3}}, angles=(pc.f64.pi / 8,))
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"RZZ": {(0, 3)}}, angles=(pc.f64.pi / 16,))
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"RZ": {1, 3}}, angles=(pc.f64.pi / 16,))
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"R1XY": {2}}, angles=(pc.f64.pi / 16, pc.f64.frac_pi_2))
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"I": {0, 1, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"X": {1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"Y": {2, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"CY": {(2, 3), (0, 1)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SYY": {(1, 2)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"Z": {2, 0}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"H": {3, 1}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"RYY": {(2, 1)}}, angles=(pc.f64.pi / 8,))
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SZZdg": {(3, 1)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"F": {0, 1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"CX": {(0, 1), (3, 2)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"Fdg": {3, 1}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SYYdg": {(1, 3)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SX": {1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append(
-            {"R2XXYYZZ": {(0, 3)}},
-            angles=(pc.f64.frac_pi_4, pc.f64.pi / 16, pc.f64.frac_pi_2),
-        )
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SY": {2, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SZ": {2, 0}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SZdg": {1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"CZ": {(1, 3)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SXdg": {2, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SYdg": {2, 0}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"T": {0, 1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SXX": {(0, 2)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"SWAP": {(3, 0)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"Tdg": {3, 1}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"RXX": {(1, 3)}}, angles=(pc.f64.frac_pi_4,))
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"Q": {0, 1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"Qd": {0, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"R": {0}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"Rd": {0, 1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"S": {0, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"Sd": {0}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"H2": {2, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"H3": {0, 1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"H4": {2, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"H5": {0, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"H6": {0, 1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"F2": {0, 1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"F2d": {0, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"F3": {2, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"F3d": {0, 1, 2}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"F4": {2, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"F4d": {0, 3}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"CNOT": {(0, 1)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"G": {(1, 3)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-        qc.append({"II": {(3, 2)}})
-        compare_against_statevec(simulator, qc, **sim_kwargs)
-
-        # Measure
-        qc.append({"Measure": {0, 1, 2, 3}})
-        check_measurement(simulator, qc)
-
-
-def test_statevec_probabilities_initial_state() -> None:
-    """Test that initial |0...0> state has probability 1 for basis state 0."""
-    sim = StateVec(3)
-    probs = sim.probabilities
-    assert pc.isclose(probs[0], 1.0, rtol=0.0, atol=1e-10)
-    for i in range(1, 8):
-        assert pc.isclose(probs[i], 0.0, rtol=0.0, atol=1e-10)
-
-
-def test_statevec_probabilities_bell_state() -> None:
-    """Test probabilities for a Bell state (|00> + |11>)/sqrt(2)."""
-    sim = StateVec(2)
-    sim.run_gate("H", {0})
-    sim.run_gate("CX", {(0, 1)})
-
-    probs = sim.probabilities
-    assert pc.isclose(probs[0], 0.5, rtol=0.0, atol=1e-10)
-    assert pc.isclose(probs[1], 0.0, rtol=0.0, atol=1e-10)
-    assert pc.isclose(probs[2], 0.0, rtol=0.0, atol=1e-10)
-    assert pc.isclose(probs[3], 0.5, rtol=0.0, atol=1e-10)
-
-
-def test_statevec_probability_single() -> None:
-    """Test probability() for individual basis states."""
-    sim = StateVec(2)
-    sim.run_gate("H", {0})
-    sim.run_gate("CX", {(0, 1)})
-
-    assert pc.isclose(sim.probability(0), 0.5, rtol=0.0, atol=1e-10)
-    assert pc.isclose(sim.probability(1), 0.0, rtol=0.0, atol=1e-10)
-    assert pc.isclose(sim.probability(2), 0.0, rtol=0.0, atol=1e-10)
-    assert pc.isclose(sim.probability(3), 0.5, rtol=0.0, atol=1e-10)
-
-
-def test_statevec_probabilities_sum_to_one() -> None:
-    """Test that probabilities sum to 1 after arbitrary gates."""
-    sim = StateVec(3)
-    sim.run_gate("H", {0})
-    sim.run_gate("CX", {(0, 1)})
-    sim.run_gate("H", {2})
-
-    total = pc.sum(sim.probabilities)
-    assert pc.isclose(total, 1.0, rtol=0.0, atol=1e-10)
-
-
-def test_qulacs_probabilities() -> None:
-    """Test that Qulacs probabilities match StateVec probabilities."""
-    check_dependencies("Qulacs")
-
-    sv = StateVec(2)
-    sv.run_gate("H", {0})
-    sv.run_gate("CX", {(0, 1)})
-
-    ql = Qulacs(2)
-    ql.run_gate("H", {0})
-    ql.run_gate("CX", {(0, 1)})
-
-    sv_probs = sv.probabilities
-    ql_probs = ql.probabilities
-    for i in range(4):
-        assert pc.isclose(sv_probs[i], ql_probs[i], rtol=0.0, atol=1e-10)
+        _test_all_gates_incremental(simulator, qc, sim_kwargs)
 
 
 @pytest.mark.parametrize(

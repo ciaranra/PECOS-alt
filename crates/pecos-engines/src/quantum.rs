@@ -3,13 +3,15 @@ use crate::byte_message::ByteMessage;
 use crate::byte_message::GateType;
 use dyn_clone::DynClone;
 use log::debug;
+use pecos_core::Angle64;
 use pecos_core::QubitId;
 use pecos_core::RngManageable;
 use pecos_core::errors::PecosError;
 use pecos_qsim::{
-    ArbitraryRotationGateable, CliffordGateable, CoinToss, QuantumSimulator, StateVec,
-    StdSparseStab,
+    ArbitraryRotationGateable, CliffordGateable, CoinToss, QuantumSimulator, SparseStab, StateVec,
+    StateVecAoS, StateVecSoA,
 };
+use pecos_rng::{PecosRng, SeedableRng};
 use std::any::Any;
 use std::fmt::Debug;
 
@@ -54,58 +56,166 @@ impl Engine for Box<dyn QuantumEngine> {
     }
 }
 
-/// A quantum engine that uses a state vector simulator
-#[derive(Debug, Clone)]
-pub struct StateVecEngine {
-    simulator: StateVec,
+/// Trait for simulators that can be used with `StateVectorEngine`.
+///
+/// This trait combines all the requirements for a state vector simulator.
+pub trait StateVectorSimulator:
+    QuantumSimulator
+    + CliffordGateable
+    + ArbitraryRotationGateable
+    + RngManageable
+    + Clone
+    + Debug
+    + Send
+    + Sync
+where
+    <Self as RngManageable>::Rng: Clone,
+{
+    /// Returns the number of qubits in the simulator.
+    fn num_qubits(&self) -> usize;
+
+    /// Create a new simulator with the specified number of qubits.
+    fn create(num_qubits: usize) -> Self;
+
+    /// Create a new simulator with a specific seed.
+    fn create_with_seed(num_qubits: usize, seed: u64) -> Self;
+
+    /// Create a new simulator with a custom RNG.
+    fn create_with_rng(num_qubits: usize, rng: <Self as RngManageable>::Rng) -> Self;
 }
 
-impl StateVecEngine {
+impl StateVectorSimulator for StateVec {
+    fn num_qubits(&self) -> usize {
+        self.num_qubits()
+    }
+
+    fn create(num_qubits: usize) -> Self {
+        StateVec::new(num_qubits)
+    }
+
+    fn create_with_seed(num_qubits: usize, seed: u64) -> Self {
+        StateVec::with_seed(num_qubits, seed)
+    }
+
+    fn create_with_rng(num_qubits: usize, rng: PecosRng) -> Self {
+        StateVec::with_rng(num_qubits, rng)
+    }
+}
+
+impl StateVectorSimulator for StateVecAoS {
+    fn num_qubits(&self) -> usize {
+        self.num_qubits()
+    }
+
+    fn create(num_qubits: usize) -> Self {
+        StateVecAoS::new(num_qubits)
+    }
+
+    fn create_with_seed(num_qubits: usize, seed: u64) -> Self {
+        StateVecAoS::with_seed(num_qubits, seed)
+    }
+
+    fn create_with_rng(num_qubits: usize, rng: PecosRng) -> Self {
+        StateVecAoS::with_rng(num_qubits, rng)
+    }
+}
+
+impl StateVectorSimulator for StateVecSoA {
+    fn num_qubits(&self) -> usize {
+        self.num_qubits()
+    }
+
+    fn create(num_qubits: usize) -> Self {
+        StateVecSoA::new(num_qubits)
+    }
+
+    fn create_with_seed(num_qubits: usize, seed: u64) -> Self {
+        StateVecSoA::with_seed(num_qubits, seed)
+    }
+
+    fn create_with_rng(num_qubits: usize, rng: PecosRng) -> Self {
+        StateVecSoA::with_rng(num_qubits, rng)
+    }
+}
+
+/// A generic quantum engine that uses any state vector simulator.
+///
+/// This engine works with any simulator implementing `StateVectorSimulator`.
+#[derive(Debug, Clone)]
+pub struct StateVectorEngine<S: StateVectorSimulator>
+where
+    <S as RngManageable>::Rng: Clone,
+{
+    simulator: S,
+}
+
+impl<S: StateVectorSimulator> StateVectorEngine<S>
+where
+    <S as RngManageable>::Rng: Clone,
+{
     /// Create a new state vector engine with the specified number of qubits
     #[must_use]
     pub fn new(num_qubits: usize) -> Self {
         Self {
-            simulator: StateVec::new(num_qubits),
+            simulator: S::create(num_qubits),
         }
     }
 
     /// Create a new state vector engine with a specific seed
-    ///
-    /// # Arguments
-    /// * `num_qubits` - Number of qubits in the system
-    /// * `seed` - Seed value for the random number generator
     #[must_use]
     pub fn with_seed(num_qubits: usize, seed: u64) -> Self {
         Self {
-            simulator: StateVec::with_seed(num_qubits, seed),
+            simulator: S::create_with_seed(num_qubits, seed),
         }
     }
 
     /// Ensure the simulator has the correct number of qubits, recreating if necessary
-    ///
-    /// This method checks if the current simulator has enough qubits.
-    /// If not, it recreates the simulator with more qubits to prevent
-    /// memory corruption during quantum operations.
-    ///
-    /// Note: The simulator can only grow, never shrink, to preserve quantum state.
-    ///
-    /// # Arguments
-    /// * `required_qubits` - The minimum number of qubits required for the simulation
     pub fn ensure_qubit_count(&mut self, required_qubits: usize) {
         if self.simulator.num_qubits() < required_qubits {
             debug!(
-                "StateVecEngine: Expanding simulator (was {} qubits, now {} qubits)",
+                "StateVectorEngine: Expanding simulator (was {} qubits, now {} qubits)",
                 self.simulator.num_qubits(),
                 required_qubits
             );
-            // Preserve the RNG state if possible
             let rng = self.simulator.rng().clone();
-            self.simulator = StateVec::with_rng(required_qubits, rng);
+            self.simulator = S::create_with_rng(required_qubits, rng);
         }
     }
 }
 
-impl Engine for StateVecEngine {
+/// Type alias for state vector engine using the default `StateVec` simulator
+/// (sparse `SoA`, optimized for QEC workloads).
+pub type StateVecEngine = StateVectorEngine<StateVec>;
+
+/// Type alias for state vector engine using the dense `StateVecSoA` simulator.
+///
+/// `DenseStateVecEngine` uses:
+/// - `SoA` (Structure of Arrays) layout for better SIMD performance
+/// - Strided iteration for cache-efficient access patterns
+/// - Fused gate primitives for reduced memory bandwidth
+/// - Optional parallel execution for large state vectors
+pub type DenseStateVecEngine = StateVectorEngine<StateVecSoA>;
+
+impl DenseStateVecEngine {
+    /// Create a new dense state vector engine with parallel execution enabled/disabled
+    ///
+    /// # Arguments
+    /// * `num_qubits` - Number of qubits in the system
+    /// * `parallel` - Whether to enable parallel execution for large states
+    /// * `num_threads` - Number of threads for parallel execution (None = use Rayon's default)
+    #[must_use]
+    pub fn with_parallel(num_qubits: usize, parallel: bool, num_threads: Option<usize>) -> Self {
+        let mut simulator = StateVecSoA::new(num_qubits);
+        simulator.set_parallel(parallel);
+        simulator.set_num_threads(num_threads);
+        Self { simulator }
+    }
+}
+
+impl<S: StateVectorSimulator + 'static> Engine for StateVectorEngine<S>
+where
+    <S as RngManageable>::Rng: Clone,
+{
     type Input = ByteMessage;
     type Output = ByteMessage;
 
@@ -126,69 +236,49 @@ impl Engine for StateVecEngine {
             self.ensure_qubit_count(required_qubits);
         }
 
-        let mut measurements = Vec::new();
+        let mut measurements: Vec<usize> = Vec::new();
 
         for cmd in &batch {
             match cmd.gate_type {
                 GateType::X => {
-                    for q in &cmd.qubits {
-                        debug!("Processing X gate on qubit {q:?}");
-                        self.simulator.x(usize::from(*q));
-                    }
+                    debug!("Processing X gate on qubits {:?}", cmd.qubits);
+                    self.simulator.x(&cmd.qubits);
                 }
                 GateType::Y => {
-                    for q in &cmd.qubits {
-                        debug!("Processing Y gate on qubit {q:?}");
-                        self.simulator.y(usize::from(*q));
-                    }
+                    debug!("Processing Y gate on qubits {:?}", cmd.qubits);
+                    self.simulator.y(&cmd.qubits);
                 }
                 GateType::Z => {
-                    for q in &cmd.qubits {
-                        debug!("Processing Z gate on qubit {q:?}");
-                        self.simulator.z(usize::from(*q));
-                    }
+                    debug!("Processing Z gate on qubits {:?}", cmd.qubits);
+                    self.simulator.z(&cmd.qubits);
                 }
                 GateType::H => {
-                    for q in &cmd.qubits {
-                        debug!("Processing H gate on qubit {q:?}");
-                        self.simulator.h(usize::from(*q));
-                    }
+                    debug!("Processing H gate on qubits {:?}", cmd.qubits);
+                    self.simulator.h(&cmd.qubits);
                 }
                 GateType::SZ => {
-                    for q in &cmd.qubits {
-                        debug!("Processing SZ gate on qubit {q:?}");
-                        self.simulator.sz(usize::from(*q));
-                    }
+                    debug!("Processing SZ gate on qubits {:?}", cmd.qubits);
+                    self.simulator.sz(&cmd.qubits);
                 }
                 GateType::SZdg => {
-                    for q in &cmd.qubits {
-                        debug!("Processing SZdg gate on qubit {q:?}");
-                        self.simulator.szdg(usize::from(*q));
-                    }
+                    debug!("Processing SZdg gate on qubits {:?}", cmd.qubits);
+                    self.simulator.szdg(&cmd.qubits);
                 }
                 GateType::SX => {
-                    for q in &cmd.qubits {
-                        debug!("Processing SX gate on qubit {q:?}");
-                        self.simulator.sx(usize::from(*q));
-                    }
+                    debug!("Processing SX gate on qubits {:?}", cmd.qubits);
+                    self.simulator.sx(&cmd.qubits);
                 }
                 GateType::SXdg => {
-                    for q in &cmd.qubits {
-                        debug!("Processing SXdg gate on qubit {q:?}");
-                        self.simulator.sxdg(usize::from(*q));
-                    }
+                    debug!("Processing SXdg gate on qubits {:?}", cmd.qubits);
+                    self.simulator.sxdg(&cmd.qubits);
                 }
                 GateType::T => {
-                    for q in &cmd.qubits {
-                        debug!("Processing T gate on qubit {q:?}");
-                        self.simulator.t(usize::from(*q));
-                    }
+                    debug!("Processing T gate on qubits {:?}", cmd.qubits);
+                    self.simulator.t(&cmd.qubits);
                 }
                 GateType::Tdg => {
-                    for q in &cmd.qubits {
-                        debug!("Processing Tdg gate on qubit {q:?}");
-                        self.simulator.tdg(usize::from(*q));
-                    }
+                    debug!("Processing Tdg gate on qubits {:?}", cmd.qubits);
+                    self.simulator.tdg(&cmd.qubits);
                 }
                 GateType::CX => {
                     if cmd.qubits.len() % 2 != 0 {
@@ -197,14 +287,8 @@ impl Engine for StateVecEngine {
                             cmd.qubits.len()
                         )));
                     }
-                    for qubits in cmd.qubits.chunks_exact(2) {
-                        debug!(
-                            "Processing CX gate with control {:?} and target {:?}",
-                            qubits[0], qubits[1]
-                        );
-                        self.simulator
-                            .cx(usize::from(qubits[0]), usize::from(qubits[1]));
-                    }
+                    debug!("Processing CX gate on qubits {:?}", cmd.qubits);
+                    self.simulator.cx(&cmd.qubits);
                 }
                 GateType::CY => {
                     if cmd.qubits.len() % 2 != 0 {
@@ -213,14 +297,8 @@ impl Engine for StateVecEngine {
                             cmd.qubits.len()
                         )));
                     }
-                    for qubits in cmd.qubits.chunks_exact(2) {
-                        debug!(
-                            "Processing CY gate with control {:?} and target {:?}",
-                            qubits[0], qubits[1]
-                        );
-                        self.simulator
-                            .cy(usize::from(qubits[0]), usize::from(qubits[1]));
-                    }
+                    debug!("Processing CY gate on qubits {:?}", cmd.qubits);
+                    self.simulator.cy(&cmd.qubits);
                 }
                 GateType::CZ => {
                     if cmd.qubits.len() % 2 != 0 {
@@ -229,14 +307,8 @@ impl Engine for StateVecEngine {
                             cmd.qubits.len()
                         )));
                     }
-                    for qubits in cmd.qubits.chunks_exact(2) {
-                        debug!(
-                            "Processing CZ gate with control {:?} and target {:?}",
-                            qubits[0], qubits[1]
-                        );
-                        self.simulator
-                            .cz(usize::from(qubits[0]), usize::from(qubits[1]));
-                    }
+                    debug!("Processing CZ gate on qubits {:?}", cmd.qubits);
+                    self.simulator.cz(&cmd.qubits);
                 }
                 // CH = Ry(π/4)_target, CX(control, target), Ry(-π/4)_target
                 GateType::CH => {
@@ -251,11 +323,16 @@ impl Engine for StateVecEngine {
                             "Processing CH gate with control {:?} and target {:?}",
                             qubits[0], qubits[1]
                         );
-                        let control = usize::from(qubits[0]);
-                        let target = usize::from(qubits[1]);
-                        self.simulator.ry(std::f64::consts::FRAC_PI_4, target);
-                        self.simulator.cx(control, target);
-                        self.simulator.ry(-std::f64::consts::FRAC_PI_4, target);
+                        let target_slice = &[qubits[1]];
+                        self.simulator.ry(
+                            Angle64::from_radians(std::f64::consts::FRAC_PI_4),
+                            target_slice,
+                        );
+                        self.simulator.cx(qubits);
+                        self.simulator.ry(
+                            Angle64::from_radians(-std::f64::consts::FRAC_PI_4),
+                            target_slice,
+                        );
                     }
                 }
                 GateType::RZZ => {
@@ -268,14 +345,9 @@ impl Engine for StateVecEngine {
                     if cmd.angles.is_empty() {
                         return Err(quantum_error("RZZ gate requires at least one angle"));
                     }
-                    let angle = cmd.angles[0].to_radians();
-                    for qubits in cmd.qubits.chunks_exact(2) {
-                        debug!(
-                            "Processing RZZ gate on qubits {:?} and {:?}",
-                            qubits[0], qubits[1]
-                        );
-                        self.simulator.rzz(angle, *qubits[0], *qubits[1]);
-                    }
+                    let angle = cmd.angles[0];
+                    debug!("Processing RZZ gate on qubits {:?}", cmd.qubits);
+                    self.simulator.rzz(angle, &cmd.qubits);
                 }
                 GateType::SZZ => {
                     if cmd.qubits.len() % 2 != 0 {
@@ -284,14 +356,8 @@ impl Engine for StateVecEngine {
                             cmd.qubits.len()
                         )));
                     }
-                    for qubits in cmd.qubits.chunks_exact(2) {
-                        debug!(
-                            "Processing SZZ gate on qubits {:?} and {:?}",
-                            qubits[0], qubits[1]
-                        );
-                        self.simulator
-                            .szz(usize::from(qubits[0]), usize::from(qubits[1]));
-                    }
+                    debug!("Processing SZZ gate on qubits {:?}", cmd.qubits);
+                    self.simulator.szz(&cmd.qubits);
                 }
                 GateType::SZZdg => {
                     if cmd.qubits.len() % 2 != 0 {
@@ -300,14 +366,8 @@ impl Engine for StateVecEngine {
                             cmd.qubits.len()
                         )));
                     }
-                    for qubits in cmd.qubits.chunks_exact(2) {
-                        debug!(
-                            "Processing SZZdg gate on qubits {:?} and {:?}",
-                            qubits[0], qubits[1]
-                        );
-                        self.simulator
-                            .szzdg(usize::from(qubits[0]), usize::from(qubits[1]));
-                    }
+                    debug!("Processing SZZdg gate on qubits {:?}", cmd.qubits);
+                    self.simulator.szzdg(&cmd.qubits);
                 }
                 GateType::SWAP => {
                     if cmd.qubits.len() % 2 != 0 {
@@ -316,18 +376,8 @@ impl Engine for StateVecEngine {
                             cmd.qubits.len()
                         )));
                     }
-                    for qubits in cmd.qubits.chunks_exact(2) {
-                        debug!(
-                            "Processing SWAP gate on qubits {:?} and {:?}",
-                            qubits[0], qubits[1]
-                        );
-                        // SWAP = CX(0,1) CX(1,0) CX(0,1)
-                        let q0 = usize::from(qubits[0]);
-                        let q1 = usize::from(qubits[1]);
-                        self.simulator.cx(q0, q1);
-                        self.simulator.cx(q1, q0);
-                        self.simulator.cx(q0, q1);
-                    }
+                    debug!("Processing SWAP gate on qubits {:?}", cmd.qubits);
+                    self.simulator.swap(&cmd.qubits);
                 }
                 GateType::CRZ => {
                     if cmd.qubits.len() % 2 != 0 {
@@ -339,20 +389,18 @@ impl Engine for StateVecEngine {
                     if cmd.angles.is_empty() {
                         return Err(quantum_error("CRZ gate requires at least one angle"));
                     }
-                    let angle = cmd.angles[0].to_radians();
-                    let half_angle = angle / 2.0;
+                    let angle = cmd.angles[0];
+                    let half_angle = angle / 2u64;
+                    // CRZ(θ) = Rz(θ/2) on target, CX, Rz(-θ/2) on target, CX
                     for qubits in cmd.qubits.chunks_exact(2) {
                         debug!(
                             "Processing CRZ gate on qubits {:?} and {:?} with angle {:?}",
                             qubits[0], qubits[1], angle
                         );
-                        // CRZ(θ) = Rz(θ/2) on target, CX, Rz(-θ/2) on target, CX
-                        let control = usize::from(qubits[0]);
-                        let target = usize::from(qubits[1]);
-                        self.simulator.rz(half_angle, target);
-                        self.simulator.cx(control, target);
-                        self.simulator.rz(-half_angle, target);
-                        self.simulator.cx(control, target);
+                        self.simulator.rz(half_angle, &[qubits[1]]);
+                        self.simulator.cx(&[qubits[0], qubits[1]]);
+                        self.simulator.rz(-half_angle, &[qubits[1]]);
+                        self.simulator.cx(&[qubits[0], qubits[1]]);
                     }
                 }
                 GateType::CCX => {
@@ -368,84 +416,81 @@ impl Engine for StateVecEngine {
                             qubits[0], qubits[1], qubits[2]
                         );
                         // Toffoli decomposition into Clifford+T gates
-                        let c0 = usize::from(qubits[0]);
-                        let c1 = usize::from(qubits[1]);
-                        let target = usize::from(qubits[2]);
+                        let c0 = qubits[0];
+                        let c1 = qubits[1];
+                        let target = qubits[2];
                         // Standard decomposition (15 gates)
-                        self.simulator.h(target);
-                        self.simulator.cx(c1, target);
-                        self.simulator.tdg(target);
-                        self.simulator.cx(c0, target);
-                        self.simulator.t(target);
-                        self.simulator.cx(c1, target);
-                        self.simulator.tdg(target);
-                        self.simulator.cx(c0, target);
-                        self.simulator.t(c1);
-                        self.simulator.t(target);
-                        self.simulator.cx(c0, c1);
-                        self.simulator.h(target);
-                        self.simulator.t(c0);
-                        self.simulator.tdg(c1);
-                        self.simulator.cx(c0, c1);
+                        self.simulator.h(&[target]);
+                        self.simulator.cx(&[c1, target]);
+                        self.simulator.tdg(&[target]);
+                        self.simulator.cx(&[c0, target]);
+                        self.simulator.t(&[target]);
+                        self.simulator.cx(&[c1, target]);
+                        self.simulator.tdg(&[target]);
+                        self.simulator.cx(&[c0, target]);
+                        self.simulator.t(&[c1]);
+                        self.simulator.t(&[target]);
+                        self.simulator.cx(&[c0, c1]);
+                        self.simulator.h(&[target]);
+                        self.simulator.t(&[c0]);
+                        self.simulator.tdg(&[c1]);
+                        self.simulator.cx(&[c0, c1]);
                     }
                 }
                 GateType::RX => {
                     if !cmd.angles.is_empty() {
-                        let angle = cmd.angles[0].to_radians();
-                        for q in &cmd.qubits {
-                            debug!("Processing RX gate with angle {angle:?} on qubit {q:?}");
-                            self.simulator.rx(angle, **q);
-                        }
+                        let angle = cmd.angles[0];
+                        debug!(
+                            "Processing RX gate with angle {angle:?} on qubits {:?}",
+                            cmd.qubits
+                        );
+                        self.simulator.rx(angle, &cmd.qubits);
                     }
                 }
                 GateType::RY => {
                     if !cmd.angles.is_empty() {
-                        let angle = cmd.angles[0].to_radians();
-                        for q in &cmd.qubits {
-                            debug!("Processing RY gate with angle {angle:?} on qubit {q:?}");
-                            self.simulator.ry(angle, **q);
-                        }
+                        let angle = cmd.angles[0];
+                        debug!(
+                            "Processing RY gate with angle {angle:?} on qubits {:?}",
+                            cmd.qubits
+                        );
+                        self.simulator.ry(angle, &cmd.qubits);
                     }
                 }
                 GateType::RZ => {
                     if !cmd.angles.is_empty() {
-                        let angle = cmd.angles[0].to_radians();
-                        for q in &cmd.qubits {
-                            debug!("Processing RZ gate with angle {angle:?} on qubit {q:?}");
-                            self.simulator.rz(angle, **q);
-                        }
+                        let angle = cmd.angles[0];
+                        debug!(
+                            "Processing RZ gate with angle {angle:?} on qubits {:?}",
+                            cmd.qubits
+                        );
+                        self.simulator.rz(angle, &cmd.qubits);
                     }
                 }
                 GateType::R1XY => {
                     if cmd.angles.len() >= 2 {
-                        let theta = cmd.angles[0].to_radians();
-                        let phi = cmd.angles[1].to_radians();
-                        for q in &cmd.qubits {
-                            debug!(
-                                "Processing R1XY gate with angles theta={theta:?}, phi={phi:?} on qubit {q:?}"
-                            );
-                            self.simulator.r1xy(theta, phi, **q);
-                        }
+                        let theta = cmd.angles[0];
+                        let phi = cmd.angles[1];
+                        debug!(
+                            "Processing R1XY gate with angles theta={theta:?}, phi={phi:?} on qubits {:?}",
+                            cmd.qubits
+                        );
+                        self.simulator.r1xy(theta, phi, &cmd.qubits);
                     }
                 }
 
                 // TODO: Fix it so we have multiple result_ids or get rid of result ids...
                 GateType::Measure | GateType::MeasureLeaked => {
-                    for q in &cmd.qubits {
-                        debug!("Processing measurement on qubit {q:?}");
-                        let meas_result = self.simulator.mz(**q);
-                        // According to the documentation:
+                    debug!("Processing measurement on qubits {:?}", cmd.qubits);
+                    let meas_results = self.simulator.mz(&cmd.qubits);
+                    for meas_result in meas_results {
                         // mz() outcome: true if projected to |1⟩, false if projected to |0⟩
-                        // So we can directly convert the boolean to u32
-                        let outcome = u32::from(meas_result.outcome);
-                        measurements.push(outcome);
+                        measurements.push(usize::from(meas_result.outcome));
                     }
                 }
                 GateType::Prep => {
-                    for q in &cmd.qubits {
-                        debug!("Processing Prep gate on qubit {q:?}");
-                        self.simulator.pz(**q);
-                    }
+                    debug!("Processing Prep gate on qubits {:?}", cmd.qubits);
+                    self.simulator.pz(&cmd.qubits);
                 }
                 GateType::I
                 | GateType::Idle
@@ -464,31 +509,27 @@ impl Engine for StateVecEngine {
                 }
                 GateType::QAlloc => {
                     // Allocate qubits in |0⟩ state - for state vector sim, same as Prep
-                    for q in &cmd.qubits {
-                        debug!("Processing QAlloc gate on qubit {q:?}");
-                        self.simulator.pz(**q);
-                    }
+                    debug!("Processing QAlloc gate on qubits {:?}", cmd.qubits);
+                    self.simulator.pz(&cmd.qubits);
                 }
                 GateType::MeasureFree => {
                     // Measure and deallocate - measure first, then the qubit is implicitly freed
-                    for q in &cmd.qubits {
-                        debug!("Processing MeasureFree gate on qubit {q:?}");
-                        let meas_result = self.simulator.mz(**q);
-                        let outcome = u32::from(meas_result.outcome);
-                        measurements.push(outcome);
+                    debug!("Processing MeasureFree gate on qubits {:?}", cmd.qubits);
+                    let meas_results = self.simulator.mz(&cmd.qubits);
+                    for meas_result in meas_results {
+                        measurements.push(usize::from(meas_result.outcome));
                     }
                 }
                 GateType::U => {
                     if cmd.angles.len() >= 3 {
-                        let theta = cmd.angles[0].to_radians();
-                        let phi = cmd.angles[1].to_radians();
-                        let lambda = cmd.angles[2].to_radians();
-                        for q in &cmd.qubits {
-                            debug!(
-                                "Processing U gate with angles theta={theta:?}, phi={phi:?}, lambda={lambda:?} on qubit {q:?}"
-                            );
-                            self.simulator.u(theta, phi, lambda, **q);
-                        }
+                        let theta = cmd.angles[0];
+                        let phi = cmd.angles[1];
+                        let lambda = cmd.angles[2];
+                        debug!(
+                            "Processing U gate with angles theta={theta:?}, phi={phi:?}, lambda={lambda:?} on qubits {:?}",
+                            cmd.qubits
+                        );
+                        self.simulator.u(theta, phi, lambda, &cmd.qubits);
                     }
                 }
             }
@@ -496,10 +537,7 @@ impl Engine for StateVecEngine {
 
         // Create a message with the measurement results
         let mut builder = ByteMessage::outcomes_builder();
-
-        // Convert measurements from u32 to usize and add to builder
-        let outcomes: Vec<usize> = measurements.iter().map(|&m| m as usize).collect();
-        builder.add_outcomes(&outcomes);
+        builder.add_outcomes(&measurements);
 
         Ok(builder.build())
     }
@@ -511,40 +549,31 @@ impl Engine for StateVecEngine {
     }
 }
 
-impl RngManageable for StateVecEngine {
-    type Rng = <StateVec as RngManageable>::Rng;
+impl<S: StateVectorSimulator> RngManageable for StateVectorEngine<S>
+where
+    <S as RngManageable>::Rng: Clone,
+{
+    type Rng = <S as RngManageable>::Rng;
 
     fn set_rng(&mut self, rng: Self::Rng) {
         self.simulator.set_rng(rng);
     }
 
-    /// Get a read-only reference to the internal random number generator
-    ///
-    /// This method delegates to the underlying simulator's RNG
-    ///
-    /// # Returns
-    /// A reference to the internal RNG
     fn rng(&self) -> &Self::Rng {
         self.simulator.rng()
     }
 
-    /// Get a mutable reference to the internal random number generator
-    ///
-    /// This method delegates to the underlying simulator's RNG
-    ///
-    /// # Returns
-    /// A mutable reference to the internal RNG
     fn rng_mut(&mut self) -> &mut Self::Rng {
         self.simulator.rng_mut()
     }
 }
 
-impl QuantumEngine for StateVecEngine {
+impl<S: StateVectorSimulator + 'static> QuantumEngine for StateVectorEngine<S>
+where
+    <S as RngManageable>::Rng: Clone,
+{
     fn set_seed(&mut self, seed: u64) {
-        // Create a new RNG with the given seed
-        let rng = <StateVec as RngManageable>::Rng::seed_from_u64(seed);
-
-        // Set the simulator's RNG
+        let rng = <S as RngManageable>::Rng::seed_from_u64(seed);
         self.simulator.set_rng(rng);
     }
 
@@ -560,7 +589,7 @@ impl QuantumEngine for StateVecEngine {
 /// A quantum engine that uses a stabilizer simulator
 #[derive(Debug, Clone)]
 pub struct SparseStabEngine {
-    simulator: StdSparseStab,
+    simulator: SparseStab,
 }
 
 impl SparseStabEngine {
@@ -568,7 +597,7 @@ impl SparseStabEngine {
     #[must_use]
     pub fn new(num_qubits: usize) -> Self {
         Self {
-            simulator: StdSparseStab::new(num_qubits),
+            simulator: SparseStab::new(num_qubits),
         }
     }
 
@@ -580,7 +609,7 @@ impl SparseStabEngine {
     #[must_use]
     pub fn with_seed(num_qubits: usize, seed: u64) -> Self {
         Self {
-            simulator: StdSparseStab::with_seed(num_qubits, seed),
+            simulator: SparseStab::with_seed(num_qubits, seed),
         }
     }
 }
@@ -593,40 +622,28 @@ impl SparseStabEngine {
     ) -> Result<(), PecosError> {
         match gate_type {
             GateType::X => {
-                for q in qubits {
-                    debug!("Processing X gate on qubit {q:?}");
-                    self.simulator.x(usize::from(*q));
-                }
+                debug!("Processing X gate on qubits {qubits:?}");
+                self.simulator.x(qubits);
             }
             GateType::Y => {
-                for q in qubits {
-                    debug!("Processing Y gate on qubit {q:?}");
-                    self.simulator.y(usize::from(*q));
-                }
+                debug!("Processing Y gate on qubits {qubits:?}");
+                self.simulator.y(qubits);
             }
             GateType::Z => {
-                for q in qubits {
-                    debug!("Processing Z gate on qubit {q:?}");
-                    self.simulator.z(usize::from(*q));
-                }
+                debug!("Processing Z gate on qubits {qubits:?}");
+                self.simulator.z(qubits);
             }
             GateType::H => {
-                for q in qubits {
-                    debug!("Processing H gate on qubit {q:?}");
-                    self.simulator.h(usize::from(*q));
-                }
+                debug!("Processing H gate on qubits {qubits:?}");
+                self.simulator.h(qubits);
             }
             GateType::SZ => {
-                for q in qubits {
-                    debug!("Processing SZ gate on qubit {q:?}");
-                    self.simulator.sz(usize::from(*q));
-                }
+                debug!("Processing SZ gate on qubits {qubits:?}");
+                self.simulator.sz(qubits);
             }
             GateType::SZdg => {
-                for q in qubits {
-                    debug!("Processing SZdg gate on qubit {q:?}");
-                    self.simulator.szdg(usize::from(*q));
-                }
+                debug!("Processing SZdg gate on qubits {qubits:?}");
+                self.simulator.szdg(qubits);
             }
             GateType::T => {
                 return Err(quantum_error(
@@ -661,34 +678,16 @@ impl SparseStabEngine {
 
         match gate_type {
             GateType::CX => {
-                for qubits in qubits.chunks_exact(2) {
-                    debug!(
-                        "Processing CX gate with control {:?} and target {:?}",
-                        qubits[0], qubits[1]
-                    );
-                    self.simulator
-                        .cx(usize::from(qubits[0]), usize::from(qubits[1]));
-                }
+                debug!("Processing CX gate on qubits {qubits:?}");
+                self.simulator.cx(qubits);
             }
             GateType::SZZ => {
-                for qubits in qubits.chunks_exact(2) {
-                    debug!(
-                        "Processing SZZ gate on qubits {:?} and {:?}",
-                        qubits[0], qubits[1]
-                    );
-                    self.simulator
-                        .szz(usize::from(qubits[0]), usize::from(qubits[1]));
-                }
+                debug!("Processing SZZ gate on qubits {qubits:?}");
+                self.simulator.szz(qubits);
             }
             GateType::SZZdg => {
-                for qubits in qubits.chunks_exact(2) {
-                    debug!(
-                        "Processing SZZdg gate on qubits {:?} and {:?}",
-                        qubits[0], qubits[1]
-                    );
-                    self.simulator
-                        .szzdg(usize::from(qubits[0]), usize::from(qubits[1]));
-                }
+                debug!("Processing SZZdg gate on qubits {qubits:?}");
+                self.simulator.szzdg(qubits);
             }
             _ => {} // Not a two-qubit gate
         }
@@ -701,7 +700,7 @@ impl Engine for SparseStabEngine {
 
     fn process(&mut self, message: Self::Input) -> Result<Self::Output, PecosError> {
         let batch = message.quantum_ops()?;
-        let mut measurements = Vec::new();
+        let mut measurements: Vec<usize> = Vec::new();
 
         for cmd in &batch {
             match cmd.gate_type {
@@ -724,21 +723,16 @@ impl Engine for SparseStabEngine {
                 }
                 // Special operations
                 GateType::Measure | GateType::MeasureLeaked => {
-                    for q in &cmd.qubits {
-                        debug!("Processing measurement on qubit {q:?}");
-                        let meas_result = self.simulator.mz(**q);
-                        // According to the documentation:
+                    debug!("Processing measurement on qubits {:?}", cmd.qubits);
+                    let meas_results = self.simulator.mz(&cmd.qubits);
+                    for meas_result in meas_results {
                         // mz() outcome: true if projected to |1⟩, false if projected to |0⟩
-                        // So we can directly convert the boolean to u32
-                        let outcome = u32::from(meas_result.outcome);
-                        measurements.push(outcome);
+                        measurements.push(usize::from(meas_result.outcome));
                     }
                 }
                 GateType::Prep => {
-                    for q in &cmd.qubits {
-                        debug!("Processing Prep gate on qubit {q:?}");
-                        self.simulator.pz(**q);
-                    }
+                    debug!("Processing Prep gate on qubits {:?}", cmd.qubits);
+                    self.simulator.pz(&cmd.qubits);
                 }
                 GateType::Idle => {
                     // For idle gates, just let the system naturally evolve
@@ -755,8 +749,7 @@ impl Engine for SparseStabEngine {
 
         // Create a message with the measurement results
         let mut builder = ByteMessage::outcomes_builder();
-        let outcomes: Vec<usize> = measurements.iter().map(|&m| m as usize).collect();
-        builder.add_outcomes(&outcomes);
+        builder.add_outcomes(&measurements);
 
         Ok(builder.build())
     }
@@ -768,7 +761,7 @@ impl Engine for SparseStabEngine {
 }
 
 impl RngManageable for SparseStabEngine {
-    type Rng = <StdSparseStab as RngManageable>::Rng;
+    type Rng = <SparseStab as RngManageable>::Rng;
 
     fn set_rng(&mut self, rng: Self::Rng) {
         self.simulator.set_rng(rng);
@@ -798,7 +791,7 @@ impl RngManageable for SparseStabEngine {
 impl QuantumEngine for SparseStabEngine {
     fn set_seed(&mut self, seed: u64) {
         // Create a new RNG with the given seed
-        let rng = <StdSparseStab as RngManageable>::Rng::seed_from_u64(seed);
+        let rng = <SparseStab as RngManageable>::Rng::seed_from_u64(seed);
 
         // Set the simulator's RNG
         self.simulator.set_rng(rng);
@@ -870,9 +863,11 @@ impl Engine for CoinTossEngine {
                 GateType::Measure | GateType::MeasureLeaked | GateType::MeasureFree => {
                     for q in &cmd.qubits {
                         debug!("CoinToss: Processing measurement on qubit {q:?}");
-                        let meas_result = self.simulator.mz(**q);
-                        let outcome = u32::from(meas_result.outcome);
-                        measurements.push(outcome);
+                        let meas_results = self.simulator.mz(&[*q]);
+                        for meas_result in &meas_results {
+                            let outcome = u32::from(meas_result.outcome);
+                            measurements.push(outcome);
+                        }
                     }
                 }
                 // All other gates are ignored

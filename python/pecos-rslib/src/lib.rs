@@ -22,10 +22,12 @@ mod byte_message_bindings;
 mod coin_toss_bindings;
 mod cpp_sparse_sim_bindings;
 mod dag_circuit_bindings;
+mod decoder_bindings;
 mod dtypes;
 mod engine_bindings;
 mod engine_builders;
 mod experimental_bindings;
+mod fault_tolerance_bindings;
 mod graph_bindings;
 mod noise_helpers;
 mod num_bindings;
@@ -260,6 +262,9 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register graph module (graph algorithms for MWPM)
     graph_bindings::register_graph_module(m)?;
 
+    // Register decoders module (QEC decoders: PyMatching, Fusion Blossom, LDPC, etc.)
+    decoder_bindings::register_decoders_module(m)?;
+
     // Register quantum circuit types (DagCircuit, Gate, GateType, QubitId)
     dag_circuit_bindings::register_quantum_circuit_types(m)?;
 
@@ -323,6 +328,9 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register experimental submodule (symbolic HUGR execution)
     experimental_bindings::register_experimental_module(m)?;
+
+    // Register QEC fault tolerance submodule
+    fault_tolerance_bindings::register_qec_module(m)?;
 
     // =========================================================================
     // Top-level numerical function exports (NumPy-like API)
@@ -418,6 +426,7 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("f64", dtypes.getattr("f64")?.getattr("type")?)?;
     m.add("complex64", dtypes.getattr("complex64")?.getattr("type")?)?;
     m.add("complex128", dtypes.getattr("complex128")?.getattr("type")?)?;
+    m.add("angle64", m.py().get_type::<dtypes::ScalarAngle64>())?;
 
     // Note: Type aliases (Integer, Float, Complex, etc.) are now defined in quantum-pecos
     // (pecos.typing module) as they are Python TypeAlias constructs, not Rust types.

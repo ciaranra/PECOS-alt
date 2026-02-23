@@ -24,6 +24,7 @@ from pecos_rslib.simulators import StateVec as StateVecRs
 from pecos.simulators.statevec.bindings import get_bindings
 
 if TYPE_CHECKING:
+    from pecos import Array
     from pecos.circuits import QuantumCircuit
     from pecos.circuits.quantum_circuit import ParamGateCollection
     from pecos.typing import SimulatorGateParams
@@ -48,7 +49,7 @@ class StateVec:
         self.bindings = get_bindings(self)
 
     @property
-    def vector(self) -> Array:  # noqa: F821 - Array is a forward reference
+    def vector(self) -> Array:
         """Get the state vector as an Array of complex numbers.
 
         Returns:
@@ -57,7 +58,7 @@ class StateVec:
         return self.backend.vector_big_endian()
 
     @property
-    def probabilities(self) -> Array:  # noqa: F821 - Array is a forward reference
+    def probabilities(self) -> Array:
         """Get the probability distribution over all basis states.
 
         Returns:

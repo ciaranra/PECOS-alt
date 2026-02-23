@@ -1,4 +1,5 @@
 // Copyright 2025 The PECOS Developers
+use crate::dtypes::AngleParam;
 use pecos::prelude::*;
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -28,40 +29,40 @@ impl PyQulacs {
         q1: usize,
         q2: usize,
     ) -> PyResult<Option<u8>> {
+        let pair = &[QubitId(q1), QubitId(q2)];
         match symbol {
             "CX" => {
-                self.inner.cx(q1, q2);
+                self.inner.cx(pair);
             }
             "CY" => {
-                self.inner.cy(q1, q2);
+                self.inner.cy(pair);
             }
             "CZ" => {
-                self.inner.cz(q1, q2);
+                self.inner.cz(pair);
             }
             "SWAP" => {
-                self.inner.swap(q1, q2);
+                self.inner.swap(pair);
             }
             "G" | "G2" => {
-                self.inner.g(q1, q2);
+                self.inner.g(pair);
             }
             "SXX" => {
-                // Use trait decomposition for consistency with StateVec
-                self.inner.sxx(q1, q2);
+                self.inner.rxx(Angle64::QUARTER_TURN, pair);
             }
             "SXXdg" => {
-                self.inner.sxxdg(q1, q2);
+                self.inner.rxx(-Angle64::QUARTER_TURN, pair);
             }
             "SYY" => {
-                self.inner.syy(q1, q2);
+                self.inner.ryy(Angle64::QUARTER_TURN, pair);
             }
             "SYYdg" => {
-                self.inner.syydg(q1, q2);
+                self.inner.ryy(-Angle64::QUARTER_TURN, pair);
             }
             "SZZ" | "SqrtZZ" => {
-                self.inner.szz(q1, q2);
+                self.inner.rzz(Angle64::QUARTER_TURN, pair);
             }
             "SZZdg" => {
-                self.inner.szzdg(q1, q2);
+                self.inner.rzz(-Angle64::QUARTER_TURN, pair);
             }
             _ => {
                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
@@ -73,9 +74,9 @@ impl PyQulacs {
     }
 
     /// Helper method to extract angle parameter from dict
-    fn extract_angle_param(params: &Bound<'_, PyDict>, gate_name: &str) -> PyResult<f64> {
+    fn extract_angle_param(params: &Bound<'_, PyDict>, gate_name: &str) -> PyResult<Angle64> {
         match params.get_item("angle") {
-            Ok(Some(py_any)) => py_any.extract::<f64>().map_err(|_| {
+            Ok(Some(py_any)) => py_any.extract::<AngleParam>().map(|a| a.0).map_err(|_| {
                 PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                     "Expected a valid angle parameter for {gate_name} gate"
                 ))
@@ -92,16 +93,16 @@ impl PyQulacs {
         params: &Bound<'_, PyDict>,
         gate_name: &str,
         expected_count: usize,
-    ) -> PyResult<Vec<f64>> {
+    ) -> PyResult<Vec<Angle64>> {
         match params.get_item("angles") {
             Ok(Some(py_any)) => {
-                let angles = py_any.extract::<Vec<f64>>().map_err(|_| {
+                let angles = py_any.extract::<Vec<AngleParam>>().map_err(|_| {
                     PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                         "Expected valid angles parameter for {gate_name} gate"
                     ))
                 })?;
                 if angles.len() == expected_count {
-                    Ok(angles)
+                    Ok(angles.into_iter().map(|a| a.0).collect())
                 } else {
                     Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                         "{gate_name} requires exactly {expected_count} angles"
@@ -164,71 +165,72 @@ impl PyQulacs {
             )));
         }
 
+        let q = &[QubitId(location)];
         match symbol {
             "X" => {
-                self.inner.x(location);
+                self.inner.x(q);
                 Ok(None)
             }
             "Y" => {
-                self.inner.y(location);
+                self.inner.y(q);
                 Ok(None)
             }
             "Z" => {
-                self.inner.z(location);
+                self.inner.z(q);
                 Ok(None)
             }
             "H" => {
-                self.inner.h(location);
+                self.inner.h(q);
                 Ok(None)
             }
             "SX" => {
-                self.inner.sx(location);
+                self.inner.sx(q);
                 Ok(None)
             }
             "SXdg" => {
-                self.inner.sxdg(location);
+                self.inner.sxdg(q);
                 Ok(None)
             }
             "SY" => {
-                self.inner.sy(location);
+                self.inner.sy(q);
                 Ok(None)
             }
             "SYdg" => {
-                self.inner.sydg(location);
+                self.inner.sydg(q);
                 Ok(None)
             }
             "SZ" => {
-                self.inner.sz(location);
+                self.inner.sz(q);
                 Ok(None)
             }
             "SZdg" => {
-                self.inner.szdg(location);
+                self.inner.szdg(q);
                 Ok(None)
             }
             "F" | "F1" => {
                 // F gate is implemented via CliffordGateable trait
-                self.inner.f(location);
+                self.inner.f(q);
                 Ok(None)
             }
             "Fdg" | "F1dg" => {
                 // F dagger is implemented via CliffordGateable trait
-                self.inner.fdg(location);
+                self.inner.fdg(q);
                 Ok(None)
             }
             "T" => {
-                self.inner.t(location);
+                self.inner.t(q);
                 Ok(None)
             }
             "Tdg" => {
-                self.inner.tdg(location);
+                self.inner.tdg(q);
                 Ok(None)
             }
             "RX" => {
                 if let Some(params) = params {
                     match params.get_item("angle") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angle) = py_any.extract::<f64>() {
-                                self.inner.rx(angle, location);
+                            if let Ok(angle) = py_any.extract::<AngleParam>() {
+                                self.inner.rx(angle.0, q);
                             } else {
                                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                     "Expected a valid angle parameter for RX gate",
@@ -255,8 +257,8 @@ impl PyQulacs {
                 if let Some(params) = params {
                     match params.get_item("angle") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angle) = py_any.extract::<f64>() {
-                                self.inner.ry(angle, location);
+                            if let Ok(angle) = py_any.extract::<AngleParam>() {
+                                self.inner.ry(angle.0, q);
                             } else {
                                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                     "Expected a valid angle parameter for RY gate",
@@ -283,8 +285,8 @@ impl PyQulacs {
                 if let Some(params) = params {
                     match params.get_item("angle") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angle) = py_any.extract::<f64>() {
-                                self.inner.rz(angle, location);
+                            if let Ok(angle) = py_any.extract::<AngleParam>() {
+                                self.inner.rz(angle.0, q);
                             } else {
                                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                     "Expected a valid angle parameter for RZ gate",
@@ -311,17 +313,17 @@ impl PyQulacs {
                 if let Some(params) = params {
                     match params.get_item("angles") {
                         Ok(Some(py_any)) => {
-                            if let Ok(angles) = py_any.extract::<Vec<f64>>() {
+                            if let Ok(angles) = py_any.extract::<Vec<AngleParam>>() {
                                 if angles.len() >= 2 {
                                     // R1XY = RZ(phi-pi/2) * RY(theta) * RZ(-phi+pi/2)
                                     // where theta = angles[0], phi = angles[1]
-                                    let theta = angles[0];
-                                    let phi = angles[1];
-                                    let pi_half = std::f64::consts::PI / 2.0;
+                                    let theta = angles[0].0;
+                                    let phi = angles[1].0;
+                                    let pi_half = Angle64::QUARTER_TURN;
 
-                                    self.inner.rz(-phi + pi_half, location);
-                                    self.inner.ry(theta, location);
-                                    self.inner.rz(phi - pi_half, location);
+                                    self.inner.rz(-phi + pi_half, q);
+                                    self.inner.ry(theta, q);
+                                    self.inner.rz(phi - pi_half, q);
                                 } else {
                                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                                         "R1XY requires at least 2 angles",
@@ -351,105 +353,105 @@ impl PyQulacs {
             }
             "H2" => {
                 // H2 is implemented via CliffordGateable trait
-                self.inner.h2(location);
+                self.inner.h2(q);
                 Ok(None)
             }
             "H3" => {
                 // H3 is implemented via CliffordGateable trait
-                self.inner.h3(location);
+                self.inner.h3(q);
                 Ok(None)
             }
             "H4" => {
                 // H4 is implemented via CliffordGateable trait
-                self.inner.h4(location);
+                self.inner.h4(q);
                 Ok(None)
             }
             "H5" => {
                 // H5 is implemented via CliffordGateable trait
-                self.inner.h5(location);
+                self.inner.h5(q);
                 Ok(None)
             }
             "H6" => {
                 // H6 is implemented via CliffordGateable trait
-                self.inner.h6(location);
+                self.inner.h6(q);
                 Ok(None)
             }
             "F2" => {
                 // F2 is implemented via CliffordGateable trait
-                self.inner.f2(location);
+                self.inner.f2(q);
                 Ok(None)
             }
             "F2dg" | "F2d" => {
                 // F2dg is implemented via CliffordGateable trait
-                self.inner.f2dg(location);
+                self.inner.f2dg(q);
                 Ok(None)
             }
             "F3" => {
                 // F3 is implemented via CliffordGateable trait
-                self.inner.f3(location);
+                self.inner.f3(q);
                 Ok(None)
             }
             "F3dg" | "F3d" => {
                 // F3dg is implemented via CliffordGateable trait
-                self.inner.f3dg(location);
+                self.inner.f3dg(q);
                 Ok(None)
             }
             "F4" => {
                 // F4 is implemented via CliffordGateable trait
-                self.inner.f4(location);
+                self.inner.f4(q);
                 Ok(None)
             }
             "F4dg" | "F4d" => {
                 // F4dg is implemented via CliffordGateable trait
-                self.inner.f4dg(location);
+                self.inner.f4dg(q);
                 Ok(None)
             }
             "MZ" => {
-                let result = self.inner.mz(location);
-                Ok(Some(u8::from(result.outcome)))
+                let results = self.inner.mz(q);
+                Ok(Some(u8::from(results[0].outcome)))
             }
             "MX" => {
-                let result = self.inner.mx(location);
-                Ok(Some(u8::from(result.outcome)))
+                let results = self.inner.mx(q);
+                Ok(Some(u8::from(results[0].outcome)))
             }
             "MY" => {
-                let result = self.inner.my(location);
-                Ok(Some(u8::from(result.outcome)))
+                let results = self.inner.my(q);
+                Ok(Some(u8::from(results[0].outcome)))
             }
             "PZ" => {
                 // Project to |0⟩ state using CliffordGateable trait
-                self.inner.pz(location);
+                self.inner.pz(q);
                 Ok(None)
             }
             "PnZ" => {
                 // Project to |1⟩ state using CliffordGateable trait
-                self.inner.pnz(location);
+                self.inner.pnz(q);
                 Ok(None)
             }
             "PX" => {
                 // Project to |+⟩ state
                 self.inner.prepare_computational_basis(0);
-                self.inner.h(location);
+                self.inner.h(q);
                 Ok(None)
             }
             "PnX" => {
                 // Project to |-⟩ state
                 self.inner.prepare_computational_basis(1 << location);
-                self.inner.h(location);
+                self.inner.h(q);
                 Ok(None)
             }
             "PY" => {
                 // Project to |+i⟩ state
                 self.inner.prepare_computational_basis(0);
-                self.inner.h(location);
-                self.inner.sz(location);
+                self.inner.h(q);
+                self.inner.sz(q);
                 Ok(None)
             }
             "PnY" => {
                 // Project to |-i⟩ state
                 self.inner.prepare_computational_basis(0);
-                self.inner.h(location);
-                self.inner.szdg(location);
+                self.inner.h(q);
+                self.inner.szdg(q);
                 Ok(None)
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
@@ -489,6 +491,7 @@ impl PyQulacs {
             )));
         }
 
+        let pair = &[QubitId(q1), QubitId(q2)];
         match symbol {
             "CX" | "CY" | "CZ" | "SWAP" | "G" | "SXX" | "SXXdg" | "SYY" | "SYYdg" | "SZZ"
             | "SqrtZZ" | "SZZdg" | "G2" => self.handle_simple_2q_gate(symbol, q1, q2),
@@ -499,7 +502,7 @@ impl PyQulacs {
                     )
                 })?;
                 let angle = Self::extract_angle_param(params, "RZZ")?;
-                self.inner.rzz(angle, q1, q2);
+                self.inner.rzz(angle, pair);
                 Ok(None)
             }
             "RXX" => {
@@ -509,7 +512,7 @@ impl PyQulacs {
                     )
                 })?;
                 let angle = Self::extract_angle_param(params, "RXX")?;
-                self.inner.rxx(angle, q1, q2);
+                self.inner.rxx(angle, pair);
                 Ok(None)
             }
             "RYY" => {
@@ -519,7 +522,7 @@ impl PyQulacs {
                     )
                 })?;
                 let angle = Self::extract_angle_param(params, "RYY")?;
-                self.inner.ryy(angle, q1, q2);
+                self.inner.ryy(angle, pair);
                 Ok(None)
             }
             "RZZRYYRXX" => {
@@ -531,8 +534,7 @@ impl PyQulacs {
                 let angles = Self::extract_angles_param(params, "RZZRYYRXX", 3)?;
                 // Use the rzzryyrxx method from ArbitraryRotationGateable trait
                 // angles[0] = theta (XX), angles[1] = phi (YY), angles[2] = lambda (ZZ)
-                self.inner
-                    .rzzryyrxx(angles[0], angles[1], angles[2], q1, q2);
+                self.inner.rzzryyrxx(angles[0], angles[1], angles[2], pair);
                 Ok(None)
             }
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(

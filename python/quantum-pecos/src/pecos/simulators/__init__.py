@@ -44,7 +44,7 @@ from pecos.simulators.sparsesim import (
 )
 from pecos.simulators.statevec import StateVec
 
-# Attempt to import optional cuquantum and cupy packages for CuStateVec
+# Attempt to import optional cuquantum and cupy packages (Python cuQuantum bindings)
 try:
     import cupy
     import cuquantum
@@ -63,11 +63,28 @@ try:
 except ImportError:
     MPS = None
 
+# Attempt to import Rust cuQuantum bindings (pecos-rslib-cuda)
+try:
+    from pecos_rslib_cuda import is_cuquantum_available
+
+    if is_cuquantum_available():
+        from pecos.simulators.cuda_stabilizer import CudaStabilizer
+        from pecos.simulators.cuda_statevec import CudaStateVec
+    else:
+        CudaStateVec = None
+        CudaStabilizer = None
+except ImportError:
+    CudaStateVec = None
+    CudaStabilizer = None
+
 __all__ = [
     "MPS",
     # Python simulators
     "CoinToss",
     "CuStateVec",
+    "CudaStabilizer",
+    # CUDA simulators (Rust cuQuantum bindings)
+    "CudaStateVec",
     "DefaultSimulator",
     "PauliFaultProp",
     "PauliProp",

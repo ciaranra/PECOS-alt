@@ -31,6 +31,288 @@ use crate::circuit::{Circuit, CircuitMut, GateHandle, GateView};
 // Re-export attribute type for use with DagCircuit
 pub use pecos_num::graph::Attribute;
 
+// ==================== Traversal Index ====================
+
+/// Pre-computed traversal indices for efficient DAG iteration.
+///
+/// This struct contains cached data structures that enable O(1) lookups
+/// for common traversal patterns. It's designed for data-oriented access
+/// with flat arrays that are cache-friendly.
+///
+/// Build once from a [`DagCircuit`], then use for multiple traversal operations.
+///
+/// # Example
+///
+/// ```
+/// use pecos_quantum::DagCircuit;
+///
+/// let mut dag = DagCircuit::new();
+/// dag.h(0);
+/// dag.cx(0, 1);
+/// dag.mz(0);
+/// dag.mz(1);
+///
+/// let index = dag.build_traversal_index();
+/// assert_eq!(index.max_qubit(), 1);
+/// assert_eq!(index.topo_order().len(), 4);
+/// ```
+#[derive(Debug, Clone)]
+pub struct DagTraversalIndex {
+    /// Gates in topological order (forward direction).
+    topo_order: Vec<usize>,
+    /// Position of each node in topological order (node -> position).
+    /// Enables O(1) lookup of relative ordering.
+    topo_positions: Vec<usize>,
+    /// Gates touching each qubit, sorted by topological position.
+    /// `qubit_gates[qubit]` = list of `(topo_position, node_id)`.
+    qubit_gates: Vec<Vec<(usize, usize)>>,
+    /// Maximum node index in the circuit.
+    max_node: usize,
+    /// Maximum qubit index in the circuit.
+    max_qubit: usize,
+}
+
+impl DagTraversalIndex {
+    /// Returns the topological order of nodes.
+    #[inline]
+    #[must_use]
+    pub fn topo_order(&self) -> &[usize] {
+        &self.topo_order
+    }
+
+    /// Returns the topological order reversed (for backward traversal).
+    pub fn topo_order_reversed(&self) -> impl Iterator<Item = usize> + '_ {
+        self.topo_order.iter().copied().rev()
+    }
+
+    /// Returns the topological position of a node (O(1) lookup).
+    #[inline]
+    #[must_use]
+    pub fn topo_position(&self, node: usize) -> usize {
+        self.topo_positions[node]
+    }
+
+    /// Returns gates on a qubit in forward topological order.
+    /// Each entry is `(topo_position, node_id)`.
+    #[inline]
+    #[must_use]
+    pub fn qubit_gates(&self, qubit: usize) -> &[(usize, usize)] {
+        &self.qubit_gates[qubit]
+    }
+
+    /// Returns gates on a qubit in reverse topological order (for backward traversal).
+    pub fn qubit_gates_reversed(&self, qubit: usize) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.qubit_gates[qubit].iter().copied().rev()
+    }
+
+    /// Returns the maximum node index.
+    #[inline]
+    #[must_use]
+    pub fn max_node(&self) -> usize {
+        self.max_node
+    }
+
+    /// Returns the maximum qubit index.
+    #[inline]
+    #[must_use]
+    pub fn max_qubit(&self) -> usize {
+        self.max_qubit
+    }
+
+    /// Returns the number of qubits (`max_qubit` + 1).
+    #[inline]
+    #[must_use]
+    pub fn num_qubits(&self) -> usize {
+        self.max_qubit + 1
+    }
+
+    /// Returns the number of gates.
+    #[inline]
+    #[must_use]
+    pub fn num_gates(&self) -> usize {
+        self.topo_order.len()
+    }
+
+    /// Creates reusable work buffers sized for this circuit.
+    #[must_use]
+    pub fn create_work_buffers(&self) -> TraversalWorkBuffers {
+        TraversalWorkBuffers::new(self.max_node, self.max_qubit)
+    }
+
+    // ==================== Local Graph Traversal ====================
+
+    /// Returns the predecessor node on the given qubit, if any.
+    ///
+    /// This is the gate immediately before this node on the qubit wire.
+    /// Returns `None` if this is the first gate on the qubit or if the
+    /// node doesn't touch this qubit.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use pecos_quantum::{DagCircuit, Gate, QubitId};
+    ///
+    /// let mut dag = DagCircuit::new();
+    /// let h = dag.add_gate(Gate::h(&[0]));
+    /// let cx = dag.add_gate(Gate::cx(&[(0, 1)]));
+    /// dag.connect(h, cx, QubitId::from(0)).unwrap();
+    /// let mz = dag.add_gate(Gate::measure(&[QubitId::from(0)]));
+    /// dag.connect(cx, mz, QubitId::from(0)).unwrap();
+    ///
+    /// let index = dag.build_traversal_index();
+    ///
+    /// // mz's predecessor on qubit 0 is cx
+    /// assert_eq!(index.predecessor_on_qubit(mz, 0), Some(cx));
+    /// // cx's predecessor on qubit 0 is h
+    /// assert_eq!(index.predecessor_on_qubit(cx, 0), Some(h));
+    /// // h has no predecessor on qubit 0
+    /// assert_eq!(index.predecessor_on_qubit(h, 0), None);
+    /// // cx's predecessor on qubit 1 is None (first gate on qubit 1)
+    /// assert_eq!(index.predecessor_on_qubit(cx, 1), None);
+    /// ```
+    #[must_use]
+    pub fn predecessor_on_qubit(&self, node: usize, qubit: usize) -> Option<usize> {
+        if qubit >= self.qubit_gates.len() {
+            return None;
+        }
+
+        let topo_pos = self.topo_position(node);
+        let gates = &self.qubit_gates[qubit];
+
+        // Binary search for this node's position in the qubit's gate list
+        let idx = gates.binary_search_by_key(&topo_pos, |&(tp, _)| tp).ok()?;
+
+        // Return predecessor if it exists
+        if idx > 0 {
+            Some(gates[idx - 1].1)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the successor node on the given qubit, if any.
+    ///
+    /// This is the gate immediately after this node on the qubit wire.
+    /// Returns `None` if this is the last gate on the qubit or if the
+    /// node doesn't touch this qubit.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use pecos_quantum::{DagCircuit, Gate, QubitId};
+    ///
+    /// let mut dag = DagCircuit::new();
+    /// let h = dag.add_gate(Gate::h(&[0]));
+    /// let cx = dag.add_gate(Gate::cx(&[(0, 1)]));
+    /// dag.connect(h, cx, QubitId::from(0)).unwrap();
+    /// let mz = dag.add_gate(Gate::measure(&[QubitId::from(0)]));
+    /// dag.connect(cx, mz, QubitId::from(0)).unwrap();
+    ///
+    /// let index = dag.build_traversal_index();
+    ///
+    /// // h's successor on qubit 0 is cx
+    /// assert_eq!(index.successor_on_qubit(h, 0), Some(cx));
+    /// // cx's successor on qubit 0 is mz
+    /// assert_eq!(index.successor_on_qubit(cx, 0), Some(mz));
+    /// // mz has no successor on qubit 0
+    /// assert_eq!(index.successor_on_qubit(mz, 0), None);
+    /// ```
+    #[must_use]
+    pub fn successor_on_qubit(&self, node: usize, qubit: usize) -> Option<usize> {
+        if qubit >= self.qubit_gates.len() {
+            return None;
+        }
+
+        let topo_pos = self.topo_position(node);
+        let gates = &self.qubit_gates[qubit];
+
+        // Binary search for this node's position in the qubit's gate list
+        let idx = gates.binary_search_by_key(&topo_pos, |&(tp, _)| tp).ok()?;
+
+        // Return successor if it exists
+        if idx + 1 < gates.len() {
+            Some(gates[idx + 1].1)
+        } else {
+            None
+        }
+    }
+
+    /// Returns all predecessor nodes (nodes immediately before on each qubit wire).
+    ///
+    /// Given the qubits this node touches, returns the immediate predecessor
+    /// on each qubit wire. This is useful for backward traversal from a node.
+    ///
+    /// # Arguments
+    /// * `node` - The node to find predecessors for
+    /// * `qubits` - The qubits this node touches
+    ///
+    /// # Returns
+    /// Iterator of `(predecessor_node, qubit)` pairs
+    pub fn predecessors<'a>(
+        &'a self,
+        node: usize,
+        qubits: &'a [usize],
+    ) -> impl Iterator<Item = (usize, usize)> + 'a {
+        qubits
+            .iter()
+            .filter_map(move |&q| self.predecessor_on_qubit(node, q).map(|pred| (pred, q)))
+    }
+
+    /// Returns all successor nodes (nodes immediately after on each qubit wire).
+    ///
+    /// Given the qubits this node touches, returns the immediate successor
+    /// on each qubit wire. This is useful for forward traversal from a node.
+    ///
+    /// # Arguments
+    /// * `node` - The node to find successors for
+    /// * `qubits` - The qubits this node touches
+    ///
+    /// # Returns
+    /// Iterator of `(successor_node, qubit)` pairs
+    pub fn successors<'a>(
+        &'a self,
+        node: usize,
+        qubits: &'a [usize],
+    ) -> impl Iterator<Item = (usize, usize)> + 'a {
+        qubits
+            .iter()
+            .filter_map(move |&q| self.successor_on_qubit(node, q).map(|succ| (succ, q)))
+    }
+}
+
+/// Reusable work buffers for traversal algorithms.
+///
+/// Pre-allocate once and reuse across multiple traversals to avoid
+/// repeated allocations.
+#[derive(Debug, Clone)]
+pub struct TraversalWorkBuffers {
+    /// Visited flags indexed by node.
+    pub visited: Vec<bool>,
+    /// Active qubit flags.
+    pub active_qubits: Vec<bool>,
+    /// Priority queue for heap-based traversal.
+    pub heap: std::collections::BinaryHeap<(usize, usize)>,
+}
+
+impl TraversalWorkBuffers {
+    /// Creates new work buffers sized for the given circuit dimensions.
+    #[must_use]
+    pub fn new(max_node: usize, max_qubit: usize) -> Self {
+        Self {
+            visited: vec![false; max_node + 1],
+            active_qubits: vec![false; max_qubit + 1],
+            heap: std::collections::BinaryHeap::with_capacity(64),
+        }
+    }
+
+    /// Clears all buffers for reuse.
+    pub fn clear(&mut self) {
+        self.visited.fill(false);
+        self.active_qubits.fill(false);
+        self.heap.clear();
+    }
+}
+
 /// A handle returned by measurement operations, allowing metadata to be attached.
 ///
 /// This follows the simulator pattern where measurements break the chain,
@@ -50,6 +332,13 @@ pub struct MeasureHandle<'a> {
 }
 
 impl MeasureHandle<'_> {
+    /// Returns the node ID of this measurement.
+    #[inline]
+    #[must_use]
+    pub fn node(&self) -> usize {
+        self.node
+    }
+
     /// Add metadata to this measurement.
     ///
     /// Returns `()` to break the chain, matching simulator behavior.
@@ -77,6 +366,13 @@ pub struct PrepHandle<'a> {
 }
 
 impl PrepHandle<'_> {
+    /// Returns the node ID of this preparation.
+    #[inline]
+    #[must_use]
+    pub fn node(&self) -> usize {
+        self.node
+    }
+
     /// Add metadata to this preparation.
     ///
     /// Returns `()` to break the chain.
@@ -132,6 +428,8 @@ pub struct DagCircuit {
     qubit_heads: BTreeMap<QubitId, usize>,
     /// Tracks the last added node for `.meta()` calls.
     last_node: Option<usize>,
+    /// Maximum qubit index seen so far (updated incrementally on gate addition).
+    max_qubit: usize,
 }
 
 impl DagCircuit {
@@ -144,6 +442,7 @@ impl DagCircuit {
             edge_qubits: BTreeMap::new(),
             qubit_heads: BTreeMap::new(),
             last_node: None,
+            max_qubit: 0,
         }
     }
 
@@ -162,6 +461,7 @@ impl DagCircuit {
             edge_qubits: BTreeMap::new(),
             qubit_heads: BTreeMap::new(),
             last_node: None,
+            max_qubit: 0,
         }
     }
 
@@ -181,6 +481,10 @@ impl DagCircuit {
         // Ensure gates vector is large enough
         if node_idx >= self.gates.len() {
             self.gates.resize(node_idx + 1, None);
+        }
+        // Update max_qubit tracking
+        for q in &gate.qubits {
+            self.max_qubit = self.max_qubit.max(q.index());
         }
         self.gates[node_idx] = Some(gate);
         node_idx
@@ -230,6 +534,16 @@ impl DagCircuit {
     #[must_use]
     pub fn nodes(&self) -> Vec<usize> {
         self.dag.nodes()
+    }
+
+    /// Returns the maximum qubit index used in this circuit.
+    ///
+    /// This is tracked incrementally as gates are added, providing O(1) access.
+    /// Returns 0 for empty circuits.
+    #[must_use]
+    #[inline]
+    pub fn max_qubit(&self) -> usize {
+        self.max_qubit
     }
 
     // ==================== Wire (edge) operations ====================
@@ -493,6 +807,57 @@ impl DagCircuit {
         self.dag.leaves()
     }
 
+    /// Builds a pre-computed traversal index for efficient iteration.
+    ///
+    /// This creates cached data structures that enable O(1) lookups for
+    /// topological positions and per-qubit gate lists. Build once and
+    /// reuse for multiple traversal operations.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use pecos_quantum::DagCircuit;
+    ///
+    /// let mut dag = DagCircuit::new();
+    /// dag.h(0);
+    /// dag.cx(0, 1);
+    ///
+    /// let index = dag.build_traversal_index();
+    /// // O(1) position lookup
+    /// let h_node = index.topo_order()[0];
+    /// assert_eq!(index.topo_position(h_node), 0);
+    /// ```
+    #[must_use]
+    pub fn build_traversal_index(&self) -> DagTraversalIndex {
+        let topo_order = self.topological_order();
+        let max_node = topo_order.iter().copied().max().unwrap_or(0);
+        let max_qubit = self.max_qubit;
+
+        // Build position lookup (node -> topo position) for O(1) access
+        let mut topo_positions = vec![usize::MAX; max_node + 1];
+        for (pos, &node) in topo_order.iter().enumerate() {
+            topo_positions[node] = pos;
+        }
+
+        // Build per-qubit gate index
+        let mut qubit_gates: Vec<Vec<(usize, usize)>> = vec![Vec::new(); max_qubit + 1];
+        for (topo_pos, &node) in topo_order.iter().enumerate() {
+            if let Some(gate) = self.gate(node) {
+                for q in &gate.qubits {
+                    qubit_gates[q.index()].push((topo_pos, node));
+                }
+            }
+        }
+
+        DagTraversalIndex {
+            topo_order,
+            topo_positions,
+            qubit_gates,
+            max_node,
+            max_qubit,
+        }
+    }
+
     // ==================== Qubit-based queries ====================
 
     /// Returns all gates acting on a specific qubit.
@@ -647,6 +1012,11 @@ impl DagCircuit {
         self
     }
 
+    /// Alias for `identity` - apply the identity gate.
+    pub fn iden(&mut self, q: impl Into<QubitId>) -> &mut Self {
+        self.identity(q)
+    }
+
     /// Apply an X (Pauli-X) gate.
     pub fn x(&mut self, q: impl Into<QubitId>) -> &mut Self {
         self.add_gate_auto_wire(Gate::x(&[q.into()]));
@@ -680,6 +1050,34 @@ impl DagCircuit {
     /// Apply the SZ-dagger (S-dagger) gate.
     pub fn szdg(&mut self, q: impl Into<QubitId>) -> &mut Self {
         self.add_gate_auto_wire(Gate::simple(GateType::SZdg, vec![q.into()]));
+        self
+    }
+
+    /// Apply the SX (sqrt(X)) gate.
+    ///
+    /// This is a native gate on IBM quantum hardware. Two SX gates equal an X gate.
+    pub fn sx(&mut self, q: impl Into<QubitId>) -> &mut Self {
+        self.add_gate_auto_wire(Gate::simple(GateType::SX, vec![q.into()]));
+        self
+    }
+
+    /// Apply the SX-dagger (sqrt(X) inverse) gate.
+    pub fn sxdg(&mut self, q: impl Into<QubitId>) -> &mut Self {
+        self.add_gate_auto_wire(Gate::simple(GateType::SXdg, vec![q.into()]));
+        self
+    }
+
+    /// Apply the SY (sqrt(Y)) gate.
+    ///
+    /// Two SY gates equal a Y gate.
+    pub fn sy(&mut self, q: impl Into<QubitId>) -> &mut Self {
+        self.add_gate_auto_wire(Gate::simple(GateType::SY, vec![q.into()]));
+        self
+    }
+
+    /// Apply the SY-dagger (sqrt(Y) inverse) gate.
+    pub fn sydg(&mut self, q: impl Into<QubitId>) -> &mut Self {
+        self.add_gate_auto_wire(Gate::simple(GateType::SYdg, vec![q.into()]));
         self
     }
 
@@ -759,20 +1157,44 @@ impl DagCircuit {
     // -------------------- Two-qubit gates --------------------
 
     /// Apply a CX (CNOT) gate.
-    pub fn cx(&mut self, q1: impl Into<QubitId>, q2: impl Into<QubitId>) -> &mut Self {
-        let c = q1.into();
-        let t = q2.into();
+    ///
+    /// The first qubit is the control, the second is the target.
+    /// Flips the target qubit if the control is |1>.
+    pub fn cx(&mut self, control: impl Into<QubitId>, target: impl Into<QubitId>) -> &mut Self {
+        let c = control.into();
+        let t = target.into();
         self.add_gate_auto_wire(Gate::cx(&[(c, t)]));
         self
     }
 
+    /// Apply a CY (controlled-Y) gate.
+    ///
+    /// The first qubit is the control, the second is the target.
+    pub fn cy(&mut self, control: impl Into<QubitId>, target: impl Into<QubitId>) -> &mut Self {
+        self.add_gate_auto_wire(Gate::simple(
+            GateType::CY,
+            vec![control.into(), target.into()],
+        ));
+        self
+    }
+
+    /// Apply a CZ (controlled-Z) gate.
+    ///
+    /// Applies a phase flip when both qubits are |1>. This gate is symmetric.
+    pub fn cz(&mut self, q1: impl Into<QubitId>, q2: impl Into<QubitId>) -> &mut Self {
+        self.add_gate_auto_wire(Gate::simple(GateType::CZ, vec![q1.into(), q2.into()]));
+        self
+    }
+
     /// Apply an SZZ (sqrt(ZZ)) gate.
+    ///
+    /// Native entangling gate on some trapped-ion systems.
     pub fn szz(&mut self, q1: impl Into<QubitId>, q2: impl Into<QubitId>) -> &mut Self {
         self.add_gate_auto_wire(Gate::simple(GateType::SZZ, vec![q1.into(), q2.into()]));
         self
     }
 
-    /// Apply an SZZ-dagger gate.
+    /// Apply an SZZ-dagger (sqrt(ZZ) inverse) gate.
     pub fn szzdg(&mut self, q1: impl Into<QubitId>, q2: impl Into<QubitId>) -> &mut Self {
         self.add_gate_auto_wire(Gate::simple(GateType::SZZdg, vec![q1.into(), q2.into()]));
         self
@@ -780,7 +1202,7 @@ impl DagCircuit {
 
     /// Apply an RZZ (ZZ rotation) gate.
     ///
-    /// The angle can be an `Angle64` or an `f64` (interpreted as radians).
+    /// Implements exp(-i * theta/2 * Z*Z). The angle can be `Angle64` or `f64` (radians).
     pub fn rzz(
         &mut self,
         theta: impl Into<Angle64>,
@@ -791,6 +1213,84 @@ impl DagCircuit {
             GateType::RZZ,
             vec![theta.into()],
             vec![q1.into(), q2.into()],
+        ));
+        self
+    }
+
+    /// Apply an RXX (XX rotation) gate.
+    ///
+    /// Implements exp(-i * theta/2 * X*X). Native gate on trapped-ion systems.
+    /// The angle can be `Angle64` or `f64` (radians).
+    pub fn rxx(
+        &mut self,
+        theta: impl Into<Angle64>,
+        q1: impl Into<QubitId>,
+        q2: impl Into<QubitId>,
+    ) -> &mut Self {
+        self.add_gate_auto_wire(Gate::with_angles(
+            GateType::RXX,
+            vec![theta.into()],
+            vec![q1.into(), q2.into()],
+        ));
+        self
+    }
+
+    /// Apply an RYY (YY rotation) gate.
+    ///
+    /// Implements exp(-i * theta/2 * Y*Y). The angle can be `Angle64` or `f64` (radians).
+    pub fn ryy(
+        &mut self,
+        theta: impl Into<Angle64>,
+        q1: impl Into<QubitId>,
+        q2: impl Into<QubitId>,
+    ) -> &mut Self {
+        self.add_gate_auto_wire(Gate::with_angles(
+            GateType::RYY,
+            vec![theta.into()],
+            vec![q1.into(), q2.into()],
+        ));
+        self
+    }
+
+    /// Apply a SWAP gate.
+    ///
+    /// Exchanges the states of two qubits.
+    pub fn swap(&mut self, q1: impl Into<QubitId>, q2: impl Into<QubitId>) -> &mut Self {
+        self.add_gate_auto_wire(Gate::simple(GateType::SWAP, vec![q1.into(), q2.into()]));
+        self
+    }
+
+    /// Apply a CRZ (controlled-RZ) gate.
+    ///
+    /// The angle can be an `Angle64` or an `f64` (interpreted as radians).
+    pub fn crz(
+        &mut self,
+        theta: impl Into<Angle64>,
+        control: impl Into<QubitId>,
+        target: impl Into<QubitId>,
+    ) -> &mut Self {
+        self.add_gate_auto_wire(Gate::with_angles(
+            GateType::CRZ,
+            vec![theta.into()],
+            vec![control.into(), target.into()],
+        ));
+        self
+    }
+
+    // -------------------- Three-qubit gates --------------------
+
+    /// Apply a CCX (Toffoli) gate.
+    ///
+    /// The first two qubits are controls, the third is the target.
+    pub fn ccx(
+        &mut self,
+        c1: impl Into<QubitId>,
+        c2: impl Into<QubitId>,
+        target: impl Into<QubitId>,
+    ) -> &mut Self {
+        self.add_gate_auto_wire(Gate::simple(
+            GateType::CCX,
+            vec![c1.into(), c2.into(), target.into()],
         ));
         self
     }

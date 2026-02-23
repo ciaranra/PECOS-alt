@@ -3,8 +3,8 @@ use env_logger::Env;
 
 mod cli;
 use cli::{
-    CudaCommands, DepsCommands, FeaturesCommands, GoCommands, JuliaCommands, LlvmCommands,
-    PythonCommands, RustCommands, SeleneCommands,
+    CuQuantumCommands, CudaCommands, DepsCommands, FeaturesCommands, GoCommands, GpuCommands,
+    JuliaCommands, LlvmCommands, PythonCommands, RustCommands, SeleneCommands,
 };
 
 // Runtime-only imports
@@ -19,6 +19,10 @@ use pecos::{
     DepolarizingNoise, GeneralNoiseModelBuilder, qasm_engine, sim_builder, sparse_stabilizer,
     state_vector,
 };
+#[cfg(feature = "runtime")]
+use pecos_build::cuda::find_cuda;
+#[cfg(feature = "runtime")]
+use pecos_build::cuquantum::{find_cuquantum, get_cuquantum_version};
 #[cfg(feature = "runtime")]
 use pecos_build::llvm::{find_llvm_14, get_llvm_version};
 #[cfg(feature = "runtime")]
@@ -78,10 +82,21 @@ enum Commands {
         #[command(subcommand)]
         command: PythonCommands,
     },
-    /// CUDA availability and info
+    /// CUDA inspection and validation
     Cuda {
         #[command(subcommand)]
         command: CudaCommands,
+    },
+    /// cuQuantum SDK inspection, validation, and configuration
+    #[command(name = "cuquantum", visible_alias = "cuq")]
+    CuQuantum {
+        #[command(subcommand)]
+        command: CuQuantumCommands,
+    },
+    /// GPU (wgpu) availability check
+    Gpu {
+        #[command(subcommand)]
+        command: GpuCommands,
     },
     /// Julia build and test commands
     #[command(visible_alias = "jl")]
@@ -94,7 +109,7 @@ enum Commands {
         #[command(subcommand)]
         command: GoCommands,
     },
-    /// LLVM 14 management (install, check, configure)
+    /// LLVM 14 inspection, validation, and configuration
     Llvm {
         #[command(subcommand)]
         command: LlvmCommands,
@@ -114,6 +129,54 @@ enum Commands {
         #[command(subcommand)]
         command: DepsCommands,
     },
+    /// Install optional dependencies (cuda, llvm, cuquantum)
+    ///
+    /// Example: pecos install cuda cuquantum
+    Install {
+        /// Dependencies to install
+        #[arg(required_unless_present = "all")]
+        targets: Vec<String>,
+
+        /// Force reinstall even if already present
+        #[arg(long)]
+        force: bool,
+
+        /// Install all optional dependencies
+        #[arg(long)]
+        all: bool,
+
+        /// Skip automatic configuration after installation (applies to llvm)
+        #[arg(long)]
+        no_configure: bool,
+    },
+    /// Uninstall optional dependencies (cuda, llvm, cuquantum)
+    ///
+    /// Example: pecos uninstall cuda cuquantum
+    Uninstall {
+        /// Dependencies to uninstall
+        #[arg(required_unless_present = "all")]
+        targets: Vec<String>,
+
+        /// Uninstall all optional dependencies
+        #[arg(long)]
+        all: bool,
+    },
+    /// Upgrade optional dependencies (force reinstall)
+    ///
+    /// Example: pecos upgrade cuda cuquantum
+    Upgrade {
+        /// Dependencies to upgrade
+        #[arg(required_unless_present = "all")]
+        targets: Vec<String>,
+
+        /// Upgrade all optional dependencies
+        #[arg(long)]
+        all: bool,
+
+        /// Skip automatic configuration after installation (applies to llvm)
+        #[arg(long)]
+        no_configure: bool,
+    },
     /// Show system tools and project info
     #[command(name = "sys-info")]
     SysInfo,
@@ -122,6 +185,12 @@ enum Commands {
         /// Show detailed information
         #[arg(short, long)]
         verbose: bool,
+    },
+    /// Manage the pecos CLI itself
+    #[command(name = "self")]
+    Self_ {
+        #[command(subcommand)]
+        command: cli::SelfCommands,
     },
     /// Serve documentation locally and open in browser
     Docs {
@@ -594,14 +663,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Rust { command } => cli::run_rust(command)?,
         Commands::Python { command } => cli::run_python(command)?,
         Commands::Cuda { command } => cli::run_cuda(command.clone())?,
+        Commands::CuQuantum { command } => cli::run_cuquantum(command.clone())?,
+        Commands::Gpu { command } => cli::run_gpu(command)?,
         Commands::Julia { command } => cli::run_julia(command)?,
         Commands::Go { command } => cli::run_go(command)?,
         Commands::Llvm { command } => cli::run_llvm(command.clone())?,
         Commands::Selene { command } => cli::run_selene(command.clone())?,
         Commands::Features { command } => cli::run_features(command.clone())?,
         Commands::Deps { command } => cli::run_deps(command.clone())?,
+        Commands::Install {
+            targets,
+            force,
+            all,
+            no_configure,
+        } => cli::run_install(targets, *force, *all, *no_configure)?,
+        Commands::Uninstall { targets, all } => cli::run_uninstall(targets, *all)?,
+        Commands::Upgrade {
+            targets,
+            all,
+            no_configure,
+        } => cli::run_upgrade(targets, *all, *no_configure)?,
         Commands::SysInfo => cli::run_sys_info()?,
         Commands::List { verbose } => cli::run_list(*verbose)?,
+        Commands::Self_ { command } => cli::run_self(command.clone())?,
         Commands::Docs { port, no_browser } => cli::run_docs(*port, *no_browser)?,
     }
 
@@ -846,11 +930,46 @@ fn run_doctor() {
             &format!("{version} at {}", llvm_path.display()),
         );
     } else {
-        print_check("LLVM 14", false, "not found (run 'pecos llvm install')");
-        warnings.push("LLVM 14 not found. To install: pecos llvm install");
+        print_check("LLVM 14", false, "not found (run 'pecos install llvm')");
+        warnings.push("LLVM 14 not found. To install: pecos install llvm");
     }
 
-    // Check 7: Test basic circuit execution
+    // Check 7: CUDA installation
+    if let Some(cuda_path) = find_cuda() {
+        let version =
+            pecos_build::cuda::get_cuda_version(&cuda_path).unwrap_or_else(|_| "unknown".into());
+        print_check(
+            "CUDA",
+            true,
+            &format!("{version} at {}", cuda_path.display()),
+        );
+    } else {
+        print_check(
+            "CUDA",
+            false,
+            "not found (optional, run 'pecos install cuda')",
+        );
+        // CUDA is optional, so just a suggestion not a warning
+    }
+
+    // Check 8: cuQuantum installation
+    if let Some(cuquantum_path) = find_cuquantum() {
+        let version = get_cuquantum_version(&cuquantum_path).unwrap_or_else(|_| "unknown".into());
+        print_check(
+            "cuQuantum",
+            true,
+            &format!("{version} at {}", cuquantum_path.display()),
+        );
+    } else {
+        print_check(
+            "cuQuantum",
+            false,
+            "not found (optional, run 'pecos install cuquantum')",
+        );
+        // cuQuantum is optional, so just a suggestion not a warning
+    }
+
+    // Check 9: Test basic circuit execution
     print!("  ");
     let test_result = test_basic_execution();
     match test_result {

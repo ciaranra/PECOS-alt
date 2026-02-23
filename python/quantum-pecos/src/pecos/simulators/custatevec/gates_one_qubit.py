@@ -17,10 +17,10 @@ including Pauli gates, rotation gates, and other fundamental single-qubit operat
 
 from __future__ import annotations
 
+import cmath
 from typing import TYPE_CHECKING
 
 import cupy as cp
-import numpy as np
 
 if TYPE_CHECKING:
     from pecos.simulators.custatevec.state import CuStateVec
@@ -211,10 +211,10 @@ def RZ(
 
     matrix = cp.asarray(
         [
-            np.exp(-1j * theta / 2),
+            cmath.exp(-1j * float(theta) / 2),
             0,
             0,
-            np.exp(1j * theta / 2),
+            cmath.exp(1j * float(theta) / 2),
         ],
         dtype=state.cp_type,
     )

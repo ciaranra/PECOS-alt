@@ -34,7 +34,7 @@
 //! # Example
 //!
 //! ```rust
-//! use pecos_qsim::{StdSymbolicSparseStab, MeasurementSampler};
+//! use pecos_qsim::{SymbolicSparseStab, MeasurementSampler};
 //! use pecos_experimental::execute_hugr;
 //! use pecos_quantum::{DagCircuit, Gate};
 //!
@@ -46,7 +46,7 @@
 //! circuit.add_gate(Gate::measure(&[1]));
 //!
 //! // Execute symbolically (once!)
-//! let mut sim = StdSymbolicSparseStab::new(2);
+//! let mut sim = SymbolicSparseStab::new(2);
 //! execute_hugr(&mut sim, &circuit).unwrap();
 //!
 //! // Sample efficiently (millions of shots)
@@ -63,7 +63,6 @@
 use std::fmt;
 
 use pecos_core::gate_type::GateType;
-use pecos_core::{IndexableElement, Set};
 use pecos_qsim::SymbolicSparseStab;
 use pecos_quantum::Circuit;
 
@@ -168,7 +167,7 @@ impl std::error::Error for HugrExecutionError {}
 /// # Example
 ///
 /// ```rust
-/// use pecos_qsim::StdSymbolicSparseStab;
+/// use pecos_qsim::SymbolicSparseStab;
 /// use pecos_experimental::execute_hugr;
 /// use pecos_quantum::{DagCircuit, Gate};
 ///
@@ -177,20 +176,15 @@ impl std::error::Error for HugrExecutionError {}
 /// circuit.add_gate(Gate::h(&[0]));
 /// circuit.add_gate(Gate::measure(&[0]));
 ///
-/// let mut sim = StdSymbolicSparseStab::new(1);
+/// let mut sim = SymbolicSparseStab::new(1);
 /// execute_hugr(&mut sim, &circuit).unwrap();
 ///
 /// // Now sim.measurement_history() contains the symbolic dependencies
 /// assert_eq!(sim.measurement_history().len(), 1);
 /// ```
 #[allow(clippy::too_many_lines)]
-pub fn execute_hugr<T, E, C>(
-    sim: &mut SymbolicSparseStab<T, E>,
-    hugr: &C,
-) -> Result<(), HugrExecutionError>
+pub fn execute_hugr<C>(sim: &mut SymbolicSparseStab, hugr: &C) -> Result<(), HugrExecutionError>
 where
-    E: IndexableElement,
-    T: for<'a> Set<'a, Element = E>,
     C: Circuit,
 {
     let num_qubits = sim.num_qubits();
@@ -224,33 +218,33 @@ where
             // Single-qubit Clifford gates
             GateType::X => {
                 validate_qubit_count(gate.gate_type, gate_idx, 1, gate.qubits.len())?;
-                let q = E::from_index(gate.qubits[0].index());
+                let q = gate.qubits[0].index();
                 sim.x(q);
             }
             GateType::Y => {
                 validate_qubit_count(gate.gate_type, gate_idx, 1, gate.qubits.len())?;
-                let q = E::from_index(gate.qubits[0].index());
+                let q = gate.qubits[0].index();
                 sim.y(q);
             }
             GateType::Z => {
                 validate_qubit_count(gate.gate_type, gate_idx, 1, gate.qubits.len())?;
-                let q = E::from_index(gate.qubits[0].index());
+                let q = gate.qubits[0].index();
                 sim.z(q);
             }
             GateType::H => {
                 validate_qubit_count(gate.gate_type, gate_idx, 1, gate.qubits.len())?;
-                let q = E::from_index(gate.qubits[0].index());
+                let q = gate.qubits[0].index();
                 sim.h(q);
             }
             GateType::SZ => {
                 validate_qubit_count(gate.gate_type, gate_idx, 1, gate.qubits.len())?;
-                let q = E::from_index(gate.qubits[0].index());
+                let q = gate.qubits[0].index();
                 sim.sz(q);
             }
             GateType::SZdg => {
                 // S† = S^3, so apply S three times
                 validate_qubit_count(gate.gate_type, gate_idx, 1, gate.qubits.len())?;
-                let q = E::from_index(gate.qubits[0].index());
+                let q = gate.qubits[0].index();
                 sim.sz(q);
                 sim.sz(q);
                 sim.sz(q);
@@ -259,15 +253,15 @@ where
             // Two-qubit Clifford gates
             GateType::CX => {
                 validate_qubit_count(gate.gate_type, gate_idx, 2, gate.qubits.len())?;
-                let q1 = E::from_index(gate.qubits[0].index());
-                let q2 = E::from_index(gate.qubits[1].index());
+                let q1 = gate.qubits[0].index();
+                let q2 = gate.qubits[1].index();
                 sim.cx(q1, q2);
             }
             GateType::CY => {
                 // CY = (I ⊗ S†) CX (I ⊗ S)
                 validate_qubit_count(gate.gate_type, gate_idx, 2, gate.qubits.len())?;
-                let q1 = E::from_index(gate.qubits[0].index());
-                let q2 = E::from_index(gate.qubits[1].index());
+                let q1 = gate.qubits[0].index();
+                let q2 = gate.qubits[1].index();
                 // S on target
                 sim.sz(q2);
                 // CX
@@ -280,8 +274,8 @@ where
             GateType::CZ => {
                 // CZ = (I ⊗ H) CX (I ⊗ H)
                 validate_qubit_count(gate.gate_type, gate_idx, 2, gate.qubits.len())?;
-                let q1 = E::from_index(gate.qubits[0].index());
-                let q2 = E::from_index(gate.qubits[1].index());
+                let q1 = gate.qubits[0].index();
+                let q2 = gate.qubits[1].index();
                 sim.h(q2);
                 sim.cx(q1, q2);
                 sim.h(q2);
@@ -290,7 +284,7 @@ where
             // Measurements (including leaked measurement, treated as regular)
             GateType::Measure | GateType::MeasureFree | GateType::MeasureLeaked => {
                 validate_qubit_count(gate.gate_type, gate_idx, 1, gate.qubits.len())?;
-                let q = E::from_index(gate.qubits[0].index());
+                let q = gate.qubits[0].index();
                 sim.mz(q);
             }
 
@@ -347,7 +341,7 @@ fn validate_qubit_count(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pecos_qsim::StdSymbolicSparseStab;
+    use pecos_qsim::SymbolicSparseStab;
     use pecos_quantum::DagCircuit;
 
     #[test]
@@ -360,7 +354,7 @@ mod tests {
         circuit.mz(1);
 
         // Execute
-        let mut sim = StdSymbolicSparseStab::new(2);
+        let mut sim = SymbolicSparseStab::new(2);
         execute_hugr(&mut sim, &circuit).expect("execution failed");
 
         // Verify measurement history
@@ -387,7 +381,7 @@ mod tests {
         circuit.mz(2);
 
         // Execute
-        let mut sim = StdSymbolicSparseStab::new(3);
+        let mut sim = SymbolicSparseStab::new(3);
         execute_hugr(&mut sim, &circuit).expect("execution failed");
 
         // Verify
@@ -410,7 +404,7 @@ mod tests {
         circuit.x(0); // Flip to |1⟩
         circuit.mz(0);
 
-        let mut sim = StdSymbolicSparseStab::new(2);
+        let mut sim = SymbolicSparseStab::new(2);
         execute_hugr(&mut sim, &circuit).expect("execution failed");
 
         let history = sim.measurement_history();
@@ -430,7 +424,7 @@ mod tests {
         circuit.mz(0);
         circuit.mz(1); // Qubit 1 stays |0⟩
 
-        let mut sim = StdSymbolicSparseStab::new(2);
+        let mut sim = SymbolicSparseStab::new(2);
         execute_hugr(&mut sim, &circuit).expect("execution failed");
 
         let history = sim.measurement_history();
@@ -449,18 +443,18 @@ mod tests {
 
     #[test]
     fn test_cz_gate() {
-        use pecos_core::Gate;
+        use pecos_core::{Gate, QubitId};
 
         let mut circuit = DagCircuit::new();
         circuit.h(0);
         circuit.h(1);
-        circuit.add_gate(Gate::simple(GateType::CZ, vec![0, 1]));
+        circuit.add_gate(Gate::simple(GateType::CZ, vec![QubitId(0), QubitId(1)]));
         circuit.h(0);
         circuit.h(1);
         circuit.mz(0);
         circuit.mz(1);
 
-        let mut sim = StdSymbolicSparseStab::new(2);
+        let mut sim = SymbolicSparseStab::new(2);
         execute_hugr(&mut sim, &circuit).expect("execution failed");
 
         // Should work without error
@@ -474,7 +468,7 @@ mod tests {
         let mut circuit = DagCircuit::new();
         circuit.add_gate(Gate::rz(Angle64::from_turns(0.25), &[0])); // RZ is not Clifford
 
-        let mut sim = StdSymbolicSparseStab::new(1);
+        let mut sim = SymbolicSparseStab::new(1);
         let result = execute_hugr(&mut sim, &circuit);
 
         assert!(result.is_err());
@@ -491,7 +485,7 @@ mod tests {
         let mut circuit = DagCircuit::new();
         circuit.h(5); // Qubit 5 doesn't exist in a 2-qubit sim
 
-        let mut sim = StdSymbolicSparseStab::new(2);
+        let mut sim = SymbolicSparseStab::new(2);
         let result = execute_hugr(&mut sim, &circuit);
 
         assert!(result.is_err());
@@ -506,7 +500,7 @@ mod tests {
     #[test]
     fn test_empty_circuit() {
         let circuit = DagCircuit::new();
-        let mut sim = StdSymbolicSparseStab::new(2);
+        let mut sim = SymbolicSparseStab::new(2);
 
         execute_hugr(&mut sim, &circuit).expect("empty circuit should succeed");
         assert_eq!(sim.measurement_history().len(), 0);
@@ -543,7 +537,7 @@ mod tests {
         circuit.mz(1);
         circuit.mz(2);
 
-        let mut sim = StdSymbolicSparseStab::new(5);
+        let mut sim = SymbolicSparseStab::new(5);
         execute_hugr(&mut sim, &circuit).expect("execution failed");
 
         let history = sim.measurement_history();

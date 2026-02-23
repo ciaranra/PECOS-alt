@@ -4,14 +4,16 @@
 //! dev tool commands. The command enums are designed to be embedded in the
 //! main pecos CLI.
 
-#![allow(clippy::missing_errors_doc)]
 #![allow(clippy::fn_params_excessive_bools)]
 
 pub mod cuda_cmd;
+pub mod cuquantum_cmd;
 pub mod docs_cmd;
 pub mod features_cmd;
 pub mod go_cmd;
+pub mod gpu_cmd;
 pub mod info;
+pub mod install_cmd;
 pub mod julia_cmd;
 pub mod list;
 pub mod llvm_cmd;
@@ -19,6 +21,9 @@ pub mod manifest_cmd;
 pub mod python_cmd;
 pub mod rust_cmd;
 pub mod selene_cmd;
+pub mod self_update_cmd;
+pub mod uninstall_cmd;
+pub mod upgrade_cmd;
 
 use clap::Subcommand;
 
@@ -65,6 +70,12 @@ pub enum RustCommands {
         /// Check formatting without modifying files
         #[arg(long)]
         check: bool,
+    },
+
+    /// Run benchmarks with native CPU optimizations (AVX2, etc.)
+    Bench {
+        /// Benchmark filter pattern (e.g., "`SoA` Comparison", "DOD")
+        pattern: Option<String>,
     },
 }
 
@@ -125,13 +136,6 @@ pub enum PythonCommands {
 
 #[derive(Subcommand, Clone)]
 pub enum CudaCommands {
-    /// Download and install CUDA Toolkit to ~/.pecos/cuda/
-    Install {
-        /// Force reinstall even if already present
-        #[arg(long)]
-        force: bool,
-    },
-
     /// Check if CUDA is available (local or system)
     Check {
         /// Suppress output (exit code only)
@@ -149,9 +153,6 @@ pub enum CudaCommands {
     /// Show CUDA version information
     Version,
 
-    /// Remove local CUDA installation (~/.pecos/cuda/)
-    Uninstall,
-
     /// Validate CUDA installation integrity
     Validate {
         /// Path to CUDA installation (uses detected path if not specified)
@@ -160,9 +161,59 @@ pub enum CudaCommands {
 
     /// Install CUDA Python packages (cupy, cuquantum, pytket-cutensornet)
     ///
-    /// Requires CUDA toolkit to be installed first (pecos cuda install or system CUDA).
+    /// Requires CUDA toolkit to be installed first (pecos install cuda or system CUDA).
     /// Installs quantum-pecos[cuda] which includes cupy, cuquantum, and pytket-cutensornet.
     SetupPython,
+}
+
+// ============================================================================
+// cuQuantum Commands
+// ============================================================================
+
+#[derive(Subcommand, Clone)]
+pub enum CuQuantumCommands {
+    /// Check if cuQuantum is available (local or system)
+    Check {
+        /// Suppress output (exit code only)
+        #[arg(short, long)]
+        quiet: bool,
+    },
+
+    /// Find cuQuantum installation path
+    Find {
+        /// Print export command for shell evaluation
+        #[arg(long)]
+        export: bool,
+    },
+
+    /// Show cuQuantum version information
+    Version,
+
+    /// Validate cuQuantum installation integrity
+    Validate {
+        /// Path to cuQuantum installation (uses detected path if not specified)
+        path: Option<String>,
+    },
+
+    /// Configure .cargo/config.toml with cuQuantum path
+    ///
+    /// Automatically detects cuQuantum installation and updates
+    /// .cargo/config.toml with `CUQUANTUM_ROOT`.
+    Configure,
+}
+
+// ============================================================================
+// GPU Commands (wgpu-based GPU detection)
+// ============================================================================
+
+#[derive(Subcommand, Clone)]
+pub enum GpuCommands {
+    /// Check if a GPU (wgpu adapter) is available
+    Check {
+        /// Suppress output (exit code only)
+        #[arg(short, long)]
+        quiet: bool,
+    },
 }
 
 // ============================================================================
@@ -313,17 +364,6 @@ pub enum FeaturesCommands {
 
 #[derive(Subcommand, Clone)]
 pub enum LlvmCommands {
-    /// Download and install LLVM 14
-    Install {
-        /// Force reinstall even if already present
-        #[arg(long)]
-        force: bool,
-
-        /// Skip automatic configuration after installation
-        #[arg(long)]
-        no_configure: bool,
-    },
-
     /// Check if LLVM 14 is available
     Check {
         /// Suppress output messages
@@ -355,6 +395,18 @@ pub enum LlvmCommands {
         /// Name of the tool (e.g., llvm-as, clang)
         name: String,
     },
+}
+
+// ============================================================================
+// Self Commands
+// ============================================================================
+
+#[derive(Subcommand, Clone)]
+pub enum SelfCommands {
+    /// Rebuild and reinstall the pecos CLI from the repo
+    Upgrade,
+    /// Uninstall the pecos CLI
+    Uninstall,
 }
 
 // ============================================================================
@@ -396,61 +448,171 @@ pub enum DepsCommands {
 // ============================================================================
 
 /// Run a Rust subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
 pub fn run_rust(command: &RustCommands) -> pecos_build::Result<()> {
     rust_cmd::run(command)
 }
 
 /// Run a Python subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
 pub fn run_python(command: &PythonCommands) -> pecos_build::Result<()> {
     python_cmd::run(command)
 }
 
 /// Run a CUDA subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
 pub fn run_cuda(command: CudaCommands) -> pecos_build::Result<()> {
     cuda_cmd::run(command)
 }
 
+/// Run a cuQuantum subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
+pub fn run_cuquantum(command: CuQuantumCommands) -> pecos_build::Result<()> {
+    cuquantum_cmd::run(command)
+}
+
+/// Run a GPU subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
+pub fn run_gpu(command: &GpuCommands) -> pecos_build::Result<()> {
+    gpu_cmd::run(command)
+}
+
 /// Run a Julia subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
 pub fn run_julia(command: &JuliaCommands) -> pecos_build::Result<()> {
     julia_cmd::run(command)
 }
 
 /// Run a Go subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
 pub fn run_go(command: &GoCommands) -> pecos_build::Result<()> {
     go_cmd::run(command)
 }
 
 /// Run a Selene subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
 pub fn run_selene(command: SeleneCommands) -> pecos_build::Result<()> {
     selene_cmd::run(command)
 }
 
 /// Run a Features subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
 pub fn run_features(command: FeaturesCommands) -> pecos_build::Result<()> {
     features_cmd::run(command)
 }
 
 /// Run an LLVM subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
 pub fn run_llvm(command: LlvmCommands) -> pecos_build::Result<()> {
     llvm_cmd::run(command)
 }
 
 /// Run a Deps subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
 pub fn run_deps(command: DepsCommands) -> pecos_build::Result<()> {
     manifest_cmd::run(command)
 }
 
+/// Run the install command
+///
+/// # Errors
+///
+/// Returns an error if any target fails to install.
+pub fn run_install(
+    targets: &[String],
+    force: bool,
+    all: bool,
+    no_configure: bool,
+) -> pecos_build::Result<()> {
+    install_cmd::run(targets, force, all, no_configure)
+}
+
+/// Run the uninstall command
+///
+/// # Errors
+///
+/// Returns an error if any target fails to uninstall.
+pub fn run_uninstall(targets: &[String], all: bool) -> pecos_build::Result<()> {
+    uninstall_cmd::run(targets, all)
+}
+
+/// Run the upgrade command
+///
+/// # Errors
+///
+/// Returns an error if any target fails to upgrade.
+pub fn run_upgrade(targets: &[String], all: bool, no_configure: bool) -> pecos_build::Result<()> {
+    upgrade_cmd::run(targets, all, no_configure)
+}
+
 /// Run the sys-info command
+///
+/// # Errors
+///
+/// Returns an error if system information cannot be gathered.
 pub fn run_sys_info() -> pecos_build::Result<()> {
     info::run()
 }
 
 /// Run the list command
+///
+/// # Errors
+///
+/// Returns an error if component status cannot be determined.
 pub fn run_list(verbose: bool) -> pecos_build::Result<()> {
     list::run(verbose)
 }
 
 /// Run the docs command
+///
+/// # Errors
+///
+/// Returns an error if the documentation server cannot be started.
 pub fn run_docs(port: u16, no_browser: bool) -> pecos_build::Result<()> {
     docs_cmd::run(port, no_browser)
+}
+
+/// Run a self subcommand
+///
+/// # Errors
+///
+/// Returns an error if the subcommand fails.
+pub fn run_self(command: SelfCommands) -> pecos_build::Result<()> {
+    match command {
+        SelfCommands::Upgrade => self_update_cmd::run(),
+        SelfCommands::Uninstall => self_update_cmd::run_uninstall(),
+    }
 }

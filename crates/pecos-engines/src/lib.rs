@@ -29,7 +29,10 @@ pub use noise::{
     PassThroughNoiseModel, PassThroughNoiseModelBuilder,
 };
 pub use pecos_core::errors::PecosError;
-pub use quantum::{CoinTossEngine, QuantumEngine};
+pub use quantum::{
+    CoinTossEngine, DenseStateVecEngine, QuantumEngine, StateVecEngine, StateVectorEngine,
+    StateVectorSimulator,
+};
 pub use quantum_engine_builder::{
     CoinTossEngineBuilder, IntoQuantumEngineBuilder, QuantumEngineBuilder,
     SparseStabilizerEngineBuilder, StateVectorEngineBuilder, coin_toss, sparse_stab,

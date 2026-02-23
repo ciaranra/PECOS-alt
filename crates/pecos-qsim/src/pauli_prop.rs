@@ -12,16 +12,9 @@
 
 use super::clifford_gateable::{CliffordGateable, MeasurementResult};
 use crate::quantum_simulator::QuantumSimulator;
-use core::marker::PhantomData;
-use pecos_core::{IndexableElement, Set, VecSet};
+use pecos_core::{QubitId, Set, VecSet};
 use std::collections::BTreeMap;
 use std::fmt;
-
-// TODO: Allow for the use of sets of elements of types other than usize
-
-/// Type alias for the most common use case of `PauliProp` with standard vectors
-#[expect(clippy::module_name_repetitions)]
-pub type StdPauliProp = PauliProp<VecSet<usize>, usize>;
 
 /// A simulator that tracks how Pauli operators transform under Clifford operations.
 ///
@@ -43,17 +36,14 @@ pub type StdPauliProp = PauliProp<VecSet<usize>, usize>;
 ///
 /// Optionally, the sign and phase can be tracked for full Pauli string representation.
 ///
-/// # Type Parameters
-/// - `T`: The set type used to store qubit indices (e.g., `VecSet`\<usize\>)
-/// - `E`: The element type used for qubit indices (e.g., usize)
-///
 /// # Example
 /// ```rust
-/// use pecos_qsim::{StdPauliProp, CliffordGateable};
+/// use pecos_core::qid;
+/// use pecos_qsim::{PauliProp, CliffordGateable};
 ///
-/// let mut sim = StdPauliProp::new();
+/// let mut sim = PauliProp::new();
 /// sim.add_x(0);  // Track an X on qubit 0
-/// sim.h(0);         // Apply Hadamard - transforms X to Z
+/// sim.h(&qid(0));    // Apply Hadamard - transforms X to Z
 /// assert!(sim.contains_z(0));  // Verify qubit 0 now has Z
 /// ```
 ///
@@ -65,37 +55,24 @@ pub type StdPauliProp = PauliProp<VecSet<usize>, usize>;
 /// - Gottesman, "The Heisenberg Representation of Quantum Computers"
 ///   <https://arxiv.org/abs/quant-ph/9807006>
 #[derive(Clone, Debug)]
-pub struct PauliProp<T, E>
-where
-    T: for<'a> Set<'a, Element = E>,
-    E: IndexableElement,
-{
-    xs: T,
-    zs: T,
+pub struct PauliProp {
+    xs: VecSet<usize>,
+    zs: VecSet<usize>,
     /// Optional tracking of the sign (false = +1, true = -1)
     sign: Option<bool>,
     /// Optional tracking of imaginary phase (0 = 1, 1 = i, 2 = -1, 3 = -i)
     img: Option<u8>,
     /// Maximum qubit index for string representation (optional)
     num_qubits: Option<usize>,
-    _marker: PhantomData<E>,
 }
 
-impl<T, E> Default for PauliProp<T, E>
-where
-    E: IndexableElement,
-    T: for<'a> Set<'a, Element = E>,
-{
+impl Default for PauliProp {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T, E> PauliProp<T, E>
-where
-    E: IndexableElement,
-    T: for<'a> Set<'a, Element = E>,
-{
+impl PauliProp {
     /// Creates a new `PauliProp` simulator.
     ///
     /// The simulator is initialized with no Pauli operators as the user needs to specify what
@@ -106,12 +83,11 @@ where
     #[must_use]
     pub fn new() -> Self {
         PauliProp {
-            xs: T::new(),
-            zs: T::new(),
+            xs: VecSet::new(),
+            zs: VecSet::new(),
             sign: None,
             img: None,
             num_qubits: None,
-            _marker: PhantomData,
         }
     }
 
@@ -125,21 +101,16 @@ where
     #[must_use]
     pub fn with_sign_tracking(num_qubits: usize) -> Self {
         PauliProp {
-            xs: T::new(),
-            zs: T::new(),
+            xs: VecSet::new(),
+            zs: VecSet::new(),
             sign: Some(false), // Start with +1
             img: Some(0),      // Start with no imaginary component
             num_qubits: Some(num_qubits),
-            _marker: PhantomData,
         }
     }
 }
 
-impl<T, E> QuantumSimulator for PauliProp<T, E>
-where
-    E: IndexableElement,
-    T: for<'a> Set<'a, Element = E>,
-{
+impl QuantumSimulator for PauliProp {
     /// Resets the state by clearing all Pauli all tracked X and Z operators.
     ///
     /// # Returns
@@ -158,11 +129,7 @@ where
     }
 }
 
-impl<T, E> PauliProp<T, E>
-where
-    T: for<'a> Set<'a, Element = E>,
-    E: IndexableElement,
-{
+impl PauliProp {
     /// Checks if the specified qubit has an X operator.
     ///
     /// # Arguments
@@ -171,7 +138,8 @@ where
     /// # Returns
     /// `true` if an X operator is present on the qubit
     #[inline]
-    pub fn contains_x(&self, item: E) -> bool {
+    #[must_use]
+    pub fn contains_x(&self, item: usize) -> bool {
         self.xs.contains(&item)
     }
 
@@ -183,7 +151,8 @@ where
     /// # Returns
     /// `true` if a Z operator is present on the qubit
     #[inline]
-    pub fn contains_z(&self, item: E) -> bool {
+    #[must_use]
+    pub fn contains_z(&self, item: usize) -> bool {
         self.zs.contains(&item)
     }
 
@@ -197,7 +166,8 @@ where
     /// # Returns
     /// `true` if both X and Z operators are present on the qubit
     #[inline]
-    pub fn contains_y(&self, item: E) -> bool {
+    #[must_use]
+    pub fn contains_y(&self, item: usize) -> bool {
         self.contains_x(item) && self.contains_z(item)
     }
 
@@ -212,7 +182,7 @@ where
     /// # Arguments
     /// * `item` - The qubit index to add the X operator to
     #[inline]
-    pub fn add_x(&mut self, item: E) {
+    pub fn add_x(&mut self, item: usize) {
         self.xs.symmetric_difference_item_update(&item);
     }
 
@@ -227,7 +197,7 @@ where
     /// # Arguments
     /// * `item` - The qubit index to add the Z operator to
     #[inline]
-    pub fn add_z(&mut self, item: E) {
+    pub fn add_z(&mut self, item: usize) {
         self.zs.symmetric_difference_item_update(&item);
     }
 
@@ -244,7 +214,7 @@ where
     /// # Arguments
     /// * `item` - The qubit index to add the Y operator to
     #[inline]
-    pub fn add_y(&mut self, item: E) {
+    pub fn add_y(&mut self, item: usize) {
         self.add_x(item);
         self.add_z(item);
     }
@@ -291,10 +261,10 @@ where
     /// # Example
     /// ```rust
     /// use std::collections::BTreeMap;
-    /// use pecos_qsim::StdPauliProp;
+    /// use pecos_qsim::PauliProp;
     /// use pecos_core::{VecSet, Set};
     ///
-    /// let mut sim = StdPauliProp::with_sign_tracking(4);
+    /// let mut sim = PauliProp::with_sign_tracking(4);
     /// let mut paulis = BTreeMap::new();
     /// let mut x_set = VecSet::new();
     /// x_set.insert(0);
@@ -302,14 +272,10 @@ where
     /// paulis.insert("X".to_string(), x_set);
     /// sim.add_paulis(&paulis);
     /// ```
-    pub fn add_paulis(&mut self, paulis: &BTreeMap<String, T>)
-    where
-        T: Clone,
-        E: Copy,
-    {
+    pub fn add_paulis(&mut self, paulis: &BTreeMap<String, VecSet<usize>>) {
         // Handle X operators
         if let Some(x_set) = paulis.get("X") {
-            for &item in x_set.iter() {
+            for &item in x_set {
                 let was_y = self.contains_y(item);
                 let was_z = self.contains_z(item) && !was_y;
 
@@ -330,7 +296,7 @@ where
 
         // Handle Z operators
         if let Some(z_set) = paulis.get("Z") {
-            for &item in z_set.iter() {
+            for &item in z_set {
                 let was_y = self.contains_y(item);
                 let was_x = self.contains_x(item) && !was_y;
 
@@ -351,7 +317,7 @@ where
 
         // Handle Y operators
         if let Some(y_set) = paulis.get("Y") {
-            for &item in y_set.iter() {
+            for &item in y_set {
                 let was_x = self.contains_x(item) && !self.contains_z(item);
                 let was_z = self.contains_z(item) && !self.contains_x(item);
 
@@ -375,24 +341,25 @@ where
     ///
     /// # Returns
     /// The total number of qubits with non-identity Pauli operators
+    #[must_use]
     pub fn weight(&self) -> usize {
         // Count X-only qubits
         let mut count = 0;
-        for item in self.xs.iter() {
+        for item in &self.xs {
             if !self.zs.contains(item) {
                 count += 1;
             }
         }
 
         // Count Z-only qubits
-        for item in self.zs.iter() {
+        for item in &self.zs {
             if !self.xs.contains(item) {
                 count += 1;
             }
         }
 
         // Count Y qubits (both X and Z)
-        for item in self.xs.iter() {
+        for item in &self.xs {
             if self.zs.contains(item) {
                 count += 1;
             }
@@ -405,6 +372,7 @@ where
     ///
     /// # Returns
     /// true if there are no X, Y, or Z operators on any qubit
+    #[must_use]
     pub fn is_identity(&self) -> bool {
         self.xs.is_empty() && self.zs.is_empty()
     }
@@ -413,6 +381,7 @@ where
     ///
     /// # Returns
     /// false for positive sign, true for negative sign
+    #[must_use]
     pub fn get_sign(&self) -> bool {
         self.sign.unwrap_or(false)
     }
@@ -421,6 +390,7 @@ where
     ///
     /// # Returns
     /// 0 for real, 1 for imaginary
+    #[must_use]
     pub fn get_img(&self) -> u8 {
         self.img.unwrap_or(0)
     }
@@ -429,6 +399,7 @@ where
     ///
     /// # Returns
     /// A string like "+", "-", "+i", or "-i" depending on the phase
+    #[must_use]
     pub fn sign_string(&self) -> String {
         match (self.sign, self.img) {
             (Some(false), Some(0) | None) => "+".to_string(),
@@ -443,14 +414,12 @@ where
     ///
     /// # Returns
     /// A string like "`X_0` `Z_2` `Y_3`" representing non-identity operators
-    pub fn sparse_string(&self) -> String
-    where
-        E: Copy,
-    {
+    #[must_use]
+    pub fn sparse_string(&self) -> String {
         let mut entries = Vec::new();
 
         // Collect all qubit indices with operators
-        for &item in self.xs.iter() {
+        for &item in &self.xs {
             if self.contains_y(item) {
                 entries.push((item, 'Y'));
             } else {
@@ -458,7 +427,7 @@ where
             }
         }
 
-        for &item in self.zs.iter() {
+        for &item in &self.zs {
             if !self.xs.contains(&item) {
                 entries.push((item, 'Z'));
             }
@@ -480,16 +449,13 @@ where
     ///
     /// # Returns
     /// A string like "+`X_0` `Z_2`" in sparse format
-    pub fn to_pauli_string(&self) -> String
-    where
-        E: Copy,
-    {
+    #[must_use]
+    pub fn to_pauli_string(&self) -> String {
         format!("{}{}", self.sign_string(), self.sparse_string())
     }
 }
 
-// Specialized implementation for StdPauliProp (usize indices)
-impl StdPauliProp {
+impl PauliProp {
     /// Get all qubits with X operators (including those with Y)
     #[must_use]
     pub fn get_x_qubits(&self) -> Vec<usize> {
@@ -569,22 +535,14 @@ impl StdPauliProp {
     }
 }
 
-impl<T, E> fmt::Display for PauliProp<T, E>
-where
-    T: for<'a> Set<'a, Element = E>,
-    E: IndexableElement + Copy,
-{
+impl fmt::Display for PauliProp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_pauli_string())
     }
 }
 
-impl<T, E> CliffordGateable<E> for PauliProp<T, E>
-where
-    T: for<'a> Set<'a, Element = E>,
-    E: IndexableElement,
-{
-    /// Applies the square root of Z gate (SZ or S gate) to the specified qubit.
+impl CliffordGateable for PauliProp {
+    /// Applies the square root of Z gate (SZ or S gate) to the specified qubits.
     ///
     /// The SZ gate transforms Pauli operators as follows:
     /// ```text
@@ -596,19 +554,22 @@ where
     /// Implementation: If the qubit has an X operator, toggle its Z operator
     ///
     /// # Arguments
-    /// * `q` - The target qubit
+    /// * `qubits` - The target qubits
     ///
     /// # Returns
     /// * `&mut Self` - Returns self for method chaining
     #[inline]
-    fn sz(&mut self, q: E) -> &mut Self {
-        if self.contains_x(q) {
-            self.add_z(q);
+    fn sz(&mut self, qubits: &[QubitId]) -> &mut Self {
+        for &q in qubits {
+            let qu = q.index();
+            if self.contains_x(qu) {
+                self.add_z(qu);
+            }
         }
         self
     }
 
-    /// Applies the Hadamard (H) gate to the specified qubit.
+    /// Applies the Hadamard (H) gate to the specified qubits.
     ///
     /// The H gate transforms Pauli operators as follows:
     /// ```text
@@ -622,28 +583,31 @@ where
     /// - For Y: Leave unchanged (Y transforms to -Y)
     ///
     /// # Arguments
-    /// * `q` - The target qubit
+    /// * `qubits` - The target qubits
     ///
     /// # Returns
     /// * `&mut Self` - Returns self for method chaining
     #[inline]
     #[expect(clippy::similar_names)]
-    fn h(&mut self, q: E) -> &mut Self {
-        let in_xs = self.contains_x(q);
-        let in_zs = self.contains_z(q);
+    fn h(&mut self, qubits: &[QubitId]) -> &mut Self {
+        for &q in qubits {
+            let qu = q.index();
+            let in_xs = self.contains_x(qu);
+            let in_zs = self.contains_z(qu);
 
-        if in_xs && in_zs {
-        } else if in_xs {
-            self.xs.remove(&q);
-            self.zs.insert(q);
-        } else if in_zs {
-            self.zs.remove(&q);
-            self.xs.insert(q);
+            if in_xs && in_zs {
+            } else if in_xs {
+                self.xs.remove(&qu);
+                self.zs.insert(qu);
+            } else if in_zs {
+                self.zs.remove(&qu);
+                self.xs.insert(qu);
+            }
         }
         self
     }
 
-    /// Applies the controlled-X (CX) gate between two qubits
+    /// Applies the controlled-X (CX) gate between pairs of qubits
     ///
     /// The CX gate transforms Pauli operators as follows:
     /// ```text
@@ -658,23 +622,30 @@ where
     /// - If target has Z: Toggle Z on control
     ///
     /// # Arguments
-    /// * `q1` - The control qubit
-    /// * `q2` - The target qubit
+    /// * `qubits` - Pairs of (control, target) qubits
     ///
     /// # Returns
     /// * `&mut Self` - Returns self for method chaining
     #[inline]
-    fn cx(&mut self, q1: E, q2: E) -> &mut Self {
-        if self.contains_x(q1) {
-            self.add_x(q2);
-        }
-        if self.contains_z(q2) {
-            self.add_z(q1);
+    fn cx(&mut self, qubits: &[QubitId]) -> &mut Self {
+        debug_assert!(
+            qubits.len().is_multiple_of(2),
+            "CX requires pairs of qubits"
+        );
+        for pair in qubits.chunks_exact(2) {
+            let q1 = pair[0].index();
+            let q2 = pair[1].index();
+            if self.contains_x(q1) {
+                self.add_x(q2);
+            }
+            if self.contains_z(q2) {
+                self.add_z(q1);
+            }
         }
         self
     }
 
-    /// Performs a Z-basis measurement on the specified qubit.
+    /// Performs a Z-basis measurement on the specified qubits.
     ///
     /// This simulates the effect of Pauli operators on measurement due to propagation.
     /// The outcome indicates whether an X operator has propagated to the measured
@@ -685,19 +656,24 @@ where
     /// are originally deterministic.
     ///
     /// # Arguments
-    /// * `q` - The qubit to measure
+    /// * `qubits` - The qubits to measure
     ///
     /// # Returns
-    /// * `MeasurementResult` containing:
+    /// * `Vec<MeasurementResult>` containing:
     ///   - `outcome`: true if an X operator is present (measurement flipped)
     ///   - `is_deterministic`: always true for this simulator
     #[inline]
-    fn mz(&mut self, q: E) -> MeasurementResult {
-        let outcome = self.contains_x(q);
-        MeasurementResult {
-            outcome,
-            is_deterministic: true,
-        }
+    fn mz(&mut self, qubits: &[QubitId]) -> Vec<MeasurementResult> {
+        qubits
+            .iter()
+            .map(|&q| {
+                let outcome = self.contains_x(q.index());
+                MeasurementResult {
+                    outcome,
+                    is_deterministic: true,
+                }
+            })
+            .collect()
     }
 }
 
@@ -708,7 +684,7 @@ mod tests {
 
     #[test]
     fn test_sign_tracking() {
-        let mut sim = StdPauliProp::with_sign_tracking(4);
+        let mut sim = PauliProp::with_sign_tracking(4);
 
         // Initially should be +
         assert_eq!(sim.sign_string(), "+");
@@ -729,7 +705,7 @@ mod tests {
 
     #[test]
     fn test_weight() {
-        let mut sim = StdPauliProp::new();
+        let mut sim = PauliProp::new();
 
         // Empty should have weight 0
         assert_eq!(sim.weight(), 0);
@@ -753,7 +729,7 @@ mod tests {
 
     #[test]
     fn test_dense_string() {
-        let mut sim = StdPauliProp::with_sign_tracking(4);
+        let mut sim = PauliProp::with_sign_tracking(4);
 
         sim.add_x(0);
         sim.add_z(2);
@@ -768,7 +744,7 @@ mod tests {
 
     #[test]
     fn test_add_paulis() {
-        let mut sim = StdPauliProp::with_sign_tracking(4);
+        let mut sim = PauliProp::with_sign_tracking(4);
 
         let mut paulis = BTreeMap::new();
         let mut x_set = VecSet::new();
@@ -791,7 +767,7 @@ mod tests {
 
     #[test]
     fn test_pauli_composition_with_phase() {
-        let mut sim = StdPauliProp::with_sign_tracking(2);
+        let mut sim = PauliProp::with_sign_tracking(2);
 
         // Start with X on qubit 0
         sim.add_x(0);

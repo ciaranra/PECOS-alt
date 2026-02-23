@@ -20,11 +20,18 @@
 use criterion::{BenchmarkId, Criterion, Throughput, measurement::Measurement};
 use pecos::prelude::*;
 use pecos::qsim::measurement_sampler::{MeasurementSampler, SequentialMeasurementSampler};
+use pecos::qsim::{SparseStab, SparseStabVecSet, SymbolicSparseStab, SymbolicSparseStabVecSet};
+use pecos_engines::quantum::SparseStabEngine;
+use pecos_engines::{Engine, EngineSystem, QuantumSystem};
 use rand::RngExt;
 use std::hint::black_box;
 
 pub fn benchmarks<M: Measurement>(c: &mut Criterion<M>) {
     bench_surface_code_simulation(c);
+    bench_sparse_stab_simulation(c);
+    bench_bitset_vs_vecset_simulation(c);
+    bench_sparse_stab_bitset_vs_vecset(c);
+    bench_surface_code_noisy(c);
     bench_surface_code_sampling(c);
     bench_surface_code_shot_scaling(c);
     bench_simd_vs_scalar(c);
@@ -112,9 +119,21 @@ impl SurfaceCodeParams {
 /// - Each ancilla is entangled with 2-4 data qubits via CNOT gates
 /// - Ancillas are measured, creating non-deterministic outcomes in round 1
 /// - Subsequent rounds create computed measurements (XOR with previous round)
-fn simulate_surface_code(params: &SurfaceCodeParams, rounds: usize) -> StdSymbolicSparseStab {
-    let mut sim = StdSymbolicSparseStab::new(params.num_qubits);
+fn simulate_surface_code(params: &SurfaceCodeParams, rounds: usize) -> SymbolicSparseStab {
+    let mut sim = SymbolicSparseStab::new(params.num_qubits);
+    sim.reset();
+    run_circuit_only(&mut sim, params, rounds);
+    sim
+}
 
+/// Run surface code circuit on VecSet-based simulator WITHOUT reset.
+/// Assumes the simulator is already in a clean initial state.
+/// Use this to benchmark pure circuit simulation without reset overhead.
+fn run_circuit_vecset(
+    sim: &mut SymbolicSparseStabVecSet,
+    params: &SurfaceCodeParams,
+    rounds: usize,
+) {
     // Initialize data qubits in |+> state (typical for X-error detection)
     for i in 0..params.num_data {
         sim.h(i);
@@ -152,19 +171,24 @@ fn simulate_surface_code(params: &SurfaceCodeParams, rounds: usize) -> StdSymbol
             sim.mz(ancilla);
         }
     }
-
-    sim
 }
 
 /// Benchmark the simulation phase (running circuits through `SymbolicSparseStab`).
+///
+/// Provides three benchmark variants:
+/// - `circuit_only`: Pure circuit simulation (reset happens in setup, not timed)
+/// - `full_shot`: Reset + circuit on populated simulator (Monte Carlo pattern)
+/// - `with_alloc`: Fresh allocation + reset + circuit (one-shot pattern)
 fn bench_surface_code_simulation<M: Measurement>(c: &mut Criterion<M>) {
+    use criterion::BatchSize;
+
     let mut group = c.benchmark_group("Surface Code - Simulation");
 
     // Test different distances and round counts
     for distance in [5, 11, 17] {
         let params = SurfaceCodeParams::new(distance);
 
-        for rounds in [1, 3, 5, 10] {
+        for rounds in [1, 3, 5, 10, 20] {
             let label = format!("d{distance}_r{rounds}");
 
             // Throughput: number of gates + measurements
@@ -172,8 +196,465 @@ fn bench_surface_code_simulation<M: Measurement>(c: &mut Criterion<M>) {
             let ops_per_run = rounds * (params.num_ancillas * 3 + params.num_ancillas); // ~3 CNOTs + 1 meas per ancilla
             group.throughput(Throughput::Elements(ops_per_run as u64));
 
-            group.bench_with_input(BenchmarkId::new("symbolic_sim", &label), &(), |b, ()| {
+            // 1. Circuit-only: Pure simulation without reset overhead
+            // Uses iter_batched so reset happens in setup (not timed)
+            group.bench_with_input(BenchmarkId::new("circuit_only", &label), &(), |b, ()| {
+                b.iter_batched(
+                    || {
+                        // Setup: create and reset simulator (not timed)
+                        let mut sim = SymbolicSparseStab::new(params.num_qubits);
+                        sim.reset();
+                        sim
+                    },
+                    |mut sim| {
+                        // Routine: only circuit execution (timed)
+                        run_circuit_only(&mut sim, &params, rounds);
+                        black_box(sim)
+                    },
+                    BatchSize::SmallInput,
+                );
+            });
+
+            // 2. Full shot: Reset + circuit on populated simulator (Monte Carlo pattern)
+            // This is what happens per shot in Monte Carlo: reset populated state, run circuit
+            group.bench_with_input(BenchmarkId::new("full_shot", &label), &(), |b, ()| {
+                b.iter_batched(
+                    || {
+                        // Setup: create simulator and populate it (not timed)
+                        let mut sim = SymbolicSparseStab::new(params.num_qubits);
+                        sim.reset();
+                        run_circuit_only(&mut sim, &params, rounds);
+                        sim
+                    },
+                    |mut sim| {
+                        // Routine: reset + circuit (timed) - this is the Monte Carlo shot
+                        sim.reset();
+                        run_circuit_only(&mut sim, &params, rounds);
+                        black_box(sim)
+                    },
+                    BatchSize::SmallInput,
+                );
+            });
+
+            // 3. With allocation: Fresh alloc + reset + circuit (one-shot pattern)
+            // Note: Criterion drops return value after timing, so drop cost not included
+            group.bench_with_input(BenchmarkId::new("with_alloc", &label), &(), |b, ()| {
                 b.iter(|| black_box(simulate_surface_code(&params, rounds)));
+            });
+        }
+    }
+
+    group.finish();
+}
+
+/// Run surface code circuit on `SparseStab` (for Monte Carlo benchmarking).
+fn run_circuit_sparse_stab<R: Rng + SeedableRng + std::fmt::Debug>(
+    sim: &mut SparseStab<R>,
+    params: &SurfaceCodeParams,
+    rounds: usize,
+) {
+    use pecos::quantum::QubitId;
+
+    // Initialize data qubits in |+> state
+    for i in 0..params.num_data {
+        sim.h(&[QubitId::from(i)]);
+    }
+
+    // Perform syndrome extraction rounds
+    for _round in 0..rounds {
+        for a in 0..params.num_ancillas {
+            let ancilla = QubitId::from(params.ancilla_start + a);
+            let neighbors = params.ancilla_neighbors(a);
+
+            if a < params.num_ancillas / 2 {
+                for &data in &neighbors {
+                    sim.cx(&[ancilla, QubitId::from(data)]);
+                }
+            } else {
+                for &data in &neighbors {
+                    sim.cx(&[QubitId::from(data), ancilla]);
+                }
+            }
+        }
+
+        for a in 0..params.num_ancillas {
+            let ancilla = QubitId::from(params.ancilla_start + a);
+            sim.mz(&[ancilla]);
+        }
+    }
+}
+
+/// Run surface code circuit on `SymbolicSparseStab` (`BitSet` version).
+fn run_circuit_only(sim: &mut SymbolicSparseStab, params: &SurfaceCodeParams, rounds: usize) {
+    // Initialize data qubits in |+> state
+    for i in 0..params.num_data {
+        sim.h(i);
+    }
+
+    // Perform syndrome extraction rounds
+    for _round in 0..rounds {
+        for a in 0..params.num_ancillas {
+            let ancilla = params.ancilla_start + a;
+            let neighbors = params.ancilla_neighbors(a);
+
+            if a < params.num_ancillas / 2 {
+                for &data in &neighbors {
+                    sim.cx(ancilla, data);
+                }
+            } else {
+                for &data in &neighbors {
+                    sim.cx(data, ancilla);
+                }
+            }
+        }
+
+        for a in 0..params.num_ancillas {
+            let ancilla = params.ancilla_start + a;
+            sim.mz(ancilla);
+        }
+    }
+}
+
+/// Benchmark `SparseStab` directly (what Monte Carlo uses internally).
+///
+/// This isolates `SparseStab` performance without engine overhead:
+/// - `circuit_only`: Pure circuit simulation (reset in setup)
+/// - `full_shot`: Reset + circuit on populated simulator (Monte Carlo pattern)
+fn bench_sparse_stab_simulation<M: Measurement>(c: &mut Criterion<M>) {
+    use criterion::BatchSize;
+
+    let mut group = c.benchmark_group("SparseStab - Simulation");
+
+    for distance in [5, 11, 17] {
+        let params = SurfaceCodeParams::new(distance);
+
+        for rounds in [1, 5, 10] {
+            let label = format!("d{distance}_r{rounds}");
+
+            let ops_per_run = rounds * (params.num_ancillas * 3 + params.num_ancillas);
+            group.throughput(Throughput::Elements(ops_per_run as u64));
+
+            // Circuit-only: reset in setup (not timed)
+            group.bench_with_input(BenchmarkId::new("circuit_only", &label), &(), |b, ()| {
+                b.iter_batched(
+                    || {
+                        let mut sim = SparseStab::new(params.num_qubits);
+                        sim.reset();
+                        sim
+                    },
+                    |mut sim| {
+                        run_circuit_sparse_stab(&mut sim, &params, rounds);
+                        black_box(sim)
+                    },
+                    BatchSize::SmallInput,
+                );
+            });
+
+            // Full shot: reset + circuit on populated sim (Monte Carlo pattern)
+            group.bench_with_input(BenchmarkId::new("full_shot", &label), &(), |b, ()| {
+                b.iter_batched(
+                    || {
+                        let mut sim = SparseStab::new(params.num_qubits);
+                        sim.reset();
+                        run_circuit_sparse_stab(&mut sim, &params, rounds);
+                        sim
+                    },
+                    |mut sim| {
+                        sim.reset();
+                        run_circuit_sparse_stab(&mut sim, &params, rounds);
+                        black_box(sim)
+                    },
+                    BatchSize::SmallInput,
+                );
+            });
+        }
+    }
+
+    group.finish();
+}
+
+/// Benchmark comparing BitSet-based vs VecSet-based `SymbolicSparseStab` simulators.
+///
+/// Both simulators implement the same symbolic stabilizer algorithm but with different
+/// underlying set implementations:
+/// - `VecSet`: O(n) linear search for toggle operations
+/// - `BitSet`: O(1) bit operations for toggle
+fn bench_bitset_vs_vecset_simulation<M: Measurement>(c: &mut Criterion<M>) {
+    use criterion::BatchSize;
+
+    let mut group = c.benchmark_group("BitSet vs VecSet - Symbolic");
+
+    for distance in [5, 11, 17] {
+        let params = SurfaceCodeParams::new(distance);
+
+        for rounds in [1, 5, 10] {
+            let label = format!("d{distance}_r{rounds}");
+
+            let ops_per_run = rounds * (params.num_ancillas * 3 + params.num_ancillas);
+            group.throughput(Throughput::Elements(ops_per_run as u64));
+
+            // VecSet version (baseline)
+            group.bench_with_input(
+                BenchmarkId::new("VecSet/circuit_only", &label),
+                &(),
+                |b, ()| {
+                    b.iter_batched(
+                        || {
+                            let mut sim = SymbolicSparseStabVecSet::new(params.num_qubits);
+                            sim.reset();
+                            sim
+                        },
+                        |mut sim| {
+                            run_circuit_vecset(&mut sim, &params, rounds);
+                            black_box(sim)
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+
+            // BitSet version
+            group.bench_with_input(
+                BenchmarkId::new("BitSet/circuit_only", &label),
+                &(),
+                |b, ()| {
+                    b.iter_batched(
+                        || {
+                            let mut sim = SymbolicSparseStab::new(params.num_qubits);
+                            sim.reset();
+                            sim
+                        },
+                        |mut sim| {
+                            run_circuit_only(&mut sim, &params, rounds);
+                            black_box(sim)
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+        }
+    }
+
+    group.finish();
+}
+
+/// Run surface code circuit on `SparseStabVecSet` (for `BitSet` vs `VecSet` comparison).
+fn run_circuit_sparse_stab_vecset<R: Rng + SeedableRng + std::fmt::Debug>(
+    sim: &mut SparseStabVecSet<R>,
+    params: &SurfaceCodeParams,
+    rounds: usize,
+) {
+    use pecos::quantum::QubitId;
+
+    // Initialize data qubits in |+> state
+    for i in 0..params.num_data {
+        sim.h(&[QubitId::from(i)]);
+    }
+
+    // Perform syndrome extraction rounds
+    for _round in 0..rounds {
+        for a in 0..params.num_ancillas {
+            let ancilla = QubitId::from(params.ancilla_start + a);
+            let neighbors = params.ancilla_neighbors(a);
+
+            if a < params.num_ancillas / 2 {
+                for &data in &neighbors {
+                    sim.cx(&[ancilla, QubitId::from(data)]);
+                }
+            } else {
+                for &data in &neighbors {
+                    sim.cx(&[QubitId::from(data), ancilla]);
+                }
+            }
+        }
+
+        for a in 0..params.num_ancillas {
+            let ancilla = QubitId::from(params.ancilla_start + a);
+            sim.mz(&[ancilla]);
+        }
+    }
+}
+
+/// Benchmark comparing BitSet-based vs VecSet-based `SparseStab` simulators.
+///
+/// Both simulators implement the same stabilizer algorithm but with different
+/// underlying set implementations:
+/// - `SparseStab` (BitSet): O(1) bit operations for toggle
+/// - `SparseStabVecSet`: O(n) linear search for toggle operations
+fn bench_sparse_stab_bitset_vs_vecset<M: Measurement>(c: &mut Criterion<M>) {
+    use criterion::BatchSize;
+
+    let mut group = c.benchmark_group("BitSet vs VecSet - SparseStab");
+
+    for distance in [5, 11, 17] {
+        let params = SurfaceCodeParams::new(distance);
+
+        for rounds in [1, 5, 10] {
+            let label = format!("d{distance}_r{rounds}");
+
+            let ops_per_run = rounds * (params.num_ancillas * 3 + params.num_ancillas);
+            group.throughput(Throughput::Elements(ops_per_run as u64));
+
+            // VecSet version (baseline)
+            group.bench_with_input(
+                BenchmarkId::new("VecSet/circuit_only", &label),
+                &(),
+                |b, ()| {
+                    b.iter_batched(
+                        || {
+                            use pecos_rng::PecosRng;
+
+                            let rng: PecosRng = rand::make_rng();
+                            let mut sim = SparseStabVecSet::with_rng(params.num_qubits, rng);
+                            sim.reset();
+                            sim
+                        },
+                        |mut sim| {
+                            run_circuit_sparse_stab_vecset(&mut sim, &params, rounds);
+                            black_box(sim)
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+
+            // BitSet version (SparseStab default)
+            group.bench_with_input(
+                BenchmarkId::new("BitSet/circuit_only", &label),
+                &(),
+                |b, ()| {
+                    b.iter_batched(
+                        || {
+                            let mut sim = SparseStab::new(params.num_qubits);
+                            sim.reset();
+                            sim
+                        },
+                        |mut sim| {
+                            run_circuit_sparse_stab(&mut sim, &params, rounds);
+                            black_box(sim)
+                        },
+                        BatchSize::SmallInput,
+                    );
+                },
+            );
+        }
+    }
+
+    group.finish();
+}
+
+/// Build a surface code syndrome extraction circuit as a `ByteMessage`.
+///
+/// This creates the same circuit structure as `simulate_surface_code` but
+/// in `ByteMessage` format for use with the engine infrastructure.
+fn build_surface_code_circuit(params: &SurfaceCodeParams, rounds: usize) -> ByteMessage {
+    let mut builder = ByteMessageBuilder::new();
+    let _ = builder.for_quantum_operations();
+
+    // Initialize data qubits in |+> state
+    for i in 0..params.num_data {
+        builder.add_h(&[i]);
+    }
+
+    // Perform syndrome extraction rounds
+    for _round in 0..rounds {
+        // Entangle ancillas with their data qubit neighbors
+        for a in 0..params.num_ancillas {
+            let ancilla = params.ancilla_start + a;
+            let neighbors = params.ancilla_neighbors(a);
+
+            if a < params.num_ancillas / 2 {
+                // X-type: CNOT with ancilla as control
+                for &data in &neighbors {
+                    builder.add_cx(&[ancilla], &[data]);
+                }
+            } else {
+                // Z-type: CNOT with ancilla as target
+                for &data in &neighbors {
+                    builder.add_cx(&[data], &[ancilla]);
+                }
+            }
+        }
+
+        // Measure all ancillas
+        for a in 0..params.num_ancillas {
+            let ancilla = params.ancilla_start + a;
+            builder.add_measurements(&[ancilla]);
+        }
+    }
+
+    builder.build()
+}
+
+/// Benchmark noisy surface code simulation using `SparseStabEngine` with `DepolarizingNoiseModel`.
+///
+/// This benchmarks the full noisy simulation pipeline:
+/// - Circuit transformation through noise model
+/// - Stabilizer state evolution through `SparseStab`
+/// - Multiple shots with different noise realizations
+fn bench_surface_code_noisy<M: Measurement>(c: &mut Criterion<M>) {
+    let mut group = c.benchmark_group("Surface Code - Noisy");
+
+    // Test different distances and error rates
+    for distance in [5, 11] {
+        let params = SurfaceCodeParams::new(distance);
+        let rounds = 3; // Fixed rounds for noise benchmarks
+
+        // Build the circuit once
+        let circuit = build_surface_code_circuit(&params, rounds);
+
+        // Throughput: number of gates + measurements per shot
+        let ops_per_run = rounds * (params.num_ancillas * 3 + params.num_ancillas);
+
+        for &error_rate in &[0.0, 0.001, 0.01] {
+            let label = format!("d{distance}_r{rounds}_p{error_rate}");
+
+            // Single shot benchmark (measures per-shot overhead)
+            group.throughput(Throughput::Elements(ops_per_run as u64));
+            group.bench_with_input(BenchmarkId::new("single_shot", &label), &(), |b, ()| {
+                // Create system outside the benchmark loop for setup
+                let noise = Box::new(
+                    DepolarizingNoiseModel::builder()
+                        .with_uniform_probability(error_rate)
+                        .with_seed(42)
+                        .build(),
+                );
+                let engine = Box::new(SparseStabEngine::new(params.num_qubits));
+                let mut system = QuantumSystem::new(noise, engine);
+                system.set_seed(42);
+
+                b.iter(|| {
+                    system.reset().expect("reset failed");
+                    let result = system
+                        .process_as_system(circuit.clone())
+                        .expect("process failed");
+                    black_box(result)
+                });
+            });
+
+            // Multi-shot benchmark (100 shots)
+            let shots = 100;
+            group.throughput(Throughput::Elements((ops_per_run * shots) as u64));
+            group.bench_with_input(BenchmarkId::new("100_shots", &label), &(), |b, ()| {
+                let noise = Box::new(
+                    DepolarizingNoiseModel::builder()
+                        .with_uniform_probability(error_rate)
+                        .with_seed(42)
+                        .build(),
+                );
+                let engine = Box::new(SparseStabEngine::new(params.num_qubits));
+                let mut system = QuantumSystem::new(noise, engine);
+                system.set_seed(42);
+
+                b.iter(|| {
+                    for _ in 0..shots {
+                        system.reset().expect("reset failed");
+                        let result = system
+                            .process_as_system(circuit.clone())
+                            .expect("process failed");
+                        black_box(&result);
+                    }
+                });
             });
         }
     }

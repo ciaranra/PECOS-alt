@@ -18,7 +18,8 @@
 
 use anyhow::{Result, anyhow};
 use clap::Parser;
-use pecos_qsim::{CliffordGateable, StdSparseStab};
+use pecos_core::QubitId;
+use pecos_qsim::{CliffordGateable, SparseStab};
 use selene_core::export_simulator_plugin;
 use selene_core::simulator::SimulatorInterface;
 use selene_core::simulator::interface::SimulatorInterfaceFactory;
@@ -51,7 +52,7 @@ struct Params {
 /// The PECOS `SparseStab` simulator wrapped for Selene compatibility.
 pub struct SparseStabSimulator {
     /// The underlying PECOS sparse stabilizer simulator
-    simulator: StdSparseStab,
+    simulator: SparseStab,
     /// Number of qubits in the system
     n_qubits: u64,
     /// Threshold for angle approximation to Clifford rotations
@@ -117,7 +118,7 @@ impl SimulatorInterface for SparseStabSimulator {
 
     fn shot_start(&mut self, _shot_id: u64, seed: u64) -> Result<()> {
         // Create a fresh simulator with the given seed for deterministic behavior
-        self.simulator = StdSparseStab::with_seed(Self::to_usize(self.n_qubits), seed);
+        self.simulator = SparseStab::with_seed(Self::to_usize(self.n_qubits), seed);
         Ok(())
     }
 
@@ -136,7 +137,7 @@ impl SimulatorInterface for SparseStabSimulator {
 
         let approx_theta = self.get_approximate_angle(theta);
         let approx_phi = self.get_approximate_angle(phi);
-        let q = Self::to_usize(qubit);
+        let q = QubitId(Self::to_usize(qubit));
 
         // RXY(theta, phi) = Rz(phi) * Rx(theta) * Rz(-phi)
         // Gates are applied left-to-right in code but the matrix multiplication
@@ -145,15 +146,15 @@ impl SimulatorInterface for SparseStabSimulator {
             ApproxAngle::Zero => (),
             ApproxAngle::FracPi2 => {
                 // Rz(-pi/2) = S^dagger = szdg
-                self.simulator.szdg(q);
+                self.simulator.szdg(&[q]);
             }
             ApproxAngle::Pi => {
                 // Rz(-pi) = Z (same as Rz(pi))
-                self.simulator.z(q);
+                self.simulator.z(&[q]);
             }
             ApproxAngle::Frac3Pi2 => {
                 // Rz(-3pi/2) = Rz(pi/2) = S = sz
-                self.simulator.sz(q);
+                self.simulator.sz(&[q]);
             }
             ApproxAngle::NoSuitableApproximation => {
                 return Err(anyhow!(
@@ -168,13 +169,13 @@ impl SimulatorInterface for SparseStabSimulator {
         match approx_theta {
             ApproxAngle::Zero => (),
             ApproxAngle::FracPi2 => {
-                self.simulator.sx(q);
+                self.simulator.sx(&[q]);
             }
             ApproxAngle::Pi => {
-                self.simulator.x(q);
+                self.simulator.x(&[q]);
             }
             ApproxAngle::Frac3Pi2 => {
-                self.simulator.sxdg(q);
+                self.simulator.sxdg(&[q]);
             }
             ApproxAngle::NoSuitableApproximation => {
                 return Err(anyhow!(
@@ -190,15 +191,15 @@ impl SimulatorInterface for SparseStabSimulator {
             ApproxAngle::Zero => (),
             ApproxAngle::FracPi2 => {
                 // Rz(pi/2) = S = sz
-                self.simulator.sz(q);
+                self.simulator.sz(&[q]);
             }
             ApproxAngle::Pi => {
                 // Rz(pi) = Z
-                self.simulator.z(q);
+                self.simulator.z(&[q]);
             }
             ApproxAngle::Frac3Pi2 => {
                 // Rz(3pi/2) = Rz(-pi/2) = S^dagger = szdg
-                self.simulator.szdg(q);
+                self.simulator.szdg(&[q]);
             }
             ApproxAngle::NoSuitableApproximation => {
                 // Already handled above, but included for completeness
@@ -223,18 +224,18 @@ impl SimulatorInterface for SparseStabSimulator {
         }
 
         let approx = self.get_approximate_angle(theta);
-        let q = Self::to_usize(qubit);
+        let q = QubitId(Self::to_usize(qubit));
 
         match approx {
             ApproxAngle::Zero => (),
             ApproxAngle::FracPi2 => {
-                self.simulator.sz(q);
+                self.simulator.sz(&[q]);
             }
             ApproxAngle::Pi => {
-                self.simulator.z(q);
+                self.simulator.z(&[q]);
             }
             ApproxAngle::Frac3Pi2 => {
-                self.simulator.szdg(q);
+                self.simulator.szdg(&[q]);
             }
             ApproxAngle::NoSuitableApproximation => {
                 return Err(anyhow!(
@@ -256,24 +257,23 @@ impl SimulatorInterface for SparseStabSimulator {
             ));
         }
 
-        let q1 = Self::to_usize(qubit1);
-        let q2 = Self::to_usize(qubit2);
+        let q1 = QubitId(Self::to_usize(qubit1));
+        let q2 = QubitId(Self::to_usize(qubit2));
         let approx = self.get_approximate_angle(theta);
 
         match approx {
             ApproxAngle::Zero => (),
             ApproxAngle::FracPi2 => {
                 // sqrt(ZZ) = szz in PECOS
-                self.simulator.szz(q1, q2);
+                self.simulator.szz(&[q1, q2]);
             }
             ApproxAngle::Pi => {
                 // ZZ = Z tensor Z (up to global phase)
-                self.simulator.z(q1);
-                self.simulator.z(q2);
+                self.simulator.z(&[q1]).z(&[q2]);
             }
             ApproxAngle::Frac3Pi2 => {
                 // sqrt(ZZ)^dagger = szzdg in PECOS
-                self.simulator.szzdg(q1, q2);
+                self.simulator.szzdg(&[q1, q2]);
             }
             ApproxAngle::NoSuitableApproximation => {
                 return Err(anyhow!(
@@ -295,8 +295,8 @@ impl SimulatorInterface for SparseStabSimulator {
             ));
         }
 
-        let result = self.simulator.mz(Self::to_usize(qubit));
-        Ok(result.outcome)
+        let results = self.simulator.mz(&[QubitId(Self::to_usize(qubit))]);
+        Ok(results[0].outcome)
     }
 
     fn postselect(&mut self, qubit: u64, target_value: bool) -> Result<()> {
@@ -308,10 +308,11 @@ impl SimulatorInterface for SparseStabSimulator {
             ));
         }
 
-        let q = Self::to_usize(qubit);
+        let q = QubitId(Self::to_usize(qubit));
 
         // Measure the qubit
-        let result = self.simulator.mz(q);
+        let results = self.simulator.mz(&[q]);
+        let result = &results[0];
 
         // If the outcome doesn't match the target, we need to flip it
         // But for stabilizer states, if the measurement was deterministic and
@@ -346,11 +347,11 @@ impl SimulatorInterface for SparseStabSimulator {
             ));
         }
 
-        let q = Self::to_usize(qubit);
+        let q = QubitId(Self::to_usize(qubit));
 
         // Use the measure-and-prepare operation to reset to |0>
         // mpz measures in Z basis and prepares |0> (the +1 eigenstate of Z)
-        self.simulator.mpz(q);
+        self.simulator.mpz(&[q]);
 
         Ok(())
     }
@@ -387,7 +388,7 @@ impl SimulatorInterfaceFactory for SparseStabSimulatorFactory {
                 "Error parsing arguments to PECOS SparseStab plugin: {e}"
             )),
             Ok(params) => Ok(Box::new(SparseStabSimulator {
-                simulator: StdSparseStab::with_seed(SparseStabSimulator::to_usize(n_qubits), 0),
+                simulator: SparseStab::with_seed(SparseStabSimulator::to_usize(n_qubits), 0),
                 n_qubits,
                 angle_threshold: params.angle_threshold,
             })),
