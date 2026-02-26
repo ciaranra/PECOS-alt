@@ -14,6 +14,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 
 mod modules {
     pub mod allocation_overhead;
+    pub mod cpu_stabilizer_comparison;
     pub mod dem_sampler;
     pub mod dod_statevec;
     // TODO: pub mod hadamard_ops;
@@ -21,6 +22,8 @@ mod modules {
     pub mod gpu_influence_sampler;
     pub mod measurement_sampling;
     pub mod noise_models;
+    #[cfg(feature = "cppsparsesim")]
+    pub mod sparse_stab_vs_cpp;
     // TODO: pub mod pauli_ops;
     pub mod rng;
     pub mod set_ops;
@@ -33,13 +36,17 @@ mod modules {
 
 #[cfg(feature = "gpu-sims")]
 use modules::gpu_influence_sampler;
+#[cfg(feature = "cppsparsesim")]
+use modules::sparse_stab_vs_cpp;
 use modules::{
-    allocation_overhead, dem_sampler, dod_statevec, measurement_sampling, noise_models, rng,
-    set_ops, sparse_state_vec, stabilizer_sims, state_vec_sims, surface_code, trig,
+    allocation_overhead, cpu_stabilizer_comparison, dem_sampler, dod_statevec,
+    measurement_sampling, noise_models, rng, set_ops, sparse_state_vec, stabilizer_sims,
+    state_vec_sims, surface_code, trig,
 };
 
 fn all_benchmarks(c: &mut Criterion) {
     allocation_overhead::benchmarks(c);
+    cpu_stabilizer_comparison::benchmarks(c);
     dem_sampler::benchmarks(c);
     dod_statevec::benchmarks(c);
     #[cfg(feature = "gpu-sims")]
@@ -51,6 +58,8 @@ fn all_benchmarks(c: &mut Criterion) {
     sparse_state_vec::benchmarks(c);
     stabilizer_sims::benchmarks(c);
     state_vec_sims::benchmarks(c);
+    #[cfg(feature = "cppsparsesim")]
+    sparse_stab_vs_cpp::benchmarks(c);
     surface_code::benchmarks(c);
     trig::benchmarks(c);
     // TODO: pauli_ops::benchmarks(c);
