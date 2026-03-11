@@ -35,13 +35,13 @@ from pecos_rslib import (
     AngleSource,  # Angle source specification for gate decomposition
     Array,  # Array type with generic dtype support (Array[f64], etc.)
     BitInt,  # Fixed-width binary integer type
+    BitUInt,  # Unsigned fixed-width binary integer type
     GateRegistry,  # Gate registration system for custom gate decomposition
     GateSignatureMismatchError,  # Raised when custom gate arity mismatches
     Nanoseconds,  # Time duration in nanoseconds
     Pauli,  # Quantum Pauli operators (I, X, Y, Z)
     PauliString,  # Multi-qubit Pauli operators
     TimeUnits,  # Abstract time duration in arbitrary units
-    WasmError,  # WASM execution error (div-by-zero, timeout, etc.)
     WasmForeignObject,  # WASM foreign object for classical coprocessor
     abs,  # Absolute value
     all,  # All elements true
@@ -64,6 +64,7 @@ from pecos_rslib import (
     i64,
     isclose,  # Approximate equality (element-wise)
     isnan,  # Check for NaN
+    kron,  # Kronecker product
     ln,  # Natural logarithm
     log,  # Logarithm with base
     max,  # Maximum value
@@ -227,6 +228,10 @@ from pecos.circuits.quantum_circuit import QuantumCircuit
 from pecos.engines import circuit_runners
 from pecos.engines.hybrid_engine_old import HybridEngine
 
+# Import WasmError from pecos.exceptions (Python-defined, inherits from pecos_rslib.WasmError)
+# so that errors re-raised through the Python layer display as pecos.WasmError
+from pecos.exceptions import WasmError
+
 # Import program wrappers from programs submodule for convenience
 # These can also be accessed via pecos.programs.Qasm, etc.
 from pecos.programs import Guppy, Hugr, PhirJson, ProgramWrapper, Qasm, Qis, Wasm, Wat
@@ -258,6 +263,7 @@ __all__ = [
     # Deprecated
     "BinArray",  # Deprecated - use BitInt instead
     "BitInt",
+    "BitUInt",
     # Type categories
     "Complex",
     "Float",
@@ -348,6 +354,7 @@ __all__ = [
     "i64",
     "isclose",
     "isnan",
+    "kron",
     "linalg",
     "linspace",
     "ln",
