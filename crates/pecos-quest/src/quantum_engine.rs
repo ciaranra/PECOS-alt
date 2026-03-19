@@ -226,14 +226,14 @@ impl Engine for QuestStateVecEngine {
                             .r1xy(cmd.angles[0], cmd.angles[1], &cmd.qubits);
                     }
                 }
-                GateType::Measure | GateType::MeasureLeaked | GateType::MeasureFree => {
+                GateType::MZ | GateType::MeasureLeaked | GateType::MeasureFree => {
                     let meas_results = self.simulator.mz(&cmd.qubits);
                     for meas_result in meas_results {
                         let outcome = u32::from(meas_result.outcome);
                         measurements.push(outcome);
                     }
                 }
-                GateType::Prep | GateType::QAlloc => {
+                GateType::PZ | GateType::QAlloc => {
                     self.simulator.pz(&cmd.qubits);
                 }
                 GateType::I
@@ -265,6 +265,16 @@ impl Engine for QuestStateVecEngine {
                         ));
                     }
                     self.simulator.ryy(cmd.angles[0], &cmd.qubits);
+                }
+                GateType::RXXRYYRZZ | GateType::U2q => {
+                    if cmd.angles.len() < 3 {
+                        return Err(PecosError::Processing(
+                            "RXXRYYRZZ gate requires three angles".to_string(),
+                        ));
+                    }
+                    self.simulator.rxx(cmd.angles[0], &cmd.qubits);
+                    self.simulator.ryy(cmd.angles[1], &cmd.qubits);
+                    self.simulator.rzz(cmd.angles[2], &cmd.qubits);
                 }
             }
         }
@@ -505,14 +515,14 @@ impl Engine for QuestDensityMatrixEngine {
                             .r1xy(cmd.angles[0], cmd.angles[1], &cmd.qubits);
                     }
                 }
-                GateType::Measure | GateType::MeasureLeaked | GateType::MeasureFree => {
+                GateType::MZ | GateType::MeasureLeaked | GateType::MeasureFree => {
                     let meas_results = self.simulator.mz(&cmd.qubits);
                     for meas_result in meas_results {
                         let outcome = u32::from(meas_result.outcome);
                         measurements.push(outcome);
                     }
                 }
-                GateType::Prep | GateType::QAlloc => {
+                GateType::PZ | GateType::QAlloc => {
                     self.simulator.pz(&cmd.qubits);
                 }
                 GateType::I
@@ -544,6 +554,16 @@ impl Engine for QuestDensityMatrixEngine {
                         ));
                     }
                     self.simulator.ryy(cmd.angles[0], &cmd.qubits);
+                }
+                GateType::RXXRYYRZZ | GateType::U2q => {
+                    if cmd.angles.len() < 3 {
+                        return Err(PecosError::Processing(
+                            "RXXRYYRZZ gate requires three angles".to_string(),
+                        ));
+                    }
+                    self.simulator.rxx(cmd.angles[0], &cmd.qubits);
+                    self.simulator.ryy(cmd.angles[1], &cmd.qubits);
+                    self.simulator.rzz(cmd.angles[2], &cmd.qubits);
                 }
             }
         }
@@ -1154,14 +1174,14 @@ impl Engine for QuestCudaStateVecEngine {
                         }
                     }
                 }
-                GateType::Measure | GateType::MeasureLeaked | GateType::MeasureFree => {
+                GateType::MZ | GateType::MeasureLeaked | GateType::MeasureFree => {
                     for q in &cmd.qubits {
                         let qubit = **q as i32;
                         let outcome = unsafe { (self.backend.measure)(self.qureg_handle, qubit) };
                         measurements.push(u32::try_from(outcome).unwrap());
                     }
                 }
-                GateType::Prep | GateType::QAlloc => {
+                GateType::PZ | GateType::QAlloc => {
                     // Prepare in |0> state: measure and flip if result is 1
                     for q in &cmd.qubits {
                         let qubit = **q as i32;
@@ -1434,6 +1454,34 @@ impl Engine for QuestCudaStateVecEngine {
                         unsafe {
                             (self.backend.apply_cnot)(self.qureg_handle, a, b);
                             (self.backend.apply_rotation_y)(self.qureg_handle, b, theta);
+                            (self.backend.apply_cnot)(self.qureg_handle, a, b);
+                        }
+                    }
+                }
+                GateType::RXXRYYRZZ | GateType::U2q => {
+                    // RXXRYYRZZ(a,b,c) = RXX(a) · RYY(b) · RZZ(c)
+                    if cmd.angles.len() < 3 {
+                        return Err(PecosError::Processing(
+                            "RXXRYYRZZ gate requires three angles".to_string(),
+                        ));
+                    }
+                    let theta_xx = cmd.angles[0].to_radians();
+                    let theta_yy = cmd.angles[1].to_radians();
+                    let theta_zz = cmd.angles[2].to_radians();
+                    for qubits in cmd.qubits.chunks_exact(2) {
+                        let (a, b) = (usize::from(qubits[0]) as i32, usize::from(qubits[1]) as i32);
+                        unsafe {
+                            // RXX
+                            (self.backend.apply_cnot)(self.qureg_handle, a, b);
+                            (self.backend.apply_rotation_x)(self.qureg_handle, b, theta_xx);
+                            (self.backend.apply_cnot)(self.qureg_handle, a, b);
+                            // RYY
+                            (self.backend.apply_cnot)(self.qureg_handle, a, b);
+                            (self.backend.apply_rotation_y)(self.qureg_handle, b, theta_yy);
+                            (self.backend.apply_cnot)(self.qureg_handle, a, b);
+                            // RZZ
+                            (self.backend.apply_cnot)(self.qureg_handle, a, b);
+                            (self.backend.apply_rotation_z)(self.qureg_handle, b, theta_zz);
                             (self.backend.apply_cnot)(self.qureg_handle, a, b);
                         }
                     }

@@ -21,6 +21,7 @@ mod bit_conversion;
 mod bit_int_bindings;
 mod bit_uint_bindings;
 mod byte_message_bindings;
+mod clifford_rep_bindings;
 mod coin_toss_bindings;
 mod dag_circuit_bindings;
 mod decoder_bindings;
@@ -34,6 +35,9 @@ mod noise_helpers;
 mod num_bindings;
 mod pauli_bindings;
 mod pauli_prop_bindings;
+mod pauli_sequence_bindings;
+mod stabilizer_code_bindings;
+mod stabilizer_group_bindings;
 // mod pcg_bindings;
 mod hugr_compilation_bindings;
 mod namespace_modules;
@@ -264,6 +268,12 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register Pauli types (quantum operators)
     pauli_bindings::register_pauli_types(m)?;
 
+    // Register stabilizer group, Pauli sequence, and Clifford types
+    stabilizer_group_bindings::register_stabilizer_group_types(m)?;
+    stabilizer_code_bindings::register_stabilizer_code_types(m)?;
+    pauli_sequence_bindings::register_pauli_sequence_types(m)?;
+    clifford_rep_bindings::register_clifford_types(m)?;
+
     // Register graph module (graph algorithms for MWPM)
     graph_bindings::register_graph_module(m)?;
 
@@ -291,6 +301,7 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(engine_builders::qis_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::selene_runtime, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::phir_json_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::phir_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sim_builder, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::general_noise, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::depolarizing_noise, m)?)?;

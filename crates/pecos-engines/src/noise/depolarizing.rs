@@ -199,7 +199,9 @@ impl DepolarizingNoiseModel {
                 | GateType::CRZ
                 | GateType::RXX
                 | GateType::RYY
-                | GateType::RZZ => {
+                | GateType::RZZ
+                | GateType::RXXRYYRZZ
+                | GateType::U2q => {
                     NoiseUtils::add_gate_to_builder(&mut builder, gate);
                     trace!("Applying two-qubit gate with possible fault");
                     self.apply_tq_faults(&mut builder, gate);
@@ -210,12 +212,12 @@ impl DepolarizingNoiseModel {
                     // Apply fault to each qubit pair
                     self.apply_tq_faults(&mut builder, gate);
                 }
-                GateType::Measure | GateType::MeasureLeaked | GateType::MeasureFree => {
+                GateType::MZ | GateType::MeasureLeaked | GateType::MeasureFree => {
                     trace!("Applying measurement with possible fault");
                     self.apply_meas_faults(&mut builder, gate);
                     NoiseUtils::add_gate_to_builder(&mut builder, gate);
                 }
-                GateType::Prep | GateType::QAlloc => {
+                GateType::PZ | GateType::QAlloc => {
                     NoiseUtils::add_gate_to_builder(&mut builder, gate);
                     trace!("Applying preparation with possible fault");
                     self.apply_prep_faults(&mut builder, gate);

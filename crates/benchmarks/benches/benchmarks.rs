@@ -27,7 +27,9 @@ mod modules {
     pub mod noise_models;
     #[cfg(feature = "cppsparsesim")]
     pub mod sparse_stab_vs_cpp;
+    pub mod sparse_stab_w_vs_y;
     // TODO: pub mod pauli_ops;
+    pub mod pecos_neo_comparison;
     pub mod rng;
     pub mod set_ops;
     pub mod sparse_state_vec;
@@ -45,8 +47,9 @@ use modules::gpu_influence_sampler;
 use modules::sparse_stab_vs_cpp;
 use modules::{
     allocation_overhead, cpu_stabilizer_comparison, dem_sampler, dod_statevec,
-    measurement_sampling, native_statevec_comparison, noise_models, rng, set_ops, sparse_state_vec,
-    stabilizer_sims, state_vec_sims, surface_code, trig,
+    measurement_sampling, native_statevec_comparison, noise_models, pecos_neo_comparison, rng,
+    set_ops, sparse_stab_w_vs_y, sparse_state_vec, stabilizer_sims, state_vec_sims, surface_code,
+    trig,
 };
 
 fn all_benchmarks(c: &mut Criterion) {
@@ -61,6 +64,7 @@ fn all_benchmarks(c: &mut Criterion) {
     measurement_sampling::benchmarks(c);
     native_statevec_comparison::benchmarks(c);
     noise_models::benchmarks(c);
+    pecos_neo_comparison::benchmarks(c);
     rng::benchmarks(c);
     set_ops::benchmarks(c);
     sparse_state_vec::benchmarks(c);
@@ -68,6 +72,7 @@ fn all_benchmarks(c: &mut Criterion) {
     state_vec_sims::benchmarks(c);
     #[cfg(feature = "cppsparsesim")]
     sparse_stab_vs_cpp::benchmarks(c);
+    sparse_stab_w_vs_y::benchmarks(c);
     surface_code::benchmarks(c);
     trig::benchmarks(c);
     // TODO: pauli_ops::benchmarks(c);

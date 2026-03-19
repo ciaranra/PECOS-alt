@@ -77,7 +77,10 @@ pub enum GateType {
     /// RYY rotation gate
     RYY = 81,
     RZZ = 82,
-    // RXXYYZZ
+    /// General 2-qubit Pauli rotation: exp(-i/2 * (a*XX + b*YY + c*ZZ))
+    RXXRYYRZZ = 83,
+    /// General 2-qubit unitary via KAK decomposition
+    U2q = 84,
     /// Toffoli gate (CCX, 3 qubits)
     CCX = 90,
 
@@ -86,7 +89,7 @@ pub enum GateType {
     // MY = 102
     // MnY = 103
     // MZ = 104
-    Measure = 104,
+    MZ = 104,
     // MnZ = 105
     MeasureLeaked = 105,
     /// Measure and free the qubit (destructive measurement)
@@ -98,7 +101,7 @@ pub enum GateType {
     // PY = 132
     // PnY = 133
     // PZ = 134
-    Prep = 134,
+    PZ = 134,
     // PnZ
     /// Allocate a qubit in the |0⟩ state
     QAlloc = 135,
@@ -149,11 +152,13 @@ impl From<u8> for GateType {
             80 => GateType::RXX,
             81 => GateType::RYY,
             82 => GateType::RZZ,
+            83 => GateType::RXXRYYRZZ,
+            84 => GateType::U2q,
             90 => GateType::CCX,
-            104 => GateType::Measure,
+            104 => GateType::MZ,
             105 => GateType::MeasureLeaked,
             106 => GateType::MeasureFree,
-            134 => GateType::Prep,
+            134 => GateType::PZ,
             135 => GateType::QAlloc,
             136 => GateType::QFree,
             200 => GateType::Idle,
@@ -202,12 +207,12 @@ impl GateType {
             | GateType::SZZdg
             | GateType::SWAP
             | GateType::CCX
-            | GateType::Measure
+            | GateType::MZ
             | GateType::MeasureLeaked
             | GateType::MeasureFree
             | GateType::MeasCrosstalkGlobalPayload
             | GateType::MeasCrosstalkLocalPayload
-            | GateType::Prep
+            | GateType::PZ
             | GateType::QAlloc
             | GateType::QFree
             | GateType::Custom => 0,
@@ -226,7 +231,10 @@ impl GateType {
             GateType::R1XY => 2,
 
             // Gates with three parameters
-            GateType::U => 3,
+            GateType::U | GateType::RXXRYYRZZ => 3,
+
+            // Gates with fifteen parameters (KAK decomposition)
+            GateType::U2q => 15,
         }
     }
 
@@ -260,10 +268,10 @@ impl GateType {
             | GateType::Tdg
             | GateType::R1XY
             | GateType::U
-            | GateType::Measure
+            | GateType::MZ
             | GateType::MeasureLeaked
             | GateType::MeasureFree
-            | GateType::Prep
+            | GateType::PZ
             | GateType::QAlloc
             | GateType::QFree
             | GateType::Idle
@@ -286,7 +294,9 @@ impl GateType {
             | GateType::CRZ
             | GateType::RXX
             | GateType::RYY
-            | GateType::RZZ => 2,
+            | GateType::RZZ
+            | GateType::RXXRYYRZZ
+            | GateType::U2q => 2,
 
             // Three-qubit gates
             GateType::CCX => 3,
@@ -309,7 +319,8 @@ impl GateType {
             | GateType::RZZ
             | GateType::CRZ => 1,
             GateType::R1XY => 2,
-            GateType::U => 3,
+            GateType::U | GateType::RXXRYYRZZ => 3,
+            GateType::U2q => 15,
             // All other gates have no angle parameters
             _ => 0,
         }
@@ -381,11 +392,13 @@ impl fmt::Display for GateType {
             GateType::SWAP => write!(f, "SWAP"),
             GateType::CRZ => write!(f, "CRZ"),
             GateType::RZZ => write!(f, "RZZ"),
+            GateType::RXXRYYRZZ => write!(f, "RXXRYYRZZ"),
+            GateType::U2q => write!(f, "U2q"),
             GateType::CCX => write!(f, "CCX"),
-            GateType::Measure => write!(f, "Measure"),
+            GateType::MZ => write!(f, "MZ"),
             GateType::MeasureLeaked => write!(f, "MeasureLeaked"),
             GateType::MeasureFree => write!(f, "MeasureFree"),
-            GateType::Prep => write!(f, "Prep"),
+            GateType::PZ => write!(f, "PZ"),
             GateType::QAlloc => write!(f, "QAlloc"),
             GateType::QFree => write!(f, "QFree"),
             GateType::Idle => write!(f, "Idle"),
@@ -402,8 +415,8 @@ impl std::str::FromStr for GateType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Try exact match first for multi-word aliases with specific casing
         match s {
-            "init |0>" | "Init |0>" => return Ok(GateType::Prep),
-            "measure Z" => return Ok(GateType::Measure),
+            "init |0>" | "Init |0>" => return Ok(GateType::PZ),
+            "measure Z" => return Ok(GateType::MZ),
             _ => {}
         }
 
@@ -443,11 +456,13 @@ impl std::str::FromStr for GateType {
             "RXX" => Ok(GateType::RXX),
             "RYY" => Ok(GateType::RYY),
             "RZZ" => Ok(GateType::RZZ),
+            "RXXRYYRZZ" => Ok(GateType::RXXRYYRZZ),
+            "U2Q" => Ok(GateType::U2q),
             "CRZ" => Ok(GateType::CRZ),
             "CCX" | "TOFFOLI" => Ok(GateType::CCX),
             "SWAP" => Ok(GateType::SWAP),
-            "MEASURE" | "MZ" | "MEASURE Z" => Ok(GateType::Measure),
-            "PREP" | "INIT" | "INIT |0>" | "RESET" => Ok(GateType::Prep),
+            "MEASURE" | "MZ" | "MEASURE Z" => Ok(GateType::MZ),
+            "PREP" | "PZ" | "INIT" | "INIT |0>" | "RESET" => Ok(GateType::PZ),
             "QALLOC" => Ok(GateType::QAlloc),
             "QFREE" => Ok(GateType::QFree),
             "IDLE" => Ok(GateType::Idle),
@@ -477,10 +492,10 @@ mod tests {
         assert_eq!(GateType::SZZ as u8, 57);
         assert_eq!(GateType::RZ as u8, 32);
         assert_eq!(GateType::R1XY as u8, 36);
-        assert_eq!(GateType::Measure as u8, 104);
+        assert_eq!(GateType::MZ as u8, 104);
         assert_eq!(GateType::MeasureLeaked as u8, 105);
         assert_eq!(GateType::MeasureFree as u8, 106);
-        assert_eq!(GateType::Prep as u8, 134);
+        assert_eq!(GateType::PZ as u8, 134);
         assert_eq!(GateType::QAlloc as u8, 135);
         assert_eq!(GateType::QFree as u8, 136);
         assert_eq!(GateType::Idle as u8, 200);
@@ -503,10 +518,10 @@ mod tests {
         assert_eq!(GateType::from(57u8), GateType::SZZ);
         assert_eq!(GateType::from(32u8), GateType::RZ);
         assert_eq!(GateType::from(36u8), GateType::R1XY);
-        assert_eq!(GateType::from(104u8), GateType::Measure);
+        assert_eq!(GateType::from(104u8), GateType::MZ);
         assert_eq!(GateType::from(105u8), GateType::MeasureLeaked);
         assert_eq!(GateType::from(106u8), GateType::MeasureFree);
-        assert_eq!(GateType::from(134u8), GateType::Prep);
+        assert_eq!(GateType::from(134u8), GateType::PZ);
         assert_eq!(GateType::from(135u8), GateType::QAlloc);
         assert_eq!(GateType::from(136u8), GateType::QFree);
         assert_eq!(GateType::from(200u8), GateType::Idle);
@@ -537,7 +552,7 @@ mod tests {
         assert_eq!(GateType::from_str("Q").unwrap(), GateType::SX);
         assert_eq!(GateType::from_str("S").unwrap(), GateType::SZ);
         assert_eq!(GateType::from_str("TOFFOLI").unwrap(), GateType::CCX);
-        assert_eq!(GateType::from_str("init |0>").unwrap(), GateType::Prep);
+        assert_eq!(GateType::from_str("init |0>").unwrap(), GateType::PZ);
 
         // Case-insensitive matching
         assert_eq!(GateType::from_str("h").unwrap(), GateType::H);
@@ -570,12 +585,12 @@ mod tests {
         assert_eq!(GateType::CX.classical_arity(), 0);
         assert_eq!(GateType::SZZ.classical_arity(), 0);
         assert_eq!(GateType::SZZdg.classical_arity(), 0);
-        assert_eq!(GateType::Measure.classical_arity(), 0);
+        assert_eq!(GateType::MZ.classical_arity(), 0);
         assert_eq!(GateType::MeasureLeaked.classical_arity(), 0);
         assert_eq!(GateType::MeasureFree.classical_arity(), 0);
         assert_eq!(GateType::MeasCrosstalkGlobalPayload.classical_arity(), 0);
         assert_eq!(GateType::MeasCrosstalkLocalPayload.classical_arity(), 0);
-        assert_eq!(GateType::Prep.classical_arity(), 0);
+        assert_eq!(GateType::PZ.classical_arity(), 0);
         assert_eq!(GateType::QAlloc.classical_arity(), 0);
         assert_eq!(GateType::QFree.classical_arity(), 0);
 
@@ -602,10 +617,10 @@ mod tests {
         assert_eq!(GateType::RZ.quantum_arity(), 1);
         assert_eq!(GateType::R1XY.quantum_arity(), 1);
         assert_eq!(GateType::U.quantum_arity(), 1);
-        assert_eq!(GateType::Measure.quantum_arity(), 1);
+        assert_eq!(GateType::MZ.quantum_arity(), 1);
         assert_eq!(GateType::MeasureLeaked.quantum_arity(), 1);
         assert_eq!(GateType::MeasureFree.quantum_arity(), 1);
-        assert_eq!(GateType::Prep.quantum_arity(), 1);
+        assert_eq!(GateType::PZ.quantum_arity(), 1);
         assert_eq!(GateType::QAlloc.quantum_arity(), 1);
         assert_eq!(GateType::QFree.quantum_arity(), 1);
         assert_eq!(GateType::Idle.quantum_arity(), 1);
@@ -630,12 +645,12 @@ mod tests {
         assert!(!GateType::CX.is_parameterized());
         assert!(!GateType::SZZ.is_parameterized());
         assert!(!GateType::SZZdg.is_parameterized());
-        assert!(!GateType::Measure.is_parameterized());
+        assert!(!GateType::MZ.is_parameterized());
         assert!(!GateType::MeasureLeaked.is_parameterized());
         assert!(!GateType::MeasureFree.is_parameterized());
         assert!(!GateType::MeasCrosstalkGlobalPayload.is_parameterized());
         assert!(!GateType::MeasCrosstalkLocalPayload.is_parameterized());
-        assert!(!GateType::Prep.is_parameterized());
+        assert!(!GateType::PZ.is_parameterized());
         assert!(!GateType::QAlloc.is_parameterized());
         assert!(!GateType::QFree.is_parameterized());
 
@@ -658,10 +673,10 @@ mod tests {
         assert!(GateType::RZ.is_single_qubit());
         assert!(GateType::R1XY.is_single_qubit());
         assert!(GateType::U.is_single_qubit());
-        assert!(GateType::Measure.is_single_qubit());
+        assert!(GateType::MZ.is_single_qubit());
         assert!(GateType::MeasureLeaked.is_single_qubit());
         assert!(GateType::MeasureFree.is_single_qubit());
-        assert!(GateType::Prep.is_single_qubit());
+        assert!(GateType::PZ.is_single_qubit());
         assert!(GateType::QAlloc.is_single_qubit());
         assert!(GateType::QFree.is_single_qubit());
         assert!(GateType::Idle.is_single_qubit());
@@ -686,10 +701,10 @@ mod tests {
         assert!(!GateType::RZ.is_two_qubit());
         assert!(!GateType::R1XY.is_two_qubit());
         assert!(!GateType::U.is_two_qubit());
-        assert!(!GateType::Measure.is_two_qubit());
+        assert!(!GateType::MZ.is_two_qubit());
         assert!(!GateType::MeasureLeaked.is_two_qubit());
         assert!(!GateType::MeasureFree.is_two_qubit());
-        assert!(!GateType::Prep.is_two_qubit());
+        assert!(!GateType::PZ.is_two_qubit());
         assert!(!GateType::QAlloc.is_two_qubit());
         assert!(!GateType::QFree.is_two_qubit());
         assert!(!GateType::Idle.is_two_qubit());

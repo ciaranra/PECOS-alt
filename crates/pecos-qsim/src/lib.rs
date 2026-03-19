@@ -15,6 +15,7 @@ pub mod batched_ops;
 pub mod circuit_executor;
 pub mod clifford_frame;
 pub mod clifford_gateable;
+pub mod clifford_rotation;
 pub mod clifford_test_utils;
 pub mod coin_toss;
 pub mod dense_stab;
@@ -35,6 +36,7 @@ pub mod quantum_simulator;
 pub mod rotation_test_utils;
 pub mod sign_algebra;
 pub mod sparse_stab;
+pub mod sparse_stab_y;
 pub mod stab;
 pub mod stabilizer_tableau;
 pub mod stabilizer_test_utils;
@@ -85,6 +87,10 @@ pub use sign_algebra::{PhaseSign, SignAlgebra, SymbolicSign};
 pub use sparse_stab::{
     SparseStab, SparseStabBitSet, SparseStabGeneric, SparseStabHybrid, SparseStabSortedVecSet,
     SparseStabUnsortedVecSet, SparseStabVecSet,
+};
+pub use sparse_stab_y::{
+    SparseStabY, SparseStabYBitSet, SparseStabYGeneric, SparseStabYUnsortedVecSet,
+    SparseStabYVecSet,
 };
 pub use stab::Stab;
 pub use stabilizer_tableau::StabilizerTableauSimulator;
