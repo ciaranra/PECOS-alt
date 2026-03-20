@@ -1026,8 +1026,8 @@ impl DagCircuit {
     // - Two-qubit rotations: `rzz(theta, q1, q2)`
     // - All methods return `&mut Self` for chaining
 
-    /// Internal helper: adds a gate and auto-wires it to previous gates on the same qubits.
-    fn add_gate_auto_wire(&mut self, gate: Gate) -> usize {
+    /// Adds a gate and auto-wires it to previous gates on the same qubits.
+    pub fn add_gate_auto_wire(&mut self, gate: Gate) -> usize {
         let qubits = gate.qubits.clone();
         let node = self.add_gate(gate);
 

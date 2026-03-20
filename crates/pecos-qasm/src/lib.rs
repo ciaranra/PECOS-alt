@@ -55,6 +55,7 @@
 
 pub mod ast;
 pub mod bitvec_expression;
+// pub mod dag_bridge; // TODO: requires DagCircuit classical bit API
 // pub mod config; // TODO: Update to use unified API types
 pub mod engine;
 pub mod engine_builder;
