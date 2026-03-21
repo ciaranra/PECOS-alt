@@ -31,7 +31,7 @@ class RNGModel:
 
     def __str__(self) -> str:
         """Returns the str representation of the model."""
-        return f"RNG Model with bound {self.current_bound} with count {self.count}"
+        return f"RNG Model bounded by {self.current_bound} with current count {self.count}"
 
     def set_seed(self, seed: int) -> None:
         """Setting the seed for generating random numbers."""
@@ -54,8 +54,8 @@ class RNGModel:
         The number after from the stream will be the idx of interest.
         """
         if self.count > index:
-            error_msg = "rngindex called after specified already generated"
-            raise BufferError(error_msg)
+            error_msg = f"RNGindex({index}) cannot move backward: current stream index is {self.count}"
+            raise ValueError(error_msg)
         while self.count < index:
             self.rng_random()
 
@@ -97,5 +97,5 @@ class RNGModel:
             binary_val = BitUInt(creg.size, rng)
             creg.set(binary_val)
         else:
-            error_msg = f"RNG function not supported {func_name}"
+            error_msg = f"Unknown RNG Function '{func_name}'"
             raise ValueError(error_msg)
