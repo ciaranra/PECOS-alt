@@ -19,8 +19,10 @@
 
 use criterion::{BenchmarkId, Criterion, Throughput, measurement::Measurement};
 use pecos::prelude::*;
-use pecos::qsim::measurement_sampler::{MeasurementSampler, SequentialMeasurementSampler};
-use pecos::qsim::{SparseStab, SparseStabVecSet, SymbolicSparseStab, SymbolicSparseStabVecSet};
+use pecos::simulators::measurement_sampler::{MeasurementSampler, SequentialMeasurementSampler};
+use pecos::simulators::{
+    SparseStab, SparseStabVecSet, SymbolicSparseStab, SymbolicSparseStabVecSet,
+};
 use pecos_engines::quantum::SparseStabEngine;
 use pecos_engines::{Engine, EngineSystem, QuantumSystem};
 use rand::RngExt;
@@ -502,7 +504,7 @@ fn bench_sparse_stab_bitset_vs_vecset<M: Measurement>(c: &mut Criterion<M>) {
                 |b, ()| {
                     b.iter_batched(
                         || {
-                            use pecos_rng::PecosRng;
+                            use pecos_random::PecosRng;
 
                             let rng: PecosRng = rand::make_rng();
                             let mut sim = SparseStabVecSet::with_rng(params.num_qubits, rng);

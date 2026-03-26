@@ -11,6 +11,15 @@ This guide covers working with Pauli strings and stabilizer codes in PECOS's Rus
 - Using standard code constructors
 - Converting between code types
 
+```hidden-rust
+use pecos_core::pauli::constructors::*;
+use pecos_core::PauliOperator;
+
+fn main() {
+    // CODE
+}
+```
+
 ## Building Pauli Strings
 
 Pauli strings are the fundamental building block. PECOS provides a concise constructor API:
@@ -42,13 +51,13 @@ Pauli strings are the fundamental building block. PECOS provides a concise const
 === ":fontawesome-brands-python: Python"
 
     ```python
-    from pecos_rslib import PauliString
+    from pecos.quantum import PauliString
 
     # From string notation
     p = PauliString.from_str("XZI")
     q = PauliString.from_str("ZXI")
 
-    # Commutation
+    # Commutation check
     print(p.commutes_with(q))  # False (anticommute)
     ```
 
@@ -63,7 +72,7 @@ A `StabilizerCode` is defined by its stabilizer generators and a qubit count:
     use pecos_core::pauli::constructors::*;
 
     // 3-qubit bit-flip repetition code: generators ZZI, IZZ
-    let group = pecos_quantum::PauliStabilizerGroup::from_generators(vec![
+    let group = pecos_quantum::PauliStabilizerGroup::new(vec![
         Zs([0, 1]),
         Zs([1, 2]),
     ]).unwrap();
@@ -186,10 +195,10 @@ PECOS includes constructors for well-known codes:
 ```rust
 use pecos_qec::StabilizerCode;
 
-let toric = StabilizerCode::toric(3);
-assert_eq!(toric.num_qubits(), 18);       // 2 * 3^2
+let toric = StabilizerCode::toric(2);
+assert_eq!(toric.num_qubits(), 8);        // 2 * 2^2
 assert_eq!(toric.num_logical_qubits(), 2);
-assert_eq!(toric.distance(), Some(3));
+assert_eq!(toric.distance(), Some(2));
 ```
 
 ## Explicit Qubit Count
@@ -202,7 +211,7 @@ use pecos_quantum::PauliStabilizerGroup;
 use pecos_core::pauli::constructors::Zs;
 
 // ZZ on qubits 0,1 -- but we declare 4 physical qubits
-let group = PauliStabilizerGroup::from_generators(vec![
+let group = PauliStabilizerGroup::new(vec![
     Zs([0, 1]),
 ]).unwrap();
 
@@ -225,7 +234,7 @@ let code = StabilizerCodeSpec::builder(3)
     .check(Zs([0, 1]))
     .check(Zs([1, 2]))
     .logical_z(Zs([0, 1, 2]))
-    .logical_x(Xs([0]))
+    .logical_x(Xs([0, 1, 2]))
     .build()
     .unwrap();
 

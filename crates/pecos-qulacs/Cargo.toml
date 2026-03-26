@@ -13,8 +13,8 @@ readme = "README.md"
 
 [dependencies]
 pecos-core.workspace = true
-pecos-qsim.workspace = true
-pecos-rng.workspace = true
+pecos-simulators.workspace = true
+pecos-random.workspace = true
 num-complex.workspace = true
 rand.workspace = true
 rand_core.workspace = true

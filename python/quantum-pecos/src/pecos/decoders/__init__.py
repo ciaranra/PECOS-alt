@@ -15,10 +15,50 @@ This package provides various decoders for quantum error correction codes.
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
+# Rust decoders (from pecos_rslib)
+from pecos_rslib.decoders import (
+    BpLsdBuilder,
+    BpLsdDecoder,
+    BpOsdBuilder,
+    BpOsdDecoder,
+    BpResult,
+    CheckMatrix,
+    FusionBlossomDecoder,
+    MinSumBpBuilder,
+    MinSumBpDecoder,
+    MwpmResult,
+    PyMatchingDecoder,
+    RelayBpBuilder,
+    RelayBpDecoder,
+    SparseMatrix,
+    TesseractDecoder,
+    TesseractResult,
+    UnionFindBuilder,
+    UnionFindDecoder,
+)
+
 from pecos.decoders.dummy_decoder.dummy_decoder import DummyDecoder
 from pecos.decoders.mwpm2d.mwpm2d import MWPM2D
 
 __all__ = [
     "MWPM2D",
+    "BpLsdBuilder",
+    "BpLsdDecoder",
+    "BpOsdBuilder",
+    "BpOsdDecoder",
+    "BpResult",
+    "CheckMatrix",
     "DummyDecoder",
+    "FusionBlossomDecoder",
+    "MinSumBpBuilder",
+    "MinSumBpDecoder",
+    "MwpmResult",
+    "PyMatchingDecoder",
+    "RelayBpBuilder",
+    "RelayBpDecoder",
+    "SparseMatrix",
+    "TesseractDecoder",
+    "TesseractResult",
+    "UnionFindBuilder",
+    "UnionFindDecoder",
 ]

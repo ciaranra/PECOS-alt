@@ -2,7 +2,7 @@
 
 ```hidden-rust
 use pecos::prelude::*;
-use pecos::quantum::{sparse_stabilizer, state_vector};
+use pecos::simulators::{sparse_stabilizer, state_vector};
 use pecos::noise::GeneralNoiseModelBuilder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -244,26 +244,26 @@ Real quantum computers are noisy. PECOS helps you understand how noise affects y
 
 === ":fontawesome-brands-rust: Rust"
 
-    ```rust,skip
+    ```rust
     use pecos::prelude::*;
 
     // No noise (ideal simulation)
-    PassThroughNoiseModel::builder()
+    let _pass = PassThroughNoiseModel::builder();
 
     // Standard depolarizing
-    DepolarizingNoiseModel::builder()
-        .with_uniform_probability(0.01)
+    let _depol = DepolarizingNoiseModel::builder()
+        .with_uniform_probability(0.01);
 
     // Custom depolarizing per operation type
-    DepolarizingNoiseModel::builder()
+    let _custom = DepolarizingNoiseModel::builder()
         .with_prep_probability(0.001)  // State preparation error
         .with_meas_probability(0.002)  // Measurement error
         .with_p1_probability(0.003)    // Single-qubit gate error
-        .with_p2_probability(0.004)    // Two-qubit gate error
+        .with_p2_probability(0.004);   // Two-qubit gate error
 
     // Biased depolarizing (asymmetric error distribution)
-    BiasedDepolarizingNoiseModel::builder()
-        .with_uniform_probability(0.01)
+    let _biased = BiasedDepolarizingNoiseModel::builder()
+        .with_uniform_probability(0.01);
     ```
 
 ### Creating Custom Noise Models
@@ -340,7 +340,7 @@ PECOS provides different engines optimized for different types of circuits:
 
     ```rust
     use pecos::prelude::*;
-    use pecos::quantum::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stabilizer, state_vector};
 
     let qasm_code = r#"
         OPENQASM 2.0;
@@ -460,7 +460,7 @@ This example shows how noise affects quantum entanglement:
     )
 
     # Run multiple times
-    for shots in [100, 1000, 10000]:
+    for shots in [100, 500, 1000]:
         results = experiment.run(shots)
         data = results.to_dict()
         print(f"Results for {shots} shots:")
@@ -493,7 +493,7 @@ This example shows how noise affects quantum entanglement:
             .build()?;
 
         // Run multiple times
-        for shots in [100, 1000, 10000] {
+        for shots in [100, 500, 1000] {
             let results = experiment.run(shots)?;
             println!("Results for {} shots: {:?}", shots, results);
         }
@@ -597,13 +597,13 @@ For many shots, you can use multiple CPU cores to speed up simulation:
     """
 
     # Single-threaded (default)
-    results = sim(Qasm(qasm_code)).run(100000)
+    results = sim(Qasm(qasm_code)).run(1000)
 
     # Use 4 worker threads
-    results = sim(Qasm(qasm_code)).workers(4).run(100000)
+    results = sim(Qasm(qasm_code)).workers(4).run(1000)
 
     # Automatically use all available cores
-    results = sim(Qasm(qasm_code)).auto_workers().run(100000)
+    results = sim(Qasm(qasm_code)).auto_workers().run(1000)
     ```
 
 === ":fontawesome-brands-rust: Rust"
@@ -624,13 +624,13 @@ For many shots, you can use multiple CPU cores to speed up simulation:
     let program = Qasm::from_string(qasm_code);
 
     // Single threaded (default)
-    let results = sim(program.clone()).workers(1).run(100000)?;
+    let results = sim(program.clone()).workers(1).run(1000)?;
 
     // Explicit thread count
-    let results = sim(program.clone()).workers(4).run(100000)?;
+    let results = sim(program.clone()).workers(4).run(1000)?;
 
     // Automatically use all available cores
-    let results = sim(program).auto_workers().run(100000)?;
+    let results = sim(program).auto_workers().run(1000)?;
     ```
 
 ### Choosing the Right Engine

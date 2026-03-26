@@ -50,7 +50,18 @@ let checker = StabilizerFlipChecker::new(&code);
 ### Classifying Individual Errors
 
 ```rust
+use pecos_qec::{StabilizerCodeSpec, StabilizerFlipChecker, ErrorClass};
+use pecos_core::{Xs, Zs};
 use pecos_core::pauli::constructors::*;
+
+let code = StabilizerCodeSpec::builder(3)
+    .check(Zs([0, 1]))
+    .check(Zs([1, 2]))
+    .logical_z(Zs([0, 1, 2]))
+    .logical_x(Xs([0]))
+    .build()
+    .unwrap();
+let checker = StabilizerFlipChecker::new(&code);
 
 // X error on qubit 0 -- detectable (flips first stabilizer, also hits logical X)
 let result = checker.classify_error(&X(0));
@@ -68,6 +79,16 @@ assert!(matches!(result, ErrorClass::UndetectableLogical { .. }));
 For detailed information about which stabilizers and logicals are affected:
 
 ```rust
+use pecos_qec::{StabilizerCodeSpec, StabilizerFlipChecker};
+use pecos_core::{Xs, Zs};
+use pecos_core::pauli::constructors::*;
+
+let code = StabilizerCodeSpec::builder(3)
+    .check(Zs([0, 1])).check(Zs([1, 2]))
+    .logical_z(Zs([0, 1, 2])).logical_x(Xs([0]))
+    .build().unwrap();
+let checker = StabilizerFlipChecker::new(&code);
+
 let flips = checker.compute_flips(&X(1));
 println!("Flipped stabilizers: {:?}", flips.stabilizers);  // {0, 1}
 println!("Flipped logical Zs: {:?}", flips.logical_zs);
@@ -80,6 +101,15 @@ println!("Syndrome: {:?}", flips.syndrome(2));  // [true, true]
 Enumerate all weight-t Pauli errors and classify each:
 
 ```rust
+use pecos_qec::{StabilizerCodeSpec, StabilizerFlipChecker};
+use pecos_core::{Xs, Zs};
+
+let code = StabilizerCodeSpec::builder(3)
+    .check(Zs([0, 1])).check(Zs([1, 2]))
+    .logical_z(Zs([0, 1, 2])).logical_x(Xs([0]))
+    .build().unwrap();
+let checker = StabilizerFlipChecker::new(&code);
+
 // Analyze all weight-1 errors
 let analysis = checker.analyze_weight(1);
 
@@ -98,6 +128,15 @@ println!("Fault-tolerant: {}", analysis.is_fault_tolerant());
 For CSS codes, you can analyze X, Y, and Z errors separately:
 
 ```rust
+use pecos_qec::{StabilizerCodeSpec, StabilizerFlipChecker};
+use pecos_core::{Xs, Zs};
+
+let code = StabilizerCodeSpec::builder(3)
+    .check(Zs([0, 1])).check(Zs([1, 2]))
+    .logical_z(Zs([0, 1, 2])).logical_x(Xs([0]))
+    .build().unwrap();
+let checker = StabilizerFlipChecker::new(&code);
+
 // Only X errors (bit-flip)
 let x_analysis = checker.analyze_weight_with_types(1, true, false, false);
 
@@ -209,24 +248,47 @@ println!("Excessive output: {}", analysis.excessive_output);
 
 The `DemBuilder` generates Stim-compatible detector error models from fault influence maps. This connects PECOS's fault analysis to external decoders.
 
+```hidden-rust
+use pecos_qec::DemBuilder;
+use pecos_qec::fault_tolerance::propagator::DagFaultAnalyzer;
+use pecos_quantum::DagCircuit;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Build a simple parity check circuit
+    let mut dag = DagCircuit::new();
+    dag.pz(2);       // prepare ancilla
+    dag.cx(0, 2);    // parity check
+    dag.cx(1, 2);
+    dag.mz(2);       // measure syndrome
+
+    // Analyze faults to build influence map
+    let analyzer = DagFaultAnalyzer::new(&dag);
+    let influence_map = analyzer.build_influence_map();
+
+    // Define detectors and observables
+    let detectors_json = r#"[{"id": 0, "records": [-1]}]"#;
+    let observables_json = r"[]";
+
+    // CODE
+    Ok(())
+}
+```
+
 ```rust
-use pecos_qec::fault_tolerance::{DemBuilder};
+use pecos_qec::DemBuilder;
 
 // Build DEM from a fault influence map
 let dem = DemBuilder::new(&influence_map)
-    .with_noise(0.01, 0.01, 0.01, 0.01)  // px, py, pz, pm
+    .with_noise(0.01, 0.01, 0.01, 0.01)  // p1, p2, p_meas, p_init
     .with_detectors_json(detectors_json)?
     .with_observables_json(observables_json)?
     .build();
 
-// Output in Stim format
-println!("{}", dem.to_stim_format());
-
-// Decomposed format for MWPM decoders (breaks hyperedges into graphlike errors)
-println!("{}", dem.to_stim_format_decomposed());
+println!("DEM has {} detectors, {} contributions",
+    dem.num_detectors(), dem.num_contributions());
 ```
 
-**Decomposition:** MWPM decoders work on graphs, not hypergraphs. When an error mechanism affects 3+ detectors (a hyperedge), `to_stim_format_decomposed()` decomposes it into combinations of graphlike (1-2 detector) errors.
+**Decomposition:** MWPM decoders work on graphs, not hypergraphs. When an error mechanism affects 3+ detectors (a hyperedge), it can be decomposed into combinations of graphlike (1-2 detector) errors.
 
 ## Distance Calculation
 
@@ -265,7 +327,20 @@ let result = calculate_distance(&code, &DistanceSearchConfig::with_max_weight(5)
 ### Finding All Minimum-Weight Logicals
 
 ```rust
-use pecos_qec::{find_min_weight_logicals_with_info, DistanceSearchConfig};
+use pecos_qec::{StabilizerCodeSpec, find_min_weight_logicals_with_info, DistanceSearchConfig};
+use pecos_core::{Xs, Zs};
+
+let code = StabilizerCodeSpec::builder(7)
+    .check(Xs([0, 2, 4, 6]))
+    .check(Xs([1, 2, 5, 6]))
+    .check(Xs([3, 4, 5, 6]))
+    .check(Zs([0, 2, 4, 6]))
+    .check(Zs([1, 2, 5, 6]))
+    .check(Zs([3, 4, 5, 6]))
+    .logical_z(Zs([0, 2, 4, 6]))
+    .logical_x(Xs([0, 2, 4, 6]))
+    .build()
+    .unwrap();
 
 let logicals = find_min_weight_logicals_with_info(&code, &DistanceSearchConfig::default());
 for op in &logicals {
@@ -325,7 +400,7 @@ spec.verify().unwrap();
 
 // 4. Compute distance
 let dist = calculate_distance(&spec, &DistanceSearchConfig::default());
-println!("Distance: {:?}", dist.map(|r| r.distance));
+println!("Distance: {:?}", dist.as_ref().map(|r| r.distance));
 
 // 5. Check fault tolerance at weight 1
 let checker = StabilizerFlipChecker::new(&spec);
@@ -333,7 +408,7 @@ let analysis = checker.analyze_weight(1);
 println!("Fault-tolerant at weight 1: {}", analysis.is_fault_tolerant());
 
 // 6. For a distance-3 code, also check weight 2
-if dist.is_some() && dist.as_ref().unwrap().distance >= 3 {
+if dist.as_ref().is_some_and(|r| r.distance >= 3) {
     let analysis_2 = checker.analyze_weight(2);
     println!("Fault-tolerant at weight 2: {}", analysis_2.is_fault_tolerant());
 }

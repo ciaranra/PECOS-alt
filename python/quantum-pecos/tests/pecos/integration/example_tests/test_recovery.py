@@ -53,7 +53,7 @@ def recovery_tester(qecc: pc.protocols.QECCProtocol) -> None:
 
     # Error Generator
     # ---------------
-    depolar = pc.error_models.DepolarModel(model_level="code_capacity")
+    depolar = pc.noise.DepolarModel(model_level="code_capacity")
 
     # Circuit simulator
     # -----------------
@@ -121,8 +121,8 @@ def recovery_tester(qecc: pc.protocols.QECCProtocol) -> None:
 
     # Determine if the logical operators will flip due to the recovery
 
-    commute1 = pc.misc.commute.qubit_pauli(logical_ops["Z"], recovery)
-    commute2 = pc.misc.commute.qubit_pauli(logical_ops["X"], recovery)
+    commute1 = pc.quantum.commute.qubit_pauli(logical_ops["Z"], recovery)
+    commute2 = pc.quantum.commute.qubit_pauli(logical_ops["X"], recovery)
 
     sim.run(state_zero, recovery)
     sim.run(state_plus, recovery)

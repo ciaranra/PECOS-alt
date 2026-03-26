@@ -24,14 +24,14 @@ import struct
 from typing import TYPE_CHECKING
 
 import pecos as pc
-from pecos.misc.std_output import StdOutput
+from pecos.engines.std_output import StdOutput
 
 if TYPE_CHECKING:
     from typing import Any
 
     from pecos.circuits import QuantumCircuit
-    from pecos.error_models.class_errors_circuit import ErrorCircuits
-    from pecos.error_models.parent_class_error_gen import ParentErrorModel
+    from pecos.noise.class_errors_circuit import ErrorCircuits
+    from pecos.noise.parent_class_error_gen import ParentErrorModel
     from pecos.protocols import SimulatorProtocol
 
 

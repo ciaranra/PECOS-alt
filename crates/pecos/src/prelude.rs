@@ -43,11 +43,11 @@
 //! - `pecos_core::prelude` - Core types, traits, and error handling
 //! - `pecos_engines::prelude` - Simulation engines and builders
 //! - `pecos_qasm::prelude` - `OpenQASM` language support
-//! - `pecos_qsim::prelude` - Quantum simulation implementations
+//! - `pecos_simulators::prelude` - Quantum simulation implementations
 //! - `pecos_qis::prelude` - QIS control engine
 //! - `pecos_qis::prelude` - Selene-based QIS interface (when `selene` feature enabled)
 //! - `pecos_programs::prelude` - Program type definitions
-//! - `pecos_rng::prelude` - Random number generation
+//! - `pecos_random::prelude` - Random number generation
 //! - `pecos_num::prelude` - Numerical computing (scipy.optimize replacement)
 //! - `pecos_hugr_qis::prelude` - HUGR to QIS compilation
 //! - `pecos_phir_json::prelude` - PHIR-JSON format support
@@ -61,7 +61,8 @@
 //! For organized access to specific functionality, use the namespace modules:
 //!
 //! - [`crate::engines`] - Classical control engines
-//! - [`crate::quantum`] - Quantum simulation backends
+//! - [`crate::quantum`] - Quantum circuit representation and Pauli algebra
+//! - [`crate::simulators`] - Quantum simulation backends
 //! - [`crate::noise`] - Noise models
 //! - [`crate::runtime`] - QIS runtimes
 
@@ -73,7 +74,7 @@ pub use pecos_core::prelude::*;
 pub use pecos_engines::prelude::*;
 #[cfg(feature = "qasm")]
 pub use pecos_qasm::prelude::*;
-pub use pecos_qsim::prelude::*;
+pub use pecos_simulators::prelude::*;
 
 // Re-export pecos_qis prelude
 // Note: Shot and Value from pecos_qis are not included (removed from its prelude)
@@ -87,7 +88,7 @@ pub use pecos_qis::prelude::*;
 pub use pecos_programs::prelude::*;
 
 // Re-export RNG prelude
-pub use pecos_rng::prelude::*;
+pub use pecos_random::prelude::*;
 
 // Re-export numerical computing prelude
 pub use pecos_num::prelude::*;
@@ -96,9 +97,9 @@ pub use pecos_num::prelude::*;
 #[cfg(feature = "hugr")]
 pub use pecos_hugr_qis::prelude::*;
 
-// Re-export Guppy HUGR direct interpreter (GuppyHugrEngine)
+// Re-export Guppy HUGR direct interpreter (HugrEngine)
 #[cfg(feature = "hugr")]
-pub use pecos_guppy_hugr::{GuppyHugrEngine, GuppyHugrEngineBuilder, hugr_engine, hugr_sim};
+pub use pecos_hugr::{HugrEngine, HugrEngineBuilder, hugr_engine, hugr_sim};
 
 // Re-export LLVM IR generation prelude
 #[cfg(feature = "llvm")]

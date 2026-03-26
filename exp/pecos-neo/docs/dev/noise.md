@@ -142,7 +142,7 @@ CompositeNoiseModelBuilder::new()
 ```rust
 use pecos_neo::runner::CircuitRunner;
 use pecos_neo::command::CommandBuilder;
-use pecos_qsim::SparseStab;
+use pecos_simulators::SparseStab;
 
 // Build circuit
 let circuit = CommandBuilder::new()
@@ -426,7 +426,7 @@ Implement your own noise channels by implementing the `NoiseChannel` trait:
 
 ```rust
 use pecos_neo::noise::*;
-use pecos_rng::PecosRng;
+use pecos_random::PecosRng;
 
 #[derive(Clone)]
 struct MyCustomChannel {

@@ -26,7 +26,7 @@ required-features = ["cli"]
 # Core simulation library dependencies (optional - for runtime commands)
 pecos-core = { workspace = true, optional = true }
 pecos-quantum = { workspace = true, optional = true }
-pecos-qsim = { workspace = true, optional = true }
+pecos-simulators = { workspace = true, optional = true }
 pecos-engines = { workspace = true, optional = true }
 pecos-programs = { workspace = true, optional = true }
 pecos-qasm = { workspace = true, optional = true }
@@ -34,9 +34,9 @@ pecos-phir-json = { workspace = true, optional = true }
 pecos-qis = { workspace = true, optional = true }
 pecos-llvm = { workspace = true, optional = true }
 pecos-hugr-qis = { workspace = true, optional = true }
-pecos-guppy-hugr = { workspace = true, optional = true }
+pecos-hugr = { workspace = true, optional = true }
 pecos-phir = { workspace = true, optional = true, features = ["hugr"] }
-pecos-rng = { workspace = true, optional = true }
+pecos-random = { workspace = true, optional = true }
 pecos-num = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
@@ -84,12 +84,12 @@ core = ["dep:pecos-core"]
 quantum = ["core", "dep:pecos-quantum"]
 
 # Numerical computing utilities (scipy-like functions, random number generation)
-num = ["dep:pecos-num", "dep:pecos-rng"]
+num = ["dep:pecos-num", "dep:pecos-random"]
 
 # Quantum simulation library (includes core, quantum, and num)
 sim = [
     "core", "quantum", "num",
-    "dep:pecos-qsim", "dep:pecos-engines", "dep:pecos-programs",
+    "dep:pecos-simulators", "dep:pecos-engines", "dep:pecos-programs",
     "dep:pecos-phir",
     "dep:log", "dep:tempfile", "dep:serde_json"
 ]
@@ -106,7 +106,7 @@ llvm = ["sim", "dep:pecos-llvm"]
 qis = ["llvm", "dep:pecos-qis", "pecos-qis/llvm"]
 
 # hugr: HUGR program support (requires QIS) + direct Guppy HUGR interpreter
-hugr = ["qis", "dep:pecos-hugr-qis", "pecos-hugr-qis/llvm", "pecos-qis/hugr", "pecos-quantum/hugr", "dep:pecos-guppy-hugr"]
+hugr = ["qis", "dep:pecos-hugr-qis", "pecos-hugr-qis/llvm", "pecos-qis/hugr", "pecos-quantum/hugr", "dep:pecos-hugr"]
 wasm = ["sim", "dep:pecos-wasm", "pecos-wasm/wasm"]
 
 # Quantum simulator backends (C++ wrappers)
@@ -138,12 +138,12 @@ tempfile.workspace = true
 assert_cmd.workspace = true
 # Required for doctests
 pecos-core.workspace = true
-pecos-qsim.workspace = true
+pecos-simulators.workspace = true
 pecos-engines.workspace = true
 pecos-qasm = { workspace = true, features = ["phir"] }
 pecos-phir = { workspace = true, features = ["hugr"] }
 pecos-phir-json.workspace = true
-pecos-rng.workspace = true
+pecos-random.workspace = true
 log.workspace = true
 serde_json.workspace = true
 

@@ -36,11 +36,29 @@ Note: For Python wrappers that accept pecos.programs types, use:
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 # specific language governing permissions and limitations under the License.
 
-# Re-export Rust engines from pecos_rslib.engines submodule
+# Re-export Rust engines from pecos_rslib
+from pecos_rslib import (
+    ByteMessage,
+    ByteMessageBuilder,
+    HugrEngineBuilder,
+    HugrSimulation,
+    PhirJsonSimulation,
+    PhirSimulation,
+    QasmSimulation,
+    QisControlSimulation,
+    QisInterfaceBuilder,
+    SimBuilder,
+    compile_hugr_to_qis,
+    find_llvm_tool,
+    get_compilation_backends,
+    qis_helios_interface,
+    qis_selene_helios_interface,
+    selene_runtime,
+    sim_builder,
+)
 from pecos_rslib.engines import (
-    # Engine classes
+    PhirEngineBuilder,
     PhirJsonEngine,
-    # Builder classes
     PhirJsonEngineBuilder,
     QasmEngineBuilder,
     QisEngineBuilder,
@@ -48,25 +66,44 @@ from pecos_rslib.engines import (
     SparseStabilizerEngineBuilder,
     StateVecEngine,
     StateVectorEngineBuilder,
-    # Factory functions
+    phir_engine,
     phir_json_engine,
     qasm_engine,
     qis_engine,
 )
 
+from pecos.engines.hybrid_engine import HybridEngine
+
 __all__ = [
+    "ByteMessage",
+    "ByteMessageBuilder",
+    "HugrEngineBuilder",
+    "HugrSimulation",
+    "HybridEngine",
+    "PhirEngineBuilder",
     "PhirJsonEngine",
     "PhirJsonEngineBuilder",
+    "PhirJsonSimulation",
+    "PhirSimulation",
     "QasmEngineBuilder",
+    "QasmSimulation",
+    "QisControlSimulation",
     "QisEngineBuilder",
+    "QisInterfaceBuilder",
+    "SimBuilder",
     "SparseStabEngine",
     "SparseStabilizerEngineBuilder",
-    # Engine classes
     "StateVecEngine",
-    # Builder classes
     "StateVectorEngineBuilder",
+    "compile_hugr_to_qis",
+    "find_llvm_tool",
+    "get_compilation_backends",
+    "phir_engine",
     "phir_json_engine",
-    # Factory functions
     "qasm_engine",
     "qis_engine",
+    "qis_helios_interface",
+    "qis_selene_helios_interface",
+    "selene_runtime",
+    "sim_builder",
 ]

@@ -36,20 +36,31 @@ from pecos_rslib import (
     Array,  # Array type with generic dtype support (Array[f64], etc.)
     BitInt,  # Fixed-width binary integer type
     BitUInt,  # Unsigned fixed-width binary integer type
+    ByteMessage,  # Binary protocol for quantum commands and measurement results
+    ByteMessageBuilder,  # Builder for ByteMessage
     GateRegistry,  # Gate registration system for custom gate decomposition
     GateSignatureMismatchError,  # Raised when custom gate arity mismatches
     Nanoseconds,  # Time duration in nanoseconds
     Pauli,  # Quantum Pauli operators (I, X, Y, Z)
     PauliString,  # Multi-qubit Pauli operators
+    ShotMap,  # Simulation result: register name -> measurement outcomes
+    ShotVec,  # Simulation result: vector of shots
     TimeUnits,  # Abstract time duration in arbitrary units
     WasmForeignObject,  # WASM foreign object for classical coprocessor
     abs,  # Absolute value
+    acos,  # Inverse cosine
+    acosh,  # Inverse hyperbolic cosine
     all,  # All elements true
     allclose,  # Approximate equality (arrays)
     angle64,  # Fixed-point angle type with exact constants (pi, frac_pi_2, etc.)
     any,  # Any element true
     array,  # Array creation
     array_equal,  # Array equality
+    asin,  # Inverse sine
+    asinh,  # Inverse hyperbolic sine
+    atan,  # Inverse tangent
+    atan2,  # Two-argument inverse tangent
+    atanh,  # Inverse hyperbolic tangent
     complex64,
     complex128,
     cos,  # Cosine
@@ -62,6 +73,7 @@ from pecos_rslib import (
     i16,
     i32,
     i64,
+    inf,  # Infinity
     isclose,  # Approximate equality (element-wise)
     isnan,  # Check for NaN
     kron,  # Kronecker product
@@ -70,6 +82,7 @@ from pecos_rslib import (
     max,  # Maximum value
     mean,  # Mean/average
     min,  # Minimum value
+    nan,  # Not a number
     num,
     power,  # Power function
     sin,  # Sine
@@ -163,6 +176,8 @@ linalg = num.linalg
 
 # Random number generation: pecos.random.randint(), pecos.random.normal()
 random = num.random
+# Make RngPcg accessible via pecos.random.RngPcg
+random.RngPcg = pecos_rslib.RngPcg
 
 # Optimization: pecos.optimize.brentq(), pecos.optimize.newton()
 optimize = num.optimize
@@ -194,11 +209,10 @@ from pecos import (
     circuits,
     decoders,
     engines,
-    error_models,
     exceptions,  # Exception classes
     graph,
     guppy,  # Direct Guppy code generation for QEC - bypasses SLR
-    misc,
+    noise,
     programs,
     protocols,
     qec,  # Pure QEC geometry (surface, color codes) - no SLR dependencies
@@ -206,8 +220,30 @@ from pecos import (
     quantum,  # Quantum types (DagCircuit, Gate, Pauli, etc.)
     simulators,
     testing,  # Testing utilities (like numpy.testing)
-    tools,
 )
+
+# pecos.tools is deprecated (renamed to pecos.analysis).
+# Not eagerly imported to avoid triggering the deprecation warning on every `import pecos`.
+# Lazy import via __getattr__ so `pc.tools.X` still works but emits a warning.
+
+
+def __getattr__(name: str):
+    if name == "tools":
+        # Lazy import -- tools/__init__.py emits the deprecation warning
+        import importlib
+
+        return importlib.import_module("pecos.tools")
+    if name == "misc":
+        msg = (
+            "pecos.misc has been removed. Its contents have been moved to:\n"
+            "  - pecos.analysis (threshold_curve, stabilizer_funcs)\n"
+            "  - pecos.quantum (commute, gate_groups)\n"
+            "  - pecos.engines (std_output)"
+        )
+        raise AttributeError(msg)
+    msg = f"module 'pecos' has no attribute {name!r}"
+    raise AttributeError(msg)
+
 
 # Deprecated APIs
 from pecos._deprecated import BinArray
@@ -238,6 +274,8 @@ from pecos.programs import Guppy, Hugr, PhirJson, ProgramWrapper, Qasm, Qis, Was
 
 # Re-export noise and quantum engine builders from pecos_rslib
 # These don't need wrappers since they don't take program types
+BiasedDepolarizingNoiseModelBuilder = pecos_rslib.BiasedDepolarizingNoiseModelBuilder
+DepolarizingNoiseModelBuilder = pecos_rslib.DepolarizingNoiseModelBuilder
 depolarizing_noise = pecos_rslib.depolarizing_noise
 biased_depolarizing_noise = pecos_rslib.biased_depolarizing_noise
 general_noise = pecos_rslib.general_noise
@@ -261,11 +299,13 @@ __all__ = [
     # Core types
     "Array",
     # Deprecated
+    "BiasedDepolarizingNoiseModelBuilder",
     "BinArray",  # Deprecated - use BitInt instead
     "BitInt",
     "BitUInt",
     # Type categories
     "Complex",
+    "DepolarizingNoiseModelBuilder",
     "Float",
     "GateRegistry",
     "GateSignatureMismatchError",
@@ -291,6 +331,8 @@ __all__ = [
     "Qis",
     "QisEngineBuilder",
     "QuantumCircuit",
+    "ShotMap",
+    "ShotVec",
     "SignedInteger",
     "TimeUnits",  # Time unit type
     "UnsignedInteger",
@@ -302,6 +344,8 @@ __all__ = [
     "__version__",
     # Mathematical functions
     "abs",
+    "acos",
+    "acosh",
     "all",
     "allclose",
     # Subpackages
@@ -313,6 +357,11 @@ __all__ = [
     "arange",
     "array",
     "array_equal",
+    "asin",
+    "asinh",
+    "atan",
+    "atan2",
+    "atanh",
     "benchmarks",  # Performance benchmarking
     # Noise model builders
     "biased_depolarizing_noise",
@@ -337,7 +386,6 @@ __all__ = [
     # Data types
     "dtypes",
     "engines",
-    "error_models",
     "exceptions",  # Exception classes
     "exp",
     "f32",
@@ -352,6 +400,7 @@ __all__ = [
     "i16",
     "i32",
     "i64",
+    "inf",
     "isclose",
     "isnan",
     "kron",
@@ -363,8 +412,9 @@ __all__ = [
     "max",
     "mean",
     "min",
-    "misc",  # Kept for backwards compatibility
+    "nan",
     "newton",
+    "noise",
     "num",
     "ones",
     "optimize",

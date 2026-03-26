@@ -13,12 +13,12 @@
 """Integration tests for quantum error correction threshold finding."""
 
 import pecos as pc
-from pecos.misc.threshold_curve import func
+from pecos.analysis.threshold_curve import func
 
 
 def test_finding_threshold() -> None:
     """Test threshold finding for quantum error correction codes."""
-    depolar = pc.error_models.DepolarModel(
+    depolar = pc.noise.DepolarModel(
         model_level="code_capacity",
         perp_errors=True,
     )
@@ -35,7 +35,7 @@ def test_finding_threshold() -> None:
             surface = pc.qeccs.Surface4444(distance=d)
             mwpm2d = pc.decoders.MWPM2D(surface)
             plog.append(
-                pc.tools.codecapacity_logical_rate(
+                pc.analysis.codecapacity_logical_rate(
                     10,
                     surface,
                     d,
@@ -52,6 +52,6 @@ def test_finding_threshold() -> None:
 
     try:
         p0 = (0.1, 1.5, 1, 1, 1)
-        pc.misc.threshold_fit(plist, dlist, plog, func, p0, maxfev=1000)
+        pc.analysis.threshold_fit(plist, dlist, plog, func, p0, maxfev=1000)
     except RuntimeError:
         pass

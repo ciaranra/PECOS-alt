@@ -231,7 +231,6 @@ results = sim(Qasm(circuit)).quantum(Qulacs).run(100)
 
 State vector simulator powered by the QuEST library.
 
-<!--skip: requires QuEST library to be built-->
 ```python
 from pecos.simulators import QuestStateVec
 
@@ -273,13 +272,11 @@ See [CUDA Setup Guide](cuda-setup.md) for detailed installation instructions.
 
 Tensor network simulator for circuits with limited entanglement.
 
-<!--skip: requires pytket-cutensornet-->
+<!--skip-if-no-cuda-->
 ```python
 from pecos.simulators import MPS
 
-# Configure bond dimension (higher = more accurate but slower)
-mps = MPS(chi=64, truncation_fidelity=0.99)
-results = sim(Qasm(circuit)).quantum(mps).run(100)
+results = sim(Qasm(circuit)).quantum(MPS).run(100)
 ```
 
 **Strengths:**
@@ -330,14 +327,15 @@ Tracks how Pauli errors propagate through Clifford circuits—essential for QEC 
 === ":fontawesome-brands-rust: Rust"
 
     ```rust
-    use pecos::qsim::{StdPauliProp, CliffordGateable};
+    use pecos::simulators::{PauliProp, CliffordGateable};
+    use pecos::QubitId;
 
     // Track how an X error on qubit 0 propagates
-    let mut prop = StdPauliProp::new();
+    let mut prop = PauliProp::new();
     prop.add_x(0);  // Track an X error on qubit 0
 
     // Apply Hadamard - transforms X to Z
-    prop.h(0);
+    prop.h(&[QubitId(0)]);
 
     // Check resulting error pattern
     assert!(prop.contains_z(0));  // X transformed to Z
@@ -474,16 +472,19 @@ For fine-grained control, you can use simulators directly:
 === ":fontawesome-brands-rust: Rust"
 
     ```rust
-    // Create simulator with 5 qubits
-    let mut state = StdSparseStab::new(5);
+    use pecos::simulators::{SparseStab, CliffordGateable};
+    use pecos::QubitId;
 
-    // Apply gates (methods are chainable)
-    state.h(0);
-    state.cx(0, 1);
+    // Create simulator with 5 qubits
+    let mut state = SparseStab::new(5);
+
+    // Apply gates
+    state.h(&[QubitId(0)]);
+    state.cx(&[QubitId(0), QubitId(1)]);
 
     // Measure
-    let result = state.mz(0);
-    println!("Qubit 0 measured: {}", result.outcome);
+    let results = state.mz(&[QubitId(0)]);
+    println!("Qubit 0 measured: {}", results[0].outcome);
 
     // Inspect stabilizers
     println!("{:?}", state);

@@ -64,6 +64,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pecos.quantum import commute, gate_groups
 from pecos.typing import INTEGER_TYPES
 
 if TYPE_CHECKING:
@@ -73,7 +74,53 @@ if TYPE_CHECKING:
 
 # Import types from pecos_rslib
 try:
-    from pecos_rslib import Pauli, PauliString
+    from pecos_rslib import (
+        # Gate constructor functions (create CliffordRep instances)
+        CX,
+        CY,
+        CZ,
+        F2,
+        F3,
+        F4,
+        H2,
+        H3,
+        H4,
+        H5,
+        H6,
+        ISWAP,
+        SWAP,
+        SX,
+        SXX,
+        SY,
+        SYY,
+        SZ,
+        SZZ,
+        CliffordRep,
+        F,
+        F2dg,
+        F3dg,
+        F4dg,
+        Fdg,
+        G,
+        GateBindingsDict,
+        GateDefBuilder,
+        GateRegistry,
+        H,
+        Pauli,
+        PauliSequence,
+        PauliStabilizerGroup,
+        PauliString,
+        StabilizerCode,
+        SXdg,
+        SXXdg,
+        SYdg,
+        SYYdg,
+        SZdg,
+        SZZdg,
+        TableauWrapper,
+        adjust_tableau_string,
+        sparse_stab,
+    )
 
     # Circuit representation types
     # HUGR conversion utilities
@@ -194,26 +241,67 @@ def pauli_string(
 
 
 __all__ = [
-    # Circuit representation
+    "CX",
+    "CY",
+    "CZ",
+    "F2",
+    "F3",
+    "F4",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "ISWAP",
+    "SWAP",
+    "SX",
+    "SXX",
+    "SY",
+    "SYY",
+    "SZ",
+    "SZZ",
+    "CliffordRep",
     "DagCircuit",
     "DagCircuitWouldCycleError",
+    "F",
+    "F2dg",
+    "F3dg",
+    "F4dg",
+    "Fdg",
+    "G",
     "Gate",
+    "GateBindingsDict",
+    "GateDefBuilder",
+    "GateRegistry",
     "GateType",
-    # HUGR conversion utilities
+    "H",
     "HugrConversionError",
-    # Pauli operators
     "Pauli",
+    "PauliSequence",
+    "PauliStabilizerGroup",
     "PauliString",
     "QubitConflictError",
     "QubitId",
+    "SXXdg",
+    "SXdg",
+    "SYYdg",
+    "SYdg",
+    "SZZdg",
+    "SZdg",
+    "StabilizerCode",
+    "TableauWrapper",
     "Tick",
     "TickCircuit",
     "TickHandle",
     "TickMeasureHandle",
     "TickPrepHandle",
+    "adjust_tableau_string",
+    "commute",
+    "gate_groups",
     "gate_type_to_hugr_op",
     "hugr_op_to_gate_type",
     "hugr_to_dag_circuit",
     "is_quantum_operation",
     "pauli_string",
+    "sparse_stab",
 ]
