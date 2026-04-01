@@ -158,7 +158,7 @@ The default simulator, optimized for QEC workloads with sparse stabilizer tablea
 
     // Or explicitly select it
     let results = sim(program)
-        .quantum(sparse_stabilizer())
+        .quantum(sparse_stab())
         .run(1000)?;
     ```
 
@@ -444,7 +444,7 @@ The `sim()` API lets you switch simulators easily:
         .run(1000)?;
 
     let results = sim(circuit)
-        .quantum(sparse_stabilizer())
+        .quantum(sparse_stab())
         .run(1000)?;
     ```
 

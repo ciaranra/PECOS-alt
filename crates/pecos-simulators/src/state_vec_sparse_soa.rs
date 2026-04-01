@@ -2035,7 +2035,7 @@ impl<R: Rng + Debug> CliffordGateable for SparseStateVecSoA<R> {
             let fc = self.frames[c];
             let ft = self.frames[t];
             if fc.is_pauli() && ft.is_pauli() {
-                let (new_c, new_t) = CliffordFrame::push_through_cx(fc, ft);
+                let (new_c, new_t, _phase) = CliffordFrame::push_through_cx(fc, ft);
                 self.frames[c] = new_c;
                 self.frames[t] = new_t;
             } else {
@@ -2050,7 +2050,7 @@ impl<R: Rng + Debug> CliffordGateable for SparseStateVecSoA<R> {
                 let fc = self.frames[c];
                 let ft = self.frames[t];
                 if fc.is_pauli() && ft.is_pauli() {
-                    let (new_c, new_t) = CliffordFrame::push_through_cx(fc, ft);
+                    let (new_c, new_t, _phase) = CliffordFrame::push_through_cx(fc, ft);
                     self.frames[c] = new_c;
                     self.frames[t] = new_t;
                 } else {
@@ -2090,7 +2090,7 @@ impl<R: Rng + Debug> CliffordGateable for SparseStateVecSoA<R> {
             if fc.is_pauli() && ft.is_pauli() {
                 let (xc, _) = fc.pauli_xz_bits();
                 let (xt, _) = ft.pauli_xz_bits();
-                let (new_c, new_t) = CliffordFrame::push_through_cz(fc, ft);
+                let (new_c, new_t, _phase) = CliffordFrame::push_through_cz(fc, ft);
                 self.frames[c] = new_c;
                 self.frames[t] = new_t;
                 if xc && xt {
@@ -2110,7 +2110,7 @@ impl<R: Rng + Debug> CliffordGateable for SparseStateVecSoA<R> {
                 if fc.is_pauli() && ft.is_pauli() {
                     let (xc, _) = fc.pauli_xz_bits();
                     let (xt, _) = ft.pauli_xz_bits();
-                    let (new_c, new_t) = CliffordFrame::push_through_cz(fc, ft);
+                    let (new_c, new_t, _phase) = CliffordFrame::push_through_cz(fc, ft);
                     self.frames[c] = new_c;
                     self.frames[t] = new_t;
                     if xc && xt {

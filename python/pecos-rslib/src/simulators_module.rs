@@ -46,6 +46,9 @@ pub fn register_simulators_module(parent: &Bound<'_, PyModule>) -> PyResult<()> 
     simulators.add("SparseStab", parent.getattr("SparseStab")?)?;
     simulators.add("Stabilizer", parent.getattr("Stabilizer")?)?;
 
+    // Clifford+RZ simulator
+    simulators.add("CliffordRz", parent.getattr("CliffordRz")?)?;
+
     // State vector simulators
     simulators.add("StateVec", parent.getattr("StateVec")?)?;
     simulators.add("Qulacs", parent.getattr("Qulacs")?)?;

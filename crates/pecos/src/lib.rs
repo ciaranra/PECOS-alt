@@ -23,7 +23,7 @@
 //! ### Backends and Extensions
 //! - **`llvm`**: LLVM infrastructure (required by qis)
 //! - **`quest`**: `QuEST` quantum simulator backend
-//! - **`cppsparsesim`**: C++ sparse stabilizer simulator
+//! - **`cppsparsestab`**: C++ sparse stabilizer simulator
 //! - **`qulacs`**: Qulacs quantum simulator backend
 //! - **`wasm`**: WebAssembly foreign object support
 //! - **`ldpc`**: LDPC decoder support
@@ -222,7 +222,7 @@ pub mod quantum {
 ///
 /// # Builders
 ///
-/// - **`sparse_stabilizer()`**: Builder for sparse stabilizer engines
+/// - **`sparse_stab()`**: Builder for sparse stabilizer engines
 /// - **`state_vector()`**: Builder for state vector engines
 ///
 /// # Example
@@ -241,18 +241,20 @@ pub mod simulators {
 
     // Engine wrappers
     pub use pecos_engines::quantum::{
-        QuantumEngine, SparseStabEngine, StateVecEngine, new_quantum_engine_arbitrary_qgate,
+        CliffordRzEngine, DensityMatrixEngine, QuantumEngine, SparseStabEngine, StabilizerEngine,
+        StateVecEngine, new_quantum_engine_arbitrary_qgate,
     };
 
     // Engine builders
     pub use pecos_engines::quantum_engine_builder::{
-        IntoQuantumEngineBuilder, SparseStabilizerEngineBuilder, StateVectorEngineBuilder,
-        sparse_stabilizer, state_vector,
+        CliffordRzEngineBuilder, DensityMatrixEngineBuilder, IntoQuantumEngineBuilder,
+        SparseStabEngineBuilder, StabilizerEngineBuilder, StateVectorEngineBuilder, clifford_rz,
+        density_matrix, sparse_stab, stabilizer, state_vector,
     };
 
     // Feature-gated backends
-    #[cfg(feature = "cppsparsesim")]
-    pub use pecos_cppsparsesim::CppSparseStab;
+    #[cfg(feature = "cppsparsestab")]
+    pub use pecos_cppsparsestab::CppSparseStab;
 
     #[cfg(feature = "quest")]
     pub use pecos_quest::{
@@ -764,7 +766,9 @@ pub use pecos_hugr::{HugrEngine, HugrEngineBuilder, hugr_engine, hugr_sim};
 
 // Quantum backends
 #[cfg(feature = "sim")]
-pub use pecos_engines::{sparse_stabilizer, state_vector};
+pub use pecos_engines::{
+    clifford_rz, coin_toss, density_matrix, sparse_stab, stabilizer, state_vector,
+};
 
 // Noise models
 #[cfg(feature = "sim")]
@@ -794,8 +798,8 @@ pub use unified_sim::{ProgrammedSimBuilder, SimBuilderExt, sim};
 pub use engine_type::{DynamicEngineBuilder, EngineType, sim_dynamic};
 
 // Feature-gated quantum backends
-#[cfg(feature = "cppsparsesim")]
-pub use pecos_cppsparsesim::CppSparseStab;
+#[cfg(feature = "cppsparsestab")]
+pub use pecos_cppsparsestab::CppSparseStab;
 
 #[cfg(feature = "quest")]
 pub use pecos_quest::{

@@ -58,50 +58,50 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
 
-      - name: Build Selene plugins (Unix)
+      - name: Build and install Selene plugins (Unix)
         if: runner.os != 'Windows'
         run: |
-          cargo build --release \
-            -p pecos-selene-stabilizer \
-            -p pecos-selene-statevec
-
-      - name: Build Selene plugins (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          cargo build --release -p pecos-selene-stabilizer -p pecos-selene-statevec
-
-      - name: Copy libraries to Python packages (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          # Determine library extension
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             EXT="dylib"
           else
             EXT="so"
           fi
 
-          # Copy libraries
-          mkdir -p python/selene-plugins/pecos-selene-stabilizer/python/pecos_selene_stabilizer/_dist/lib
-          mkdir -p python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib
+          # Discover all selene plugins, build, copy libraries, and install
+          CARGO_ARGS=""
+          for DIR in python/selene-plugins/pecos-selene-*/; do
+            PLUGIN=$(basename "$DIR")
+            CARGO_ARGS="$CARGO_ARGS -p $PLUGIN"
+          done
+          cargo build --release $CARGO_ARGS
 
-          cp target/release/libpecos_selene_stabilizer.$EXT python/selene-plugins/pecos-selene-stabilizer/python/pecos_selene_stabilizer/_dist/lib/
-          cp target/release/libpecos_selene_statevec.$EXT python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib/
+          for DIR in python/selene-plugins/pecos-selene-*/; do
+            PLUGIN=$(basename "$DIR")
+            LIB_NAME=$(echo "$PLUGIN" | tr '-' '_')
+            DEST="python/selene-plugins/$PLUGIN/python/${LIB_NAME}/_dist/lib"
+            mkdir -p "$DEST"
+            cp "target/release/lib${LIB_NAME}.$EXT" "$DEST/"
+            uv pip install --system -e "${DIR}[test]"
+          done
 
-      - name: Copy libraries to Python packages (Windows)
+      - name: Build and install Selene plugins (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path python/selene-plugins/pecos-selene-stabilizer/python/pecos_selene_stabilizer/_dist/lib
-          New-Item -ItemType Directory -Force -Path python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib
+          $plugins = Get-ChildItem -Directory python/selene-plugins/pecos-selene-* | Select-Object -ExpandProperty Name
+          $cargoArgs = $plugins | ForEach-Object { "-p"; $_ }
+          cargo build --release @cargoArgs
 
-          Copy-Item target/release/pecos_selene_stabilizer.dll python/selene-plugins/pecos-selene-stabilizer/python/pecos_selene_stabilizer/_dist/lib/
-          Copy-Item target/release/pecos_selene_statevec.dll python/selene-plugins/pecos-selene-statevec/python/pecos_selene_statevec/_dist/lib/
+          foreach ($plugin in $plugins) {
+            $libName = $plugin -replace '-', '_'
+            $dest = "python/selene-plugins/$plugin/python/$libName/_dist/lib"
+            New-Item -ItemType Directory -Force -Path $dest
+            Copy-Item "target/release/$libName.dll" "$dest/"
+          }
 
-      - name: Install Python packages
-        run: |
-          uv pip install --system -e ./python/selene-plugins/pecos-selene-stabilizer[test]
-          uv pip install --system -e ./python/selene-plugins/pecos-selene-statevec[test]
+          foreach ($pluginDir in (Get-ChildItem -Directory python/selene-plugins/pecos-selene-*)) {
+            uv pip install --system -e "$($pluginDir.FullName)[test]"
+          }
 
       - name: Run tests
         run: |
@@ -120,6 +120,8 @@ jobs:
             package: pecos_selene_stabilizer
           - name: pecos-selene-statevec
             package: pecos_selene_statevec
+          - name: pecos-selene-clifford-rz
+            package: pecos_selene_clifford_rz
 
     steps:
       - uses: actions/checkout@v6

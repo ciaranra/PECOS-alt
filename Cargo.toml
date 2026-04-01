@@ -3,8 +3,7 @@ resolver = "2"
 members = [
   "python/pecos-rslib",
   "python/pecos-rslib-cuda",
-  "python/selene-plugins/pecos-selene-stabilizer",
-  "python/selene-plugins/pecos-selene-statevec",
+  "python/selene-plugins/pecos-selene-*",
   "julia/pecos-julia-ffi",
   "go/pecos-go-ffi",
   "crates/pecos*",
@@ -101,6 +100,7 @@ itertools = "0.14"
 levenberg-marquardt = "0.15"
 nalgebra = "0.34"
 rustworkx-core = "0.17"
+num = "0.4"
 num-complex = "0.4"
 num-traits = "0.2"
 num-bigint = { version = "0.4", features = ["serde"] }
@@ -203,7 +203,7 @@ pecos-quest = { version = "0.2.0-dev.0", path = "crates/pecos-quest" }
 pecos-qulacs = { version = "0.2.0-dev.0", path = "crates/pecos-qulacs" }
 
 # CppSparseSim simulator wrapper
-pecos-cppsparsesim = { version = "0.2.0-dev.0", path = "crates/pecos-cppsparsesim" }
+pecos-cppsparsestab = { version = "0.2.0-dev.0", path = "crates/pecos-cppsparsestab" }
 
 # Optimize build times
 [profile.dev]

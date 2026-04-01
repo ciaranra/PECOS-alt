@@ -17,7 +17,9 @@ and fault propagation simulators.
 # specific language governing permissions and limitations under the License.
 
 # Rust simulators (direct exports without Python wrappers)
-from pecos_rslib.simulators import SparseStab, Stabilizer
+# Simulator engine builder factory functions
+from pecos_rslib import clifford_rz, coin_toss, density_matrix, sparse_stab, stabilizer, state_vector
+from pecos_rslib.simulators import CliffordRz, SparseStab, Stabilizer
 
 from pecos.simulators import sim_class_types
 
@@ -39,7 +41,7 @@ from pecos.simulators.quest_statevec import QuestStateVec
 from pecos.simulators.qulacs import Qulacs
 
 # Pauli fault propagation sim
-from pecos.simulators.sparsesim import (
+from pecos.simulators.sparsestab import (
     SparseStabPy as SparseStabPy,
 )
 from pecos.simulators.statevec import StateVec
@@ -79,6 +81,8 @@ except ImportError:
 
 __all__ = [
     "MPS",
+    # Rust simulators
+    "CliffordRz",
     # Python simulators
     "CoinToss",
     "CuStateVec",
@@ -91,11 +95,17 @@ __all__ = [
     "QuestDensityMatrix",
     "QuestStateVec",
     "Qulacs",
-    # Rust simulators
     "SparseStab",
     "SparseStabPy",
     "Stabilizer",
     "StateVec",
+    # Factory functions
+    "clifford_rz",
+    "coin_toss",
+    "density_matrix",
     # Submodules
     "sim_class_types",
+    "sparse_stab",
+    "stabilizer",
+    "state_vector",
 ]

@@ -16,6 +16,7 @@ pub mod circuit_executor;
 pub mod clifford_frame;
 pub mod clifford_gateable;
 pub mod clifford_rotation;
+pub mod clifford_rz;
 pub mod clifford_test_utils;
 pub mod coin_toss;
 pub mod dense_stab;
@@ -66,6 +67,10 @@ pub type GensData = (
     Vec<Vec<usize>>,
 );
 
+pub use clifford_rz::ch_form::{CHForm, CHFormGeneric};
+pub use clifford_rz::exact_scalar::ExactScalar;
+pub use clifford_rz::sparse_binary_matrix::SparseBinaryMatrix;
+pub use clifford_rz::{CliffordRz, CliffordRzBuilder, CliffordRzGeneric};
 pub use dense_stab::DenseStab;
 pub use dense_stab_variants::{DenseStabColOnly, DenseStabRowOnly, SparseColOnly, SparseRowOnly};
 pub use density_matrix::DensityMatrix;

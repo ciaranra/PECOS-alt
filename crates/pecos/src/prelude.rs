@@ -30,7 +30,7 @@
 //! let program = Qasm::from_string(qasm_code);
 //!
 //! let results = sim(program)
-//!     .quantum(sparse_stabilizer())
+//!     .quantum(sparse_stab())
 //!     .seed(42)
 //!     .run(1000)?;
 //! # Ok::<(), pecos_core::errors::PecosError>(())
@@ -128,8 +128,8 @@ pub use crate::unified_sim::{ProgrammedSimBuilder, SimBuilderExt, sim};
 // Feature-gated quantum simulator backends
 // ============================================================================
 
-#[cfg(feature = "cppsparsesim")]
-pub use pecos_cppsparsesim::CppSparseStab;
+#[cfg(feature = "cppsparsestab")]
+pub use pecos_cppsparsestab::CppSparseStab;
 
 #[cfg(feature = "quest")]
 pub use pecos_quest::{QuestDensityMatrix, QuestStateVec};

@@ -16,7 +16,7 @@
 //! tests for all types implementing `StabilizerSimulator`.
 
 use pecos_simulators::{
-    DenseStab, DenseStabColOnly, DenseStabRowOnly, GpuStab, GpuStabOpt, GpuStabParallel,
+    CHForm, DenseStab, DenseStabColOnly, DenseStabRowOnly, GpuStab, GpuStabOpt, GpuStabParallel,
     SparseColOnly, SparseStab, SparseStabHybrid, SparseStabUnsortedVecSet, SparseStabVecSet,
     Stabilizer,
 };
@@ -37,6 +37,9 @@ pecos_simulators::stabilizer_test_suite!(SparseColOnly);
 
 // Default wrapper
 pecos_simulators::stabilizer_test_suite!(Stabilizer);
+
+// CH-form stabilizer simulator
+pecos_simulators::stabilizer_test_suite!(CHForm);
 
 // GPU-optimized stabilizer simulators
 pecos_simulators::stabilizer_test_suite!(GpuStab);

@@ -22,6 +22,7 @@ mod bit_int_bindings;
 mod bit_uint_bindings;
 mod byte_message_bindings;
 mod clifford_rep_bindings;
+mod clifford_rz_bindings;
 mod coin_toss_bindings;
 mod dag_circuit_bindings;
 mod decoder_bindings;
@@ -71,6 +72,7 @@ mod wasm_program_bindings;
 use bit_int_bindings::PyBitInt;
 use bit_uint_bindings::PyBitUInt;
 use byte_message_bindings::{PyByteMessage, PyByteMessageBuilder};
+use clifford_rz_bindings::PyCliffordRz;
 use coin_toss_bindings::PyCoinToss;
 use engine_builders::{PyHugr, PyPhirJson, PyQasm, PyQis};
 use pauli_prop_bindings::PyPauliProp;
@@ -206,6 +208,7 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         }
     }
 
+    m.add_class::<PyCliffordRz>()?;
     m.add_class::<PySparseStab>()?;
     m.add_class::<PyStabilizer>()?;
     m.add_class::<phir_json_bridge::PhirJsonEngine>()?;
@@ -310,8 +313,11 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(engine_builders::state_vector, m)?)?;
-    m.add_function(wrap_pyfunction!(engine_builders::sparse_stabilizer, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sparse_stab, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::stabilizer, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::clifford_rz, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::density_matrix, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::coin_toss, m)?)?;
 
     // Utility functions
     m.add_function(wrap_pyfunction!(

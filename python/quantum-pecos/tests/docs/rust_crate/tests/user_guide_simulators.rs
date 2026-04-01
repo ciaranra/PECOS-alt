@@ -21,7 +21,7 @@ let results = sim(program.clone()).run(1000)?;
 
 // Or explicitly select it
 let results = sim(program)
-    .quantum(sparse_stabilizer())
+    .quantum(sparse_stab())
     .run(1000)?;
 
     Ok(())
@@ -137,7 +137,7 @@ let results = sim(circuit.clone())
     .run(1000)?;
 
 let results = sim(circuit)
-    .quantum(sparse_stabilizer())
+    .quantum(sparse_stab())
     .run(1000)?;
 
     Ok(())

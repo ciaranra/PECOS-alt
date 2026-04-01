@@ -7,7 +7,7 @@
 fn test_user_guide_qasm_simulation_rust_1() -> Result<(), Box<dyn std::error::Error>> {
     use pecos::prelude::*;
     use pecos::noise::GeneralNoiseModelBuilder;
-    use pecos::simulators::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stab, state_vector};
     let qasm_code = r#"
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -46,7 +46,7 @@ let results = sim(program).seed(42).run(1000)?;
 fn test_user_guide_qasm_simulation_rust_2() -> Result<(), Box<dyn std::error::Error>> {
     use pecos::prelude::*;
     use pecos::noise::GeneralNoiseModelBuilder;
-    use pecos::simulators::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stab, state_vector};
     let qasm_code = r#"
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -89,7 +89,7 @@ let results = sim(program)
 fn test_user_guide_qasm_simulation_rust_3() -> Result<(), Box<dyn std::error::Error>> {
     use pecos::prelude::*;
     use pecos::noise::GeneralNoiseModelBuilder;
-    use pecos::simulators::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stab, state_vector};
     let qasm_code = r#"
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -131,7 +131,7 @@ let results_1000 = experiment.run(1000)?;
 fn test_user_guide_qasm_simulation_rust_4() -> Result<(), Box<dyn std::error::Error>> {
     use pecos::prelude::*;
     use pecos::noise::GeneralNoiseModelBuilder;
-    use pecos::simulators::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stab, state_vector};
     let qasm_code = r#"
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -169,7 +169,7 @@ let _biased = BiasedDepolarizingNoiseModel::builder()
 fn test_user_guide_qasm_simulation_rust_5() -> Result<(), Box<dyn std::error::Error>> {
     use pecos::prelude::*;
     use pecos::noise::GeneralNoiseModelBuilder;
-    use pecos::simulators::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stab, state_vector};
     let qasm_code = r#"
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -201,7 +201,7 @@ let results = sim(program).noise(noise).run(1000)?;
 fn test_user_guide_qasm_simulation_rust_6() -> Result<(), Box<dyn std::error::Error>> {
     use pecos::prelude::*;
     use pecos::noise::GeneralNoiseModelBuilder;
-    use pecos::simulators::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stab, state_vector};
     let qasm_code = r#"
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -227,7 +227,7 @@ let program = Qasm::from_string(qasm_code);
 
 // Sparse stabilizer (default, efficient for Clifford circuits)
 let results = sim(program.clone())
-    .quantum(sparse_stabilizer())
+    .quantum(sparse_stab())
     .run(1000)?;
 
 // State vector (for non-Clifford circuits)
@@ -243,7 +243,7 @@ let results = sim(program)
 fn test_user_guide_qasm_simulation_rust_7() -> Result<(), Box<dyn std::error::Error>> {
     use pecos::prelude::*;
     use pecos::noise::GeneralNoiseModelBuilder;
-    use pecos::simulators::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stab, state_vector};
     let qasm_code = r#"
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -286,7 +286,7 @@ let c_values = shot_map.try_bits_as_u64("c")?;
 fn test_user_guide_qasm_simulation_rust_8() -> Result<(), Box<dyn std::error::Error>> {
     use pecos::prelude::*;
     use pecos::noise::GeneralNoiseModelBuilder;
-    use pecos::simulators::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stab, state_vector};
     let qasm_code = r#"
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -335,7 +335,7 @@ fn bell_state_example() -> Result<(), PecosError> {
 fn test_user_guide_qasm_simulation_rust_9() -> Result<(), Box<dyn std::error::Error>> {
     use pecos::prelude::*;
     use pecos::noise::GeneralNoiseModelBuilder;
-    use pecos::simulators::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stab, state_vector};
     let qasm_code = r#"
         OPENQASM 2.0;
         include "qelib1.inc";
@@ -385,7 +385,7 @@ fn ghz_noise_example() -> Result<(), PecosError> {
 fn test_user_guide_qasm_simulation_rust_10() -> Result<(), Box<dyn std::error::Error>> {
     use pecos::prelude::*;
     use pecos::noise::GeneralNoiseModelBuilder;
-    use pecos::simulators::{sparse_stabilizer, state_vector};
+    use pecos::simulators::{sparse_stab, state_vector};
     let qasm_code = r#"
         OPENQASM 2.0;
         include "qelib1.inc";
