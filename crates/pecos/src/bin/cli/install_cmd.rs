@@ -36,7 +36,7 @@ pub fn run(targets: &[String], force: bool, all: bool, no_configure: bool) -> Re
     for (i, target) in targets.iter().enumerate() {
         if !force && is_available(target) {
             println!(
-                "[{}/{}] {target} is already available, skipping (use --force to reinstall)",
+                "[{}/{}] {target} is already available, skipping (use --force to install locally)",
                 i + 1,
                 total,
             );
@@ -52,7 +52,7 @@ pub fn run(targets: &[String], force: bool, all: bool, no_configure: bool) -> Re
         println!();
     }
 
-    println!("All done.");
+    println!("All done. Run `just build` to build PECOS.");
     Ok(())
 }
 

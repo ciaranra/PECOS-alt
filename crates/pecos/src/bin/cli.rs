@@ -6,6 +6,7 @@
 
 #![allow(clippy::fn_params_excessive_bools)]
 
+pub mod clean_cmd;
 pub mod cuda_cmd;
 pub mod cuquantum_cmd;
 pub mod docs_cmd;
@@ -18,10 +19,12 @@ pub mod julia_cmd;
 pub mod list;
 pub mod llvm_cmd;
 pub mod manifest_cmd;
+pub mod migrate_cmd;
 pub mod python_cmd;
 pub mod rust_cmd;
 pub mod selene_cmd;
 pub mod self_update_cmd;
+pub mod setup_cmd;
 pub mod uninstall_cmd;
 pub mod upgrade_cmd;
 
@@ -558,6 +561,43 @@ pub fn run_deps(command: DepsCommands) -> pecos_build::Result<()> {
     manifest_cmd::run(command)
 }
 
+/// Run the clean command
+///
+/// # Errors
+///
+/// Returns an error if cleaning fails.
+pub fn run_clean(
+    targets: &[String],
+    all: bool,
+    dry_run: bool,
+    yes: bool,
+) -> pecos_build::Result<()> {
+    clean_cmd::run(targets, all, dry_run, yes)
+}
+
+/// Run the setup command
+///
+/// # Errors
+///
+/// Returns an error if setup fails.
+pub fn run_setup(
+    mode: pecos_build::prompt::PromptMode,
+    skip_llvm: bool,
+    skip_cuda: bool,
+    quiet: bool,
+) -> pecos_build::Result<()> {
+    setup_cmd::run(mode, skip_llvm, skip_cuda, quiet)
+}
+
+/// Run the migrate command
+///
+/// # Errors
+///
+/// Returns an error if migration fails.
+pub fn run_migrate() -> pecos_build::Result<()> {
+    migrate_cmd::run()
+}
+
 /// Run the install command
 ///
 /// # Errors
@@ -577,8 +617,8 @@ pub fn run_install(
 /// # Errors
 ///
 /// Returns an error if any target fails to uninstall.
-pub fn run_uninstall(targets: &[String], all: bool) -> pecos_build::Result<()> {
-    uninstall_cmd::run(targets, all)
+pub fn run_uninstall(targets: &[String], all: bool, yes: bool) -> pecos_build::Result<()> {
+    uninstall_cmd::run(targets, all, yes)
 }
 
 /// Run the upgrade command
@@ -586,8 +626,13 @@ pub fn run_uninstall(targets: &[String], all: bool) -> pecos_build::Result<()> {
 /// # Errors
 ///
 /// Returns an error if any target fails to upgrade.
-pub fn run_upgrade(targets: &[String], all: bool, no_configure: bool) -> pecos_build::Result<()> {
-    upgrade_cmd::run(targets, all, no_configure)
+pub fn run_upgrade(
+    targets: &[String],
+    all: bool,
+    no_configure: bool,
+    yes: bool,
+) -> pecos_build::Result<()> {
+    upgrade_cmd::run(targets, all, no_configure, yes)
 }
 
 /// Run the sys-info command

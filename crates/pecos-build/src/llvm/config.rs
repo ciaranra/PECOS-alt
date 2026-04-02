@@ -92,50 +92,30 @@ impl ConfigValidation {
 }
 
 /// Read the configured LLVM path from .cargo/config.toml
+///
+/// Handles both TOML formats:
+///   `LLVM_SYS_140_PREFIX = "/path/to/llvm"`
+///   `LLVM_SYS_140_PREFIX = { value = "/path/to/llvm", force = true }`
 #[must_use]
-#[allow(clippy::collapsible_if)]
 pub fn read_configured_llvm_path() -> Option<PathBuf> {
     let project_root = find_cargo_project_root()?;
     let config_path = project_root.join(".cargo").join("config.toml");
-
     let content = fs::read_to_string(&config_path).ok()?;
+    let table: toml::Table = content.parse().ok()?;
 
-    // Parse out LLVM_SYS_140_PREFIX value
-    // Handles both formats:
-    //   LLVM_SYS_140_PREFIX = "/path/to/llvm"
-    //   LLVM_SYS_140_PREFIX = { value = "/path/to/llvm", force = true }
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("LLVM_SYS_140_PREFIX") {
-            if let Some(eq_pos) = trimmed.find('=') {
-                let value_part = trimmed[eq_pos + 1..].trim();
+    let env = table.get("env")?;
+    let entry = env.get("LLVM_SYS_140_PREFIX")?;
 
-                // Check for inline table format: { value = "...", ... }
-                if value_part.starts_with('{') {
-                    if let Some(value_start) = value_part.find("value") {
-                        let after_value = &value_part[value_start + 5..];
-                        if let Some(eq_pos) = after_value.find('=') {
-                            let path_part = after_value[eq_pos + 1..].trim();
-                            // Extract quoted string
-                            if let Some(start) = path_part.find('"') {
-                                if let Some(end) = path_part[start + 1..].find('"') {
-                                    let path = &path_part[start + 1..start + 1 + end];
-                                    return Some(PathBuf::from(path));
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Simple format: "..."
-                    if let Some(start) = value_part.find('"') {
-                        if let Some(end) = value_part[start + 1..].find('"') {
-                            let path = &value_part[start + 1..start + 1 + end];
-                            return Some(PathBuf::from(path));
-                        }
-                    }
-                }
-            }
-        }
+    // Simple string: LLVM_SYS_140_PREFIX = "/path"
+    if let Some(s) = entry.as_str() {
+        return Some(PathBuf::from(s));
+    }
+
+    // Inline table: LLVM_SYS_140_PREFIX = { value = "/path", force = true }
+    if let Some(t) = entry.as_table()
+        && let Some(v) = t.get("value").and_then(|v| v.as_str())
+    {
+        return Some(PathBuf::from(v));
     }
 
     None
@@ -175,34 +155,37 @@ pub fn validate_llvm_config() -> ConfigValidation {
 /// it to `.cargo/config.toml` with `force=true`.
 ///
 /// Priority order:
-/// 1. `~/.pecos/llvm` (PECOS-managed LLVM)
-/// 2. `LLVM_SYS_140_PREFIX` environment variable
-/// 3. System LLVM 14 (Homebrew, system paths, etc.)
+/// 1. `~/.pecos/deps/llvm` (PECOS-managed LLVM, new path)
+/// 2. `~/.pecos/llvm` (legacy path)
+/// 3. `LLVM_SYS_140_PREFIX` environment variable
+/// 4. System LLVM 14 (Homebrew, system paths, etc.)
 ///
 /// # Errors
 ///
 /// Returns an error if no suitable LLVM 14 installation could be found
 pub fn auto_configure_llvm(project_root: Option<PathBuf>) -> Result<PathBuf> {
-    // Priority 1: Check ~/.pecos/ for PECOS-managed LLVM
+    // Priority 1 & 2: Check ~/.pecos/deps/llvm and legacy ~/.pecos/llvm
+    let mut pecos_llvm_paths = Vec::new();
+    if let Ok(deps_llvm) = crate::home::get_llvm_dir_path() {
+        pecos_llvm_paths.push(deps_llvm);
+    }
+    if let Ok(legacy_llvm) = crate::home::get_legacy_llvm_dir_path() {
+        pecos_llvm_paths.push(legacy_llvm);
+    }
+    #[cfg(target_os = "windows")]
     if let Some(home_dir) = dirs::home_dir() {
-        let pecos_dir = home_dir.join(".pecos");
+        pecos_llvm_paths.push(home_dir.join(".pecos").join("LLVM-14"));
+    }
 
-        #[cfg(target_os = "windows")]
-        let pecos_llvm_paths = vec![pecos_dir.join("LLVM-14"), pecos_dir.join("llvm")];
+    for pecos_llvm in pecos_llvm_paths {
+        if is_valid_llvm_14(&pecos_llvm) {
+            let project_root = project_root
+                .or_else(get_repo_root_from_manifest)
+                .or_else(find_cargo_project_root)
+                .ok_or_else(|| Error::Config("Could not find Cargo project root".into()))?;
 
-        #[cfg(not(target_os = "windows"))]
-        let pecos_llvm_paths = vec![pecos_dir.join("llvm")];
-
-        for pecos_llvm in pecos_llvm_paths {
-            if is_valid_llvm_14(&pecos_llvm) {
-                let project_root = project_root
-                    .or_else(get_repo_root_from_manifest)
-                    .or_else(find_cargo_project_root)
-                    .ok_or_else(|| Error::Config("Could not find Cargo project root".into()))?;
-
-                write_cargo_config(&project_root, &pecos_llvm, true)?;
-                return Ok(pecos_llvm);
-            }
+            write_cargo_config(&project_root, &pecos_llvm, true)?;
+            return Ok(pecos_llvm);
         }
     }
 

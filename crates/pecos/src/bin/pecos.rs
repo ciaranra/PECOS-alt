@@ -129,6 +129,61 @@ enum Commands {
         #[command(subcommand)]
         command: DepsCommands,
     },
+    /// Set up build environment (detect and install missing dependencies)
+    ///
+    /// Interactively checks for LLVM, CUDA, and cuQuantum and offers to
+    /// install each one that is missing. Use --yes to accept all prompts
+    /// (for CI) or --no to decline all (for a lite build).
+    ///
+    /// Example: pecos setup
+    /// Example: pecos setup --yes
+    Setup {
+        /// Accept all prompts without asking (for CI)
+        #[arg(long, conflicts_with = "no")]
+        yes: bool,
+
+        /// Decline all prompts without asking (lite mode)
+        #[arg(long, conflicts_with = "yes")]
+        no: bool,
+
+        /// Skip LLVM setup
+        #[arg(long)]
+        skip_llvm: bool,
+
+        /// Skip CUDA setup
+        #[arg(long)]
+        skip_cuda: bool,
+
+        /// Suppress output when all dependencies are already found
+        #[arg(short, long)]
+        quiet: bool,
+    },
+    /// Migrate legacy deps from ~/.pecos/ to ~/.pecos/deps/
+    ///
+    /// Moves LLVM, CUDA, and cuQuantum installations from the old top-level
+    /// paths into the unified deps/ directory.
+    Migrate,
+    /// Clean cached downloads and temporary files from ~/.pecos/
+    ///
+    /// Example: pecos clean cache
+    /// Example: pecos clean --all --dry-run
+    Clean {
+        /// What to clean: cache, tmp
+        #[arg(required_unless_present = "all")]
+        targets: Vec<String>,
+
+        /// Clean all targets
+        #[arg(long)]
+        all: bool,
+
+        /// Show what would be removed without removing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip confirmation prompt
+        #[arg(long, short)]
+        yes: bool,
+    },
     /// Install optional dependencies (cuda, llvm, cuquantum)
     ///
     /// Example: pecos install cuda cuquantum
@@ -160,6 +215,10 @@ enum Commands {
         /// Uninstall all optional dependencies
         #[arg(long)]
         all: bool,
+
+        /// Skip confirmation prompt
+        #[arg(long, short)]
+        yes: bool,
     },
     /// Upgrade optional dependencies (force reinstall)
     ///
@@ -176,6 +235,10 @@ enum Commands {
         /// Skip automatic configuration after installation (applies to llvm)
         #[arg(long)]
         no_configure: bool,
+
+        /// Skip confirmation prompt
+        #[arg(long, short)]
+        yes: bool,
     },
     /// Show system tools and project info
     #[command(name = "sys-info")]
@@ -671,18 +734,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Selene { command } => cli::run_selene(command.clone())?,
         Commands::Features { command } => cli::run_features(command.clone())?,
         Commands::Deps { command } => cli::run_deps(command.clone())?,
+        Commands::Setup {
+            yes,
+            no,
+            skip_llvm,
+            skip_cuda,
+            quiet,
+        } => {
+            let mode = if *yes {
+                pecos_build::prompt::PromptMode::AcceptAll
+            } else if *no {
+                pecos_build::prompt::PromptMode::DeclineAll
+            } else {
+                pecos_build::prompt::PromptMode::Interactive
+            };
+            cli::run_setup(mode, *skip_llvm, *skip_cuda, *quiet)?;
+        }
+        Commands::Migrate => cli::run_migrate()?,
+        Commands::Clean {
+            targets,
+            all,
+            dry_run,
+            yes,
+        } => cli::run_clean(targets, *all, *dry_run, *yes)?,
         Commands::Install {
             targets,
             force,
             all,
             no_configure,
         } => cli::run_install(targets, *force, *all, *no_configure)?,
-        Commands::Uninstall { targets, all } => cli::run_uninstall(targets, *all)?,
+        Commands::Uninstall { targets, all, yes } => cli::run_uninstall(targets, *all, *yes)?,
         Commands::Upgrade {
             targets,
             all,
             no_configure,
-        } => cli::run_upgrade(targets, *all, *no_configure)?,
+            yes,
+        } => cli::run_upgrade(targets, *all, *no_configure, *yes)?,
         Commands::SysInfo => cli::run_sys_info()?,
         Commands::List { verbose } => cli::run_list(*verbose)?,
         Commands::Self_ { command } => cli::run_self(command.clone())?,
