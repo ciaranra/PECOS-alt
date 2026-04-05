@@ -61,7 +61,7 @@ fn bench_noise_emission(c: &mut Criterion) {
                 angles: &[],
                 gate_id: None,
             };
-            black_box(noise.emit(event, &mut rng))
+            black_box(noise.emit(&event, &mut rng))
         });
     });
 
@@ -73,7 +73,7 @@ fn bench_noise_emission(c: &mut Criterion) {
                 angles: &[],
                 gate_id: None,
             };
-            black_box(noise.emit(event, &mut rng))
+            black_box(noise.emit(&event, &mut rng))
         });
     });
 
@@ -83,7 +83,7 @@ fn bench_noise_emission(c: &mut Criterion) {
                 qubits: &qubits,
                 outcomes: &[false],
             };
-            black_box(noise.emit(event, &mut rng))
+            black_box(noise.emit(&event, &mut rng))
         });
     });
 
@@ -180,6 +180,7 @@ fn bench_multi_shot(c: &mut Criterion) {
         .build();
 
     for shots in [100, 1000] {
+        #[allow(clippy::cast_sign_loss)] // shots is a positive literal
         group.throughput(Throughput::Elements(shots as u64));
 
         group.bench_function(BenchmarkId::new("bell_no_noise", shots), |b| {
@@ -323,6 +324,7 @@ fn bench_entity_operations(c: &mut Criterion) {
 // Redistribution Benchmarks
 // ============================================================================
 
+#[allow(clippy::cast_precision_loss)] // small index as f64
 fn bench_redistribution(c: &mut Criterion) {
     let mut group = c.benchmark_group("redistribution");
 
@@ -636,7 +638,7 @@ fn bench_monte_carlo_comparison(c: &mut Criterion) {
 
                 let results = MonteCarloRunner::run(
                     &bell_commands,
-                    config,
+                    &config,
                     || (CircuitRunner::new(), SparseStab::new(2)),
                     |outcomes| {
                         black_box((
@@ -695,7 +697,7 @@ fn bench_monte_carlo_comparison(c: &mut Criterion) {
 
             let results = MonteCarloRunner::run(
                 &bell_commands,
-                config,
+                &config,
                 || {
                     let noise = GeneralNoiseModelBuilder::new()
                         .with_p1(0.001)
@@ -771,7 +773,7 @@ fn bench_monte_carlo_comparison(c: &mut Criterion) {
 
             let results = MonteCarloRunner::run(
                 &large_commands,
-                config,
+                &config,
                 || (CircuitRunner::new(), SparseStab::new(10)),
                 |outcomes| {
                     let mut sum = 0u32;
@@ -846,7 +848,7 @@ fn bench_composite_vs_channel_noise(c: &mut Criterion) {
                 angles: &[],
                 gate_id: None,
             };
-            black_box(noise.emit(event, &mut rng))
+            black_box(noise.emit(&event, &mut rng))
         });
     });
 
@@ -865,7 +867,7 @@ fn bench_composite_vs_channel_noise(c: &mut Criterion) {
                 angles: &[],
                 gate_id: None,
             };
-            black_box(noise.emit(event, &mut rng))
+            black_box(noise.emit(&event, &mut rng))
         });
     });
 
@@ -884,7 +886,7 @@ fn bench_composite_vs_channel_noise(c: &mut Criterion) {
                 angles: &[],
                 gate_id: None,
             };
-            black_box(noise.emit(event, &mut rng))
+            black_box(noise.emit(&event, &mut rng))
         });
     });
 
@@ -903,7 +905,7 @@ fn bench_composite_vs_channel_noise(c: &mut Criterion) {
                 angles: &[],
                 gate_id: None,
             };
-            black_box(noise.emit(event, &mut rng))
+            black_box(noise.emit(&event, &mut rng))
         });
     });
 
@@ -1011,7 +1013,10 @@ fn bench_composite_vs_channel_noise(c: &mut Criterion) {
 
 /// Benchmark batch probability filtering at scale
 fn bench_batch_filtering(c: &mut Criterion) {
-    use pecos_neo::noise::composite::batch::{filter_by_probability, filter_range_by_probability};
+    use pecos_neo::noise::composite::batch::{
+        ProbabilityThreshold, filter_by_probability, filter_by_probability_fast,
+        filter_range_by_probability, sample_noise_1q_batch,
+    };
     use pecos_neo::noise::composite::batch_composite::BatchState;
 
     let mut group = c.benchmark_group("batch_filtering");
@@ -1046,10 +1051,6 @@ fn bench_batch_filtering(c: &mut Criterion) {
     });
 
     // Compare with RngProbabilityExt optimized version
-    use pecos_neo::noise::composite::batch::{
-        ProbabilityThreshold, filter_by_probability_fast, sample_noise_1q_batch,
-    };
-
     group.bench_function("rng_ext_filter_1M_p0.001", |b| {
         let mut rng = PecosRng::seed_from_u64(42);
         let threshold = ProbabilityThreshold::new(0.001, &rng);
@@ -1102,6 +1103,8 @@ fn bench_batch_filtering(c: &mut Criterion) {
         b.iter(|| {
             // Mark 1000 random qubits as leaked
             for _ in 0..1000 {
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                // random f64 in [0,1) times positive constant
                 let idx = (rng.random::<f64>() * 1_000_000.0) as usize;
                 state.mark_leaked(QubitId(idx));
             }
@@ -1119,6 +1122,8 @@ fn bench_batch_filtering(c: &mut Criterion) {
         b.iter(|| {
             let mut count = 0;
             for _ in 0..1000 {
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                // random f64 in [0,1) times positive constant
                 let idx = (rng.random::<f64>() * 1_000_000.0) as usize;
                 if state.is_leaked(QubitId(idx)) {
                     count += 1;

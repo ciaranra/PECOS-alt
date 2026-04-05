@@ -10,6 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+// statistical tests use count as f64
+#![allow(clippy::cast_precision_loss)]
 //! Comprehensive statistical validation tests with high sample sizes.
 //!
 //! These tests run larger numbers of shots to get statistically significant
@@ -98,7 +100,7 @@ fn test_hadamard_distribution_high_statistics() {
 
     let mc_results = MonteCarloRunner::run(
         &commands,
-        mc_config,
+        &mc_config,
         || (CircuitRunner::new(), SparseStab::new(1)),
         |outcomes| outcomes.get_bit(QubitId(0)).unwrap_or(false),
     );
@@ -190,7 +192,7 @@ fn test_bell_state_distribution_high_statistics() {
 
     let mc_results = MonteCarloRunner::run(
         &commands,
-        mc_config,
+        &mc_config,
         || (CircuitRunner::new(), SparseStab::new(2)),
         |outcomes| {
             let b0 = outcomes.get_bit(QubitId(0)).unwrap_or(false);
@@ -277,7 +279,7 @@ fn test_depolarizing_noise_rate_validation() {
 
         let mc_results = MonteCarloRunner::run(
             &commands,
-            mc_config,
+            &mc_config,
             || {
                 let noise = GeneralNoiseModelBuilder::new().with_p1(p1).build();
                 (CircuitRunner::new().with_noise(noise), SparseStab::new(1))
@@ -332,7 +334,7 @@ fn test_measurement_error_rate_validation() {
 
         let mc_results = MonteCarloRunner::run(
             &commands,
-            mc_config,
+            &mc_config,
             || {
                 let noise = GeneralNoiseModelBuilder::new()
                     .with_p_meas(p_meas, 0.0) // Only 0->1 flip
@@ -423,7 +425,7 @@ fn test_neo_vs_engines_bell_state_comparison() {
 
     let neo_results = MonteCarloRunner::run(
         &commands,
-        mc_config,
+        &mc_config,
         || (CircuitRunner::new(), SparseStab::new(2)),
         |outcomes| {
             let b0 = outcomes.get_bit(QubitId(0)).unwrap_or(false);
@@ -527,7 +529,7 @@ fn test_neo_vs_engines_noisy_comparison() {
 
     let neo_results = MonteCarloRunner::run(
         &commands,
-        mc_config,
+        &mc_config,
         || {
             let noise = GeneralNoiseModelBuilder::new()
                 .with_p1(p1)

@@ -2,7 +2,11 @@ use pecos_core::QubitId;
 use pecos_simulators::CliffordGateable;
 use std::time::Instant;
 
+#[allow(clippy::cast_precision_loss)] // profiling calculation
 fn main() {
+    type Sim = pecos_simulators::CHForm;
+    type GateFn<S> = Box<dyn Fn(&mut S)>;
+
     let nq: usize = std::env::args()
         .nth(1)
         .and_then(|s| s.parse().ok())
@@ -11,7 +15,6 @@ fn main() {
         .nth(2)
         .and_then(|s| s.parse().ok())
         .unwrap_or(100);
-    type Sim = pecos_simulators::CHForm;
 
     let mut sim = Sim::new(nq);
     for q in 0..nq {
@@ -20,8 +23,6 @@ fn main() {
     if nq > 1 {
         sim.cx(&[(QubitId(0), QubitId(1))]);
     }
-
-    type GateFn<Sim> = Box<dyn Fn(&mut Sim)>;
 
     let gates: Vec<(&str, GateFn<Sim>, usize)> = vec![
         // Single-qubit gates
@@ -188,11 +189,13 @@ fn main() {
             gate_fn(&mut sim);
         }
         let total = t0.elapsed();
+        #[allow(clippy::cast_possible_truncation)] // iters is small benchmark count
+        let avg = total / iters as u32;
         eprintln!(
             "  {:>5} x{:<5}: {:>8.1?}  ({:>5.0}ns/gate)",
             name,
             ngates,
-            total / iters as u32,
+            avg,
             total.as_nanos() as f64 / (iters * ngates) as f64
         );
     }

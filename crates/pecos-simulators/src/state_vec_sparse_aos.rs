@@ -157,6 +157,7 @@ impl<R: Rng> SparseStateVecAoS<R> {
     /// Get the sparsity ratio (`num_amplitudes` / `2^num_qubits`)
     #[inline]
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // sparsity ratio
     pub fn sparsity(&self) -> f64 {
         self.amplitudes.len() as f64 / (1usize << self.num_qubits) as f64
     }
@@ -325,8 +326,10 @@ impl<R: Rng> SparseStateVecAoS<R> {
 
         for i in 0..len {
             if self.amplitudes[i].0 & mask == 0 {
+                #[allow(clippy::cast_possible_truncation)] // amplitude index fits in u32
                 self.scratch_low.push(i as u32);
             } else {
+                #[allow(clippy::cast_possible_truncation)] // amplitude index fits in u32
                 self.scratch_high.push(i as u32);
             }
         }
@@ -512,8 +515,10 @@ impl<R: Rng> SparseStateVecAoS<R> {
 
         for i in 0..len {
             if self.amplitudes[i].0 & mask == 0 {
+                #[allow(clippy::cast_possible_truncation)] // amplitude index fits in u32
                 self.scratch_low.push(i as u32);
             } else {
+                #[allow(clippy::cast_possible_truncation)] // amplitude index fits in u32
                 self.scratch_high.push(i as u32);
             }
         }

@@ -673,6 +673,7 @@ impl SyndromeAnalysis {
 
     /// Returns the probability of successful correction assuming uniform fault distribution.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn success_probability(&self) -> f64 {
         let total = self.total_faults();
         if total == 0 {
@@ -772,6 +773,9 @@ impl DecoderAnalysis {
     /// At weight ≤ t (where t = ⌊(d-1)/2⌋), fault tolerance is all-or-nothing:
     /// either all syndromes have unique logical effects (any decoder works),
     /// or they don't (no decoder can fully succeed).
+    ///
+    /// # Errors
+    /// Returns a list of `FaultToleranceFailure`s if the circuit is not fault tolerant.
     pub fn is_fault_tolerant(&self) -> Result<(), Vec<FaultToleranceFailure>> {
         let mut failures = Vec::new();
 
@@ -815,6 +819,7 @@ impl DecoderAnalysis {
     ///
     /// This counts undetectable logical errors plus the minority of ambiguous faults.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn best_case_failure_rate(&self, total_faults: usize) -> f64 {
         if total_faults == 0 {
             return 0.0;
@@ -839,6 +844,7 @@ impl DecoderAnalysis {
 
     /// Returns the worst-case logical error rate (assuming adversarial decoder choices).
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn worst_case_failure_rate(&self, total_faults: usize) -> f64 {
         if total_faults == 0 {
             return 0.0;
@@ -960,6 +966,9 @@ impl SyndromeHistoryResult {
     ///
     /// This is more permissive than single-shot analysis because a fault only needs
     /// to be detected in SOME round, not necessarily the final state.
+    ///
+    /// # Errors
+    /// Returns a list of `FaultToleranceFailure`s if the circuit is not fault tolerant.
     pub fn is_fault_tolerant(&self) -> Result<(), Vec<FaultToleranceFailure>> {
         let mut failures = Vec::new();
 
@@ -1273,6 +1282,7 @@ impl FaultToleranceAnalysis {
 
     /// Returns the fraction of faults that are certain failures.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn failure_rate(&self) -> f64 {
         if self.total_tested == 0 {
             0.0
@@ -1283,6 +1293,7 @@ impl FaultToleranceAnalysis {
 
     /// Returns the fraction of faults that are safe (stabilizers).
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn safe_rate(&self) -> f64 {
         if self.total_tested == 0 {
             0.0
@@ -1293,6 +1304,7 @@ impl FaultToleranceAnalysis {
 
     /// Returns the fraction of faults that are detectable.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn detectable_rate(&self) -> f64 {
         if self.total_tested == 0 {
             0.0

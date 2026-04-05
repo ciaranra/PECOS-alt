@@ -9,6 +9,7 @@
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) - Python package manager
 - [just](https://github.com/casey/just) - Command runner
 - [pecos](https://crates.io/crates/pecos) - PECOS dev tools CLI
+- **Windows**: [Git for Windows](https://git-scm.com/download/win) (provides Git Bash, required by Justfile recipes) or WSL
 
 **Pure Rust development** (Rust crates only):
 
@@ -103,12 +104,11 @@ Note: For the Rust side of the project, you can use `cargo` to run tests, benchm
 Clean commands are cross-platform (Windows, macOS, Linux):
 
 ```sh
-just clean              # Clean project build artifacts
-just clean-selene       # Clean Selene plugin artifacts only
-just clean-cache        # Clean ~/.pecos/cache/ and ~/.pecos/tmp/
-just clean-deps         # Clean ~/.pecos/deps/
-just clean-all          # Clean project + cache + deps
-just clean-everything   # Nuclear option: includes LLVM and CUDA
+just clean              # Clean project build artifacts (includes selene)
+just clean cache        # Clean ~/.pecos/cache/ and ~/.pecos/tmp/
+just clean deps         # Clean ~/.pecos/deps/ (LLVM, CUDA, cuQuantum)
+just clean all          # Everything above
+just clean dry-run      # Preview what would be cleaned
 ```
 
 You can also run the cleaning script directly:

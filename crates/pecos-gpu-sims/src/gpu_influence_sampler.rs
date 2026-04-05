@@ -161,11 +161,17 @@ pub struct GpuInfluenceSampler {
 
 impl GpuInfluenceSampler {
     /// Create a new optimized GPU influence sampler.
+    ///
+    /// # Errors
+    /// Returns an error if no GPU adapter is found or device creation fails.
     pub fn new(influence_map: &GpuInfluenceMapData, seed: u64) -> Result<Self, String> {
         Self::create_internal(influence_map, seed)
     }
 
     /// Create with a random seed.
+    ///
+    /// # Errors
+    /// Returns an error if no GPU adapter is found or device creation fails.
     pub fn new_random(influence_map: &GpuInfluenceMapData) -> Result<Self, String> {
         Self::new(influence_map, time_seed())
     }
@@ -458,6 +464,8 @@ impl GpuInfluenceSampler {
         let logical_words = self.num_logicals.div_ceil(32).max(1);
 
         // Update params
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // probability in [0,1] maps to [0, u32::MAX]
         let p_threshold = (p_error * f64::from(u32::MAX)) as u32;
         let params = SamplerParams {
             num_locations: self.num_locations,

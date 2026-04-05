@@ -508,7 +508,7 @@ impl NoiseModelBuilder {
     /// Build the noise model.
     #[must_use]
     pub fn build(self) -> ComposableNoiseModel {
-        let mut model = ComposableNoiseModel::new().add_plugin(CorePlugin);
+        let mut model = ComposableNoiseModel::new().add_plugin(&CorePlugin);
 
         // Set time scale if provided
         if let Some(scale) = self.time_scale {
@@ -601,6 +601,7 @@ impl NoiseModelBuilder {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_precision_loss)] // statistical tests use count as f64
 mod tests {
     use super::*;
     use crate::command::CommandBuilder;

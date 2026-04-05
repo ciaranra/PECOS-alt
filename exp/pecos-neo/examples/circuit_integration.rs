@@ -10,6 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+// statistical calculations use count as f64
+#![allow(clippy::cast_precision_loss)]
 //! Circuit integration example for pecos-neo.
 //!
 //! This example demonstrates:
@@ -132,7 +134,7 @@ fn example_tick_with_noise() {
 
     // Add depolarizing noise
     let noise = ComposableNoiseModel::new()
-        .add_plugin(CorePlugin)
+        .add_plugin(&CorePlugin)
         .add_channel(SingleQubitChannel::depolarizing(0.01))
         .add_channel(TwoQubitChannel::depolarizing(0.02));
 
@@ -268,7 +270,7 @@ fn example_qec_style_circuit() {
 
     // Run with noise
     let noise = ComposableNoiseModel::new()
-        .add_plugin(CorePlugin)
+        .add_plugin(&CorePlugin)
         .add_channel(SingleQubitChannel::depolarizing(0.005))
         .add_channel(TwoQubitChannel::depolarizing(0.01))
         .add_channel(MeasurementChannel::symmetric(0.005));

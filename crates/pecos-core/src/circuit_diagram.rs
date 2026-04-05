@@ -956,6 +956,7 @@ impl CircuitDiagram {
 
     /// Render the diagram as a standalone SVG string using a full [`DiagramStyle`].
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // SVG coordinate calculations use index as f64
     pub fn render_svg_with(&self, header: &str, style: &DiagramStyle) -> String {
         const ROW_SPACING: f64 = 40.0;
         const MIN_COL_SPACING: f64 = 40.0;
@@ -1284,6 +1285,7 @@ impl CircuitDiagram {
 
     /// Render the diagram as a `TikZ` `tikzpicture` using a full [`DiagramStyle`].
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // TikZ coordinate calculations use index as f64
     pub fn render_tikz_with(&self, header: &str, style: &DiagramStyle) -> String {
         const ROW_STEP: f64 = 0.8;
         const COL_STEP: f64 = 1.2;
@@ -1843,6 +1845,8 @@ pub fn blend_hex(a: &str, b: &str, t: f64) -> String {
     };
     let (r1, g1, b1) = parse(a);
     let (r2, g2, b2) = parse(b);
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    // color interpolation result is in [0,255]
     let mix =
         |c1: u8, c2: u8| -> u8 { (f64::from(c1) * (1.0 - t) + f64::from(c2) * t).round() as u8 };
     format!("#{:02X}{:02X}{:02X}", mix(r1, r2), mix(g1, g2), mix(b1, b2))

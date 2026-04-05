@@ -308,6 +308,9 @@ impl<S: CliffordGateable + Clone + Send + Sync> ParallelCoordinator<S> {
     ///
     /// # Returns
     /// Aggregated results from all entities in deterministic order.
+    ///
+    /// # Panics
+    /// Panics if an internal mutex is poisoned.
     pub fn run<F, G, T>(&self, make_simulator: F, step: G) -> ParallelResult<T>
     where
         F: Fn() -> S + Send + Sync,
@@ -444,6 +447,7 @@ impl<S: CliffordGateable + Clone + Send + Sync> ParallelCoordinator<S> {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_precision_loss)] // statistical tests use count as f64
 mod tests {
     use super::*;
     use crate::command::CommandBuilder;

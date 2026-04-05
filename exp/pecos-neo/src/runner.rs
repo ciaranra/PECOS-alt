@@ -1087,6 +1087,9 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     ///
     /// The caller is responsible for resetting the simulator state if needed
     /// (e.g., `state.reset()` before calling this method).
+    ///
+    /// # Errors
+    /// Returns `ExecutionError` if a gate or noise operation fails.
     pub fn apply_circuit(
         &mut self,
         state: &mut S,
@@ -1152,6 +1155,9 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     /// Runs before handlers -> noise -> gate execution -> noise -> after handlers.
     /// Measurement outcomes accumulate in the internal buffer; retrieve them
     /// via [`take_outcomes`](CircuitRunner::take_outcomes).
+    ///
+    /// # Errors
+    /// Returns `ExecutionError` if the gate or a noise operation fails.
     pub fn apply_gate(
         &mut self,
         state: &mut S,
@@ -1172,7 +1178,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     /// Emits the event to the noise model, applies the response to state,
     /// and returns the response. Useful for idle noise between manually-applied
     /// gates, testing noise models, or custom execution loops.
-    pub fn apply_noise(&mut self, state: &mut S, event: NoiseEvent<'_>) -> NoiseResponse {
+    pub fn apply_noise(&mut self, state: &mut S, event: &NoiseEvent<'_>) -> NoiseResponse {
         let Some(ref mut noise) = self.noise else {
             return NoiseResponse::None;
         };
@@ -1238,7 +1244,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
                 // Execute through unified precedence chain
                 let executed =
                     self.try_execute_override(sim, gate_id, qubits, command.angles.as_slice())
-                        || self.try_execute_clifford(sim, gate_id, qubits)
+                        || Self::try_execute_clifford(sim, gate_id, qubits)
                         || self.rotation_executor.is_some_and(|executor| {
                             executor(sim, gate_id, command.angles.as_slice(), qubits)
                         });
@@ -1288,10 +1294,12 @@ impl<S: CliffordGateable> CircuitRunner<S> {
         }
 
         for (gate_idx, command) in commands.iter().enumerate() {
+            #[allow(clippy::cast_possible_truncation)] // gate index fits in u32
             self.dispatch_signals_at(sim, gate_idx as u32, store, &mut cursors);
             self.execute_queue_command(sim, command)?;
         }
         // Dispatch trailing signals (positioned after the last gate)
+        #[allow(clippy::cast_possible_truncation)] // gate count fits in u32
         self.dispatch_signals_at(sim, commands.len() as u32, store, &mut cursors);
         Ok(())
     }
@@ -1307,6 +1315,9 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     ///
     /// This path uses `GateId` natively and supports conditional execution,
     /// multi-basis prep/measure, and result tracking.
+    ///
+    /// # Errors
+    /// Returns `ExecutionError` if a gate, noise operation, or conditional check fails.
     pub fn apply_adapted_circuit(
         &mut self,
         state: &mut S,
@@ -1361,7 +1372,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
                 self.execute_gate(sim, *gate_id, qubits, angles, depth)?;
             }
             AdaptedOp::Prep { qubit, basis } => {
-                self.execute_prep(sim, *qubit, *basis);
+                Self::execute_prep(sim, *qubit, *basis);
             }
             AdaptedOp::Measure {
                 qubit,
@@ -1370,20 +1381,16 @@ impl<S: CliffordGateable> CircuitRunner<S> {
             } => {
                 self.execute_measure(sim, *qubit, *basis, *result);
             }
-            AdaptedOp::Conditional {
-                condition,
-                if_one,
-                if_zero,
-            } => {
+            AdaptedOp::Conditional(cond) => {
                 let result_val = self
                     .results
-                    .get(condition.0 as usize)
+                    .get(cond.condition.0 as usize)
                     .copied()
                     .unwrap_or(false);
                 if result_val {
-                    self.execute_ops(sim, if_one, depth)?;
+                    self.execute_ops(sim, &cond.if_one, depth)?;
                 } else {
-                    self.execute_ops(sim, if_zero, depth)?;
+                    self.execute_ops(sim, &cond.if_zero, depth)?;
                 }
             }
             AdaptedOp::XorResult { target, source } => {
@@ -1427,7 +1434,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
 
         // Try execution in order of precedence
         let executed = self.try_execute_override(sim, gate_id, qubits, angles)
-            || self.try_execute_clifford(sim, gate_id, qubits)
+            || Self::try_execute_clifford(sim, gate_id, qubits)
             || self
                 .rotation_executor
                 .is_some_and(|executor| executor(sim, gate_id, angles, qubits));
@@ -1457,7 +1464,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     }
 
     /// Try to execute a Clifford gate natively via trait methods.
-    fn try_execute_clifford(&mut self, sim: &mut S, gate_id: GateId, qubits: &[QubitId]) -> bool {
+    fn try_execute_clifford(sim: &mut S, gate_id: GateId, qubits: &[QubitId]) -> bool {
         let Some(gate_type) = gate_id.try_to_gate_type() else {
             return false;
         };
@@ -1569,7 +1576,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     // ================================================================
 
     /// Execute preparation in a given basis.
-    fn execute_prep(&mut self, sim: &mut S, qubit: QubitId, basis: PrepBasis) {
+    fn execute_prep(sim: &mut S, qubit: QubitId, basis: PrepBasis) {
         sim.pz(&[qubit]);
         match basis {
             PrepBasis::Z => {}
@@ -1851,7 +1858,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
             gate_id: Some(gate_id),
         };
 
-        let response = noise.emit(event, &mut self.rng);
+        let response = noise.emit(&event, &mut self.rng);
         let should_skip = response.should_skip_gate();
         self.apply_noise_response(sim, response);
         should_skip
@@ -1877,7 +1884,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
             gate_id: Some(gate_id),
         };
 
-        let response = noise.emit(event, &mut self.rng);
+        let response = noise.emit(&event, &mut self.rng);
         self.apply_noise_response(sim, response);
     }
 
@@ -1914,7 +1921,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
                 angles,
                 gate_id: Some(gate_id),
             };
-            return noise.emit(event, &mut self.rng);
+            return noise.emit(&event, &mut self.rng);
         }
         NoiseResponse::None
     }
@@ -1945,7 +1952,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
                 angles,
                 gate_id: Some(gate_id),
             };
-            return noise.emit(event, &mut self.rng);
+            return noise.emit(&event, &mut self.rng);
         }
         NoiseResponse::None
     }
@@ -1958,7 +1965,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     fn emit_before_measurement_noise_raw(&mut self, qubits: &[QubitId]) -> NoiseResponse {
         if let Some(ref mut noise) = self.noise {
             let event = NoiseEvent::BeforeMeasurement { qubits };
-            return noise.emit(event, &mut self.rng);
+            return noise.emit(&event, &mut self.rng);
         }
         NoiseResponse::None
     }
@@ -1975,7 +1982,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     ) -> NoiseResponse {
         if let Some(ref mut noise) = self.noise {
             let event = NoiseEvent::AfterMeasurement { qubits, outcomes };
-            return noise.emit(event, &mut self.rng);
+            return noise.emit(&event, &mut self.rng);
         }
         NoiseResponse::None
     }
@@ -1988,7 +1995,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     fn emit_after_preparation_noise_raw(&mut self, qubits: &[QubitId]) -> NoiseResponse {
         if let Some(ref mut noise) = self.noise {
             let event = NoiseEvent::AfterPreparation { qubits };
-            return noise.emit(event, &mut self.rng);
+            return noise.emit(&event, &mut self.rng);
         }
         NoiseResponse::None
     }
@@ -2001,7 +2008,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     fn emit_idle_noise_raw(&mut self, qubits: &[QubitId], duration: TimeUnits) -> NoiseResponse {
         if let Some(ref mut noise) = self.noise {
             let event = NoiseEvent::IdleTime { qubits, duration };
-            return noise.emit(event, &mut self.rng);
+            return noise.emit(&event, &mut self.rng);
         }
         NoiseResponse::None
     }
@@ -2060,7 +2067,7 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     fn emit_signal_to_noise(&mut self, sim: &mut S, type_id: TypeId, data: &dyn Any) {
         if let Some(ref mut noise) = self.noise {
             let event = NoiseEvent::Signal { type_id, data };
-            let response = noise.emit(event, &mut self.rng);
+            let response = noise.emit(&event, &mut self.rng);
             self.apply_noise_response(sim, response);
         }
     }

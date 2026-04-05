@@ -1355,7 +1355,6 @@ impl GateAction for OverRotation {
         _rng: &mut PecosRng,
     ) -> CompositeResponse {
         // Get the gate's angle from context
-        #[allow(clippy::redundant_closure)]
         let base_angle = ctx
             .current_gate()
             .and_then(super::super::context::GateInfo::angle)

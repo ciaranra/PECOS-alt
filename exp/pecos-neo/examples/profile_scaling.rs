@@ -10,6 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+// profiling calculations use count as f64
+#![allow(clippy::cast_precision_loss)]
 //! Scaling profiling for pecos-neo: measures per-operation cost at different qubit counts.
 //!
 //! Run with: `cargo run --release --example profile_scaling -p pecos-neo`
@@ -77,6 +79,7 @@ fn bench_no_noise(num_qubits: usize, shots: usize) -> f64 {
     }
     let elapsed = start.elapsed();
 
+    #[allow(clippy::cast_possible_truncation)] // shots count fits in u32
     let per_shot = elapsed / shots as u32;
     let per_gate_ns = elapsed.as_nanos() as f64 / (shots * num_gates) as f64;
     println!(
@@ -91,7 +94,7 @@ fn bench_with_noise(num_qubits: usize, shots: usize) -> f64 {
     let num_gates = commands.len();
 
     let noise = ComposableNoiseModel::new()
-        .add_plugin(CorePlugin)
+        .add_plugin(&CorePlugin)
         .add_channel(SingleQubitChannel::depolarizing(0.001))
         .add_channel(TwoQubitChannel::depolarizing(0.01));
 
@@ -113,6 +116,7 @@ fn bench_with_noise(num_qubits: usize, shots: usize) -> f64 {
     }
     let elapsed = start.elapsed();
 
+    #[allow(clippy::cast_possible_truncation)] // shots count fits in u32
     let per_shot = elapsed / shots as u32;
     let per_gate_ns = elapsed.as_nanos() as f64 / (shots * num_gates) as f64;
     println!(

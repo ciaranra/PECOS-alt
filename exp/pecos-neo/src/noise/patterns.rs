@@ -60,7 +60,7 @@
 //! use pecos_neo::noise::prelude::*;
 //!
 //! let model = realistic_device_noise(
-//!     DeviceNoiseParams::new()
+//!     &DeviceNoiseParams::new()
 //!         .with_p1(0.001)           // 0.1% single-qubit error
 //!         .with_p2(0.01)            // 1% two-qubit error
 //!         .with_measurement_error(0.02)
@@ -456,7 +456,7 @@ impl DeviceNoiseParams {
 /// ```
 /// # use pecos_neo::noise::prelude::*;
 /// let model = realistic_device_noise(
-///     DeviceNoiseParams::new()
+///     &DeviceNoiseParams::new()
 ///         .with_p1(0.001)
 ///         .with_p2(0.01)
 ///         .with_measurement_error(0.02)
@@ -465,7 +465,7 @@ impl DeviceNoiseParams {
 /// );
 /// ```
 #[must_use]
-pub fn realistic_device_noise(params: DeviceNoiseParams) -> ComposableNoiseModel {
+pub fn realistic_device_noise(params: &DeviceNoiseParams) -> ComposableNoiseModel {
     let mut builder = NoiseModelBuilder::new();
 
     // Gate noise
@@ -677,7 +677,7 @@ mod tests {
             .with_p2(0.01)
             .with_measurement_error(0.02);
 
-        let model = realistic_device_noise(params);
+        let model = realistic_device_noise(&params);
         let commands = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 
         let mut state = SparseStab::new(1);

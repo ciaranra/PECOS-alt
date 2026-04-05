@@ -92,7 +92,10 @@ impl GraphState {
 
     /// Create a pure graph state from an edge list.
     ///
-    /// All VOPs are identity. Panics if any vertex index is >= n.
+    /// All VOPs are identity.
+    ///
+    /// # Panics
+    /// Panics if any vertex index is >= `n` or if any edge is a self-loop.
     #[must_use]
     pub fn from_edges(n: usize, edges: &[(usize, usize)]) -> Self {
         let mut gs = Self::new(n);
@@ -107,6 +110,7 @@ impl GraphState {
 
     /// Create a graph state from a symmetric boolean adjacency matrix.
     ///
+    /// # Panics
     /// Panics if the matrix is not square or not symmetric.
     #[must_use]
     pub fn from_adjacency_matrix(matrix: &[Vec<bool>]) -> Self {
@@ -129,7 +133,8 @@ impl GraphState {
 
     /// Create a graph state from raw parts (VOPs and adjacency lists).
     ///
-    /// Panics if the lengths do not match.
+    /// # Panics
+    /// Panics if `vops` and `neighbors` have different lengths.
     #[must_use]
     pub fn from_parts(vops: Vec<CliffordFrame>, neighbors: Vec<BitSet>) -> Self {
         assert_eq!(
@@ -156,7 +161,8 @@ impl GraphState {
 
     /// Ring graph state: 0-1-..-(n-1)-0.
     ///
-    /// Requires n >= 3.
+    /// # Panics
+    /// Panics if `n < 3`.
     #[must_use]
     pub fn ring(n: usize) -> Self {
         assert!(n >= 3, "ring requires at least 3 vertices");
@@ -166,6 +172,9 @@ impl GraphState {
     }
 
     /// Star graph state: vertex 0 connected to all others.
+    ///
+    /// # Panics
+    /// Panics if `n < 2`.
     #[must_use]
     pub fn star(n: usize) -> Self {
         assert!(n >= 2, "star requires at least 2 vertices");
@@ -300,6 +309,9 @@ impl GraphState {
     }
 
     /// Toggle edge (u, v): add if absent, remove if present.
+    ///
+    /// # Panics
+    /// Panics if `u == v` (self-loops not allowed).
     pub fn toggle_edge(&mut self, u: usize, v: usize) {
         assert_ne!(u, v, "self-loops not allowed");
         self.neighbors[u].toggle(v);
@@ -307,6 +319,9 @@ impl GraphState {
     }
 
     /// Add edge (u, v). No-op if already present.
+    ///
+    /// # Panics
+    /// Panics if `u == v` (self-loops not allowed).
     pub fn add_edge(&mut self, u: usize, v: usize) {
         assert_ne!(u, v, "self-loops not allowed");
         self.neighbors[u].insert(v);
@@ -352,7 +367,8 @@ impl GraphState {
 
     /// Perform a pivot on edge (u, v): LC(u), LC(v), LC(u).
     ///
-    /// Panics if u and v are not adjacent.
+    /// # Panics
+    /// Panics if `u` and `v` are not adjacent.
     pub fn pivot(&mut self, u: usize, v: usize) {
         assert!(self.has_edge(u, v), "pivot requires u and v to be adjacent");
         self.local_complement(u);
@@ -383,6 +399,7 @@ impl GraphState {
     /// Note: isolated vertices with non-identity VOPs cannot be fully absorbed
     /// since there are no neighbors to use for LC operations. Their VOPs
     /// remain unchanged.
+    #[allow(clippy::missing_panics_doc)] // internal unwrap is guarded by a prior None check
     pub fn absorb_vops(&mut self) {
         if self.is_pure_graph_state() {
             return;
@@ -660,6 +677,9 @@ impl GraphState {
     /// forms are equal. VOPs are irrelevant (they are local Cliffords).
     ///
     /// Uses orbit enumeration, so only practical for small graphs.
+    ///
+    /// # Panics
+    /// Panics if the LC orbit is empty (should never happen for a valid graph state).
     #[must_use]
     pub fn lc_canonical_form(&self) -> GraphState {
         let orbit = self.lc_orbit();
@@ -880,6 +900,7 @@ impl GraphState {
     ///
     /// Returns (x, y) pairs for each vertex, centered at (`cx`, `cy`) with
     /// the given `radius`. Single-vertex graphs place the vertex at center.
+    #[allow(clippy::cast_precision_loss)] // layout coordinate calculations
     fn circular_layout(n: usize, cx: f64, cy: f64, radius: f64) -> Vec<(f64, f64)> {
         if n == 0 {
             return Vec::new();
@@ -988,6 +1009,7 @@ impl GraphStateRenderer<'_> {
 
     /// Render as a standalone SVG string.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // SVG coordinate calculations
     pub fn svg(&self) -> String {
         let n = self.graph.num_qubits();
         let node_radius = 20.0;
@@ -1123,6 +1145,7 @@ impl GraphStateRenderer<'_> {
     }
 
     /// Append an SVG legend derived from the style palette.
+    #[allow(clippy::cast_precision_loss)] // SVG coordinate calculations
     fn svg_legend(&self, svg: &mut String, width: f64, height: f64, legend_height: f64) {
         let y_top = height - legend_height + 8.0;
         let r = 6.0;
@@ -1208,6 +1231,7 @@ impl GraphStateRenderer<'_> {
 
     /// Render as a `TikZ` `tikzpicture` environment.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // TikZ coordinate calculations
     pub fn tikz(&self) -> String {
         let n = self.graph.num_qubits();
         let radius = if n <= 2 { 1.5 } else { 1.0 + 0.5 * n as f64 };

@@ -10,6 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+// statistical tests use count as f64
+#![allow(clippy::cast_precision_loss)]
 //! Surface code comparison tests between `ComposableNoiseModel` and `GeneralNoiseModel`.
 //!
 //! These tests validate that both noise models produce statistically similar results
@@ -46,7 +48,7 @@ impl RepetitionCodeD3 {
         }
     }
 
-    fn num_qubits(&self) -> usize {
+    fn num_qubits() -> usize {
         5 // 3 data + 2 ancilla
     }
 }
@@ -166,7 +168,7 @@ fn run_general_noise_repetition(
     num_rounds: usize,
     num_shots: usize,
 ) -> SyndromeStatistics {
-    let quantum = Box::new(StateVecEngine::new(code.num_qubits()));
+    let quantum = Box::new(StateVecEngine::new(RepetitionCodeD3::num_qubits()));
     let mut system = QuantumSystem::new(Box::new(noise_model), quantum);
     system.set_seed(42);
 
@@ -285,7 +287,7 @@ impl ComposableNoiseConfig {
 /// Run repetition code with `ComposableNoiseModel`.
 fn run_composable_noise_repetition(
     code: &RepetitionCodeD3,
-    noise_config: ComposableNoiseConfig,
+    noise_config: &ComposableNoiseConfig,
     num_rounds: usize,
     num_shots: usize,
 ) -> SyndromeStatistics {
@@ -335,7 +337,7 @@ fn run_composable_noise_repetition(
         let noise_model = noise_config.build();
 
         // Run with fresh simulator and RNG state per shot for better independence
-        let mut state = SparseStab::new(code.num_qubits());
+        let mut state = SparseStab::new(RepetitionCodeD3::num_qubits());
         let mut runner = CircuitRunner::<SparseStab>::new()
             .with_noise(noise_model)
             .with_seed(42 + shot as u64);
@@ -438,12 +440,8 @@ fn test_repetition_code_logical_error_vs_rounds() {
     for &num_rounds in &rounds_to_test {
         let general_stats =
             run_general_noise_repetition(&code, general_model.clone(), num_rounds, NUM_SHOTS);
-        let composable_stats = run_composable_noise_repetition(
-            &code,
-            composable_config.clone(),
-            num_rounds,
-            NUM_SHOTS,
-        );
+        let composable_stats =
+            run_composable_noise_repetition(&code, &composable_config, num_rounds, NUM_SHOTS);
 
         let general_rate = general_stats.logical_error_rate();
         let composable_rate = composable_stats.logical_error_rate();
@@ -493,7 +491,7 @@ fn test_repetition_code_syndrome_rates() {
 
     let general_stats = run_general_noise_repetition(&code, general_model, num_rounds, NUM_SHOTS);
     let composable_stats =
-        run_composable_noise_repetition(&code, composable_config, num_rounds, NUM_SHOTS);
+        run_composable_noise_repetition(&code, &composable_config, num_rounds, NUM_SHOTS);
 
     println!("\nRepetition Code Syndrome Rates ({num_rounds} rounds):");
     println!("  p1={p1}, p2={p2}, p_meas={p_meas}");
@@ -558,7 +556,7 @@ fn test_repetition_code_syndrome_correlations() {
 
     let general_stats = run_general_noise_repetition(&code, general_model, num_rounds, NUM_SHOTS);
     let composable_stats =
-        run_composable_noise_repetition(&code, composable_config, num_rounds, NUM_SHOTS);
+        run_composable_noise_repetition(&code, &composable_config, num_rounds, NUM_SHOTS);
 
     println!("\nRepetition Code Syndrome Correlations ({num_rounds} rounds):");
     println!("  p1={p1}, p2={p2}, p_meas={p_meas}");
@@ -641,7 +639,7 @@ fn test_repetition_code_error_scaling() {
         let general_stats =
             run_general_noise_repetition(&code, general_model, num_rounds, NUM_SHOTS);
         let composable_stats =
-            run_composable_noise_repetition(&code, composable_config, num_rounds, NUM_SHOTS);
+            run_composable_noise_repetition(&code, &composable_config, num_rounds, NUM_SHOTS);
 
         let general_rate = general_stats.logical_error_rate();
         let composable_rate = composable_stats.logical_error_rate();

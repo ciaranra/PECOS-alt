@@ -14,10 +14,6 @@
 //!
 //! This module provides a sampler that aggregates fault effects directly into
 //! detector/observable signatures, matching Stim's DEM sampler semantics.
-// Allow some documentation style issues for now - the code is functionally correct
-#![allow(clippy::doc_markdown)]
-#![allow(clippy::ref_option)]
-#![allow(clippy::collapsible_if)]
 //!
 //! # Data-Oriented Design
 //!
@@ -226,7 +222,7 @@ impl DemSampler {
         self.num_observables
     }
 
-    /// Create a DemSampler from raw mechanism data.
+    /// Create a [`DemSampler`] from raw mechanism data.
     ///
     /// This constructor is used when building from a parsed DEM string rather than
     /// from a circuit analysis. Each mechanism is specified by its probability and
@@ -234,7 +230,7 @@ impl DemSampler {
     ///
     /// # Arguments
     ///
-    /// * `mechanisms` - Iterator of (probability, detector_indices, observable_indices)
+    /// * `mechanisms` - Iterator of (probability, `detector_indices`, `observable_indices`)
     /// * `num_detectors` - Total number of detectors
     /// * `num_observables` - Total number of observables
     #[must_use]
@@ -261,7 +257,11 @@ impl DemSampler {
             observables.sort_unstable();
 
             // Precompute u64 threshold: p * u64::MAX
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                clippy::cast_precision_loss
+            )]
             let threshold = (prob * (u64::MAX as f64)) as u64;
             thresholds.push(threshold);
 
@@ -275,9 +275,11 @@ impl DemSampler {
             inv_log_1_minus_p.push(inv);
 
             detector_data.extend_from_slice(&detectors);
+            #[allow(clippy::cast_possible_truncation)] // detector data length fits in u32
             detector_offsets.push(detector_data.len() as u32);
 
             observable_data.extend_from_slice(&observables);
+            #[allow(clippy::cast_possible_truncation)] // observable data length fits in u32
             observable_offsets.push(observable_data.len() as u32);
         }
 
@@ -295,7 +297,7 @@ impl DemSampler {
 
     /// Sample a single shot.
     ///
-    /// Returns (detection_events, observable_flips) as boolean vectors.
+    /// Returns (`detection_events`, `observable_flips`) as boolean vectors.
     #[must_use]
     pub fn sample<R: Rng>(&self, rng: &mut R) -> (Vec<bool>, Vec<bool>) {
         let mut det_bits = PackedBits::new(self.num_detectors);
@@ -342,7 +344,7 @@ impl DemSampler {
 
     /// Sample multiple shots.
     ///
-    /// Returns (all_detection_events, all_observable_flips).
+    /// Returns (`all_detection_events`, `all_observable_flips`).
     #[must_use]
     pub fn sample_batch<R: Rng>(
         &self,
@@ -1305,18 +1307,21 @@ impl SamplingStatistics {
 
     /// Logical error rate.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn logical_error_rate(&self) -> f64 {
         self.logical_error_count as f64 / self.total_shots as f64
     }
 
     /// Syndrome rate (fraction of shots with non-trivial syndrome).
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn syndrome_rate(&self) -> f64 {
         self.syndrome_count as f64 / self.total_shots as f64
     }
 
     /// Undetectable error rate.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn undetectable_rate(&self) -> f64 {
         self.undetectable_count as f64 / self.total_shots as f64
     }
@@ -1326,9 +1331,9 @@ impl SamplingStatistics {
 // DEM Sampler Builder
 // ============================================================================
 
-/// Builder for DemSampler.
+/// Builder for [`DemSampler`].
 ///
-/// Constructs a DemSampler from a fault influence map, noise parameters,
+/// Constructs a [`DemSampler`] from a fault influence map, noise parameters,
 /// and explicit detector/observable definitions.
 pub struct DemSamplerBuilder<'a> {
     influence_map: &'a DagFaultInfluenceMap,
@@ -1372,6 +1377,9 @@ impl<'a> DemSamplerBuilder<'a> {
     /// Set detector definitions from JSON.
     ///
     /// Format: `[{"id": 0, "records": [-1, -5]}, ...]`
+    ///
+    /// # Errors
+    /// Returns an error if the JSON is malformed or missing required fields.
     pub fn with_detectors_json(mut self, json: &str) -> Result<Self, String> {
         self.detector_records = parse_records_json(json, "detector")?;
         Ok(self)
@@ -1380,6 +1388,9 @@ impl<'a> DemSamplerBuilder<'a> {
     /// Set observable definitions from JSON.
     ///
     /// Format: `[{"id": 0, "records": [-1, -3, -5]}, ...]`
+    ///
+    /// # Errors
+    /// Returns an error if the JSON is malformed or missing required fields.
     pub fn with_observables_json(mut self, json: &str) -> Result<Self, String> {
         self.observable_records = parse_records_json(json, "observable")?;
         Ok(self)
@@ -1399,10 +1410,10 @@ impl<'a> DemSamplerBuilder<'a> {
         self
     }
 
-    /// Set the measurement order mapping from TickCircuit.
+    /// Set the measurement order mapping from `TickCircuit`.
     ///
-    /// `measurement_order[tc_idx]` is the qubit measured at TickCircuit index `tc_idx`.
-    /// This is needed to map between TickCircuit record offsets and influence map indices.
+    /// `measurement_order[tc_idx]` is the qubit measured at `TickCircuit` index `tc_idx`.
+    /// This is needed to map between `TickCircuit` record offsets and influence map indices.
     #[must_use]
     pub fn with_measurement_order(mut self, order: Vec<usize>) -> Self {
         self.num_tc_measurements = Some(order.len());
@@ -1410,7 +1421,7 @@ impl<'a> DemSamplerBuilder<'a> {
         self
     }
 
-    /// Build the DemSampler.
+    /// Build the [`DemSampler`].
     #[must_use]
     pub fn build(self) -> DemSampler {
         let num_detectors = self.detector_records.len();
@@ -1437,7 +1448,7 @@ impl<'a> DemSamplerBuilder<'a> {
                             loc_idx,
                             Pauli::X,
                             self.p_init,
-                            &im_to_tc,
+                            im_to_tc.as_deref(),
                             num_tc_measurements,
                             &mut aggregated,
                         );
@@ -1450,7 +1461,7 @@ impl<'a> DemSamplerBuilder<'a> {
                             loc_idx,
                             Pauli::X,
                             self.p_meas,
-                            &im_to_tc,
+                            im_to_tc.as_deref(),
                             num_tc_measurements,
                             &mut aggregated,
                         );
@@ -1477,7 +1488,7 @@ impl<'a> DemSamplerBuilder<'a> {
                         self.process_depolarizing_fault(
                             loc_idx,
                             self.p1,
-                            &im_to_tc,
+                            im_to_tc.as_deref(),
                             num_tc_measurements,
                             &mut aggregated,
                         );
@@ -1494,7 +1505,7 @@ impl<'a> DemSamplerBuilder<'a> {
                     self.process_two_qubit_fault(
                         loc_indices[0],
                         loc_indices[1],
-                        &im_to_tc,
+                        im_to_tc.as_deref(),
                         num_tc_measurements,
                         &mut aggregated,
                     );
@@ -1518,7 +1529,11 @@ impl<'a> DemSamplerBuilder<'a> {
         for (mech, prob) in aggregated {
             // Precompute u64 threshold: p * u64::MAX
             // This avoids f64 comparison during sampling
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                clippy::cast_precision_loss
+            )]
             let threshold = (prob * (u64::MAX as f64)) as u64;
             thresholds.push(threshold);
 
@@ -1533,9 +1548,11 @@ impl<'a> DemSamplerBuilder<'a> {
             inv_log_1_minus_p.push(inv);
 
             detector_data.extend_from_slice(&mech.detectors);
+            #[allow(clippy::cast_possible_truncation)] // detector data length fits in u32
             detector_offsets.push(detector_data.len() as u32);
 
             observable_data.extend_from_slice(&mech.observables);
+            #[allow(clippy::cast_possible_truncation)] // observable data length fits in u32
             observable_offsets.push(observable_data.len() as u32);
         }
 
@@ -1551,7 +1568,7 @@ impl<'a> DemSamplerBuilder<'a> {
         }
     }
 
-    /// Build mapping from influence map measurement indices to TickCircuit indices.
+    /// Build mapping from influence map measurement indices to `TickCircuit` indices.
     fn build_im_to_tc_mapping(&self) -> Option<Vec<usize>> {
         let tc_order = self.measurement_order.as_ref()?;
 
@@ -1590,7 +1607,7 @@ impl<'a> DemSamplerBuilder<'a> {
         loc_idx: usize,
         pauli: Pauli,
         prob: f64,
-        im_to_tc: &Option<Vec<usize>>,
+        im_to_tc: Option<&[usize]>,
         num_tc_measurements: usize,
         aggregated: &mut BTreeMap<DemMechanism, f64>,
     ) {
@@ -1606,7 +1623,7 @@ impl<'a> DemSamplerBuilder<'a> {
         &self,
         loc_idx: usize,
         prob: f64,
-        im_to_tc: &Option<Vec<usize>>,
+        im_to_tc: Option<&[usize]>,
         num_tc_measurements: usize,
         aggregated: &mut BTreeMap<DemMechanism, f64>,
     ) {
@@ -1625,7 +1642,7 @@ impl<'a> DemSamplerBuilder<'a> {
         &self,
         loc1: usize,
         loc2: usize,
-        im_to_tc: &Option<Vec<usize>>,
+        im_to_tc: Option<&[usize]>,
         num_tc_measurements: usize,
         aggregated: &mut BTreeMap<DemMechanism, f64>,
     ) {
@@ -1680,7 +1697,7 @@ impl<'a> DemSamplerBuilder<'a> {
         &self,
         loc_idx: usize,
         pauli: Pauli,
-        im_to_tc: &Option<Vec<usize>>,
+        im_to_tc: Option<&[usize]>,
         num_tc_measurements: usize,
     ) -> DemMechanism {
         // Get measurement indices that flip (in IM order)
@@ -1714,6 +1731,9 @@ impl<'a> DemSamplerBuilder<'a> {
             .filter_map(|(det_id, records)| {
                 let mut xor_result = false;
                 for &offset in records {
+                    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)] // measurement count fits in i32
+                    #[allow(clippy::cast_sign_loss)]
+                    // negative offset + total count, or non-negative offset
                     let abs_idx = if offset < 0 {
                         (num_tc_measurements as i32 + offset) as usize
                     } else {
@@ -1724,6 +1744,7 @@ impl<'a> DemSamplerBuilder<'a> {
                     }
                 }
                 if xor_result {
+                    #[allow(clippy::cast_possible_truncation)] // detector ID fits in u32
                     Some(det_id as u32)
                 } else {
                     None
@@ -1739,6 +1760,9 @@ impl<'a> DemSamplerBuilder<'a> {
             .filter_map(|(obs_id, records)| {
                 let mut xor_result = false;
                 for &offset in records {
+                    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)] // measurement count fits in i32
+                    #[allow(clippy::cast_sign_loss)]
+                    // negative offset + total count, or non-negative offset
                     let abs_idx = if offset < 0 {
                         (num_tc_measurements as i32 + offset) as usize
                     } else {
@@ -1749,6 +1773,7 @@ impl<'a> DemSamplerBuilder<'a> {
                     }
                 }
                 if xor_result {
+                    #[allow(clippy::cast_possible_truncation)] // observable ID fits in u32
                     Some(obs_id as u32)
                 } else {
                     None
@@ -1760,7 +1785,7 @@ impl<'a> DemSamplerBuilder<'a> {
     }
 }
 
-/// XORs two DemMechanisms (symmetric difference of detectors and observables).
+/// XORs two [`DemMechanism`]s (symmetric difference of detectors and observables).
 fn xor_mechanisms(a: Option<&DemMechanism>, b: Option<&DemMechanism>) -> DemMechanism {
     match (a, b) {
         (Some(m1), Some(m2)) => {
@@ -1776,7 +1801,7 @@ fn xor_mechanisms(a: Option<&DemMechanism>, b: Option<&DemMechanism>) -> DemMech
     }
 }
 
-/// XORs two sorted u32 slices (symmetric difference), returning a SmallVec.
+/// XORs two sorted u32 slices (symmetric difference), returning a `SmallVec`.
 fn xor_u32_vecs<const N: usize>(a: &[u32], b: &[u32]) -> SmallVec<[u32; N]>
 where
     [u32; N]: smallvec::Array<Item = u32>,
@@ -1810,7 +1835,7 @@ where
 
 /// Parse detector or observable records from JSON.
 ///
-/// Uses a simple custom parser to avoid serde_json dependency.
+/// Uses a simple custom parser to avoid `serde_json` dependency.
 /// Expected format: `[{"id": 0, "records": [-1, -5]}, ...]`
 #[allow(clippy::unnecessary_wraps)]
 fn parse_records_json(json: &str, _kind: &str) -> Result<Vec<Vec<i32>>, String> {
@@ -1857,14 +1882,14 @@ fn parse_records_json(json: &str, _kind: &str) -> Result<Vec<Vec<i32>>, String> 
 fn extract_records_from_object(json: &str) -> Vec<i32> {
     if let Some(pos) = json.find("\"records\"") {
         let rest = &json[pos..];
-        if let Some(arr_start) = rest.find('[') {
-            if let Some(arr_end) = rest[arr_start..].find(']') {
-                let arr_str = &rest[arr_start + 1..arr_start + arr_end];
-                return arr_str
-                    .split(',')
-                    .filter_map(|s| s.trim().parse::<i32>().ok())
-                    .collect();
-            }
+        if let (Some(arr_start), Some(arr_end)) = (rest.find('['), rest.find(']'))
+            && arr_start < arr_end
+        {
+            let arr_str = &rest[arr_start + 1..arr_end];
+            return arr_str
+                .split(',')
+                .filter_map(|s| s.trim().parse::<i32>().ok())
+                .collect();
         }
     }
     Vec::new()

@@ -10,6 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+// statistical tests use count as f64
+#![allow(clippy::cast_precision_loss)]
 //! Integration tests comparing pecos-neo execution against pecos-engines.
 //!
 //! These tests verify that:
@@ -143,7 +145,7 @@ fn test_monte_carlo_bell_state_no_noise() {
 
     let neo_results = MonteCarloRunner::run(
         &commands,
-        config,
+        &config,
         || (CircuitRunner::new(), SparseStab::new(2)),
         |outcomes| {
             let b0 = outcomes.get_bit(QubitId(0)).unwrap_or(false);
@@ -223,7 +225,7 @@ fn test_monte_carlo_with_depolarizing_noise() {
 
     let neo_results = MonteCarloRunner::run(
         &commands,
-        config,
+        &config,
         || {
             let neo_noise = GeneralNoiseModelBuilder::new().with_p1(p1).build();
             (
@@ -300,7 +302,7 @@ fn test_monte_carlo_measurement_errors() {
 
     let neo_results = MonteCarloRunner::run(
         &commands,
-        config,
+        &config,
         || {
             let neo_noise = GeneralNoiseModelBuilder::new()
                 .with_p_meas(p_meas, p_meas)
@@ -353,7 +355,7 @@ fn test_monte_carlo_parallel_execution() {
 
     let results_parallel = MonteCarloRunner::run(
         &commands,
-        config_parallel,
+        &config_parallel,
         || (CircuitRunner::new(), SparseStab::new(1)),
         |outcomes| outcomes.get_bit(QubitId(0)).unwrap_or(false),
     );
@@ -366,7 +368,7 @@ fn test_monte_carlo_parallel_execution() {
 
     let results_single = MonteCarloRunner::run(
         &commands,
-        config_single,
+        &config_single,
         || (CircuitRunner::new(), SparseStab::new(1)),
         |outcomes| outcomes.get_bit(QubitId(0)).unwrap_or(false),
     );
@@ -444,7 +446,7 @@ fn test_monte_carlo_two_qubit_noise() {
 
     let neo_results = MonteCarloRunner::run(
         &commands,
-        config,
+        &config,
         || {
             let neo_noise = GeneralNoiseModelBuilder::new().with_p2(p2).build();
             (
@@ -511,7 +513,7 @@ fn test_monte_carlo_deterministic_circuit() {
 
     let results: Vec<bool> = MonteCarloRunner::run(
         &commands,
-        config,
+        &config,
         || (CircuitRunner::new(), SparseStab::new(1)),
         |outcomes| outcomes.get_bit(QubitId(0)).unwrap_or(false),
     )
@@ -537,7 +539,7 @@ fn test_monte_carlo_statistical_consistency() {
 
     let results: Vec<bool> = MonteCarloRunner::run(
         &commands,
-        config,
+        &config,
         || (CircuitRunner::new(), SparseStab::new(1)),
         |outcomes| outcomes.get_bit(QubitId(0)).unwrap_or(false),
     )
@@ -601,6 +603,7 @@ fn test_full_seed_determinism() {
 /// This is the critical validation: both methods should estimate the same quantity
 /// (error rate) and agree within statistical tolerance.
 #[test]
+#[allow(clippy::cast_sign_loss)] // loop seeds are non-negative counters cast to u64
 fn test_importance_sampling_matches_standard_monte_carlo() {
     use pecos_neo::sampling::ImportanceSamplingRunner;
 
@@ -680,6 +683,7 @@ fn test_importance_sampling_matches_standard_monte_carlo() {
 /// With a lower true error rate and higher boost, importance sampling
 /// should still produce unbiased estimates.
 #[test]
+#[allow(clippy::cast_sign_loss)] // loop seeds are non-negative counters cast to u64
 fn test_importance_sampling_rare_events() {
     use pecos_neo::sampling::ImportanceSamplingRunner;
 
@@ -748,6 +752,7 @@ fn test_importance_sampling_rare_events() {
 /// For rare events, importance sampling should achieve lower variance
 /// (tighter confidence intervals) for the same number of samples.
 #[test]
+#[allow(clippy::cast_sign_loss)] // loop seeds are non-negative counters cast to u64
 fn test_importance_sampling_variance_reduction() {
     use pecos_neo::sampling::ImportanceSamplingRunner;
 

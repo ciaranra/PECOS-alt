@@ -10,6 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+// statistical calculations use count as f64
+#![allow(clippy::cast_precision_loss)]
 //! Repetition code example demonstrating quantum error correction.
 //!
 //! This example shows:
@@ -53,7 +55,7 @@ impl RepetitionCode {
         }
     }
 
-    fn num_qubits(&self) -> usize {
+    fn num_qubits() -> usize {
         5
     }
 
@@ -107,7 +109,7 @@ impl RepetitionCode {
     /// Decode syndromes using majority voting.
     ///
     /// Returns the estimated logical measurement outcome.
-    fn decode(&self, data_outcomes: &[bool], syndromes: &[Vec<bool>]) -> bool {
+    fn decode(data_outcomes: &[bool], syndromes: &[Vec<bool>]) -> bool {
         // Simple decoder: use majority vote on final data
         // A more sophisticated decoder would use syndrome history
         let _ = syndromes; // Could be used for better decoding
@@ -151,7 +153,7 @@ fn example_noiseless(code: &RepetitionCode) {
     println!("--- Noiseless Operation ---");
 
     let commands = code.build_circuit(3);
-    let mut state = SparseStab::new(code.num_qubits());
+    let mut state = SparseStab::new(RepetitionCode::num_qubits());
     let mut runner = CircuitRunner::<SparseStab>::new().with_seed(42);
 
     let mut all_zero = true;
@@ -181,14 +183,14 @@ fn example_with_noise(code: &RepetitionCode) {
     let p_error = 0.02; // 2% error rate
 
     let noise = ComposableNoiseModel::new()
-        .add_plugin(CorePlugin)
+        .add_plugin(&CorePlugin)
         .add_channel(SingleQubitChannel::depolarizing(p_error))
         .add_channel(TwoQubitChannel::depolarizing(p_error * 2.0))
         .add_channel(MeasurementChannel::symmetric(p_error));
 
     let commands = code.build_circuit(3);
 
-    let mut state = SparseStab::new(code.num_qubits());
+    let mut state = SparseStab::new(RepetitionCode::num_qubits());
     let mut runner = CircuitRunner::<SparseStab>::new()
         .with_noise(noise)
         .with_seed(42);
@@ -217,7 +219,7 @@ fn example_with_noise(code: &RepetitionCode) {
             .collect();
 
         // Decode
-        let logical = code.decode(&data_outcomes, &syndromes);
+        let logical = RepetitionCode::decode(&data_outcomes, &syndromes);
 
         results.total_shots += 1;
         if logical {
@@ -265,12 +267,12 @@ fn example_error_scaling(code: &RepetitionCode) {
 
     for p_phys in [0.005, 0.01, 0.02, 0.03, 0.05] {
         let noise = ComposableNoiseModel::new()
-            .add_plugin(CorePlugin)
+            .add_plugin(&CorePlugin)
             .add_channel(SingleQubitChannel::depolarizing(p_phys))
             .add_channel(TwoQubitChannel::depolarizing(p_phys * 2.0))
             .add_channel(MeasurementChannel::symmetric(p_phys));
 
-        let mut state = SparseStab::new(code.num_qubits());
+        let mut state = SparseStab::new(RepetitionCode::num_qubits());
         let mut runner = CircuitRunner::<SparseStab>::new()
             .with_noise(noise)
             .with_seed(42);
@@ -323,12 +325,12 @@ fn example_round_scaling(code: &RepetitionCode) {
         let commands = code.build_circuit(num_rounds);
 
         let noise = ComposableNoiseModel::new()
-            .add_plugin(CorePlugin)
+            .add_plugin(&CorePlugin)
             .add_channel(SingleQubitChannel::depolarizing(p_phys))
             .add_channel(TwoQubitChannel::depolarizing(p_phys * 2.0))
             .add_channel(MeasurementChannel::symmetric(p_phys));
 
-        let mut state = SparseStab::new(code.num_qubits());
+        let mut state = SparseStab::new(RepetitionCode::num_qubits());
         let mut runner = CircuitRunner::<SparseStab>::new()
             .with_noise(noise)
             .with_seed(42);

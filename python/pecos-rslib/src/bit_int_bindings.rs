@@ -13,7 +13,7 @@
 //! Python bindings for the `BitInt` fixed-width signed integer type.
 
 use crate::bit_conversion;
-use pecos::prelude::BitInt;
+use crate::prelude::BitInt;
 use pyo3::basic::CompareOp;
 use pyo3::prelude::*;
 use pyo3::types::PyInt;
@@ -290,6 +290,7 @@ impl PyBitInt {
 
     /// Always returns True (signed).
     #[getter]
+    #[allow(clippy::unused_self)] // Python instance method
     pub fn signed(&self) -> bool {
         true
     }

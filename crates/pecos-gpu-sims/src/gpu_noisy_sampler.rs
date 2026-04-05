@@ -131,6 +131,12 @@ impl DepolarizingNoiseSampler {
     }
 
     fn occurs(&mut self, probability: f64) -> bool {
+        #[allow(
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_precision_loss
+        )]
+        // probability in [0,1] so product fits in u64
         let threshold = (probability * u64::MAX as f64) as u64;
         self.rng.next_u64() < threshold
     }
@@ -248,6 +254,12 @@ impl BiasedDepolarizingNoiseSampler {
     }
 
     fn occurs(&mut self, probability: f64) -> bool {
+        #[allow(
+            clippy::cast_sign_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_precision_loss
+        )]
+        // probability in [0,1] so product fits in u64
         let threshold = (probability * u64::MAX as f64) as u64;
         self.rng.next_u64() < threshold
     }
@@ -500,6 +512,9 @@ impl<N: NoiseSampler> GpuNoisySampler<N> {
     ///
     /// The `circuit_fn` is called once to build the circuit, which is then
     /// executed for each shot with fresh noise samples.
+    ///
+    /// # Errors
+    /// Returns an error if GPU resource creation or shader execution fails.
     pub fn sample<F>(&mut self, shots: usize, circuit_fn: F) -> Result<Vec<ShotResult>, String>
     where
         F: Fn(&mut CircuitBuilder),

@@ -1,6 +1,6 @@
 // Copyright 2024 The PECOS Developers
 use crate::dtypes::AngleParam;
-use pecos::prelude::*;
+use crate::prelude::*;
 //
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.You may obtain a copy of the License at
@@ -801,7 +801,7 @@ impl PyStateVec {
 
         let rng: PecosRng = rand::make_rng();
         Ok(PyStateVec {
-            inner: StateVec::from_state(state, rng),
+            inner: StateVec::from_state(&state, rng),
         })
     }
 

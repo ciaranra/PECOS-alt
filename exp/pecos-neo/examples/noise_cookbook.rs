@@ -10,6 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+// statistical calculations use count as f64
+#![allow(clippy::cast_precision_loss)]
 //! Noise Cookbook: Common patterns for the unified noise system.
 //!
 //! This example demonstrates:
@@ -141,7 +143,7 @@ fn recipe_sim_neo_integration() {
     // Method 4: Reusable simulation with noise
     let mut sim = sim_neo(circuit)
         .noise(realistic_device_noise(
-            DeviceNoiseParams::new()
+            &DeviceNoiseParams::new()
                 .with_p1(0.001)
                 .with_p2(0.01)
                 .with_measurement_error(0.02),
@@ -398,7 +400,7 @@ fn recipe_realistic_device() {
         &commands,
         || {
             realistic_device_noise(
-                DeviceNoiseParams::new()
+                &DeviceNoiseParams::new()
                     .with_p1(0.001) // 0.1% single-qubit gate error
                     .with_p2(0.01) // 1% two-qubit gate error
                     .with_measurement_error(0.02) // 2% readout error

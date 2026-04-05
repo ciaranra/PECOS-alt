@@ -1,0 +1,200 @@
+//! PECOS CLI — dependency management, CUDA-aware builds, and system inspection.
+//!
+//! The CLI owns things that need real program logic: detecting CUDA/LLVM/GPU,
+//! installing dependencies, introspecting cargo features, and building with
+//! platform-specific flags (e.g., macOS rpath handling in `python build`).
+//!
+//! Daily dev workflows (fmt, test, lint, bench, docs) live in the Justfile,
+//! which is transparent, editable, and doesn't require compiling anything.
+
+#![allow(clippy::fn_params_excessive_bools)]
+
+pub mod cuda_cmd;
+pub mod cuquantum_cmd;
+pub mod gpu_cmd;
+pub mod info;
+pub mod install_cmd;
+pub mod list;
+pub mod llvm_cmd;
+pub mod manifest_cmd;
+pub mod migrate_cmd;
+pub mod python_cmd;
+pub mod rust_cmd;
+pub mod selene_cmd;
+pub mod setup_cmd;
+pub mod uninstall_cmd;
+pub mod upgrade_cmd;
+
+use clap::Subcommand;
+
+#[derive(Subcommand, Clone)]
+pub enum RustCommands {
+    /// Run cargo check with CUDA-aware feature handling
+    Check {
+        /// Also check FFI crates (pecos-rslib, pecos-julia-ffi, pecos-go-ffi)
+        #[arg(long)]
+        include_ffi: bool,
+    },
+
+    /// Run cargo clippy with CUDA-aware feature handling
+    Clippy {
+        /// Also check FFI crates (pecos-rslib, pecos-julia-ffi, pecos-go-ffi)
+        #[arg(long)]
+        include_ffi: bool,
+
+        /// Apply clippy fixes (--fix --allow-staged --allow-dirty)
+        #[arg(long)]
+        fix: bool,
+    },
+
+    /// Run cargo test with CUDA-aware feature handling
+    Test {
+        /// Use release mode for tests
+        #[arg(long)]
+        release: bool,
+
+        /// Also test FFI crates
+        #[arg(long)]
+        include_ffi: bool,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum PythonCommands {
+    /// Build pecos-rslib and quantum-pecos via maturin
+    Build {
+        /// Build profile (dev/debug, release, native)
+        #[arg(long, default_value = "dev")]
+        profile: String,
+
+        /// Additional RUSTFLAGS
+        #[arg(long)]
+        rustflags: Option<String>,
+
+        /// Build with CUDA support
+        #[arg(long)]
+        cuda: bool,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum CudaCommands {
+    /// Check if CUDA is available
+    Check {
+        #[arg(short, long)]
+        quiet: bool,
+    },
+    /// Find CUDA installation path
+    Find {
+        #[arg(long)]
+        export: bool,
+    },
+    /// Show CUDA version
+    Version,
+    /// Validate CUDA installation
+    Validate { path: Option<String> },
+    /// Install CUDA Python packages (cupy, cuquantum, pytket-cutensornet)
+    SetupPython,
+}
+
+#[derive(Subcommand, Clone)]
+pub enum CuQuantumCommands {
+    /// Check if cuQuantum is available
+    Check {
+        #[arg(short, long)]
+        quiet: bool,
+    },
+    /// Find cuQuantum installation path
+    Find {
+        #[arg(long)]
+        export: bool,
+    },
+    /// Show cuQuantum version
+    Version,
+    /// Validate cuQuantum installation
+    Validate { path: Option<String> },
+    /// Configure .cargo/config.toml with cuQuantum path
+    Configure,
+}
+
+#[derive(Subcommand, Clone)]
+pub enum GpuCommands {
+    /// Check if a GPU (wgpu adapter) is available
+    Check {
+        #[arg(short, long)]
+        quiet: bool,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum SeleneCommands {
+    /// Install Selene plugins by copying built libraries to Python packages
+    Install {
+        #[arg(short, long)]
+        plugin: Option<String>,
+        #[arg(long, default_value = "dev")]
+        profile: String,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Clean Selene plugin _dist directories and venv installations
+    Clean {
+        #[arg(short, long)]
+        plugin: Option<String>,
+        #[arg(long)]
+        venv: bool,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(short, long, action = clap::ArgAction::Count)]
+        verbose: u8,
+    },
+    /// List Selene plugins and their installation status
+    List,
+}
+
+#[derive(Subcommand, Clone)]
+pub enum LlvmCommands {
+    /// Check if LLVM 14 is available
+    Check {
+        #[arg(short, long)]
+        quiet: bool,
+    },
+    /// Configure .cargo/config.toml with LLVM path
+    Configure,
+    /// Find LLVM installation path
+    Find {
+        #[arg(long)]
+        export: bool,
+    },
+    /// Show LLVM version
+    Version,
+    /// Validate LLVM installation
+    Validate { path: Option<String> },
+    /// Find a specific LLVM tool (e.g., llvm-as, clang)
+    Tool { name: String },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum DepsCommands {
+    /// Initialize a new pecos.toml manifest
+    Init {
+        #[arg(long)]
+        force: bool,
+    },
+    /// Show current manifest status
+    Status,
+    /// Sync crate manifests from workspace manifest
+    Sync {
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Verify dependency checksums
+    Verify {
+        #[arg(short, long)]
+        deps: Option<String>,
+    },
+    /// List available dependencies
+    List,
+}

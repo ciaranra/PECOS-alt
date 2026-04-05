@@ -532,7 +532,7 @@ impl<S: CliffordGateable> ImportanceSamplingRunner<S> {
                 command.qubits.as_slice(),
                 command.angles.as_slice(),
             );
-            let response = noise.emit(event, &mut self.rng);
+            let response = noise.emit(&event, &mut self.rng);
             let should_skip = response.should_skip_gate();
             self.apply_noise_response(response);
             return should_skip;
@@ -544,7 +544,7 @@ impl<S: CliffordGateable> ImportanceSamplingRunner<S> {
     fn emit_after_preparation(&mut self, qubits: &[QubitId]) {
         if let Some(ref mut noise) = self.noise {
             let event = NoiseEvent::AfterPreparation { qubits };
-            let response = noise.emit(event, &mut self.rng);
+            let response = noise.emit(&event, &mut self.rng);
             self.apply_noise_response(response);
         }
     }
@@ -855,6 +855,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_precision_loss)] // statistical tests use count as f64
 mod tests {
     use super::*;
     use crate::command::CommandBuilder;
@@ -954,7 +955,9 @@ mod tests {
         let mut flip_count = 0;
         for i in 0..100 {
             // Use different seeds to get variety
-            runner.rng = PecosRng::seed_from_u64(42 + i as u64);
+            #[allow(clippy::cast_sign_loss)] // i is a non-negative loop counter
+            let seed = 42 + i as u64;
+            runner.rng = PecosRng::seed_from_u64(seed);
             let result = runner.run_shot(&commands);
             // With 10% proposal rate, we should see flips
             if (result.weight.weight() - 1.0).abs() > f64::EPSILON {

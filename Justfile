@@ -14,6 +14,7 @@ default:
     @echo "  just test           # Run all tests"
     @echo "  just dev            # Build + test (daily workflow)"
     @echo "  just lint           # Check formatting and linting"
+    @echo "  just doctor         # Diagnose environment problems"
     @echo ""
     @echo "All commands:"
     @just --list --list-heading ''
@@ -22,9 +23,8 @@ default:
 # Settings
 # =============================================================================
 
-# Use bash by default (Windows users should use Git Bash, WSL, or PowerShell recipes)
+# Requires bash (Windows: use Git Bash from https://git-scm.com or WSL)
 set shell := ["bash", "-cu"]
-set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 # PECOS CLI - must be installed (run 'just install-cli' first)
 pecos := "pecos"
@@ -33,18 +33,13 @@ pecos := "pecos"
 # Getting Started
 # =============================================================================
 
-# Install PECOS CLI (required for most recipes)
+# Install or update the PECOS CLI
 [group('setup')]
 install-cli:
     @echo "Installing PECOS CLI..."
-    cargo install --path crates/pecos --features cli
+    cargo install --path crates/pecos-cli --force
     @echo ""
     @echo "Done! You can now run: just build"
-
-# Reinstall PECOS CLI (run after changing CLI code)
-[group('setup')]
-reinstall-cli:
-    cargo install --path crates/pecos --features cli --force
 
 # Set up build environment (detect and install missing dependencies)
 [group('setup')]
@@ -55,6 +50,59 @@ setup: check-cli
 [group('setup')]
 setup-ci: check-cli
     {{pecos}} setup --yes
+
+# Check development environment for common problems
+[group('setup')]
+doctor:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PROBLEMS=0
+    ok()   { echo "  [OK] $1: $2"; }
+    fail() { echo "  [!!] $1: $2"; PROBLEMS=$((PROBLEMS + 1)); }
+
+    echo "LLVM 14:"
+    if [ -d "$HOME/.pecos/deps/llvm/bin" ]; then
+        VERSION=$("$HOME/.pecos/deps/llvm/bin/llvm-config" --version 2>/dev/null || echo "unknown")
+        ok "installed" "$VERSION at $HOME/.pecos/deps/llvm"
+    else
+        fail "installed" "not found (run: pecos install llvm)"
+    fi
+    if [ -f .cargo/config.toml ] && grep -q "LLVM_SYS_140_PREFIX" .cargo/config.toml 2>/dev/null; then
+        ok ".cargo/config.toml" "LLVM_SYS_140_PREFIX configured"
+    else
+        fail ".cargo/config.toml" "LLVM_SYS_140_PREFIX not set (run: pecos llvm configure)"
+    fi
+    echo ""
+
+    echo "Python:"
+    if command -v uv >/dev/null 2>&1; then
+        ok "uv" "$(uv --version)"
+    else
+        fail "uv" "not found (see: https://docs.astral.sh/uv/)"
+    fi
+    PECOS_VER=$(uv run python -c "import pecos; print(pecos.__version__)" 2>/dev/null) \
+        && ok "import pecos" "v$PECOS_VER" \
+        || fail "import pecos" "failed (run: just build)"
+    RSLIB_VER=$(uv run python -c "import pecos_rslib; print(pecos_rslib.__version__)" 2>/dev/null) \
+        && ok "pecos_rslib" "v$RSLIB_VER" \
+        || fail "pecos_rslib" "native library failed to load (run: just build)"
+    echo ""
+
+    echo "CUDA (optional):"
+    NVCC=$(command -v nvcc 2>/dev/null || echo /usr/local/cuda/bin/nvcc)
+    if [ -x "$NVCC" ]; then
+        CUDA_VER=$("$NVCC" --version 2>/dev/null | grep release | sed 's/.*release //' | sed 's/,.*//')
+        ok "CUDA" "$CUDA_VER"
+    else
+        echo "  [--] CUDA: not found (optional)"
+    fi
+    echo ""
+
+    if [ "$PROBLEMS" -eq 0 ]; then
+        echo "No problems found."
+    else
+        echo "$PROBLEMS problem(s) found. See above for fixes."
+    fi
 
 # Show system information
 [group('setup')]
@@ -72,172 +120,220 @@ list-deps: check-cli
 
 # Build PECOS (profile: debug, release, native)
 [group('build')]
-build profile="debug": check-cli setup-quiet installreqs build-selene
+build profile="debug": check-cli setup-quiet sync-deps build-selene
+    #!/usr/bin/env bash
+    set -euo pipefail
     {{pecos}} python build --profile {{profile}}
-    -{{pecos}} julia build --profile {{profile}}
-    -{{pecos}} go build --profile {{profile}}
+    if command -v julia >/dev/null 2>&1; then
+        just julia-build {{profile}}
+    else
+        echo "Skipping Julia build (julia not found)"
+    fi
+    if command -v go >/dev/null 2>&1; then
+        just go-build {{profile}}
+    else
+        echo "Skipping Go build (go not found)"
+    fi
 
-# Build PECOS without dependency setup prompts
+# Build PECOS without dependency setup or sync (profile: debug, release, native)
 [group('build')]
-build-lite profile="debug": check-cli installreqs build-selene
+build-lite profile="debug": check-cli build-selene
     {{pecos}} python build --profile {{profile}}
-    -{{pecos}} julia build --profile {{profile}}
-    -{{pecos}} go build --profile {{profile}}
 
-# Build PECOS with CUDA support
+# Build PECOS with CUDA Python extras (profile: debug, release, native)
 [group('build')]
-build-cuda profile="debug": check-cli setup-quiet installreqs
+build-cuda profile="debug": check-cli setup-quiet
     {{pecos}} python build --profile {{profile}} --cuda
-    -{{pecos}} julia build --profile {{profile}}
-    -{{pecos}} go build --profile {{profile}}
 
 # =============================================================================
 # Testing
 # =============================================================================
 
-# Run Python tests (core)
+# Run Python tests (or: just pytest <custom args>)
 [group('test')]
-pytest:
-    uv run pytest python/pecos-rslib/tests -m "not performance and not numpy"
-    uv run pytest python/quantum-pecos/tests -m "not optional_dependency and not numpy"
+pytest *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{args}}" ]; then
+        uv run pytest {{args}}
+    else
+        uv run pytest python/pecos-rslib/tests -m "not performance"
+        uv run --group numpy-compat pytest python/pecos-rslib/tests -m "numpy and not performance"
+        uv run pytest python/quantum-pecos/tests -m "not optional_dependency"
+        uv run pytest python/selene-plugins
+    fi
 
-# Run Rust tests (CUDA-aware, release mode)
+# Run Rust tests (CUDA-aware; mode: debug or release)
 [group('test')]
-rstest: check-cli
-    {{pecos}} rust test --release
+rstest mode="release": check-cli
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{mode}}" = "release" ]; then
+        {{pecos}} rust test --release
+    else
+        {{pecos}} rust test
+    fi
 
 # Run all tests (Rust + Python + Julia + Go if available)
 [group('test')]
-test: rstest-all pytest-all
+test mode="release": (rstest mode) pytest
     #!/usr/bin/env bash
     set -euo pipefail
     if command -v julia >/dev/null 2>&1; then
         echo "Julia detected, running Julia tests..."
-        {{pecos}} julia test
+        just julia-test
     else
         echo "Julia not detected, skipping Julia tests"
     fi
     if command -v go >/dev/null 2>&1; then
         echo "Go detected, running Go tests..."
-        {{pecos}} go test
+        just go-test
     else
         echo "Go not detected, skipping Go tests"
     fi
-
-# Run all Python tests (core + numpy compat + selene)
-[group('test')]
-pytest-all: pytest pytest-numpy pytest-selene
-    @echo "All Python tests completed"
 
 # =============================================================================
 # Linting / Formatting
 # =============================================================================
 
-# Run all quality checks (fmt + clippy + pre-commit + Julia/Go if available)
+# Fix formatting and linting issues (or: just lint check)
 [group('lint')]
-lint: fmt clippy
+lint mode="fix":
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "==> Running pre-commit..."
-    uv run pre-commit run --all-files
-
-    if command -v julia >/dev/null 2>&1; then
-        echo "Julia detected, running Julia formatting check and linting..."
-        {{pecos}} julia fmt --check
-        {{pecos}} julia lint
+    # Detect CUDA: only use --all-features when CUDA toolkit is available
+    if command -v nvcc >/dev/null 2>&1 || [ -n "${CUDA_PATH:-}" ] || [ -d /usr/local/cuda ]; then
+        CLIPPY_FEATURES="--all-features"
+        echo "(CUDA detected -- linting with all features)"
     else
-        echo "Julia not detected, skipping Julia linting"
+        CLIPPY_FEATURES=""
+        echo "(No CUDA -- linting with default features only)"
     fi
 
-    if command -v go >/dev/null 2>&1; then
-        echo "Go detected, running Go formatting check and linting..."
-        test -z "$(gofmt -l go/pecos)" || (gofmt -l go/pecos && exit 1)
-        cd go/pecos && go vet ./...
+    if [ "{{mode}}" = "check" ]; then
+        echo "==> Checking Rust formatting..."
+        cargo fmt --all -- --check
+        echo "==> Running clippy..."
+        cargo clippy --workspace --all-targets $CLIPPY_FEATURES -- -D warnings
+        echo "==> Running pre-commit..."
+        uv run pre-commit run --all-files
+        if command -v julia >/dev/null 2>&1; then
+            echo "==> Checking Julia formatting..."
+            just julia-fmt-check
+            just julia-lint
+        fi
+        if command -v go >/dev/null 2>&1; then
+            echo "==> Checking Go formatting..."
+            just go-fmt-check
+            just go-lint
+        fi
     else
-        echo "Go not detected, skipping Go linting"
+        echo "==> Fixing Rust formatting and clippy..."
+        cargo fmt --all
+        cargo clippy --workspace --all-targets $CLIPPY_FEATURES --fix --allow-staged --allow-dirty -- -D warnings
+        echo "==> Running pre-commit..."
+        uv run pre-commit run --all-files || true
+        if command -v julia >/dev/null 2>&1; then
+            echo "==> Fixing Julia formatting..."
+            just julia-fmt
+        fi
+        if command -v go >/dev/null 2>&1; then
+            echo "==> Fixing Go formatting..."
+            just go-fmt
+        fi
     fi
-
-# Fix all auto-fixable linting issues
-[group('lint')]
-lint-fix:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "Fixing Rust formatting and clippy issues..."
-    cargo fmt --all
-    cargo clippy --workspace --all-targets --fix --allow-staged --allow-dirty -- -D warnings
-    echo ""
-    echo "Running pre-commit fixes..."
-    uv run pre-commit run --all-files || true
-    echo ""
-    if command -v julia >/dev/null 2>&1; then
-        echo "Fixing Julia formatting..."
-        {{pecos}} julia fmt
-    else
-        echo "Julia not detected, skipping Julia formatting"
-    fi
-    if command -v go >/dev/null 2>&1; then
-        echo "Fixing Go formatting..."
-        gofmt -w go/pecos
-    else
-        echo "Go not detected, skipping Go formatting"
-    fi
-    echo ""
-    echo "Linting fixes applied! Run 'just lint' to check for remaining issues."
 
 # Run cargo check
 [group('lint')]
 check:
     cargo check --workspace --all-targets
 
-# Run cargo clippy
+# Run cargo clippy (CUDA-aware: uses --all-features only when CUDA is available)
 [group('lint')]
 clippy:
-    cargo clippy --workspace --all-targets -- -D warnings
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v nvcc >/dev/null 2>&1 || [ -n "${CUDA_PATH:-}" ] || [ -d /usr/local/cuda ]; then
+        echo "(CUDA detected -- clippy with all features)"
+        cargo clippy --workspace --all-targets --all-features -- -D warnings
+    else
+        echo "(No CUDA -- clippy with default features)"
+        cargo clippy --workspace --all-targets -- -D warnings
+    fi
 
 # Check Rust formatting
 [group('lint')]
 fmt:
     cargo fmt --all -- --check
 
-# Fix Rust formatting
-[group('lint')]
-fmt-fix:
-    cargo fmt --all
+# Run benchmarks (profile: release/native; features: optional; pattern: filter)
+[group('test')]
+bench profile="release" features="" pattern="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ARGS="bench -p benchmarks --bench benchmarks"
+    if [ "{{profile}}" = "native" ]; then
+        ARGS="$ARGS --profile=native"
+        export RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=native"
+    elif [ "{{profile}}" != "release" ]; then
+        echo "Unknown profile: {{profile}}. Use release or native."; exit 1
+    fi
+    if [ -n "{{features}}" ]; then ARGS="$ARGS --features={{features}}"; fi
+    if [ -n "{{pattern}}" ]; then ARGS="$ARGS -- {{pattern}}"; fi
+    cargo $ARGS
 
 # =============================================================================
 # Dev Workflows
 # =============================================================================
 
-# Dev cycle: build + test (fast, for normal development)
+# Dev cycle: build + test (lang: all, rust, python, julia, go)
 [group('dev')]
-dev cuda="false": pre-check (build-dev cuda) test
+dev lang="all":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{lang}}" in
+        all)
+            just build
+            just test debug
+            ;;
+        rust)
+            just rstest debug
+            ;;
+        python)
+            just build
+            just pytest
+            ;;
+        julia)
+            just julia-build
+            just julia-test
+            ;;
+        go)
+            just go-build
+            just go-test
+            ;;
+        *)
+            echo "Unknown language: {{lang}}. Use: all, rust, python, julia, go"
+            exit 1
+            ;;
+    esac
 
-# Full dev cycle: clean + build + test + lint (pre-merge)
+# Clean build + test + lint check (run before opening a PR)
 [group('dev')]
-dev-full cuda="false": pre-check clean (build-dev cuda) test lint
+check-all: clean (build "release") (test "release") (lint "check")
 
-# Dev cycle with CUDA support
-[group('dev')]
-devc: (dev "true")
-
-# Full dev cycle with CUDA support
-[group('dev')]
-devc-full: (dev-full "true")
-
-# Clean build artifacts
-[group('dev')]
+# Clean build artifacts (or: just clean cache/deps/all/dry-run)
 [group('clean')]
-clean:
-    uv run python scripts/clean.py
+clean *target:
+    uv run python scripts/clean.py {{ if target == "cache" { "--cache" } else if target == "deps" { "--deps" } else if target == "all" { "--all" } else if target == "dry-run" { "--dry-run" } else { "" } }}
 
 # =============================================================================
 # Documentation
 # =============================================================================
 
-# Serve documentation and open in browser
+# Serve documentation locally (port: default 8000)
 [group('docs')]
-docs port="8000": check-cli
-    {{pecos}} docs --port {{port}}
+docs port="8000":
+    uv run mkdocs serve -a "127.0.0.1:{{port}}"
 
 # Build documentation
 [group('docs')]
@@ -283,44 +379,75 @@ check-cuda: check-cli
 # Julia Bindings
 # =============================================================================
 
-# Build Julia FFI library
+# Build Julia FFI library (profile: debug, release, native; rustflags: optional)
 [group('julia')]
-julia-build profile="release": check-cli
-    {{pecos}} julia build --profile {{profile}}
+julia-build profile="release" rustflags="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{rustflags}}" ]; then
+        export RUSTFLAGS="${RUSTFLAGS:-} {{rustflags}}"
+    fi
+    case "{{profile}}" in
+        native)  cargo build --profile native -p pecos-julia-ffi ;;
+        release) cargo build --release -p pecos-julia-ffi ;;
+        dev|debug) cargo build -p pecos-julia-ffi ;;
+        *) echo "Unknown profile: {{profile}}"; exit 1 ;;
+    esac
 
 # Run Julia tests
 [group('julia')]
-julia-test: check-cli
-    {{pecos}} julia test
+julia-test: (julia-build "release")
+    cd julia/PECOS.jl && julia --project=. -e 'using Pkg; Pkg.instantiate(); include("test/runtests.jl")'
 
 # Format Julia code
 [group('julia')]
-julia-format: check-cli
-    {{pecos}} julia fmt
+julia-fmt:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    julia -e 'using Pkg; Pkg.activate(); haskey(Pkg.project().dependencies, "JuliaFormatter") || Pkg.add("JuliaFormatter")'
+    cd julia/PECOS.jl && julia -e 'using JuliaFormatter; format("."; verbose=true)'
 
 # Check Julia code formatting
 [group('julia')]
-julia-format-check: check-cli
-    {{pecos}} julia fmt --check
+julia-fmt-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    julia -e 'using Pkg; Pkg.activate(); haskey(Pkg.project().dependencies, "JuliaFormatter") || Pkg.add("JuliaFormatter")'
+    cd julia/PECOS.jl && julia -e 'using JuliaFormatter; format("."; verbose=false, overwrite=false) || (println("Run just julia-fmt to fix."); exit(1))'
 
 # Run Aqua.jl quality checks
 [group('julia')]
-julia-lint: check-cli
-    {{pecos}} julia lint
+julia-lint: (julia-build "release")
+    cd julia/PECOS.jl && julia --project=. test/aqua_tests.jl
 
 # =============================================================================
 # Go Bindings
 # =============================================================================
 
-# Build Go FFI library
+# Build Go FFI library (profile: debug, release, native; rustflags: optional)
 [group('go')]
-go-build profile="release": check-cli
-    {{pecos}} go build --profile {{profile}}
+go-build profile="release" rustflags="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "{{rustflags}}" ]; then
+        export RUSTFLAGS="${RUSTFLAGS:-} {{rustflags}}"
+    fi
+    case "{{profile}}" in
+        native)  cargo build --profile native -p pecos-go-ffi ;;
+        release) cargo build --release -p pecos-go-ffi ;;
+        dev|debug) cargo build -p pecos-go-ffi ;;
+        *) echo "Unknown profile: {{profile}}"; exit 1 ;;
+    esac
 
 # Run Go tests
 [group('go')]
-go-test: check-cli
-    {{pecos}} go test
+go-test: (go-build "release")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    LIB_DIR="$(pwd)/target/release"
+    export LD_LIBRARY_PATH="$LIB_DIR:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="$LIB_DIR:${DYLD_LIBRARY_PATH:-}"
+    cd go/pecos && go test -v
 
 # Format Go code
 [group('go')]
@@ -334,46 +461,17 @@ go-fmt-check:
 
 # Run Go linting with go vet
 [group('go')]
-go-lint:
+go-lint: (go-build "release")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    LIB_DIR="$(pwd)/target/release"
+    export LD_LIBRARY_PATH="$LIB_DIR:${LD_LIBRARY_PATH:-}"
+    export DYLD_LIBRARY_PATH="$LIB_DIR:${DYLD_LIBRARY_PATH:-}"
     cd go/pecos && go vet ./...
-
-# =============================================================================
-# Decoders
-# =============================================================================
-
-# Build all decoder crates
-[group('decoders')]
-build-decoders:
-    cargo build --package pecos-decoders --all-features
-
-# Test all decoder crates
-[group('decoders')]
-test-decoders:
-    cargo test --package pecos-decoders --all-features
-
-# Build specific decoder (e.g., just build-decoder ldpc)
-[group('decoders')]
-build-decoder decoder:
-    cargo build --package pecos-decoders --features {{decoder}}
-
-# Test specific decoder
-[group('decoders')]
-test-decoder decoder:
-    cargo test --package pecos-decoders --features {{decoder}}
 
 # =============================================================================
 # Additional Testing
 # =============================================================================
-
-# Run Rust tests in default cargo profile
-[private]
-rstest-all: check-cli
-    {{pecos}} rust test
-
-# Run NumPy/SciPy compatibility tests
-[group('test')]
-pytest-numpy:
-    uv run --group numpy-compat pytest python/pecos-rslib/tests -m "numpy and not performance"
 
 # Run performance tests with release build
 [group('test')]
@@ -386,63 +484,8 @@ pytest-dep:
     uv run pytest python/pecos-rslib/tests -m "optional_dependency"
     uv run pytest python/quantum-pecos/tests -m "optional_dependency"
 
-# Run Selene plugin tests
-[group('test')]
-pytest-selene:
-    uv run pytest python/selene-plugins
 
-# Run all tests with warnings for missing tools
-[group('test')]
-test-all: rstest-all pytest-all
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if command -v julia >/dev/null 2>&1; then
-        echo "Julia detected, running Julia tests..."
-        {{pecos}} julia test
-    else
-        echo ""
-        echo "WARNING: Julia is not installed. Skipping Julia tests."
-        echo "   To run Julia tests, please install Julia from https://julialang.org/downloads/"
-        echo ""
-    fi
-    if command -v go >/dev/null 2>&1; then
-        echo "Go detected, running Go tests..."
-        {{pecos}} go test
-    else
-        echo ""
-        echo "WARNING: Go is not installed. Skipping Go tests."
-        echo "   To run Go tests, please install Go from https://go.dev/dl/"
-        echo ""
-    fi
 
-# =============================================================================
-# Cleaning
-# =============================================================================
-
-# Clean Selene plugin build artifacts
-[group('clean')]
-clean-selene:
-    uv run python scripts/clean.py --selene
-
-# Clean ~/.pecos/cache/ and ~/.pecos/tmp/
-[group('clean')]
-clean-cache:
-    uv run python scripts/clean.py --cache
-
-# Clean ~/.pecos/deps/ (extracted C++ dependencies)
-[group('clean')]
-clean-deps:
-    uv run python scripts/clean.py --deps
-
-# Clean everything including LLVM and CUDA
-[group('clean')]
-clean-everything:
-    uv run python scripts/clean.py --all
-
-# Preview what would be cleaned
-[group('clean')]
-clean-dry-run:
-    uv run python scripts/clean.py --dry-run
 
 # =============================================================================
 # Private / Internal Recipes
@@ -451,37 +494,63 @@ clean-dry-run:
 [private]
 check-cli:
     #!/usr/bin/env bash
+    NEEDS_INSTALL=false
     if ! command -v pecos >/dev/null 2>&1; then
-        echo "Error: PECOS CLI not found. Install with: just install-cli"
-        exit 1
+        NEEDS_INSTALL=true
+    else
+        expected=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        installed=$(pecos --version 2>/dev/null | awk '{print $2}')
+        if [[ "$installed" != "$expected" ]]; then
+            echo "PECOS CLI outdated (installed: ${installed:-unknown}, expected: $expected)"
+            NEEDS_INSTALL=true
+        fi
     fi
-    expected=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-    installed=$(pecos --version 2>/dev/null | awk '{print $2}')
-    if [[ "$installed" != "$expected" ]]; then
-        echo "Warning: PECOS CLI outdated (installed: ${installed:-unknown}, expected: $expected)"
-        echo "  Update with: just reinstall-cli"
+    if [ "$NEEDS_INSTALL" = true ]; then
+        echo "Installing PECOS CLI..."
+        cargo install --path crates/pecos-cli --force --quiet
     fi
 
 [private]
 setup-quiet: check-cli
     {{pecos}} setup --quiet
 
+# Sync Python deps (fast if already installed, skips maturin rebuilds)
 [private]
-installreqs:
+sync-deps:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Installing requirements..."
-    if python -c "import cupy" >/dev/null 2>&1; then
-        echo "(including CUDA packages)"
-        uv sync --project . --all-packages --group cuda
-    else
-        uv sync --project . --all-packages
+    # Quick check: if quantum-pecos is importable, deps are likely fine
+    if uv run --frozen python -c "import pecos" 2>/dev/null; then
+        exit 0
     fi
+    echo "Python deps not installed, running uv sync..."
+    uv sync --project . --all-packages
 
 [private]
 build-selene:
     #!/usr/bin/env bash
     set -euo pipefail
+    # Check if any selene source changed since last install
+    NEEDS_BUILD=false
+    for DIR in python/selene-plugins/pecos-selene-*/; do
+        PKG=$(basename "$DIR")
+        DEST="$DIR/python/${PKG//-/_}/_dist/lib/"
+        SO=$(find "$DEST" -name "*.so" 2>/dev/null | head -1 || true)
+        if [ -z "$SO" ]; then
+            NEEDS_BUILD=true
+            break
+        fi
+        # Check if any Rust source is newer than the installed .so
+        NEWER=$(find "crates/" "$DIR" -name "*.rs" -newer "$SO" 2>/dev/null | head -1 || true)
+        if [ -n "$NEWER" ]; then
+            NEEDS_BUILD=true
+            break
+        fi
+    done
+    if [ "$NEEDS_BUILD" = false ]; then
+        echo "Selene plugins: up to date"
+        exit 0
+    fi
     echo "Building Selene plugins..."
     CARGO_ARGS=""
     for DIR in python/selene-plugins/pecos-selene-*/; do
@@ -494,109 +563,33 @@ build-selene:
     {{pecos}} selene install --profile release
     echo "Selene plugins built and installed successfully"
 
-[private]
-pre-check: check-cli setup-quiet
-
-[private]
-build-dev cuda="false": installreqs build-selene
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ "{{cuda}}" == "true" ]]; then
-        {{pecos}} python build --profile debug --cuda
-    else
-        {{pecos}} python build --profile debug
-    fi
-    {{pecos}} julia build --profile debug 2>/dev/null || true
-    {{pecos}} go build --profile debug 2>/dev/null || true
 
 # Convenience aliases
 [private]
 build-debug: (build "debug")
 [private]
 build-release: (build "release")
-[private]
-build-native: (build "native")
-[private]
-build-lite-debug: (build-lite "debug")
-[private]
-build-lite-release: (build-lite "release")
-[private]
-build-cuda-debug: (build-cuda "debug")
-[private]
-build-cuda-release: (build-cuda "release")
-[private]
-build-cuda-native: (build-cuda "native")
 
-# Remaining utility recipes
-
-# Generate/update lockfiles
+# Regenerate all lockfiles from scratch
 [group('setup')]
-updatereqs:
-    uv self update
+updatelocks:
+    rm -f uv.lock Cargo.lock
     uv lock --project .
-
-# Install requirements with specific Python version
-[private]
-installreqs-python version:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if python -c "import cupy" >/dev/null 2>&1; then
-        uv sync --project . --all-packages --python "{{version}}" --group cuda
-    else
-        uv sync --project . --all-packages --python "{{version}}"
-    fi
-
-# Install uv using pip
-[group('setup')]
-pip-install-uv:
-    python -m pip install --upgrade uv
-    uv sync
-
-# Normalize line endings according to .gitattributes
-[private]
-normalize-line-endings:
-    -git rm --cached -r .
-    git reset --hard
+    cargo generate-lockfile
 
 # Install CUDA Python packages (requires CUDA toolkit)
 [private]
 install-cuda-python:
     {{pecos}} cuda setup-python
 
-# Full CUDA setup: toolkit + Python packages
-[private]
-install-cuda-full: install-cuda install-cuda-python
-
 # Validate CUDA installation integrity
 [private]
 validate-cuda:
     {{pecos}} cuda validate
 
-# Docs extras
+# Run Julia examples
 [private]
-docs-test-slow:
-    uv run python scripts/docs/generate_doc_tests.py
-    uv run pytest python/quantum-pecos/tests/docs/generated -v -k "not rust"
-
-[private]
-docs-test-generate:
-    uv run python scripts/docs/generate_doc_tests.py
-
-[private]
-docs-test-run *args:
-    uv run pytest python/quantum-pecos/tests/docs/generated {{args}}
-
-[private]
-docs-test-legacy:
-    uv run python scripts/docs/test_code_examples.py
-
-# Julia/Go extras
-[private]
-julia-build-debug:
-    {{pecos}} julia build --profile debug
-
-[private]
-julia-examples: julia-build-debug
+julia-examples: (julia-build "debug")
     #!/usr/bin/env bash
     set -euo pipefail
     if command -v julia >/dev/null 2>&1; then
@@ -605,50 +598,3 @@ julia-examples: julia-build-debug
     else
         echo "Julia not found."; exit 1
     fi
-
-[private]
-julia-info:
-    @echo "Julia: julia/PECOS.jl | FFI: julia/pecos-julia-ffi"
-
-[private]
-julia-clean:
-    rm -f julia/PECOS.jl/Manifest.toml julia/PECOS.jl/dev/PECOS_julia_jll/Manifest.toml || true
-
-[private]
-go-build-debug:
-    {{pecos}} go build --profile debug
-
-[private]
-go-info:
-    @echo "Go: go/pecos | FFI: go/pecos-go-ffi"
-
-[private]
-go-clean:
-    rm -f go/pecos/go.sum || true
-
-[private]
-decoder-info:
-    @echo "Decoders: ldpc (BP-OSD, MBP). See DECODERS.md"
-
-[private]
-decoder-cache-status:
-    {{pecos}} list -v
-
-[private]
-decoder-cache-clean: clean-cache
-
-[private]
-clean-llvm:
-    uv run python scripts/clean.py --llvm
-
-[private]
-clean-cuda:
-    uv run python scripts/clean.py --cuda
-
-[private]
-clean-pecos-home:
-    uv run python scripts/clean.py --cache --deps
-
-[private]
-clean-all:
-    uv run python scripts/clean.py --cache --deps

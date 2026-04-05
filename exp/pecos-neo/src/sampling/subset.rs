@@ -303,6 +303,7 @@ where
     }
 
     /// Run the subset simulation.
+    #[allow(clippy::cast_precision_loss)] // statistical calculations use count as f64
     pub fn run(&self) -> SubsetResult {
         let mut rng = PecosRng::seed_from_u64(resolve_seed(self.config.seed));
 
@@ -342,6 +343,8 @@ where
 
         for level in 0..self.config.max_levels {
             // Find threshold: score at (1 - threshold_fraction) quantile
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            // product of values in [0,1] and a positive length
             let threshold_idx =
                 ((1.0 - self.config.threshold_fraction) * samples.len() as f64) as usize;
             let threshold_idx = threshold_idx.min(samples.len() - 1);
@@ -566,6 +569,7 @@ impl BernoulliSubsetSimulation {
     ///
     /// Returns a [`SubsetResult`] with a single level containing the direct MC estimate.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // statistical calculations use count as f64
     pub fn run(&self) -> SubsetResult {
         let mut rng = PecosRng::seed_from_u64(resolve_seed(self.config.seed));
 
@@ -614,6 +618,7 @@ impl BernoulliSubsetSimulation {
 
     /// Run direct Monte Carlo (for comparison).
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn run_direct_mc(&self, num_samples: usize, seed: u64) -> f64 {
         let mut rng = PecosRng::seed_from_u64(seed);
         let mut failures = 0;
@@ -643,6 +648,8 @@ impl BernoulliSubsetSimulation {
     #[must_use]
     pub fn analytical_probability(&self) -> f64 {
         let n = self.num_steps;
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // both values are positive, quotient fits in usize
         let k_min = (self.failure_threshold / self.damage_increment).ceil() as usize;
 
         if k_min > n {
@@ -660,6 +667,7 @@ impl BernoulliSubsetSimulation {
     }
 }
 /// Binomial probability mass function: C(n,k) * p^k * (1-p)^(n-k)
+#[allow(clippy::cast_precision_loss)] // mathematical calculation
 fn binomial_pmf(n: usize, k: usize, p: f64) -> f64 {
     if k > n {
         return 0.0;
@@ -686,6 +694,7 @@ fn log_binomial_coefficient(n: usize, k: usize) -> f64 {
 }
 
 /// Log factorial using Stirling's approximation for large n.
+#[allow(clippy::cast_precision_loss)] // mathematical calculation
 fn log_factorial(n: usize) -> f64 {
     if n <= 1 {
         return 0.0;
@@ -851,6 +860,7 @@ impl<S: pecos_simulators::CliffordGateable + Clone> EcsSubsetSimulation<S> {
     /// 2. Return the criticality score increment for this round
     ///
     /// The `is_failure_fn` checks if the accumulated score indicates failure.
+    #[allow(clippy::cast_precision_loss)] // statistical calculations use count as f64
     pub fn run_round<F, G>(&mut self, round_fn: F, is_failure_fn: G) -> RoundResult
     where
         F: Fn(&mut World<S>, EntityId) -> f64,
@@ -880,6 +890,8 @@ impl<S: pecos_simulators::CliffordGateable + Clone> EcsSubsetSimulation<S> {
         });
 
         // Find adaptive threshold (top threshold_fraction)
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // product of fraction in [0,1] and a positive length
         let target_above =
             (self.config.threshold_fraction * self.trajectories.len() as f64).ceil() as usize;
         let threshold_idx = target_above.min(self.trajectories.len().saturating_sub(1));
@@ -1172,6 +1184,7 @@ impl ProperSubsetSimulation {
 
     /// Run the subset simulation.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // statistical calculations use count as f64
     pub fn run(mut self) -> SubsetResult {
         let n = self.config.samples_per_level;
         let p0 = self.config.threshold_fraction;
@@ -1202,6 +1215,8 @@ impl ProperSubsetSimulation {
             });
 
             // Find adaptive threshold: score at (1-p0) quantile
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            // p0 in [0,1] so (1-p0)*n fits in usize
             let threshold_idx = ((1.0 - p0) * n as f64).floor() as usize;
             let threshold_idx = threshold_idx.min(n - 1);
             let new_threshold = self.trajectories[threshold_idx].score;
@@ -1356,6 +1371,7 @@ impl ProperSubsetSimulation {
     ///
     /// Returns `None` if the failure threshold is unreachable (max score < threshold).
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // statistical calculations use count as f64
     pub fn run_adaptive(mut self) -> SubsetResult {
         let n = self.config.samples_per_level;
         let p0 = self.config.threshold_fraction;
@@ -1437,6 +1453,8 @@ impl ProperSubsetSimulation {
             // If no trajectories exceed this threshold, use quantile-based threshold
             let actual_threshold = if num_above == 0 {
                 // Use the (1-p0) quantile as the new threshold
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                // p0 in [0,1] so (1-p0)*n fits in usize
                 let threshold_idx = ((1.0 - p0) * n as f64).floor() as usize;
                 let threshold_idx = threshold_idx.min(n - 1);
                 self.trajectories[threshold_idx].score
@@ -1589,6 +1607,7 @@ impl ProperSubsetSimulation {
 
     /// Run direct Monte Carlo for comparison.
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // rate calculation
     pub fn run_direct_mc(&self, num_samples: usize) -> f64 {
         let mut failures = 0;
 
@@ -1654,6 +1673,7 @@ impl SyndromeScore {
     }
 
     /// Add syndrome measurements from one round.
+    #[allow(clippy::cast_precision_loss)] // score is count as f64
     pub fn add_round(&mut self, syndrome_bits: &[bool]) {
         let weight: usize = syndrome_bits.iter().filter(|&&b| b).count();
         self.total_weight += weight;
@@ -1932,12 +1952,8 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
     /// ## Parameters
     /// - `p_syndrome`: Probability that each ancilla triggers per round
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // statistical calculations use count as f64
     pub fn run_proper(mut self, p_syndrome: f64) -> SubsetResult {
-        let n = self.config.base.samples_per_level;
-        let p0 = self.config.base.threshold_fraction;
-        let num_rounds = self.config.num_rounds;
-        let mut total_samples = n;
-
         // Data structure to track trajectory history
         #[allow(dead_code)]
         struct TrajHistory {
@@ -1947,6 +1963,11 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
             is_failure: bool,
             base_seed: u64, // Kept for debugging/tracing
         }
+
+        let n = self.config.base.samples_per_level;
+        let p0 = self.config.base.threshold_fraction;
+        let num_rounds = self.config.num_rounds;
+        let mut total_samples = n;
 
         // Step 1: Run all trajectories to completion, recording history
         let mut histories: Vec<TrajHistory> = Vec::with_capacity(n);
@@ -2004,6 +2025,8 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
             });
 
             // Find adaptive threshold: score at (1-p0) quantile
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            // p0 in [0,1] so (1-p0)*n fits in usize
             let threshold_idx = ((1.0 - p0) * n as f64).floor() as usize;
             let threshold_idx = threshold_idx.min(n - 1);
             let new_threshold = histories[indices[threshold_idx]].final_score;
@@ -2082,7 +2105,11 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
                     }
                     syndrome_score.score =
                         parent.scores.get(crossing_round).copied().unwrap_or(0.0);
-                    syndrome_score.total_weight = syndrome_score.score as usize;
+                    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                    // score is a non-negative syndrome weight
+                    {
+                        syndrome_score.total_weight = syndrome_score.score as usize;
+                    }
 
                     // Continue from crossing point with new randomness
                     for round in (crossing_round + 1)..num_rounds {
@@ -2207,7 +2234,7 @@ pub fn phase_flip_syndrome_circuit() -> CommandQueue {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
+#[allow(clippy::float_cmp, clippy::cast_precision_loss)]
 mod tests {
     use super::*;
 
@@ -2883,6 +2910,8 @@ mod tests {
         // Sum is Binomial(40, 0.2)
         // P(sum >= threshold) using our binomial_pmf function
         let total_trials = num_ancillas * num_rounds;
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // failure_threshold is a positive count
         let k_threshold = failure_threshold.ceil() as usize;
         let mut analytical = 0.0;
         for k in k_threshold..=total_trials {

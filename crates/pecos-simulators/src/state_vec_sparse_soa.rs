@@ -186,6 +186,7 @@ impl<R: Rng> SparseStateVecSoA<R> {
     /// Get the sparsity ratio
     #[inline]
     #[must_use]
+    #[allow(clippy::cast_precision_loss)] // sparsity ratio
     pub fn sparsity(&self) -> f64 {
         self.len as f64 / (1usize << self.num_qubits) as f64
     }
@@ -241,6 +242,7 @@ impl<R: Rng> SparseStateVecSoA<R> {
     /// Takes precomputed cos(theta/2) and sin(theta/2).
     /// Branch-free with SIMD (f64x4) for the inner loop.
     #[inline]
+    #[allow(clippy::cast_precision_loss)] // bit extraction (0 or 1) as f64
     fn apply_rz_kernel(&mut self, q: usize, cos: f64, sin: f64) {
         let shift = q;
         let len = self.len;
@@ -355,6 +357,14 @@ impl<R: Rng> SparseStateVecSoA<R> {
         same_sin_sign: f64,
         diff_sin_sign: f64,
     ) {
+        struct PairInfo {
+            self_pos: u32,
+            partner_pos: u32, // u32::MAX if partner doesn't exist
+            self_idx: usize,
+            partner_idx: usize,
+            same_parity: bool,
+        }
+
         self.ensure_sorted();
         let both_mask = (1usize << q1) | (1usize << q2);
         let mask1 = 1usize << q1;
@@ -378,14 +388,6 @@ impl<R: Rng> SparseStateVecSoA<R> {
 
         // Phase 1: Identify pairs. For each amplitude, find its partner.
         // Process from lower index side only.
-        struct PairInfo {
-            self_pos: u32,
-            partner_pos: u32, // u32::MAX if partner doesn't exist
-            self_idx: usize,
-            partner_idx: usize,
-            same_parity: bool,
-        }
-
         let mut pairs: Vec<PairInfo> = Vec::with_capacity(len);
 
         for i in 0..len {
@@ -402,6 +404,7 @@ impl<R: Rng> SparseStateVecSoA<R> {
                 let partner_pos = src_idx.binary_search(&partner_idx).ok();
                 if let Some(pp) = partner_pos {
                     self.scratch_low[pp] = 1; // Mark partner as processed
+                    #[allow(clippy::cast_possible_truncation)] // position index fits in u32
                     pairs.push(PairInfo {
                         self_pos: i as u32,
                         partner_pos: pp as u32,
@@ -410,6 +413,7 @@ impl<R: Rng> SparseStateVecSoA<R> {
                         same_parity: same,
                     });
                 } else {
+                    #[allow(clippy::cast_possible_truncation)] // position index fits in u32
                     pairs.push(PairInfo {
                         self_pos: i as u32,
                         partner_pos: u32::MAX,
@@ -429,6 +433,7 @@ impl<R: Rng> SparseStateVecSoA<R> {
                     continue;
                 }
                 // Unpaired from high side
+                #[allow(clippy::cast_possible_truncation)] // position index fits in u32
                 pairs.push(PairInfo {
                     self_pos: i as u32,
                     partner_pos: u32::MAX,
@@ -544,6 +549,7 @@ impl<R: Rng> SparseStateVecSoA<R> {
     /// lower overhead. For larger states, the two-pointer merge produces two
     /// sorted output streams (bit=0 and bit=1 results), which are merged in O(k)
     /// instead of requiring an O(k log k) sort.
+    #[allow(clippy::too_many_arguments)] // 2x2 unitary matrix elements (re/im pairs)
     #[inline]
     fn apply_single_qubit_gate(
         &mut self,
@@ -661,8 +667,10 @@ impl<R: Rng> SparseStateVecSoA<R> {
                 self.indices_b[i]
             };
             if idx & mask == 0 {
+                #[allow(clippy::cast_possible_truncation)] // amplitude index fits in u32
                 self.scratch_low.push(i as u32);
             } else {
+                #[allow(clippy::cast_possible_truncation)] // amplitude index fits in u32
                 self.scratch_high.push(i as u32);
             }
         }
@@ -911,6 +919,7 @@ impl<R: Rng> SparseStateVecSoA<R> {
     }
 
     /// Binary search path for small states (<= 8 amplitudes).
+    #[allow(clippy::too_many_arguments)] // SoA hot path: src/dst arrays + 2x2 unitary elements
     #[inline]
     fn apply_gate_binary_search(
         src_indices: &[usize],
@@ -1297,8 +1306,10 @@ impl<R: Rng> SparseStateVecSoA<R> {
             };
             for (i, &idx) in indices.iter().enumerate() {
                 if idx & control_mask == 0 {
+                    #[allow(clippy::cast_possible_truncation)] // amplitude index fits in u32
                     self.scratch_low.push(i as u32);
                 } else if idx & target_mask != 0 {
+                    #[allow(clippy::cast_possible_truncation)] // amplitude index fits in u32
                     self.scratch_high.push(i as u32);
                 } else {
                     self.sort_perm.push(i);
@@ -1465,8 +1476,10 @@ impl<R: Rng> SparseStateVecSoA<R> {
                 let bit1 = (idx & mask1) != 0;
                 let bit2 = (idx & mask2) != 0;
                 if bit1 == bit2 {
+                    #[allow(clippy::cast_possible_truncation)] // amplitude index fits in u32
                     self.scratch_low.push(i as u32); // A: unchanged
                 } else if !bit1 {
+                    #[allow(clippy::cast_possible_truncation)] // amplitude index fits in u32
                     self.scratch_high.push(i as u32); // B01: bit1=0, bit2=1
                 } else {
                     self.sort_perm.push(i); // B10: bit1=1, bit2=0
@@ -1715,6 +1728,7 @@ impl<R: Rng> SparseStateVecSoA<R> {
     /// Prepare all qubits in the |+> state, creating an equal superposition of all basis states.
     ///
     /// Creates a dense state with 2^n amplitudes, each equal to 1/sqrt(2^n).
+    #[allow(clippy::cast_precision_loss)] // normalization factor
     pub fn prepare_plus_state(&mut self) -> &mut Self {
         // Reset all frames to identity
         for f in &mut self.frames {
@@ -2279,6 +2293,8 @@ impl<R: Rng + Debug> CliffordGateable for SparseStateVecSoA<R> {
                 // Phase index = (2*n_diff - n_pairs) mod 8
                 // n_diff different-parity pairs contribute e^{iπ/4} each,
                 // (n_pairs - n_diff) same-parity pairs contribute e^{-iπ/4} each.
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                // n_diff and n_pairs are small counts
                 let k = ((2 * n_diff as i32 - n_pairs as i32).rem_euclid(8)) as usize;
                 if k != 0 {
                     let [cos_k, sin_k] = PHASE_ROOTS[k];
@@ -2355,6 +2371,8 @@ impl<R: Rng + Debug> CliffordGateable for SparseStateVecSoA<R> {
                 // SZZdg: conjugated phase = (8 - szz_phase) % 8
                 // SZZ phase = (2*n_diff - n_pairs) mod 8
                 // SZZdg phase = (n_pairs - 2*n_diff) mod 8
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                // n_pairs and n_diff are small counts
                 let k = ((n_pairs as i32 - 2 * n_diff as i32).rem_euclid(8)) as usize;
                 if k != 0 {
                     let [cos_k, sin_k] = PHASE_ROOTS[k];

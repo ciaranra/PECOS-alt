@@ -27,7 +27,7 @@
 use super::GateId;
 use super::gates;
 use super::operation::{
-    AdaptedOp, AdaptedSequence, AncillaRequirements, MeasBasis, PrepBasis, ResultId,
+    AdaptedOp, AdaptedSequence, AncillaRequirements, ConditionalOp, MeasBasis, PrepBasis, ResultId,
 };
 use super::pauli::{PauliString, StabilizerMeasurement, StabilizerPreparation};
 use crate::command::{CommandQueue, GateCommand, GateType};
@@ -484,15 +484,29 @@ impl OpBuilder {
         F1: FnOnce(OpBuilder) -> OpBuilder,
         F2: FnOnce(OpBuilder) -> OpBuilder,
     {
-        let if_one = if_one_fn(OpBuilder::new()).ops;
-        let if_zero = if_zero_fn(OpBuilder::new()).ops;
+        let if_one = Self::run_branch(if_one_fn);
+        let if_zero = Self::run_branch(if_zero_fn);
 
-        self.ops.push(AdaptedOp::Conditional {
-            condition,
-            if_one,
-            if_zero,
-        });
+        self.ops
+            .push(AdaptedOp::Conditional(Box::new(ConditionalOp {
+                condition,
+                if_one,
+                if_zero,
+            })));
         self
+    }
+
+    /// Run a branch closure and extract the resulting ops.
+    ///
+    /// Factored out to avoid a miscompilation at opt-level >= 2 where
+    /// the partial move of `.ops` from the builder temporary within
+    /// `if_then_else` causes a double-free during drop.
+    #[inline(never)]
+    fn run_branch<F>(f: F) -> Vec<AdaptedOp>
+    where
+        F: FnOnce(OpBuilder) -> OpBuilder,
+    {
+        f(OpBuilder::new()).build().ops
     }
 
     /// Execute operations if measurement result is 1.
@@ -565,6 +579,9 @@ impl OpBuilder {
     /// Inline a subcircuit using positional qubit arguments.
     ///
     /// Maps subcircuit qubits 0, 1, 2, ... to the provided qubits in order.
+    ///
+    /// # Panics
+    /// Panics if `qubits.len()` does not match the subcircuit's qubit count.
     #[must_use]
     pub fn call(mut self, sub: &Subcircuit, qubits: &[QubitId]) -> Self {
         assert_eq!(
@@ -586,6 +603,9 @@ impl OpBuilder {
     }
 
     /// Call a named gate from a library.
+    ///
+    /// # Panics
+    /// Panics if the named gate is not found in the library.
     #[must_use]
     pub fn call_named(self, library: &GateLibrary, name: &str, qubits: &[QubitId]) -> Self {
         let sub = library
@@ -599,6 +619,9 @@ impl OpBuilder {
     // ========================================================================
 
     /// Measure an arbitrary stabilizer (Pauli string).
+    ///
+    /// # Panics
+    /// Panics if the Pauli string is invalid.
     #[must_use]
     pub fn stabilizer_meas(
         mut self,
@@ -632,6 +655,9 @@ impl OpBuilder {
     }
 
     /// Prepare an arbitrary stabilizer eigenstate.
+    ///
+    /// # Panics
+    /// Panics if the Pauli string is invalid.
     #[must_use]
     pub fn stabilizer_prep(mut self, pauli: &str, qubits: &[QubitId]) -> Self {
         let ps = PauliString::from_str(pauli).expect("Invalid Pauli string");
@@ -673,6 +699,9 @@ impl OpBuilder {
     ///
     /// Note: This flattens the sequence. Conditional operations are not supported
     /// in `CommandQueue` and will cause this to return an error.
+    ///
+    /// # Errors
+    /// Returns `ConversionError` if an unsupported gate or conditional operation is encountered.
     pub fn to_command_queue(&self) -> Result<CommandQueue, ConversionError> {
         let mut queue = CommandQueue::with_capacity(self.ops.len());
 
@@ -738,7 +767,7 @@ impl OpBuilder {
                     }
                 }
 
-                AdaptedOp::Conditional { .. } => {
+                AdaptedOp::Conditional(_) => {
                     return Err(ConversionError::ConditionalNotSupported { position: idx });
                 }
 
@@ -812,15 +841,11 @@ fn remap_op(op: &AdaptedOp, map: &HashMap<QubitId, QubitId>) -> AdaptedOp {
             basis: *basis,
             result: *result,
         },
-        AdaptedOp::Conditional {
-            condition,
-            if_one,
-            if_zero,
-        } => AdaptedOp::Conditional {
-            condition: *condition,
-            if_one: if_one.iter().map(|o| remap_op(o, map)).collect(),
-            if_zero: if_zero.iter().map(|o| remap_op(o, map)).collect(),
-        },
+        AdaptedOp::Conditional(cond) => AdaptedOp::Conditional(Box::new(ConditionalOp {
+            condition: cond.condition,
+            if_one: cond.if_one.iter().map(|o| remap_op(o, map)).collect(),
+            if_zero: cond.if_zero.iter().map(|o| remap_op(o, map)).collect(),
+        })),
         AdaptedOp::XorResult { target, source } => AdaptedOp::XorResult {
             target: *target,
             source: *source,
@@ -1185,7 +1210,8 @@ mod proptest_tests {
             let mut builder = OpBuilder::new();
             for i in 0..num_meas {
                 let q = QubitId(i);
-                builder = builder.pz(q).mz(q, ResultId(i as u16));
+                #[allow(clippy::cast_possible_truncation)] // test index bounded by 10
+                { builder = builder.pz(q).mz(q, ResultId(i as u16)); }
             }
             let seq = builder.build();
             prop_assert_eq!(seq.result_count, num_meas);

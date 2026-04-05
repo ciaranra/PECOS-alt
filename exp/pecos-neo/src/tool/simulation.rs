@@ -2053,13 +2053,13 @@ impl SimNeoBuilder {
 
         match &self.orchestrator {
             Orchestrator::ImportanceSampling { config: is_config } => {
-                tool = tool.add_plugin(ImportanceSamplingSimPlugin {
+                tool = tool.add_plugin(&ImportanceSamplingSimPlugin {
                     is_config: is_config.clone(),
                     explicit_num_qubits: self.explicit_num_qubits,
                 });
             }
             Orchestrator::MonteCarlo { .. } => {
-                tool = tool.add_plugin(UnifiedSimulationPlugin {
+                tool = tool.add_plugin(&UnifiedSimulationPlugin {
                     explicit_num_qubits: self.explicit_num_qubits,
                 });
             }
@@ -2636,6 +2636,9 @@ impl Simulation {
     /// - `MonteCarlo { workers: 1 }`: Runs shots via the Tool (default)
     /// - `MonteCarlo { workers: n }`: Parallelizes shots across n workers
     /// - `ImportanceSampling`: Runs via the Tool with `ImportanceSamplingSimPlugin`
+    ///
+    /// # Panics
+    /// Panics if parallel Monte Carlo is used without a static circuit and built-in backend.
     pub fn run(&mut self) -> SimulationResults {
         let config = self.tool.resource::<SimConfig>().clone();
 
@@ -2908,6 +2911,7 @@ fn distribute_shots(num_shots: usize, num_workers: usize) -> Vec<usize> {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_precision_loss)] // statistical tests use count as f64
 mod tests {
     use super::*;
     use crate::command::CommandBuilder;

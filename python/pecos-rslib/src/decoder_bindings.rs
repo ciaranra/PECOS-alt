@@ -178,7 +178,7 @@ impl PyBpResult {
 // PyMatching Decoder
 // =============================================================================
 
-use pecos::decoders::{
+use pecos_decoders::{
     CheckMatrix as RustCheckMatrix, CheckMatrixConfig as RustCheckMatrixConfig,
     PyMatchingConfig as RustPyMatchingConfig, PyMatchingDecoder as RustPyMatchingDecoder,
 };
@@ -557,7 +557,7 @@ impl PyPyMatchingDecoder {
 // Fusion Blossom Decoder
 // =============================================================================
 
-use pecos::decoders::{
+use pecos_decoders::{
     FusionBlossomConfig as RustFusionBlossomConfig,
     FusionBlossomDecoder as RustFusionBlossomDecoder, SolverType as RustSolverType,
     StandardCode as RustStandardCode, SyndromeData as RustSyndromeData,
@@ -854,7 +854,7 @@ impl PyFusionBlossomDecoder {
 // LDPC Decoders
 // =============================================================================
 
-use pecos::decoders::{
+use pecos_decoders::{
     BpLsdDecoder as RustBpLsdDecoder, BpMethod as RustBpMethod, BpOsdDecoder as RustBpOsdDecoder,
     BpSchedule as RustBpSchedule, InputVectorType as RustInputVectorType,
     OsdMethod as RustOsdMethod, SparseMatrix as RustSparseMatrix, UfMethod as RustUfMethod,
@@ -1125,6 +1125,7 @@ impl PyBpOsdDecoder {
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
+    #[allow(clippy::unused_self)] // Python instance method
     fn __repr__(&self) -> String {
         "BpOsdDecoder(...)".to_string()
     }
@@ -1255,6 +1256,7 @@ impl PyBpLsdDecoder {
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
+    #[allow(clippy::unused_self)] // Python instance method
     fn __repr__(&self) -> String {
         "BpLsdDecoder(...)".to_string()
     }
@@ -1364,6 +1366,7 @@ impl PyUnionFindDecoder {
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
     }
 
+    #[allow(clippy::unused_self)] // Python instance method
     fn __repr__(&self) -> String {
         "UnionFindDecoder(...)".to_string()
     }
@@ -1373,7 +1376,7 @@ impl PyUnionFindDecoder {
 // Tesseract Decoder
 // =============================================================================
 
-use pecos::decoders::{
+use pecos_decoders::{
     TesseractConfig as RustTesseractConfig, TesseractDecoder as RustTesseractDecoder,
 };
 
@@ -1582,7 +1585,7 @@ impl PyTesseractDecoder {
 // Relay BP Decoders
 // =============================================================================
 
-use pecos::decoders::{
+use pecos_decoders::{
     MinSumBpBuilder as RustMinSumBpBuilder, MinSumBpDecoder as RustMinSumBpDecoder,
     RelayBpBuilder as RustRelayBpBuilder, RelayBpDecoder as RustRelayBpDecoder,
     StoppingCriterion as RustStoppingCriterion,

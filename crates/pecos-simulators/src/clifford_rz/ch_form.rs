@@ -280,7 +280,11 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
                 u.xor_assign(self.f.row(p));
                 // mu += 2 * (sum(M[p,:] & u) % 2)
                 let m_dot_u = self.m.row(p).intersection_count(&u) & 1;
-                mu += 2 * m_dot_u as i32;
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                // m_dot_u is 0 or 1
+                {
+                    mu += 2 * m_dot_u as i32;
+                }
             }
         }
 
@@ -303,6 +307,8 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
 
         // Count Hadamard qubits for normalization: 2^{-sum(v)/2}
         let v_count = self.v.len();
+        #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+        // qubit count fits in i32
         let norm = std::f64::consts::FRAC_1_SQRT_2.powi(v_count as i32);
 
         // i^mu
@@ -337,7 +343,11 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
             if (x >> p) & 1 == 1 {
                 u.xor_assign(self.f.row(p));
                 let m_dot_u = self.m.row(p).intersection_count(u) & 1;
-                mu += 2 * m_dot_u as i32;
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                // m_dot_u is 0 or 1
+                {
+                    mu += 2 * m_dot_u as i32;
+                }
             }
         }
 
@@ -353,6 +363,8 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
         }
         let sign = if vus_count & 1 == 1 { -1.0 } else { 1.0 };
         let v_count = self.v.len();
+        #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+        // qubit count fits in i32
         let norm = std::f64::consts::FRAC_1_SQRT_2.powi(v_count as i32);
         let mu_mod4 = ((mu % 4) + 4) % 4;
         let i_pow_mu = match mu_mod4 {
@@ -426,7 +438,11 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
         let norm = if v_count < 1023 {
             f64::from_bits((1023 - v_count as u64) << 52)
         } else {
-            2.0_f64.powi(-(v_count as i32))
+            #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+            // qubit count fits in i32
+            {
+                2.0_f64.powi(-(v_count as i32))
+            }
         };
 
         // Fast path: v = all ones, no constraints.
@@ -548,6 +564,27 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
         omega_k: num_complex::Complex64,
         diff_qubits: Option<&[usize]>,
     ) -> (num_complex::Complex64, num_complex::Complex64) {
+        // Phase table: exp(i*k*pi/4) for k mod 8
+        const PHASE_RE: [f64; 8] = [
+            1.0,
+            std::f64::consts::FRAC_1_SQRT_2,
+            0.0,
+            -std::f64::consts::FRAC_1_SQRT_2,
+            -1.0,
+            -std::f64::consts::FRAC_1_SQRT_2,
+            0.0,
+            std::f64::consts::FRAC_1_SQRT_2,
+        ];
+        const PHASE_IM: [f64; 8] = [
+            0.0,
+            std::f64::consts::FRAC_1_SQRT_2,
+            1.0,
+            std::f64::consts::FRAC_1_SQRT_2,
+            0.0,
+            -std::f64::consts::FRAC_1_SQRT_2,
+            -1.0,
+            -std::f64::consts::FRAC_1_SQRT_2,
+        ];
         let n = self.num_qubits;
         if !sc.consistent {
             let z = num_complex::Complex64::new(0.0, 0.0);
@@ -685,29 +722,11 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
         // Compute final factors. Nontrivial qubits contribute:
         // (1+i)^a * (1-i)^b = 2^{(a+b)/2} * exp(i*pi/4*(a-b))
         // Combined with trivial factor: 2^{n_free - n_checked} per trivial qubit.
+        #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+        // qubit counts fit in i32
         let trivial_count = n_free as i32 - n_checked as i32;
-        // Phase table: exp(i*k*pi/4) for k mod 8
-        const PHASE_RE: [f64; 8] = [
-            1.0,
-            std::f64::consts::FRAC_1_SQRT_2,
-            0.0,
-            -std::f64::consts::FRAC_1_SQRT_2,
-            -1.0,
-            -std::f64::consts::FRAC_1_SQRT_2,
-            0.0,
-            std::f64::consts::FRAC_1_SQRT_2,
-        ];
-        const PHASE_IM: [f64; 8] = [
-            0.0,
-            std::f64::consts::FRAC_1_SQRT_2,
-            1.0,
-            std::f64::consts::FRAC_1_SQRT_2,
-            0.0,
-            -std::f64::consts::FRAC_1_SQRT_2,
-            -1.0,
-            -std::f64::consts::FRAC_1_SQRT_2,
-        ];
 
+        #[allow(clippy::cast_possible_wrap)] // phase counts (u32) fit in i32
         let compute_factor = |cp: i32,
                               cl1: u32,
                               cl3: u32,
@@ -715,6 +734,7 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
          -> num_complex::Complex64 {
             // Total phase = constant_phase*pi/2 + (l1-l3)*pi/4
             // = (2*constant_phase + l1 - l3) * pi/4
+            #[allow(clippy::cast_sign_loss)] // (x % 8 + 8) ensures non-negative before cast
             let phase_idx = ((2 * cp + cl1 as i32 - cl3 as i32) % 8 + 8) as usize % 8;
             // Total power of 2: trivial_count + (l1+l3)/2 (each nontrivial l=1,3 gives factor sqrt(2))
             // But we need half-integer powers: 2^{trivial + (l1+l3)/2} = 2^trivial * sqrt(2)^{l1+l3}
@@ -726,6 +746,8 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
                     std::f64::consts::SQRT_2 * 2.0_f64.powi((half_pow - 1) / 2)
                 }
             } else {
+                #[allow(clippy::cast_sign_loss)]
+                // half_pow is negative in this branch, negation makes it positive
                 let abs_hp = (-half_pow) as u32;
                 if abs_hp & 1 == 0 {
                     1.0 / 2.0_f64.powi(abs_hp as i32 / 2)
@@ -799,7 +821,11 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
                 mu += i32::from(self.gamma[p]);
                 u.xor_assign(self.f.row(p));
                 let m_dot_u = self.m.row(p).intersection_count(u) & 1;
-                mu += 2 * m_dot_u as i32;
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                // m_dot_u is 0 or 1
+                {
+                    mu += 2 * m_dot_u as i32;
+                }
             }
         }
 
@@ -835,6 +861,7 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
         z_qubit: Option<usize>,
         shared_structure: bool,
     ) -> (num_complex::Complex64, num_complex::Complex64) {
+        use super::quadratic_form::QuadraticForm;
         let n = self.num_qubits;
         debug_assert_eq!(n, other.num_qubits);
 
@@ -853,12 +880,19 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
             let norm = if v_count < 1023 {
                 f64::from_bits((1023 - v_count as u64) << 52)
             } else {
-                2.0_f64.powi(-(v_count as i32))
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                // qubit count fits in i32
+                {
+                    2.0_f64.powi(-(v_count as i32))
+                }
             };
 
             // Compute l_per_bit (just gamma difference when shared).
             let l_for = |p: usize, gamma2: &[u8]| -> u8 {
-                ((i32::from(gamma2[p]) - i32::from(self.gamma[p])) % 4 + 4) as u8 % 4
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // result is 0..3
+                {
+                    ((i32::from(gamma2[p]) - i32::from(self.gamma[p])) % 4 + 4) as u8 % 4
+                }
             };
 
             // Solve constraint system for x0 if v != all_ones.
@@ -923,38 +957,40 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
 
             // Compute inner product with optional Z adjustment on one qubit.
             // z_adj_qubit: if Some(q), gamma2[q] is adjusted by +2 mod 4.
-            let compute_ip =
-                |gamma2: &[u8], z_adj_qubit: Option<usize>| -> num_complex::Complex64 {
-                    let mut constant_phase = 0i32;
-                    let mut product = num_complex::Complex64::new(1.0, 0.0);
-                    for p in 0..n {
-                        let mut l = l_for(p, gamma2);
-                        if z_adj_qubit == Some(p) {
-                            l = (l + 2) & 3;
-                        }
-                        if x0_determined[p] {
-                            if x0_value[p] {
-                                constant_phase += i32::from(l);
-                            }
-                        } else {
-                            product *= match l {
-                                0 => num_complex::Complex64::new(2.0, 0.0),
-                                1 => num_complex::Complex64::new(1.0, 1.0),
-                                2 => return num_complex::Complex64::new(0.0, 0.0),
-                                3 => num_complex::Complex64::new(1.0, -1.0),
-                                _ => unreachable!(),
-                            };
-                        }
+            let compute_ip = |gamma2: &[u8],
+                              z_adj_qubit: Option<usize>|
+             -> num_complex::Complex64 {
+                let mut constant_phase = 0i32;
+                let mut product = num_complex::Complex64::new(1.0, 0.0);
+                for p in 0..n {
+                    let mut l = l_for(p, gamma2);
+                    if z_adj_qubit == Some(p) {
+                        l = (l + 2) & 3;
                     }
-                    let phase = match ((constant_phase % 4) + 4) as u8 % 4 {
-                        0 => num_complex::Complex64::new(1.0, 0.0),
-                        1 => num_complex::Complex64::new(0.0, 1.0),
-                        2 => num_complex::Complex64::new(-1.0, 0.0),
-                        3 => num_complex::Complex64::new(0.0, -1.0),
-                        _ => unreachable!(),
-                    };
-                    phase * product
+                    if x0_determined[p] {
+                        if x0_value[p] {
+                            constant_phase += i32::from(l);
+                        }
+                    } else {
+                        product *= match l {
+                            0 => num_complex::Complex64::new(2.0, 0.0),
+                            1 => num_complex::Complex64::new(1.0, 1.0),
+                            2 => return num_complex::Complex64::new(0.0, 0.0),
+                            3 => num_complex::Complex64::new(1.0, -1.0),
+                            _ => unreachable!(),
+                        };
+                    }
+                }
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // result is 0..3
+                let phase = match ((constant_phase % 4) + 4) as u8 % 4 {
+                    0 => num_complex::Complex64::new(1.0, 0.0),
+                    1 => num_complex::Complex64::new(0.0, 1.0),
+                    2 => num_complex::Complex64::new(-1.0, 0.0),
+                    3 => num_complex::Complex64::new(0.0, -1.0),
+                    _ => unreachable!(),
                 };
+                phase * product
+            };
 
             let ip = omega_factor * norm * compute_ip(&other.gamma, None);
             let ip_z = if z_qubit.is_some() {
@@ -1280,7 +1316,6 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
         //
         // Quadratic part per pair (p > q):
         //   Q[p,q] = (M2[p,:].F2[q,:] - M1[p,:].F1[q,:])  mod 2
-        use super::quadratic_form::QuadraticForm;
 
         // Precompute v_and_s masks for f_lin computation (avoids per-bit inner loop).
         let mut vs1 = S::with_capacity(n);
@@ -1314,10 +1349,18 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
                 let mut l = i32::from(other.gamma[p]) - i32::from(self.gamma[p]);
                 let mf_diag1 = self.m.row(p).intersection_count(self.f.row(p)) & 1;
                 let mf_diag2 = other.m.row(p).intersection_count(other.f.row(p)) & 1;
-                l += 2 * (mf_diag2 as i32 - mf_diag1 as i32);
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                // masked to 0 or 1
+                {
+                    l += 2 * (mf_diag2 as i32 - mf_diag1 as i32);
+                }
                 let f1_lin = self.f.row(p).intersection_count(&vs1) & 1;
                 let f2_lin = other.f.row(p).intersection_count(&vs2) & 1;
-                l += 2 * ((f1_lin + f2_lin) & 1) as i32;
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                // masked to 0 or 1
+                {
+                    l += 2 * ((f1_lin + f2_lin) & 1) as i32;
+                }
                 *l_p = ((l % 4) + 4) % 4;
             }
         }
@@ -1345,7 +1388,11 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
                             let q_pq = (other.m.row(p).intersection_count(other.f.row(q))
                                 + self.m.row(p).intersection_count(self.f.row(q)))
                                 & 1;
-                            e0 += 2 * q_pq as i32;
+                            #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                            // q_pq is 0 or 1
+                            {
+                                e0 += 2 * q_pq as i32;
+                            }
                         }
                     }
                 }
@@ -1410,7 +1457,13 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
                                     let q_pq = (other.m.row(p).intersection_count(other.f.row(q))
                                         + self.m.row(p).intersection_count(self.f.row(q)))
                                         & 1;
-                                    e_xbi += 2 * q_pq as i32;
+                                    #[allow(
+                                        clippy::cast_possible_wrap,
+                                        clippy::cast_possible_truncation
+                                    )] // q_pq is 0 or 1
+                                    {
+                                        e_xbi += 2 * q_pq as i32;
+                                    }
                                 }
                             }
                         }
@@ -1450,7 +1503,10 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
                             let q_val = (other.m.row(hi).intersection_count(other.f.row(lo))
                                 + self.m.row(hi).intersection_count(self.f.row(lo)))
                                 & 1;
-                            cross += q_val as u32;
+                            #[allow(clippy::cast_possible_truncation)] // q_val masked to 0 or 1
+                            {
+                                cross += q_val as u32;
+                            }
                         }
                     }
                     if cross & 1 == 1 {
@@ -1477,6 +1533,8 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
         // The 2^{-(|v1|+|v2|)/2} comes from the normalization in each amplitude.
         let v1_count = self.v.len();
         let v2_count = other.v.len();
+        #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+        // qubit count fits in i32
         let norm = std::f64::consts::FRAC_1_SQRT_2.powi((v1_count + v2_count) as i32);
         let omega_factor = self.omega.to_complex().conj() * other.omega.to_complex();
         let ip = omega_factor * norm * exp_sum.to_complex();
@@ -1554,7 +1612,10 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
     /// Apply CX gate (ctrl=q, tgt=r).
     fn apply_cx(&mut self, q: usize, r: usize) {
         let ip = self.m.row(q).intersection_count(self.f.row(r)) & 1;
-        self.gamma[q] = (self.gamma[q] + self.gamma[r] + 2 * (ip as u8)) & 3;
+        #[allow(clippy::cast_possible_truncation)] // ip masked to 0 or 1
+        {
+            self.gamma[q] = (self.gamma[q] + self.gamma[r] + 2 * (ip as u8)) & 3;
+        }
         std::sync::Arc::make_mut(&mut self.g).row_xor_assign(r, q);
         std::sync::Arc::make_mut(&mut self.f).row_xor_assign(q, r);
         std::sync::Arc::make_mut(&mut self.m).row_xor_assign(q, r);
@@ -1750,7 +1811,7 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
         let z_q = !y_q; // y and z always differ at pivot
 
         // Call the single-qubit H decomposition.
-        let (omega_factor, a, b, c) = self.h_decompose(self.v.contains(pivot), y_q, z_q, delta);
+        let (omega_factor, a, b, c) = Self::h_decompose(self.v.contains(pivot), y_q, z_q, delta);
 
         // Update state.
         let mut new_s = y.clone();
@@ -1783,13 +1844,7 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CHFormGeneric<S, R> {
     /// Single-qubit decomposition: `H^v (|y> + i^delta |z>) = omega * S^a * H^b * |c>`
     ///
     /// Precondition: y != z. From Proposition 4, case analysis.
-    fn h_decompose(
-        &self,
-        v_q: bool,
-        y: bool,
-        z: bool,
-        delta: u8,
-    ) -> (ExactScalar, bool, bool, bool) {
+    fn h_decompose(v_q: bool, y: bool, z: bool, delta: u8) -> (ExactScalar, bool, bool, bool) {
         debug_assert_ne!(y, z, "y must differ from z");
 
         if v_q {
@@ -2211,7 +2266,10 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug> CliffordGateable for CHFormGener
             std::sync::Arc::make_mut(&mut self.m).row_xor_from(r, &self.g, r);
             // CX(q,r)
             let ip = self.m.row(q).intersection_count(self.f.row(r)) & 1;
-            self.gamma[q] = (self.gamma[q] + self.gamma[r] + 2 * (ip as u8)) & 3;
+            #[allow(clippy::cast_possible_truncation)] // ip masked to 0 or 1
+            {
+                self.gamma[q] = (self.gamma[q] + self.gamma[r] + 2 * (ip as u8)) & 3;
+            }
             std::sync::Arc::make_mut(&mut self.g).row_xor_assign(r, q);
             std::sync::Arc::make_mut(&mut self.f).row_xor_assign(q, r);
             std::sync::Arc::make_mut(&mut self.m).row_xor_assign(q, r);
@@ -2576,7 +2634,7 @@ mod tests {
         );
     }
 
-    /// Compare CH state against expected reference values.
+    #[allow(clippy::too_many_arguments)] // test helper comparing all CH form components
     fn assert_ch_state_matches(
         ch: &CHForm,
         label: &str,

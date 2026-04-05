@@ -506,7 +506,7 @@ impl GeneralNoiseModelBuilder {
     /// Returns a [`ComposableNoiseModel`] with all the configured channels.
     #[must_use]
     pub fn build(self) -> ComposableNoiseModel {
-        let mut model = ComposableNoiseModel::new().add_plugin(CorePlugin);
+        let mut model = ComposableNoiseModel::new().add_plugin(&CorePlugin);
 
         // Set time scale if configured
         if let Some(scale) = self.time_scale {
@@ -622,6 +622,7 @@ pub fn general_noise() -> GeneralNoiseModelBuilder {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_precision_loss)] // statistical tests use count as f64
 mod tests {
     use super::*;
 
@@ -840,6 +841,7 @@ mod tests {
     // ========================================================================
 
     #[test]
+    #[allow(clippy::cast_possible_truncation)] // test statistical bounds
     fn test_general_vs_flow_builder_single_qubit_parity() {
         use crate::command::CommandBuilder;
         use crate::noise::composite::CompositeNoiseModelBuilder;
@@ -905,6 +907,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_truncation)] // test statistical bounds
     fn test_general_vs_flow_builder_two_qubit_parity() {
         use crate::command::CommandBuilder;
         use crate::noise::composite::CompositeNoiseModelBuilder;
@@ -973,6 +976,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_truncation)] // test statistical bounds
     fn test_general_vs_flow_builder_measurement_parity() {
         use crate::command::CommandBuilder;
         use crate::noise::composite::CompositeNoiseModelBuilder;

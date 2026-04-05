@@ -1188,7 +1188,7 @@ impl CompositeChannelBuilder {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
+#[allow(clippy::float_cmp, clippy::cast_precision_loss)]
 mod tests {
     use super::*;
     use crate::command::GateType;
@@ -1860,6 +1860,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_truncation)] // test statistical bounds fit in i32
     fn test_two_stage_partner_depolarize_scenario() {
         use crate::noise::composite::CompositeResponse;
         use crate::noise::composite::action::{

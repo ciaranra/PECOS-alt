@@ -10,6 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+// statistical calculations use count as f64
+#![allow(clippy::cast_precision_loss)]
 //! Noise model configuration examples for pecos-neo.
 //!
 //! This example demonstrates:
@@ -47,7 +49,7 @@ fn example_depolarizing_noise() {
     // Test different error rates
     for error_rate in [0.0, 0.05, 0.10, 0.20] {
         let noise = ComposableNoiseModel::new()
-            .add_plugin(CorePlugin)
+            .add_plugin(&CorePlugin)
             .add_channel(SingleQubitChannel::depolarizing(error_rate));
 
         let mut state = SparseStab::new(1);
@@ -95,7 +97,7 @@ fn example_asymmetric_measurement() {
 
     // Measure |0⟩ state
     let noise_0 = ComposableNoiseModel::new()
-        .add_plugin(CorePlugin)
+        .add_plugin(&CorePlugin)
         .add_channel(MeasurementChannel::asymmetric(p_0_to_1, p_1_to_0));
 
     let mut state = SparseStab::new(1);
@@ -114,7 +116,7 @@ fn example_asymmetric_measurement() {
 
     // Measure |1⟩ state
     let noise_1 = ComposableNoiseModel::new()
-        .add_plugin(CorePlugin)
+        .add_plugin(&CorePlugin)
         .add_channel(MeasurementChannel::asymmetric(p_0_to_1, p_1_to_0));
 
     let mut state = SparseStab::new(1);
@@ -163,7 +165,7 @@ fn example_multi_channel() {
 
     // Combine multiple noise sources
     let noise = ComposableNoiseModel::new()
-        .add_plugin(CorePlugin)
+        .add_plugin(&CorePlugin)
         .add_channel(PreparationChannel::new(0.02)) // 2% prep error
         .add_channel(SingleQubitChannel::depolarizing(0.01)) // 1% 1Q error
         .add_channel(TwoQubitChannel::depolarizing(0.05)) // 5% 2Q error
@@ -316,7 +318,7 @@ fn example_z_biased_noise() {
 
     // Uniform depolarizing
     let uniform_noise = ComposableNoiseModel::new()
-        .add_plugin(CorePlugin)
+        .add_plugin(&CorePlugin)
         .add_channel(SingleQubitChannel::depolarizing(0.10));
 
     let mut state = SparseStab::new(1);
@@ -340,7 +342,7 @@ fn example_z_biased_noise() {
         SingleQubitChannel::depolarizing(0.10).with_pauli_weights(PauliWeights::z_biased(0.9));
 
     let z_biased_noise = ComposableNoiseModel::new()
-        .add_plugin(CorePlugin)
+        .add_plugin(&CorePlugin)
         .add_channel(z_biased_channel);
 
     let mut state = SparseStab::new(1);

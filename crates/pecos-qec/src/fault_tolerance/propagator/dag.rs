@@ -61,6 +61,13 @@ use pecos_simulators::PauliProp;
 use smallvec::SmallVec;
 use std::collections::BinaryHeap;
 
+/// Reusable work buffers for propagation, avoiding per-call allocation.
+pub struct PropagationBuffers {
+    pub visited: Vec<bool>,
+    pub active_qubits: Vec<bool>,
+    pub heap: BinaryHeap<(usize, usize)>,
+}
+
 // ============================================================================
 // Fault Locations (SoA Layout)
 // ============================================================================
@@ -288,6 +295,7 @@ impl CsrArray {
     /// Call this after adding all data for the current row.
     #[inline]
     pub fn finish_row(&mut self) {
+        #[allow(clippy::cast_possible_truncation)] // data length fits in u32
         self.offsets.push(self.data.len() as u32);
     }
 
@@ -610,8 +618,11 @@ impl DagFaultInfluenceMap {
         Vec<u32>,
         Vec<u32>,
     ) {
+        #[allow(clippy::cast_possible_truncation)] // location count fits in u32
         let num_locations = self.locations.len() as u32;
+        #[allow(clippy::cast_possible_truncation)] // detector count fits in u32
         let num_detectors = self.detectors.len() as u32;
+        #[allow(clippy::cast_possible_truncation)] // logical index fits in u32
         let num_logicals = self
             .influences
             .max_logical_index()
@@ -757,6 +768,7 @@ impl InfluenceRecorder for BucketRecorder {
         obs_z: bool,
         detector_idx: usize,
     ) {
+        #[allow(clippy::cast_possible_truncation)] // detector index fits in u32
         let det = detector_idx as u32;
 
         // X fault anticommutes with Z observable
@@ -1013,10 +1025,11 @@ impl<'a> DagFaultAnalyzer<'a> {
         basis: u8,
         detector_idx: usize,
         recorder: &mut R,
-        visited: &mut [bool],
-        active_qubits: &mut [bool],
-        heap: &mut BinaryHeap<(usize, usize)>,
+        work: &mut PropagationBuffers,
     ) {
+        let visited = &mut work.visited;
+        let active_qubits = &mut work.active_qubits;
+        let heap = &mut work.heap;
         // Clear work arrays
         visited.fill(false);
         active_qubits.fill(false);
@@ -1165,10 +1178,11 @@ impl<'a> DagFaultAnalyzer<'a> {
     pub fn propagate_all<R: InfluenceRecorder>(&self, recorder: &mut R) {
         let measurements = self.extract_measurements();
 
-        // Pre-allocate work arrays
-        let mut visited = vec![false; self.propagator.max_node() + 1];
-        let mut active_qubits = vec![false; self.propagator.max_qubit() + 1];
-        let mut heap: BinaryHeap<(usize, usize)> = BinaryHeap::with_capacity(64);
+        let mut work = PropagationBuffers {
+            visited: vec![false; self.propagator.max_node() + 1],
+            active_qubits: vec![false; self.propagator.max_qubit() + 1],
+            heap: BinaryHeap::with_capacity(64),
+        };
 
         for (detector_idx, &(node, qubit, basis)) in measurements.iter().enumerate() {
             self.propagate_from_measurement_generic(
@@ -1177,9 +1191,7 @@ impl<'a> DagFaultAnalyzer<'a> {
                 basis,
                 detector_idx,
                 recorder,
-                &mut visited,
-                &mut active_qubits,
-                &mut heap,
+                &mut work,
             );
         }
     }
@@ -1242,6 +1254,7 @@ mod tests {
         // Add random Clifford gates
         for _ in 0..num_gates {
             let gate_type = next_rand() % 5;
+            #[allow(clippy::cast_possible_truncation)] // 64-bit target
             let q1 = (next_rand() % num_qubits as u64) as usize;
 
             match gate_type {
@@ -1256,6 +1269,7 @@ mod tests {
                 }
                 3 => {
                     // CX - need two different qubits
+                    #[allow(clippy::cast_possible_truncation)] // 64-bit target
                     let mut q2 = (next_rand() % num_qubits as u64) as usize;
                     if q2 == q1 {
                         q2 = (q1 + 1) % num_qubits;
@@ -1264,6 +1278,7 @@ mod tests {
                 }
                 _ => {
                     // CZ - need two different qubits
+                    #[allow(clippy::cast_possible_truncation)] // 64-bit target
                     let mut q2 = (next_rand() % num_qubits as u64) as usize;
                     if q2 == q1 {
                         q2 = (q1 + 1) % num_qubits;

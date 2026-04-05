@@ -187,9 +187,12 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug + Clone> CliffordRzGeneric<S, R> 
                 if omega.is_zero() {
                     0u64
                 } else {
+                    // sqrt2_pow may be negative; we intentionally reinterpret the bits for a sort key
+                    #[allow(clippy::cast_sign_loss)]
+                    let sqrt2_bits = (omega.sqrt2_pow() as u64) & 0xFFFF;
                     1 | (u64::from(omega.sign()) << 1)
                         | (u64::from(omega.phase8()) << 2)
-                        | (((omega.sqrt2_pow() as u64) & 0xFFFF) << 5)
+                        | (sqrt2_bits << 5)
                 }
             })
             .collect();
@@ -1442,6 +1445,7 @@ impl<S: IndexSet, R: SeedableRng + Rng + Debug + Clone> pecos_core::RngManageabl
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_precision_loss)] // statistical tests use count as f64
 mod tests {
     use super::*;
     use crate::StateVec;

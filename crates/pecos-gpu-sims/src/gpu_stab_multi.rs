@@ -87,11 +87,18 @@ pub struct GpuStabMulti<R: Rng + SeedableRng = PecosRng> {
 
 impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
     /// Create a new multi-shot GPU stabilizer simulator
+    ///
+    /// # Errors
+    /// Returns an error if no GPU adapter is found or buffer allocation exceeds device limits.
     pub fn new(num_qubits: usize, num_shots: usize) -> Result<Self, String> {
         Self::with_seed(num_qubits, num_shots, 42)
     }
 
     /// Create with a specific seed for reproducibility
+    ///
+    /// # Errors
+    /// Returns an error if no GPU adapter is found or buffer allocation exceeds device limits.
+    #[allow(clippy::cast_possible_truncation)] // GPU params: qubit/shot counts fit in u32
     pub fn with_seed(num_qubits: usize, num_shots: usize, seed: u64) -> Result<Self, String> {
         let gpu = request_default_gpu_device("GPU Stab Multi Device")
             .map_err(|error| error.to_string())?;
@@ -726,6 +733,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
     }
 
     /// Internal: Flush pending gates to GPU (without processing measurements)
+    #[allow(clippy::cast_possible_truncation)] // gate queue length fits in u32
     fn flush_gates(&mut self) {
         if self.gate_queue.is_empty() {
             return;
@@ -787,7 +795,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
         let all_random_bits = std::mem::take(&mut self.meas_queue_random_bits);
 
         // Process measurements using the GPU implementation
-        let results = self.mz_gpu_sequential(&qubits, all_random_bits);
+        let results = self.mz_gpu_sequential(&qubits, &all_random_bits);
 
         // Store results for later retrieval via mz_fetch()
         self.meas_pending_results.push(results);
@@ -851,17 +859,29 @@ impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
     fn update_noise_params(&mut self) {
         // Convert probabilities to fixed-point thresholds (p * 0xFFFF)
         let p1_threshold = if self.noise_enabled {
-            (self.noise_p1 * 65535.0) as u32
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            // probability in [0,1] maps to [0,65535]
+            {
+                (self.noise_p1 * 65535.0) as u32
+            }
         } else {
             0
         };
         let p2_threshold = if self.noise_enabled {
-            (self.noise_p2 * 65535.0) as u32
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            // probability in [0,1] maps to [0,65535]
+            {
+                (self.noise_p2 * 65535.0) as u32
+            }
         } else {
             0
         };
         let p_meas_threshold = if self.noise_enabled {
-            (self.noise_p_meas * 65535.0) as u32
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            // probability in [0,1] maps to [0,65535]
+            {
+                (self.noise_p_meas * 65535.0) as u32
+            }
         } else {
             0
         };
@@ -898,38 +918,47 @@ impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
     // Gate operations (applied to all shots)
     // Internal methods that take raw qubit indices
 
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     fn queue_h(&mut self, qubit: usize) {
         self.queue_single_gate(0, qubit as u32);
     }
 
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     fn queue_sz(&mut self, qubit: usize) {
         self.queue_single_gate(1, qubit as u32);
     }
 
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     fn queue_szdg(&mut self, qubit: usize) {
         self.queue_single_gate(2, qubit as u32);
     }
 
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     fn queue_x(&mut self, qubit: usize) {
         self.queue_single_gate(3, qubit as u32);
     }
 
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     fn queue_y(&mut self, qubit: usize) {
         self.queue_single_gate(4, qubit as u32);
     }
 
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     fn queue_z(&mut self, qubit: usize) {
         self.queue_single_gate(5, qubit as u32);
     }
 
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     fn queue_cx(&mut self, control: usize, target: usize) {
         self.queue_two_qubit_gate(6, control as u32, target as u32);
     }
 
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     fn queue_cz(&mut self, qubit_a: usize, qubit_b: usize) {
         self.queue_two_qubit_gate(7, qubit_a as u32, qubit_b as u32);
     }
 
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     fn queue_swap(&mut self, qubit_a: usize, qubit_b: usize) {
         self.queue_two_qubit_gate(8, qubit_a as u32, qubit_b as u32);
     }
@@ -1060,12 +1089,14 @@ impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
     /// probability `p_meas`.
     ///
     /// Non-deterministic measurements are now fully supported with proper tableau updates.
+    #[allow(clippy::cast_possible_truncation)] // qubit/measurement indices and f32 thresholds fit in u32
     pub fn mz(&mut self, qubits: &[QubitId]) -> Vec<Vec<bool>> {
         let qubit_indices: Vec<usize> = qubits.iter().map(pecos_core::QubitId::index).collect();
         self.mz_internal(&qubit_indices)
     }
 
     /// Internal measurement implementation that takes raw indices
+    #[allow(clippy::cast_possible_truncation)] // qubit/measurement indices and f32 thresholds fit in u32
     fn mz_internal(&mut self, qubits: &[usize]) -> Vec<Vec<bool>> {
         if qubits.is_empty() {
             return vec![vec![]; self.shots_per_batch as usize];
@@ -1178,6 +1209,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
                         meas_base_idx + meas_idx as u32 + 0xFFFF_0000,
                         qubit as u32,
                     );
+                    #[allow(clippy::cast_sign_loss)] // probability in [0,1]
                     let threshold = (self.noise_p_meas * 65535.0) as u32;
                     if (rand & 0xFFFF) < threshold {
                         !outcome // Flip the outcome
@@ -1260,6 +1292,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
     /// If noise is enabled, measurement errors (bit flips) are applied with
     /// probability `p_meas`.
     #[cfg(test)]
+    #[allow(clippy::cast_possible_truncation)] // qubit/measurement indices and f32 thresholds fit in u32
     fn mz_gpu(&mut self, qubits: &[QubitId]) -> Vec<Vec<bool>> {
         if qubits.is_empty() {
             return vec![vec![]; self.shots_per_batch as usize];
@@ -1433,14 +1466,15 @@ impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
         // For now, fall back to the working sequential implementation
         drop(results);
         let qubit_indices: Vec<usize> = qubits.iter().map(pecos_core::QubitId::index).collect();
-        self.mz_gpu_sequential(&qubit_indices, all_random_bits)
+        self.mz_gpu_sequential(&qubit_indices, &all_random_bits)
     }
 
     /// Sequential GPU measurement implementation (internal)
+    #[allow(clippy::cast_possible_truncation)] // qubit/measurement indices and f32 thresholds fit in u32
     fn mz_gpu_sequential(
         &mut self,
         qubits: &[usize],
-        all_random_bits: Vec<Vec<u32>>,
+        all_random_bits: &[Vec<u32>],
     ) -> Vec<Vec<bool>> {
         let batch_shots = self.shots_per_batch;
         let num_qubits_measured = qubits.len();
@@ -1575,6 +1609,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
                         self.measurement_count + meas_idx as u32 + 0xFFFF_0000,
                         qubit as u32,
                     );
+                    #[allow(clippy::cast_sign_loss)] // probability in [0,1]
                     let threshold = (self.noise_p_meas * 65535.0) as u32;
                     if (rand & 0xFFFF) < threshold {
                         !outcome
@@ -1707,7 +1742,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStabMulti<R> {
 
         // Process measurements using the GPU implementation
         // Note: mz_gpu_sequential already increments measurement_count
-        let results = self.mz_gpu_sequential(&qubits, all_random_bits);
+        let results = self.mz_gpu_sequential(&qubits, &all_random_bits);
 
         // Combine with any previously accumulated results
         let mut combined: Vec<Vec<bool>> = vec![vec![]; batch_shots];
@@ -2203,6 +2238,7 @@ fn compute_deterministic_outcome_multi(
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_precision_loss)] // statistical tests use count as f64
 mod tests {
     use super::*;
     use pecos_core::{QubitId, qid};
@@ -2503,14 +2539,18 @@ mod tests {
         let num_h_pairs = 50; // 100 H gates total
 
         let mut sim = GpuStabMulti::<PecosRng>::with_seed(1, num_shots, 42).unwrap();
+        #[allow(clippy::cast_possible_truncation)] // intentional f32 downcast
         sim.enable_noise(p1 as f32, 0.0, 0.0);
 
         // CPU-side verification
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // probability in [0,1] maps to [0,65535]
         let p1_threshold = (p1 * 65535.0) as u32;
         let seeds = sim.noise_seeds().to_vec();
         let mut cpu_trigger_counts = Vec::with_capacity(num_shots);
         for &seed in seeds.iter().take(num_shots) {
             let mut triggers = 0u32;
+            #[allow(clippy::cast_sign_loss)] // num_h_pairs is a positive count
             for gate_idx in 0..(num_h_pairs * 2) as u32 {
                 let rand = hash_noise_cpu(seed, gate_idx, 0);
                 if (rand & 0xFFFF) < p1_threshold {
@@ -2573,6 +2613,8 @@ mod tests {
 
         // CPU-side verification: predict how many noise triggers we expect per shot.
         // Each CX produces 2 noise evaluations (one per qubit), so 50 CX gates = 100 evaluations.
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        // probability in [0,1] maps to [0,65535]
         let p2_threshold = (p2 * 65535.0) as u32;
         let num_gates = num_cx_pairs * 2;
 
@@ -2580,6 +2622,7 @@ mod tests {
         sim_z.h(&qid(0));
         sim_z.cx(&[(QubitId(0), QubitId(1))]);
         sim_z.sync();
+        #[allow(clippy::cast_possible_truncation)] // intentional f32 downcast
         sim_z.enable_noise(0.0, p2 as f32, 0.0);
 
         let seeds = sim_z.noise_seeds().to_vec();
@@ -2587,6 +2630,7 @@ mod tests {
         let mut cpu_trigger_counts = Vec::with_capacity(num_shots);
         for &seed in seeds.iter().take(num_shots) {
             let mut triggers = 0u32;
+            #[allow(clippy::cast_sign_loss)] // num_gates is a positive count
             for gate_idx in 0..num_gates as u32 {
                 // Control qubit noise
                 let rand = hash_noise_cpu(seed, gate_idx, 0);
@@ -2633,6 +2677,7 @@ mod tests {
         sim_x.h(&qid(0));
         sim_x.cx(&[(QubitId(0), QubitId(1))]);
         sim_x.sync();
+        #[allow(clippy::cast_possible_truncation)] // intentional f32 downcast
         sim_x.enable_noise(0.0, p2 as f32, 0.0);
         for _ in 0..num_cx_pairs {
             sim_x.cx(&[(QubitId(0), QubitId(1))]);
@@ -2777,6 +2822,7 @@ mod tests {
         let target_rate: f64 = 0.05; // 5% error rate
 
         let mut sim = GpuStabMulti::<PecosRng>::with_seed(1, num_shots, 77777).unwrap();
+        #[allow(clippy::cast_possible_truncation)] // intentional f32 downcast
         sim.enable_noise(0.0, 0.0, target_rate as f32);
 
         // Measure |0> state - any flip indicates measurement error

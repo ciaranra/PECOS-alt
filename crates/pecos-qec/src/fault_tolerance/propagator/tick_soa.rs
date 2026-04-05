@@ -205,7 +205,7 @@ impl<'a> TickFaultAnalyzerSoA<'a> {
         }
 
         // Build reverse maps
-        self.build_reverse_maps(&mut map);
+        Self::build_reverse_maps(&mut map);
 
         map
     }
@@ -363,8 +363,8 @@ impl<'a> TickFaultAnalyzerSoA<'a> {
                     }
 
                     // Update active qubits
-                    self.update_active_qubit(control, prop, buffers);
-                    self.update_active_qubit(target, prop, buffers);
+                    Self::update_active_qubit(control, prop, buffers);
+                    Self::update_active_qubit(target, prop, buffers);
                 }
             }
 
@@ -383,8 +383,8 @@ impl<'a> TickFaultAnalyzerSoA<'a> {
                         prop.track_z(&[q0]);
                     }
 
-                    self.update_active_qubit(q0, prop, buffers);
-                    self.update_active_qubit(q1, prop, buffers);
+                    Self::update_active_qubit(q0, prop, buffers);
+                    Self::update_active_qubit(q1, prop, buffers);
                 }
             }
 
@@ -402,7 +402,7 @@ impl<'a> TickFaultAnalyzerSoA<'a> {
                         prop.track_x(&[q]);
                     }
 
-                    self.update_active_qubit(q, prop, buffers);
+                    Self::update_active_qubit(q, prop, buffers);
                 }
             }
 
@@ -415,7 +415,7 @@ impl<'a> TickFaultAnalyzerSoA<'a> {
                         prop.track_z(&[q]);
                     }
 
-                    self.update_active_qubit(q, prop, buffers);
+                    Self::update_active_qubit(q, prop, buffers);
                 }
             }
 
@@ -442,7 +442,7 @@ impl<'a> TickFaultAnalyzerSoA<'a> {
 
     /// Update active qubit status.
     #[inline]
-    fn update_active_qubit(&self, q: usize, prop: &PauliProp, buffers: &mut AnalyzerWorkBuffers) {
+    fn update_active_qubit(q: usize, prop: &PauliProp, buffers: &mut AnalyzerWorkBuffers) {
         if q < buffers.active_qubits.len() {
             buffers.active_qubits[q] = prop.contains_x(q) || prop.contains_z(q);
         }
@@ -586,23 +586,27 @@ impl<'a> TickFaultAnalyzerSoA<'a> {
     }
 
     /// Builds reverse maps.
-    fn build_reverse_maps(&self, map: &mut FaultInfluenceMap) {
+    fn build_reverse_maps(map: &mut FaultInfluenceMap) {
         for (loc, influence) in &map.influences {
             for (pauli, detectors) in influence.detector_flips.iter().enumerate() {
+                #[allow(clippy::cast_possible_truncation)] // Pauli index 0..2
+                let pauli_u8 = pauli as u8;
                 for detector in detectors {
                     map.detector_to_faults
                         .entry(detector.clone())
                         .or_default()
-                        .push((loc.clone(), pauli as u8));
+                        .push((loc.clone(), pauli_u8));
                 }
             }
 
             for (pauli, logicals) in influence.logical_flips.iter().enumerate() {
+                #[allow(clippy::cast_possible_truncation)] // Pauli index 0..2
+                let pauli_u8 = pauli as u8;
                 for logical in logicals {
                     map.logical_to_faults
                         .entry(*logical)
                         .or_default()
-                        .push((loc.clone(), pauli as u8));
+                        .push((loc.clone(), pauli_u8));
                 }
             }
         }

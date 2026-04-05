@@ -171,6 +171,7 @@ const fn apply_action(imgs: [(u8, bool); 3], p_axis: u8, p_neg: bool) -> (u8, bo
 }
 
 /// Find which element has the given (`x_image`, `z_image`).
+#[allow(clippy::cast_possible_truncation)] // loop bound 24 fits in u8
 const fn find_element(x_axis: u8, x_neg: bool, z_axis: u8, z_neg: bool) -> u8 {
     let mut k = 0;
     while k < 24 {
@@ -208,6 +209,7 @@ const fn compute_compose() -> [[u8; 24]; 24] {
     table
 }
 
+#[allow(clippy::cast_possible_truncation)] // loop bound 24 fits in u8
 const fn compute_inverse() -> [u8; 24] {
     let compose = compute_compose();
     let mut inv = [255u8; 24];
@@ -294,6 +296,7 @@ const VOP_DECOMP_MAX_LEN: usize = 5;
 ///
 /// The sequence is stored as (length, [steps]), where each step is 0=U or 1=V.
 /// Steps are applied in reverse order (last step first).
+#[allow(clippy::cast_possible_truncation)] // all indices bounded by 24
 const fn compute_vop_decomp() -> [(u8, [u8; VOP_DECOMP_MAX_LEN]); 24] {
     // U = SXDG (index 12), V = SZ (index 4)
     // Right-multiplying element e by SXDG: compose[12][e] = e * SXDG as element
@@ -802,9 +805,9 @@ impl CliffordFrame {
     #[inline]
     #[must_use]
     pub fn pauli_xz_bits(self) -> (bool, bool) {
-        debug_assert!(self.is_pauli());
         const PAULI_XZ: [(bool, bool); 4] =
             [(false, false), (true, false), (true, true), (false, true)];
+        debug_assert!(self.is_pauli());
         PAULI_XZ[self.0 as usize]
     }
 
@@ -826,13 +829,13 @@ impl CliffordFrame {
     #[inline]
     #[must_use]
     pub fn push_through_cx(ctrl_pauli: Self, targ_pauli: Self) -> (Self, Self, u8) {
+        // Phase: CX†(P1⊗P2)CX = phase * P1'⊗P2'. Nonzero only for XZ→YY and YY→XZ.
+        // Lookup: index = ctrl_pauli * 4 + targ_pauli (both 0-3).
+        const CX_PHASE: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 4, 0, 0, 0, 0, 0];
         let (xc, zc) = ctrl_pauli.pauli_xz_bits();
         let (xt, zt) = targ_pauli.pauli_xz_bits();
         let new_ctrl = Self::pauli_from_xz(xc, zc ^ zt);
         let new_targ = Self::pauli_from_xz(xc ^ xt, zt);
-        // Phase: CX†(P1⊗P2)CX = phase * P1'⊗P2'. Nonzero only for XZ→YY and YY→XZ.
-        // Lookup: index = ctrl_pauli * 4 + targ_pauli (both 0-3).
-        const CX_PHASE: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 4, 0, 0, 0, 0, 0];
         let phase = CX_PHASE[ctrl_pauli.0 as usize * 4 + targ_pauli.0 as usize];
         (new_ctrl, new_targ, phase)
     }
@@ -844,12 +847,12 @@ impl CliffordFrame {
     #[inline]
     #[must_use]
     pub fn push_through_cz(ctrl_pauli: Self, targ_pauli: Self) -> (Self, Self, u8) {
+        // Phase: nonzero only for XY→YX and YX→XY.
+        const CZ_PHASE: [u8; 16] = [0, 0, 0, 0, 0, 0, 4, 0, 0, 4, 0, 0, 0, 0, 0, 0];
         let (xc, zc) = ctrl_pauli.pauli_xz_bits();
         let (xt, zt) = targ_pauli.pauli_xz_bits();
         let new_ctrl = Self::pauli_from_xz(xc, zc ^ xt);
         let new_targ = Self::pauli_from_xz(xt, zt ^ xc);
-        // Phase: nonzero only for XY→YX and YX→XY.
-        const CZ_PHASE: [u8; 16] = [0, 0, 0, 0, 0, 0, 4, 0, 0, 4, 0, 0, 0, 0, 0, 0];
         let phase = CZ_PHASE[ctrl_pauli.0 as usize * 4 + targ_pauli.0 as usize];
         (new_ctrl, new_targ, phase)
     }
@@ -1106,6 +1109,7 @@ mod tests {
                         if p[i][j].norm() > 1e-10 {
                             let ratio = m[i][j] / p[i][j];
                             let is_neg = ratio.re < 0.0;
+                            #[allow(clippy::cast_possible_truncation)] // axis index 0..2
                             return (axis as u8, is_neg);
                         }
                     }
@@ -1262,6 +1266,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_truncation)] // loop index bounded by 24
     fn test_decompose() {
         for i in 0..24 {
             let (pauli, coset) = DECOMPOSE[i];
@@ -1390,6 +1395,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_truncation)] // loop index bounded by 24
     fn test_identity_is_neutral() {
         for i in 0..24 {
             assert_eq!(COMPOSE[0][i], i as u8, "I·{i} should be {i}");
@@ -1418,6 +1424,7 @@ mod tests {
 
     /// Extract the global phase ratio as an 8th-root-of-unity index.
     /// ratio = actual / representative. Should be e^{i*k*pi/4} for k in 0..7.
+    #[allow(clippy::cast_possible_truncation)] // k bounded by 8 phase roots
     fn phase_index(ratio: Complex64) -> u8 {
         let phases = PHASE_ROOTS;
         for (k, &[re, im]) in phases.iter().enumerate() {
@@ -1788,6 +1795,7 @@ mod tests {
     ///
     /// For each of the 16 Pauli⊗Pauli inputs, computes G†·(P1⊗P2)·G via
     /// matrix multiplication and checks that it matches the `push_through` output.
+    #[allow(clippy::cast_possible_truncation)] // Pauli indices bounded by 4
     fn verify_push_through_all_16(
         gate_matrix: &[[f64; 2]; 16],
         push_through: fn(CliffordFrame, CliffordFrame) -> (CliffordFrame, CliffordFrame, u8),
@@ -1940,7 +1948,6 @@ mod tests {
     fn test_push_through_syy() {
         // SYY = (Sdg⊗Sdg)·SXX·(S⊗S)
         // Build from matrix multiplication
-        let w = std::f64::consts::FRAC_1_SQRT_2;
         type Mat4 = [[f64; 2]; 16];
         const CZERO: [f64; 2] = [0.0, 0.0];
         fn mat4_zero() -> Mat4 {
@@ -1965,6 +1972,7 @@ mod tests {
             }
             r
         }
+        let w = std::f64::consts::FRAC_1_SQRT_2;
         // S⊗S tensor product: diag(1, i, i, -1)
         let mut ss = mat4_zero();
         ss[0] = [1.0, 0.0];

@@ -119,11 +119,18 @@ impl GpuPauliProp {
     ///
     /// # Returns
     /// A new `GpuPauliProp` instance or an error
+    ///
+    /// # Errors
+    /// Returns an error if no GPU adapter is found or device creation fails.
     pub fn new(num_qubits: usize, num_shots: u32) -> Result<Self, String> {
         Self::with_seed(num_qubits, num_shots, time_seed())
     }
 
     /// Create a new GPU Pauli propagator with a specific seed.
+    ///
+    /// # Errors
+    /// Returns an error if no GPU adapter is found or device creation fails.
+    #[allow(clippy::cast_possible_truncation)] // GPU params: qubit/shot counts fit in u32
     pub fn with_seed(num_qubits: usize, num_shots: u32, seed: u64) -> Result<Self, String> {
         // Initialize wgpu
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
@@ -330,6 +337,7 @@ impl GpuPauliProp {
     pub fn reset(&mut self) {
         self.gate_queue.clear();
 
+        #[allow(clippy::cast_possible_truncation)] // qubit count fits in u32
         let table_size = self.num_qubits as u32 * self.shot_words * 4;
         let zeros = vec![0u8; table_size as usize];
 
@@ -354,6 +362,7 @@ impl GpuPauliProp {
     // =========================================================================
 
     /// Apply Hadamard gate. Transforms: X <-> Z, Y -> -Y
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn h(&mut self, qubits: &[usize]) {
         for &q in qubits {
             self.queue_gate(GATE_H, q as u32, 0);
@@ -361,6 +370,7 @@ impl GpuPauliProp {
     }
 
     /// Apply SZ (S) gate. Transforms: X -> Y, Y -> -X, Z -> Z
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn sz(&mut self, qubits: &[usize]) {
         for &q in qubits {
             self.queue_gate(GATE_SZ, q as u32, 0);
@@ -368,6 +378,7 @@ impl GpuPauliProp {
     }
 
     /// Apply SZ-dagger gate. Transforms: X -> -Y, Y -> X, Z -> Z
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn szdg(&mut self, qubits: &[usize]) {
         for &q in qubits {
             self.queue_gate(GATE_SZDG, q as u32, 0);
@@ -375,6 +386,7 @@ impl GpuPauliProp {
     }
 
     /// Apply X gate. Toggles X fault.
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn x(&mut self, qubits: &[usize]) {
         for &q in qubits {
             self.queue_gate(GATE_X, q as u32, 0);
@@ -382,6 +394,7 @@ impl GpuPauliProp {
     }
 
     /// Apply Y gate. Toggles both X and Z faults.
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn y(&mut self, qubits: &[usize]) {
         for &q in qubits {
             self.queue_gate(GATE_Y, q as u32, 0);
@@ -389,6 +402,7 @@ impl GpuPauliProp {
     }
 
     /// Apply Z gate. Toggles Z fault.
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn z(&mut self, qubits: &[usize]) {
         for &q in qubits {
             self.queue_gate(GATE_Z, q as u32, 0);
@@ -397,6 +411,7 @@ impl GpuPauliProp {
 
     /// Apply CX (CNOT) gate.
     /// Transforms: `ctrl_X` -> `tgt_X`, `tgt_Z` -> `ctrl_Z`
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn cx(&mut self, pairs: &[(usize, usize)]) {
         for &(control, target) in pairs {
             self.queue_gate(GATE_CX, control as u32, target as u32);
@@ -405,6 +420,7 @@ impl GpuPauliProp {
 
     /// Apply CZ gate.
     /// Transforms: `ctrl_X` -> `tgt_Z`, `tgt_X` -> `ctrl_Z`
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn cz(&mut self, pairs: &[(usize, usize)]) {
         for &(a, b) in pairs {
             self.queue_gate(GATE_CZ, a as u32, b as u32);
@@ -412,6 +428,7 @@ impl GpuPauliProp {
     }
 
     /// Apply SWAP gate.
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn swap(&mut self, pairs: &[(usize, usize)]) {
         for &(a, b) in pairs {
             self.queue_gate(GATE_SWAP, a as u32, b as u32);
@@ -423,16 +440,19 @@ impl GpuPauliProp {
     // =========================================================================
 
     /// Inject X fault on a qubit for all shots.
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn inject_x_fault(&mut self, qubit: usize) {
         self.queue_gate(FAULT_X, qubit as u32, 0);
     }
 
     /// Inject Z fault on a qubit for all shots.
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn inject_z_fault(&mut self, qubit: usize) {
         self.queue_gate(FAULT_Z, qubit as u32, 0);
     }
 
     /// Inject Y fault on a qubit for all shots.
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32
     pub fn inject_y_fault(&mut self, qubit: usize) {
         self.queue_gate(FAULT_Y, qubit as u32, 0);
     }
@@ -445,11 +465,14 @@ impl GpuPauliProp {
     /// # Arguments
     /// * `qubit` - The qubit to potentially apply fault to
     /// * `probability` - Error probability (0.0 to 1.0)
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32; f32 threshold is intentional
     pub fn inject_depol1(&mut self, qubit: usize, probability: f32) {
         // Upload fresh random bits
         self.upload_random_bits();
 
         // Encode probability as threshold in the "target" field
+        #[allow(clippy::cast_sign_loss, clippy::cast_precision_loss)]
+        // probability in [0,1] so product is non-negative
         let threshold = (probability * u32::MAX as f32) as u32;
         self.queue_gate(FAULT_DEPOL1, qubit as u32, threshold);
     }
@@ -458,12 +481,15 @@ impl GpuPauliProp {
     ///
     /// With probability p, applies a random two-qubit Pauli (one of 15 non-II)
     /// independently per shot.
+    #[allow(clippy::cast_possible_truncation)] // qubit index fits in u32; f32 threshold is intentional
     pub fn inject_depol2(&mut self, qubit_a: usize, qubit_b: usize, probability: f32) {
         // Upload fresh random bits
         self.upload_random_bits();
 
         // For 2Q faults, we need to encode both qubits and probability
         // Use a separate queue entry for the probability threshold
+        #[allow(clippy::cast_sign_loss, clippy::cast_precision_loss)]
+        // probability in [0,1] so product is non-negative
         let threshold = (probability * u32::MAX as f32) as u32;
 
         // Queue as: [FAULT_DEPOL2, qubit_a, qubit_b, threshold]
@@ -488,6 +514,7 @@ impl GpuPauliProp {
     ///
     /// This ensures that faults injected on one qubit are visible to two-qubit
     /// gates that read from that qubit.
+    #[allow(clippy::cast_possible_truncation)] // GPU params: counts fit in u32
     pub fn flush(&mut self) {
         if self.gate_queue.is_empty() {
             return;

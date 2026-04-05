@@ -510,6 +510,9 @@ impl<'a> DemBuilder<'a> {
         for det in &self.detectors {
             for &rec in &det.records {
                 // Convert negative record offset to absolute measurement index in TickCircuit order
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)] // measurement count fits in i32
+                #[allow(clippy::cast_sign_loss)]
+                // negative offset + total count yields valid index
                 let tc_meas_idx = (self.num_measurements as i32 + rec) as usize;
 
                 // Map to influence map index
@@ -524,6 +527,9 @@ impl<'a> DemBuilder<'a> {
 
         for obs in &self.observables {
             for &rec in &obs.records {
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)] // measurement count fits in i32
+                #[allow(clippy::cast_sign_loss)]
+                // negative offset + total count yields valid index
                 let tc_meas_idx = (self.num_measurements as i32 + rec) as usize;
 
                 if let Some(&influence_idx) = tc_to_influence.get(&tc_meas_idx) {
@@ -718,6 +724,8 @@ fn parse_detectors_json(json: &str) -> Result<Vec<ParsedDetector>, DemBuilderErr
 
 /// Parses a single detector object.
 fn parse_single_detector(json: &str) -> Result<ParsedDetector, DemBuilderError> {
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    // detector IDs are small non-negative integers
     let id = extract_number(json, "\"id\"")
         .ok_or_else(|| DemBuilderError::ParseError("missing detector id".into()))?
         as u32;
@@ -773,6 +781,8 @@ fn parse_observables_json(json: &str) -> Result<Vec<ParsedObservable>, DemBuilde
 
 /// Parses a single observable object.
 fn parse_single_observable(json: &str) -> Result<ParsedObservable, DemBuilderError> {
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    // observable IDs are small non-negative integers
     let id = extract_number(json, "\"id\"")
         .ok_or_else(|| DemBuilderError::ParseError("missing observable id".into()))?
         as u32;

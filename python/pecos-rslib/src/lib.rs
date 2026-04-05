@@ -1,3 +1,4 @@
+#![allow(clippy::needless_pass_by_value)] // PyO3 requires owned values from Python
 #![doc(html_root_url = "https://docs.rs/pecos-rslib")]
 // Disable doctests since they don't work with our workspace setup
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -16,6 +17,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+mod prelude;
+
 mod array_buffer;
 mod bit_conversion;
 mod bit_int_bindings;
@@ -29,26 +32,21 @@ mod decoder_bindings;
 mod dtypes;
 mod engine_bindings;
 mod engine_builders;
+mod engines_module;
 mod experimental_bindings;
 mod fault_tolerance_bindings;
+mod gate_registry_bindings;
 mod graph_bindings;
+mod hugr_compilation_bindings;
+mod namespace_modules;
 mod noise_helpers;
 mod num_bindings;
 mod pauli_bindings;
 mod pauli_prop_bindings;
 mod pauli_sequence_bindings;
-mod stabilizer_code_bindings;
-mod stabilizer_group_bindings;
-// mod pcg_bindings;
-mod hugr_compilation_bindings;
-mod namespace_modules;
 mod pecos_array;
 mod pecos_random_bindings;
 mod phir_json_bridge;
-// mod qir_bindings;  // Removed - replaced by llvm_bindings
-mod engines_module;
-mod gate_registry_bindings;
-mod llvm_bindings;
 mod programs_module;
 mod quest_bindings;
 mod qulacs_bindings;
@@ -60,6 +58,8 @@ mod sparse_sim;
 mod sparse_stab_bindings;
 mod sparse_stab_engine_bindings;
 mod stab_bindings;
+mod stabilizer_code_bindings;
+mod stabilizer_group_bindings;
 mod state_vec_bindings;
 mod state_vec_engine_bindings;
 mod types_module;
@@ -100,7 +100,7 @@ use wasm_foreign_object_bindings::PyWasmForeignObject;
 /// Returns None if the tool is not found.
 #[pyfunction]
 fn find_llvm_tool(tool_name: &str) -> Option<String> {
-    pecos::find_tool(tool_name).map(|p| p.to_string_lossy().into_owned())
+    pecos_build::llvm::find_tool(tool_name).map(|p| p.to_string_lossy().into_owned())
 }
 
 /// Set up the `QuEST` CUDA backend path environment variable for runtime loading.
@@ -174,32 +174,42 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
         log::debug!("Unix detected, attempting Selene runtime preload...");
 
-        // Try to find libselene_simple_runtime.so
-        let possible_paths = [
-            "/home/ciaranra/Repos/cl_projects/gup/selene/target/debug/libselene_simple_runtime.so",
-            "/home/ciaranra/Repos/cl_projects/gup/selene/target/release/libselene_simple_runtime.so",
-            "../selene/target/debug/libselene_simple_runtime.so",
-            "../selene/target/release/libselene_simple_runtime.so",
-        ];
+        // Build search paths for libselene_simple_runtime.so:
+        // 1. PECOS_SELENE_PRELOAD env var (explicit override)
+        // 2. ~/.pecos/lib/
+        // 3. Relative development paths (target/debug, target/release)
+        let mut possible_paths: Vec<std::path::PathBuf> = Vec::new();
+
+        if let Ok(path) = std::env::var("PECOS_SELENE_PRELOAD") {
+            possible_paths.push(std::path::PathBuf::from(path));
+        }
+
+        if let Some(home) = dirs::home_dir() {
+            possible_paths.push(home.join(".pecos/lib/libselene_simple_runtime.so"));
+        }
+
+        possible_paths.push("target/debug/libselene_simple_runtime.so".into());
+        possible_paths.push("target/release/libselene_simple_runtime.so".into());
 
         log::debug!("Checking for Selene runtime libraries...");
         for path in &possible_paths {
-            log::trace!("Checking path: {path}");
-            if std::path::Path::new(path).exists() {
-                log::debug!("Found Selene runtime! Attempting to preload: {path}");
+            let path_str = path.to_string_lossy();
+            log::trace!("Checking path: {path_str}");
+            if path.exists() {
+                log::debug!("Found Selene runtime! Attempting to preload: {path_str}");
 
                 unsafe {
-                    let path_cstr = CString::new(path.as_bytes()).unwrap();
+                    let path_cstr = CString::new(path_str.as_bytes()).unwrap();
                     let handle = libc::dlopen(path_cstr.as_ptr(), RTLD_LAZY | RTLD_GLOBAL);
                     if handle.is_null() {
                         let error_ptr = libc::dlerror();
                         if !error_ptr.is_null() {
                             let error = std::ffi::CStr::from_ptr(error_ptr).to_string_lossy();
-                            log::warn!("Failed to preload {path}: {error}");
+                            log::warn!("Failed to preload {path_str}: {error}");
                         }
                     } else {
                         log::info!(
-                            "Successfully preloaded Selene runtime with RTLD_GLOBAL from: {path}"
+                            "Successfully preloaded Selene runtime with RTLD_GLOBAL from: {path_str}"
                         );
                         break;
                     }
@@ -255,12 +265,6 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register HUGR compilation functions
     hugr_compilation_bindings::register_hugr_compilation_functions(m)?;
-
-    // Register LLVM IR generation module (compatible with Python's llvmlite API)
-    llvm_bindings::register_llvm_module(m)?;
-
-    // Register binding module for LLVM bitcode generation
-    llvm_bindings::register_binding_module(m)?;
 
     // Register numerical computing module (scipy.optimize replacements)
     num_bindings::register_num_module(m)?;
