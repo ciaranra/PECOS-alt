@@ -527,7 +527,7 @@ fn curve_fit_array(
         let n = result.params.len();
         let identity = Array1::from_shape_fn(n * n, |i| if i / n == i % n { 1.0 } else { 0.0 })
             .into_shape_with_order((n, n))
-            .unwrap()
+            .expect("identity matrix reshape cannot fail")
             .into_dyn();
         array_buffer::f64_array_to_py(py, &identity)
     };
@@ -564,7 +564,8 @@ fn curve_fit_tuple<'py>(
 
         // Convert to 1D if needed
         let arr_1d = if arr.ndim() == 1 {
-            arr.into_dimensionality::<ndarray::Ix1>().unwrap()
+            arr.into_dimensionality::<ndarray::Ix1>()
+                .expect("array must be 1-dimensional")
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "xdata[{}] must be a 1D array, got {}D array with shape {:?}",
@@ -719,7 +720,7 @@ fn curve_fit_tuple<'py>(
         let n = result.params.len();
         let identity = Array1::from_shape_fn(n * n, |i| if i / n == i % n { 1.0 } else { 0.0 })
             .into_shape_with_order((n, n))
-            .unwrap()
+            .expect("identity matrix reshape cannot fail")
             .into_dyn();
         array_buffer::f64_array_to_py(py, &identity)
     };
@@ -1172,13 +1173,13 @@ fn isnan(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     // Try scalar float
     if let Ok(val) = x.extract::<f64>() {
         let result = val.isnan();
-        return Ok(result.into_py_any(py).unwrap());
+        return Ok(result.into_py_any(py)?);
     }
 
     // Try complex scalar
     if let Ok(val) = x.extract::<Complex64>() {
         let result = val.isnan();
-        return Ok(result.into_py_any(py).unwrap());
+        return Ok(result.into_py_any(py)?);
     }
 
     // Try float array
@@ -1336,25 +1337,25 @@ fn isclose(
     // Try scalar floats
     if let (Ok(a_val), Ok(b_val)) = (a.extract::<f64>(), b.extract::<f64>()) {
         let result = a_val.isclose(&b_val, rtol, atol);
-        return Ok(result.into_py_any(py).unwrap());
+        return Ok(result.into_py_any(py)?);
     }
 
     // Try complex scalars (both complex)
     if let (Ok(a_val), Ok(b_val)) = (a.extract::<Complex64>(), b.extract::<Complex64>()) {
         let result = a_val.isclose(&b_val, rtol, atol);
-        return Ok(result.into_py_any(py).unwrap());
+        return Ok(result.into_py_any(py)?);
     }
 
     // Handle mixed complex/float scalars - promote float to complex
     if let (Ok(a_val), Ok(b_val)) = (a.extract::<Complex64>(), b.extract::<f64>()) {
         let b_complex = Complex64::new(b_val, 0.0);
         let result = a_val.isclose(&b_complex, rtol, atol);
-        return Ok(result.into_py_any(py).unwrap());
+        return Ok(result.into_py_any(py)?);
     }
     if let (Ok(a_val), Ok(b_val)) = (a.extract::<f64>(), b.extract::<Complex64>()) {
         let a_complex = Complex64::new(a_val, 0.0);
         let result = a_complex.isclose(&b_val, rtol, atol);
-        return Ok(result.into_py_any(py).unwrap());
+        return Ok(result.into_py_any(py)?);
     }
 
     // Try to convert inputs to PECOS Arrays if they're not already
@@ -2550,19 +2551,21 @@ fn arange(
     step: Option<Bound<'_, PyAny>>,
 ) -> PyResult<Py<Array>> {
     // Handle single-argument case: arange(stop) → arange(0, stop, 1)
+    let default_step = || -> Bound<'_, PyAny> {
+        1_i64
+            .into_pyobject(py)
+            .expect("i64 to Python conversion failed")
+            .into_any()
+    };
     let (start_param, stop_param, step_param) = if let Some(stop_val) = stop {
-        (
-            start,
-            stop_val,
-            step.unwrap_or_else(|| 1_i64.into_pyobject(py).unwrap().into_any()),
-        )
+        (start, stop_val, step.unwrap_or_else(default_step))
     } else {
         // arange(n) case - start becomes stop, actual start is 0
         // Use Python int (not float) for defaults to preserve dtype inference
         (
             0_i64.into_pyobject(py)?.into_any(),
             start,
-            step.unwrap_or_else(|| 1_i64.into_pyobject(py).unwrap().into_any()),
+            step.unwrap_or_else(default_step),
         )
     };
 
@@ -3066,11 +3069,11 @@ fn array(
         let current_dtype = existing_array.dtype();
 
         // Determine if we need to create a new array
-        let needs_conversion = target_dtype.is_some() && target_dtype.unwrap() != current_dtype;
-
-        if needs_conversion {
+        if let Some(td) = target_dtype
+            && td != current_dtype
+        {
             // Perform dtype conversion using the pure Rust astype() method
-            let converted_array = existing_array.astype(target_dtype.unwrap());
+            let converted_array = existing_array.astype(td);
             return Py::new(py, converted_array);
         }
 
@@ -3271,11 +3274,11 @@ fn asarray(
         let current_dtype = existing_array.dtype();
 
         // Determine if we need to create a new array
-        let needs_conversion = target_dtype.is_some() && target_dtype.unwrap() != current_dtype;
-
-        if needs_conversion {
+        if let Some(td) = target_dtype
+            && td != current_dtype
+        {
             // Perform dtype conversion using the pure Rust astype() method
-            let converted_array = existing_array.astype(target_dtype.unwrap());
+            let converted_array = existing_array.astype(td);
             return Py::new(py, converted_array);
         }
 
@@ -3337,7 +3340,9 @@ fn delete(py: Python<'_>, arr: Bound<'_, PyAny>, index: usize) -> PyResult<Py<Py
 
         // Convert to 1D for delete operation
         let arr_1d = if arr_f64.ndim() == 1 {
-            arr_f64.into_dimensionality::<ndarray::Ix1>().unwrap()
+            arr_f64
+                .into_dimensionality::<ndarray::Ix1>()
+                .expect("array must be 1-dimensional")
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "delete only supports 1D arrays",
@@ -3360,7 +3365,9 @@ fn delete(py: Python<'_>, arr: Bound<'_, PyAny>, index: usize) -> PyResult<Py<Py
 
         // Convert to 1D for delete operation
         let arr_1d = if arr_c64.ndim() == 1 {
-            arr_c64.into_dimensionality::<ndarray::Ix1>().unwrap()
+            arr_c64
+                .into_dimensionality::<ndarray::Ix1>()
+                .expect("array must be 1-dimensional")
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "delete only supports 1D arrays",
@@ -3384,7 +3391,9 @@ fn delete(py: Python<'_>, arr: Bound<'_, PyAny>, index: usize) -> PyResult<Py<Py
 
         // Convert to 1D for delete operation
         let arr_1d = if arr_i64.ndim() == 1 {
-            arr_i64.into_dimensionality::<ndarray::Ix1>().unwrap()
+            arr_i64
+                .into_dimensionality::<ndarray::Ix1>()
+                .expect("array must be 1-dimensional")
         } else {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
                 "delete only supports 1D arrays",
@@ -3456,19 +3465,19 @@ fn sum(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
                         // Boolean array - sum treats True=1, False=0
                         let arr = array_buffer::extract_bool_array(&a)?;
                         let result: i64 = arr.iter().map(|&b| i64::from(b)).sum();
-                        return Ok(result.into_py_any(py).unwrap());
+                        return Ok(result.into_py_any(py)?);
                     }
                     "i" | "u" => {
                         // Integer array
                         let arr = array_buffer::extract_i64_array(&a)?;
                         let result: i64 = arr.iter().sum();
-                        return Ok(result.into_py_any(py).unwrap());
+                        return Ok(result.into_py_any(py)?);
                     }
                     "f" => {
                         // Float array
                         let arr = array_buffer::extract_f64_array(&a)?;
                         let result: f64 = arr.iter().sum();
-                        return Ok(result.into_py_any(py).unwrap());
+                        return Ok(result.into_py_any(py)?);
                     }
                     "c" => {
                         // Complex array
@@ -3489,13 +3498,13 @@ fn sum(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
         // Try integer list/tuple first
         if let Ok(values) = a.extract::<Vec<i64>>() {
             let result: i64 = values.iter().sum();
-            return Ok(result.into_py_any(py).unwrap());
+            return Ok(result.into_py_any(py)?);
         }
 
         // Try float list/tuple (before complex, since floats can convert to complex!)
         if let Ok(values) = a.extract::<Vec<f64>>() {
             let result: f64 = values.iter().sum();
-            return Ok(result.into_py_any(py).unwrap());
+            return Ok(result.into_py_any(py)?);
         }
 
         // Try complex list/tuple
@@ -3510,7 +3519,7 @@ fn sum(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
     }
 
     // Handle axis parameter case: sum along specific axis
-    let axis_val = axis.unwrap();
+    let axis_val = axis.expect("axis is Some after None case returned");
 
     // Convert Python lists/tuples to numpy arrays for axis operations
     // If it's not already a numpy array, try to convert it
@@ -3646,7 +3655,7 @@ fn max(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
                         // Boolean array - max treats True=1, False=0
                         let arr = array_buffer::extract_bool_array(&a)?;
                         let result = arr.iter().any(|&x| x);
-                        return Ok(result.into_py_any(py).unwrap());
+                        return Ok(result.into_py_any(py)?);
                     }
                     "i" | "u" => {
                         // Integer array
@@ -3655,7 +3664,7 @@ fn max(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
                         let result = array_view.iter().max().ok_or_else(|| {
                             PyErr::new::<pyo3::exceptions::PyValueError, _>("max() of empty array")
                         })?;
-                        return Ok((*result).into_py_any(py).unwrap());
+                        return Ok((*result).into_py_any(py)?);
                     }
                     "f" => {
                         // Float array
@@ -3669,7 +3678,7 @@ fn max(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
                                     "max() of empty array",
                                 )
                             })?;
-                        return Ok((*result).into_py_any(py).unwrap());
+                        return Ok((*result).into_py_any(py)?);
                     }
                     "c" => {
                         // Complex array - can't directly compare, need magnitude
@@ -3692,7 +3701,7 @@ fn max(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
             let result = values.iter().max().ok_or_else(|| {
                 PyErr::new::<pyo3::exceptions::PyValueError, _>("max() of empty sequence")
             })?;
-            return Ok((*result).into_py_any(py).unwrap());
+            return Ok((*result).into_py_any(py)?);
         }
 
         // Try float list/tuple
@@ -3703,7 +3712,7 @@ fn max(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
                 .ok_or_else(|| {
                     PyErr::new::<pyo3::exceptions::PyValueError, _>("max() of empty sequence")
                 })?;
-            return Ok((*result).into_py_any(py).unwrap());
+            return Ok((*result).into_py_any(py)?);
         }
 
         return Err(PyTypeError::new_err(
@@ -3713,7 +3722,7 @@ fn max(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
 
     // Handle axis parameter case: find max along specific axis
     // Note: ndarray doesn't have a built-in max_axis for floats, so we'll fold along the axis
-    let axis_val = axis.unwrap();
+    let axis_val = axis.expect("axis is Some after None case returned");
 
     // Integer array with axis
     if let Ok(arr) = array_buffer::extract_i64_array(&a) {
@@ -3788,7 +3797,7 @@ fn min(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
                         // Boolean array - min treats True=1, False=0
                         let arr = array_buffer::extract_bool_array(&a)?;
                         let result = !arr.iter().all(|&x| x);
-                        return Ok(result.into_py_any(py).unwrap());
+                        return Ok(result.into_py_any(py)?);
                     }
                     "i" | "u" => {
                         // Integer array
@@ -3797,7 +3806,7 @@ fn min(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
                         let result = array_view.iter().min().ok_or_else(|| {
                             PyErr::new::<pyo3::exceptions::PyValueError, _>("min() of empty array")
                         })?;
-                        return Ok((*result).into_py_any(py).unwrap());
+                        return Ok((*result).into_py_any(py)?);
                     }
                     "f" => {
                         // Float array
@@ -3811,7 +3820,7 @@ fn min(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
                                     "min() of empty array",
                                 )
                             })?;
-                        return Ok((*result).into_py_any(py).unwrap());
+                        return Ok((*result).into_py_any(py)?);
                     }
                     "c" => {
                         // Complex array - can't directly compare, need magnitude
@@ -3834,7 +3843,7 @@ fn min(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
             let result = values.iter().min().ok_or_else(|| {
                 PyErr::new::<pyo3::exceptions::PyValueError, _>("min() of empty sequence")
             })?;
-            return Ok((*result).into_py_any(py).unwrap());
+            return Ok((*result).into_py_any(py)?);
         }
 
         // Try float list/tuple
@@ -3845,7 +3854,7 @@ fn min(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
                 .ok_or_else(|| {
                     PyErr::new::<pyo3::exceptions::PyValueError, _>("min() of empty sequence")
                 })?;
-            return Ok((*result).into_py_any(py).unwrap());
+            return Ok((*result).into_py_any(py)?);
         }
 
         return Err(PyTypeError::new_err(
@@ -3854,7 +3863,7 @@ fn min(py: Python<'_>, a: Bound<'_, PyAny>, axis: Option<isize>) -> PyResult<Py<
     }
 
     // Handle axis parameter case: find min along specific axis
-    let axis_val = axis.unwrap();
+    let axis_val = axis.expect("axis is Some after None case returned");
 
     // Integer array with axis
     if let Ok(arr) = array_buffer::extract_i64_array(&a) {
@@ -3985,14 +3994,15 @@ macro_rules! apply_unary_math_fn {
 
         // Try scalar f64 (Python float or literal)
         if let Ok(val) = $x.extract::<f64>() {
-            return Ok($f64_op(val).into_py_any($py).unwrap());
+            return Ok($f64_op(val).into_py_any($py)?);
         }
 
         // Try scalar complex (Python complex literal)
         if $x.is_exact_instance_of::<pyo3::types::PyComplex>() {
-            let py_complex = $x.clone().cast_into::<pyo3::types::PyComplex>().unwrap();
-            if let Ok(val) = py_complex.extract::<Complex64>() {
-                return Ok($complex_op(val).into_py_any($py).unwrap());
+            if let Ok(py_complex) = $x.clone().cast_into::<pyo3::types::PyComplex>() {
+                if let Ok(val) = py_complex.extract::<Complex64>() {
+                    return Ok($complex_op(val).into_py_any($py)?);
+                }
             }
         }
 
@@ -4034,11 +4044,11 @@ macro_rules! apply_buffer_math_fn {
         }
         // Try scalar float (Python float or literal)
         if let Ok(val) = $x.extract::<f64>() {
-            return Ok(val.$f64_method().into_py_any($py).unwrap());
+            return Ok(val.$f64_method().into_py_any($py)?);
         }
         // Try scalar complex (Python complex literal)
         if let Ok(val) = $x.extract::<Complex64>() {
-            return Ok(val.$complex_method().into_py_any($py).unwrap());
+            return Ok(val.$complex_method().into_py_any($py)?);
         }
         Err(PyTypeError::new_err(format!(
             "{}() argument must be float, complex, or array",
@@ -4096,14 +4106,14 @@ fn ln(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
 
     // Try scalar f64
     if let Ok(val) = x.extract::<f64>() {
-        return Ok(val.ln().into_py_any(py).unwrap());
+        return Ok(val.ln().into_py_any(py)?);
     }
 
     // Try scalar complex
     if let Ok(py_complex) = x.clone().cast_into::<pyo3::types::PyComplex>()
         && let Ok(val) = py_complex.extract::<Complex64>()
     {
-        return Ok(val.ln().into_py_any(py).unwrap());
+        return Ok(val.ln().into_py_any(py)?);
     }
 
     // Fallback: Try to convert input to Array (handles NumPy, lists, etc.)
@@ -4161,14 +4171,14 @@ fn log(py: Python<'_>, x: Bound<'_, PyAny>, base: f64) -> PyResult<Py<PyAny>> {
 
     // Try scalar f64
     if let Ok(val) = x.extract::<f64>() {
-        return Ok(val.log(base).into_py_any(py).unwrap());
+        return Ok(val.log(base).into_py_any(py)?);
     }
 
     // Try scalar complex
     if let Ok(py_complex) = x.clone().cast_into::<pyo3::types::PyComplex>()
         && let Ok(val) = py_complex.extract::<Complex64>()
     {
-        return Ok(val.log(base).into_py_any(py).unwrap());
+        return Ok(val.log(base).into_py_any(py)?);
     }
 
     // Fallback: Try to convert input to Array (handles NumPy, lists, etc.)
@@ -4454,7 +4464,7 @@ fn power(
 
         // Try scalar base
         if let Ok(val) = base.extract::<f64>() {
-            return Ok(val.power(exp_val).into_py_any(py).unwrap());
+            return Ok(val.power(exp_val).into_py_any(py)?);
         }
 
         // Try numpy array base
@@ -4570,14 +4580,14 @@ fn tan(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
 
     // Try scalar f64
     if let Ok(val) = x.extract::<f64>() {
-        return Ok(val.tan().into_py_any(py).unwrap());
+        return Ok(val.tan().into_py_any(py)?);
     }
 
     // Try scalar complex
     if let Ok(py_complex) = x.clone().cast_into::<pyo3::types::PyComplex>()
         && let Ok(val) = py_complex.extract::<Complex64>()
     {
-        return Ok(val.tan().into_py_any(py).unwrap());
+        return Ok(val.tan().into_py_any(py)?);
     }
 
     // Fallback: Try to convert input to Array (handles NumPy, lists, etc.) and return Array
@@ -4632,10 +4642,10 @@ fn asin(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     use crate::prelude::Asin;
 
     if let Ok(val) = x.extract::<f64>() {
-        return Ok(val.asin().into_py_any(py).unwrap());
+        return Ok(val.asin().into_py_any(py)?);
     }
     if let Ok(val) = x.extract::<Complex64>() {
-        return Ok(val.asin().into_py_any(py).unwrap());
+        return Ok(val.asin().into_py_any(py)?);
     }
     if let Ok(arr) = array_buffer::extract_f64_array(&x) {
         let result = arr.asin();
@@ -4660,10 +4670,10 @@ fn acos(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     use crate::prelude::Acos;
 
     if let Ok(val) = x.extract::<f64>() {
-        return Ok(val.acos().into_py_any(py).unwrap());
+        return Ok(val.acos().into_py_any(py)?);
     }
     if let Ok(val) = x.extract::<Complex64>() {
-        return Ok(val.acos().into_py_any(py).unwrap());
+        return Ok(val.acos().into_py_any(py)?);
     }
     if let Ok(arr) = array_buffer::extract_f64_array(&x) {
         let result = arr.acos();
@@ -4688,10 +4698,10 @@ fn atan(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     use crate::prelude::Atan;
 
     if let Ok(val) = x.extract::<f64>() {
-        return Ok(val.atan().into_py_any(py).unwrap());
+        return Ok(val.atan().into_py_any(py)?);
     }
     if let Ok(val) = x.extract::<Complex64>() {
-        return Ok(val.atan().into_py_any(py).unwrap());
+        return Ok(val.atan().into_py_any(py)?);
     }
     if let Ok(arr) = array_buffer::extract_f64_array(&x) {
         let result = arr.atan();
@@ -4716,10 +4726,10 @@ fn asinh(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     use crate::prelude::Asinh;
 
     if let Ok(val) = x.extract::<f64>() {
-        return Ok(val.asinh().into_py_any(py).unwrap());
+        return Ok(val.asinh().into_py_any(py)?);
     }
     if let Ok(val) = x.extract::<Complex64>() {
-        return Ok(val.asinh().into_py_any(py).unwrap());
+        return Ok(val.asinh().into_py_any(py)?);
     }
     if let Ok(arr) = array_buffer::extract_f64_array(&x) {
         let result = arr.asinh();
@@ -4744,10 +4754,10 @@ fn acosh(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     use crate::prelude::Acosh;
 
     if let Ok(val) = x.extract::<f64>() {
-        return Ok(val.acosh().into_py_any(py).unwrap());
+        return Ok(val.acosh().into_py_any(py)?);
     }
     if let Ok(val) = x.extract::<Complex64>() {
-        return Ok(val.acosh().into_py_any(py).unwrap());
+        return Ok(val.acosh().into_py_any(py)?);
     }
     if let Ok(arr) = array_buffer::extract_f64_array(&x) {
         let result = arr.acosh();
@@ -4772,10 +4782,10 @@ fn atanh(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
     use crate::prelude::Atanh;
 
     if let Ok(val) = x.extract::<f64>() {
-        return Ok(val.atanh().into_py_any(py).unwrap());
+        return Ok(val.atanh().into_py_any(py)?);
     }
     if let Ok(val) = x.extract::<Complex64>() {
-        return Ok(val.atanh().into_py_any(py).unwrap());
+        return Ok(val.atanh().into_py_any(py)?);
     }
     if let Ok(arr) = array_buffer::extract_f64_array(&x) {
         let result = arr.atanh();
@@ -4803,12 +4813,12 @@ fn atan2(py: Python<'_>, y: Bound<'_, PyAny>, x: Bound<'_, PyAny>) -> PyResult<P
 
     // Scalar-scalar case: f64, f64 -> f64
     if let (Ok(y_val), Ok(x_val)) = (y.extract::<f64>(), x.extract::<f64>()) {
-        return Ok(y_val.atan2(x_val).into_py_any(py).unwrap());
+        return Ok(y_val.atan2(x_val).into_py_any(py)?);
     }
 
     // Scalar-scalar case: Complex64, Complex64 -> Complex64
     if let (Ok(y_val), Ok(x_val)) = (y.extract::<Complex64>(), x.extract::<Complex64>()) {
-        return Ok(y_val.atan2(x_val).into_py_any(py).unwrap());
+        return Ok(y_val.atan2(x_val).into_py_any(py)?);
     }
 
     // Array-scalar case: f64 array, f64 scalar -> f64 array
@@ -4850,7 +4860,7 @@ fn abs(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         if result.ndim() == 0
             && let Some(&val) = result.first()
         {
-            return Ok(val.into_py_any(py).unwrap());
+            return Ok(val.into_py_any(py)?);
         }
         return Ok(array_buffer::f64_array_to_py(py, &result).into());
     }
@@ -4861,7 +4871,7 @@ fn abs(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         if result.ndim() == 0
             && let Some(&val) = result.first()
         {
-            return Ok(val.into_py_any(py).unwrap());
+            return Ok(val.into_py_any(py)?);
         }
         return Ok(array_buffer::f64_array_to_py(py, &result).into());
     }
@@ -4880,13 +4890,13 @@ fn abs(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
 
     // Try f64 scalar (pure Python float)
     if let Ok(val) = x.extract::<f64>() {
-        return Ok(val.abs().into_py_any(py).unwrap());
+        return Ok(val.abs().into_py_any(py)?);
     }
 
     // Try Complex64 scalar (pure Python complex)
     // First attempt direct extraction
     if let Ok(val) = x.extract::<Complex64>() {
-        return Ok(val.abs().into_py_any(py).unwrap());
+        return Ok(val.abs().into_py_any(py)?);
     }
 
     // For numpy scalars (np.complex128, etc.), we need to convert to Python complex first
@@ -4896,7 +4906,7 @@ fn abs(py: Python<'_>, x: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         && let Ok(py_complex) = complex_fn.call1((&x,))
         && let Ok(val) = py_complex.extract::<Complex64>()
     {
-        return Ok(val.abs().into_py_any(py).unwrap());
+        return Ok(val.abs().into_py_any(py)?);
     }
 
     // Try Array type (our custom array wrapper)

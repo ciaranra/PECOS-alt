@@ -14,8 +14,7 @@
 
 //! Mathematical functions for numerical analysis.
 //!
-//! This module provides trait-based mathematical operations that work
-//! across scalars, complex numbers, and arrays.
+//! Trait-based math operations across scalars, complex numbers, and arrays.
 
 use ndarray::{Array, ArrayBase, Data, Dimension};
 use num_complex::{Complex, Complex32, Complex64};
@@ -25,9 +24,6 @@ use num_complex::{Complex, Complex32, Complex64};
 // ============================================================================
 
 /// Trait for calculating exponential (e^x).
-///
-/// This trait provides a uniform interface for exponential operations across
-/// different numeric types.
 ///
 /// # Examples
 ///
@@ -57,8 +53,6 @@ pub trait Exp {
 
 /// Trait for calculating square root.
 ///
-/// This trait provides a uniform interface for square root operations.
-///
 /// # Examples
 ///
 /// ```
@@ -80,8 +74,6 @@ pub trait Sqrt {
 }
 
 /// Trait for calculating power (base^exponent).
-///
-/// This trait provides a uniform interface for power operations.
 ///
 /// # Examples
 ///
@@ -106,8 +98,6 @@ pub trait Power {
 
 /// Trait for calculating cosine.
 ///
-/// This trait provides a uniform interface for cosine operations.
-///
 /// # Examples
 ///
 /// ```
@@ -130,8 +120,6 @@ pub trait Cos {
 }
 
 /// Trait for calculating sine.
-///
-/// This trait provides a uniform interface for sine operations.
 ///
 /// # Examples
 ///
@@ -156,8 +144,6 @@ pub trait Sin {
 
 /// Trait for calculating tangent.
 ///
-/// This trait provides a uniform interface for tangent operations.
-///
 /// # Examples
 ///
 /// ```
@@ -181,8 +167,6 @@ pub trait Tan {
 
 /// Trait for calculating hyperbolic sine.
 ///
-/// This trait provides a uniform interface for hyperbolic sine operations.
-///
 /// # Examples
 ///
 /// ```
@@ -201,8 +185,6 @@ pub trait Sinh {
 
 /// Trait for calculating hyperbolic cosine.
 ///
-/// This trait provides a uniform interface for hyperbolic cosine operations.
-///
 /// # Examples
 ///
 /// ```
@@ -220,8 +202,6 @@ pub trait Cosh {
 }
 
 /// Trait for calculating hyperbolic tangent.
-///
-/// This trait provides a uniform interface for hyperbolic tangent operations.
 ///
 /// # Examples
 ///
@@ -517,9 +497,6 @@ pub trait LogBase {
 }
 
 /// Trait for calculating absolute value.
-///
-/// This trait provides a uniform interface for absolute value operations
-/// across different numeric types.
 ///
 /// # Examples
 ///
@@ -941,8 +918,6 @@ impl Abs for Complex32 {
 // ============================================================================
 
 /// Calculate exponential element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Exp.
 impl<S, D, T> Exp for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -958,8 +933,6 @@ where
 }
 
 /// Calculate square root element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Sqrt.
 impl<S, D, T> Sqrt for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -975,8 +948,6 @@ where
 }
 
 /// Calculate power element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Power.
 impl<S, D, T> Power for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -992,8 +963,6 @@ where
 }
 
 /// Calculate cosine element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Cos.
 impl<S, D, T> Cos for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1009,8 +978,6 @@ where
 }
 
 /// Calculate sine element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Sin.
 impl<S, D, T> Sin for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1026,8 +993,6 @@ where
 }
 
 /// Calculate tangent element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Tan.
 impl<S, D, T> Tan for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1043,8 +1008,6 @@ where
 }
 
 /// Calculate hyperbolic sine element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Sinh.
 impl<S, D, T> Sinh for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1060,8 +1023,6 @@ where
 }
 
 /// Calculate hyperbolic cosine element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Cosh.
 impl<S, D, T> Cosh for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1077,8 +1038,6 @@ where
 }
 
 /// Calculate hyperbolic tangent element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Tanh.
 impl<S, D, T> Tanh for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1094,8 +1053,6 @@ where
 }
 
 /// Calculate arcsine element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Asin.
 impl<S, D, T> Asin for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1111,8 +1068,6 @@ where
 }
 
 /// Calculate arccosine element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Acos.
 impl<S, D, T> Acos for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1128,8 +1083,6 @@ where
 }
 
 /// Calculate arctangent element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Atan.
 impl<S, D, T> Atan for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1145,8 +1098,6 @@ where
 }
 
 /// Calculate inverse hyperbolic sine element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Asinh.
 impl<S, D, T> Asinh for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1162,8 +1113,6 @@ where
 }
 
 /// Calculate inverse hyperbolic cosine element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Acosh.
 impl<S, D, T> Acosh for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1179,8 +1128,6 @@ where
 }
 
 /// Calculate inverse hyperbolic tangent element-wise for arrays.
-///
-/// This generic implementation works for any element type that implements Atanh.
 impl<S, D, T> Atanh for ArrayBase<S, D>
 where
     S: Data<Elem = T>,
@@ -1248,7 +1195,6 @@ where
 
 /// Calculate absolute value element-wise for arrays.
 ///
-/// This generic implementation works for any element type that implements Abs.
 /// For arrays of floats, returns array of floats. For arrays of complex numbers,
 /// returns array of magnitudes (f64/f32).
 ///

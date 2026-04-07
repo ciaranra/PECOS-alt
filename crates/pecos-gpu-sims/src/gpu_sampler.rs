@@ -282,7 +282,7 @@ impl GpuMeasurementSampler {
         }
 
         // Initialize wgpu
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -294,7 +294,7 @@ impl GpuMeasurementSampler {
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("GpuMeasurementSampler Device"),
             required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::default(),
+            required_limits: adapter.limits(),
             ..Default::default()
         }))
         .map_err(|e| format!("Failed to create device: {e}"))?;
@@ -517,7 +517,7 @@ impl GpuMeasurementSampler {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Sampler Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -907,13 +907,13 @@ impl GpuMeasurementSampler {
 
         let (sender, receiver) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            sender.send(result).unwrap();
+            let _ = sender.send(result);
         });
 
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
         receiver
             .recv()
-            .unwrap()
+            .expect("GPU worker channel closed")
             .expect("Failed to map counts buffer");
 
         let data = buffer_slice.get_mapped_range();
@@ -933,11 +933,14 @@ impl GpuMeasurementSampler {
 
         let (sender, receiver) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            sender.send(result).unwrap();
+            let _ = sender.send(result);
         });
 
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-        receiver.recv().unwrap().expect("Failed to map buffer");
+        receiver
+            .recv()
+            .expect("GPU worker channel closed")
+            .expect("Failed to map buffer");
 
         let data = buffer_slice.get_mapped_range();
         let results: &[u32] = bytemuck::cast_slice(&data);
@@ -968,6 +971,8 @@ impl GpuMeasurementSampler {
         self.max_shots
     }
 }
+
+crate::impl_gpu_drop!(GpuMeasurementSampler);
 
 #[cfg(test)]
 #[allow(clippy::cast_precision_loss)] // Test code computes ratios from counts

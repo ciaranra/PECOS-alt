@@ -45,7 +45,7 @@ impl std::error::Error for GpuStartupError {}
 pub fn request_default_gpu_device(
     label: &'static str,
 ) -> Result<GpuDeviceContext, GpuStartupError> {
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
 
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
@@ -61,10 +61,36 @@ pub fn request_default_gpu_device(
         device_type: info.device_type,
     };
 
+    // Reject software renderers and unknown device types -- they technically
+    // "work" but OOM on real workloads (common on CI runners without real GPUs)
+    match info.device_type {
+        wgpu::DeviceType::DiscreteGpu | wgpu::DeviceType::IntegratedGpu => {}
+        other => {
+            return Err(GpuStartupError::DeviceCreation {
+                info,
+                error: format!("Device type {other:?} is not a hardware GPU"),
+            });
+        }
+    }
+
+    // Check buffer limits -- real GPUs support at least 128MB storage buffers.
+    // Software renderers or broken drivers may report very low limits.
+    let limits = adapter.limits();
+    let min_buffer_mb = 128;
+    if limits.max_storage_buffer_binding_size < min_buffer_mb * 1024 * 1024 {
+        return Err(GpuStartupError::DeviceCreation {
+            info,
+            error: format!(
+                "GPU storage buffer limit too small ({} MB, need at least {min_buffer_mb} MB)",
+                limits.max_storage_buffer_binding_size / 1024 / 1024
+            ),
+        });
+    }
+
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some(label),
         required_features: wgpu::Features::empty(),
-        required_limits: wgpu::Limits::default(),
+        required_limits: adapter.limits(),
         ..Default::default()
     }))
     .map_err(|error| GpuStartupError::DeviceCreation {

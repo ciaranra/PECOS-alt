@@ -54,7 +54,7 @@ use super::builder::MonteCarloEngineBuilder;
 ///   - Base seed → Worker seeds → Component seeds
 /// - **Noise Integration**: Applies noise before quantum operations
 ///
-/// # Best Practices
+/// # Tips
 ///
 /// - **Noise Levels**: 0.001-0.01 (0.1-1%) for hardware-like simulations
 /// - **Shot Count**: 1000+ for noisy simulations
@@ -354,10 +354,11 @@ impl MonteCarloEngine {
                         };
 
                         // Store with worker/shot indices for deterministic ordering
-                        results_vec
-                            .lock()
-                            .unwrap()
-                            .push((worker_idx, shot_idx, shot_result));
+                        results_vec.lock().expect("results mutex poisoned").push((
+                            worker_idx,
+                            shot_idx,
+                            shot_result,
+                        ));
                     }
 
                     Ok(())
@@ -373,7 +374,7 @@ impl MonteCarloEngine {
         drop(thread_pool);
 
         // Ensure deterministic ordering of results
-        let mut results = results_vec.lock().unwrap();
+        let mut results = results_vec.lock().expect("results mutex poisoned");
         results.sort_by(|(w1, s1, _), (w2, s2, _)| w1.cmp(w2).then(s1.cmp(s2)));
 
         // Convert to final results format

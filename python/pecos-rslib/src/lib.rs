@@ -39,7 +39,6 @@ mod gate_registry_bindings;
 mod graph_bindings;
 mod hugr_compilation_bindings;
 mod namespace_modules;
-mod noise_helpers;
 mod num_bindings;
 mod pauli_bindings;
 mod pauli_prop_bindings;
@@ -199,7 +198,8 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
                 log::debug!("Found Selene runtime! Attempting to preload: {path_str}");
 
                 unsafe {
-                    let path_cstr = CString::new(path_str.as_bytes()).unwrap();
+                    let path_cstr =
+                        CString::new(path_str.as_bytes()).expect("path contains null byte");
                     let handle = libc::dlopen(path_cstr.as_ptr(), RTLD_LAZY | RTLD_GLOBAL);
                     if handle.is_null() {
                         let error_ptr = libc::dlerror();

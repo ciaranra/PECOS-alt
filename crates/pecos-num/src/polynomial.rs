@@ -14,7 +14,7 @@
 
 //! Polynomial fitting and evaluation.
 //!
-//! This module provides implementations of polynomial operations,
+//! Polynomial operations,
 //! compatible with numpy.polyfit and numpy.poly1d API.
 //!
 //! Uses nalgebra for linear algebra operations.
@@ -334,7 +334,11 @@ impl Poly1d {
 
         // Horner's method: a0 + x(a1 + x(a2 + x(...)))
         let mut result = self.coeffs[0];
-        for &coeff in &self.coeffs.as_slice().unwrap()[1..] {
+        for &coeff in &self
+            .coeffs
+            .as_slice()
+            .expect("coefficient array must be contiguous")[1..]
+        {
             result = result * x + coeff;
         }
         result

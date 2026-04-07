@@ -18,24 +18,19 @@
 //!
 //! # Example
 //!
-//! ```ignore
-//! use pecos_simulators::density_matrix_test_utils::*;
+//! ```
+//! use pecos_simulators::density_matrix_test_utils::run_density_matrix_test_suite;
 //! use pecos_simulators::DensityMatrix;
 //!
-//! #[test]
-//! fn test_my_simulator() {
-//!     let mut sim = DensityMatrix::with_seed(4, 42);
-//!     run_density_matrix_test_suite(&mut sim, 4);
-//! }
+//! let mut sim = DensityMatrix::with_seed(4, 42);
+//! run_density_matrix_test_suite(&mut sim, 4);
 //! ```
 
 #![allow(clippy::missing_panics_doc)]
 
 use crate::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator};
 
-// ============================================================================
-// Density Matrix Simulator Marker Trait
-// ============================================================================
+// --- Density Matrix Simulator Marker Trait ---
 
 /// Marker trait for density matrix simulators.
 ///
@@ -51,7 +46,7 @@ use crate::{ArbitraryRotationGateable, CliffordGateable, QuantumSimulator};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```text
 /// use pecos_simulators::density_matrix_test_utils::{DensityMatrixSimulator, density_matrix_test_suite};
 ///
 /// // In your test module:
@@ -76,7 +71,7 @@ pub trait DensityMatrixSimulator:
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```text
 /// use pecos_simulators::density_matrix_test_suite;
 /// use pecos_simulators::DensityMatrix;
 ///
@@ -123,9 +118,7 @@ macro_rules! density_matrix_test_suite {
     };
 }
 
-// ============================================================================
-// Test Suite Functions
-// ============================================================================
+// --- Test Suite Functions ---
 
 /// Run the shared Clifford gate tests on a density matrix simulator.
 pub fn run_density_matrix_clifford_suite<S: CliffordGateable + QuantumSimulator>(
@@ -157,10 +150,6 @@ pub fn run_density_matrix_test_suite<
     run_density_matrix_clifford_suite(sim, num_qubits);
     run_density_matrix_rotation_suite(sim, num_qubits);
 }
-
-// ============================================================================
-// Tests
-// ============================================================================
 
 #[cfg(test)]
 mod tests {

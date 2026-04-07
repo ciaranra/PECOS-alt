@@ -10,16 +10,8 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
-//! Comprehensive demonstration of all sampling techniques in pecos-neo.
-//!
-//! This test file demonstrates:
-//! 1. Path exploration on static circuits (`CommandQueue`)
-//! 2. Importance sampling for rare event estimation
-//! 3. Measurement outcome biasing for branch exploration
-//! 4. Integration with programs using classical control flow
-//! 5. Subset simulation for very rare event estimation (Au & Beck algorithm)
-//!
-//! Each technique is shown with practical examples relevant to quantum error correction.
+//! Tests for sampling techniques: path exploration, importance sampling,
+//! outcome biasing, classical control flow integration, and subset simulation.
 #![allow(clippy::float_cmp)]
 
 use pecos_core::QubitId;
@@ -36,9 +28,7 @@ use pecos_neo::sampling::{
 };
 use pecos_simulators::SparseStab;
 
-// ============================================================================
-// Part 1: Path Exploration on Static Circuits
-// ============================================================================
+// --- Part 1: Path Exploration on Static Circuits ---
 
 /// Demonstrate path recording - running a circuit and recording which path was taken.
 #[test]
@@ -187,9 +177,7 @@ fn demo_bell_state_paths() {
     }
 }
 
-// ============================================================================
-// Part 2: Importance Sampling for Rare Events (Error Rate Boosting)
-// ============================================================================
+// --- Part 2: Importance Sampling for Rare Events (Error Rate Boosting) ---
 
 /// Demonstrate importance sampling with error rate boosting.
 #[test]
@@ -326,9 +314,7 @@ fn demo_variance_comparison() {
     assert!((is_mean - p_true).abs() < 0.02);
 }
 
-// ============================================================================
-// Part 3: Measurement Outcome Biasing for Branch Exploration
-// ============================================================================
+// --- Part 3: Measurement Outcome Biasing for Branch Exploration ---
 
 /// Demonstrate measurement outcome biasing for exploring rare branches.
 #[test]
@@ -384,9 +370,7 @@ fn demo_outcome_biasing() {
     assert!((weighted_stats.mean() - 0.5).abs() < 0.1); // But weighted mean ~0.5
 }
 
-// ============================================================================
-// Part 4: Programs with Classical Control Flow (CommandSource)
-// ============================================================================
+// --- Part 4: Programs with Classical Control Flow (CommandSource) ---
 
 /// Demonstrate running a conditional program with feedback.
 #[test]
@@ -509,9 +493,7 @@ fn demo_repeat_until_success() {
     }
 }
 
-// ============================================================================
-// Part 5: Combining Techniques - Path Enumeration with Error Analysis
-// ============================================================================
+// --- Part 5: Combining Techniques - Path Enumeration with Error Analysis ---
 
 /// Demonstrate combining path enumeration with error rate analysis.
 #[test]
@@ -580,9 +562,7 @@ fn demo_combined_path_and_error_analysis() {
     );
 }
 
-// ============================================================================
-// Part 6: Subset Simulation for Very Rare Events
-// ============================================================================
+// --- Part 6: Subset Simulation for Very Rare Events ---
 
 /// Demonstrate subset simulation for estimating rare event probabilities.
 ///
@@ -716,9 +696,7 @@ fn demo_proper_subset_simulation() {
     );
 }
 
-// ============================================================================
-// Part 7: Summary - Which Technique When?
-// ============================================================================
+// --- Part 7: Summary - Which Technique When? ---
 
 /// Summary test showing when to use each technique.
 #[test]

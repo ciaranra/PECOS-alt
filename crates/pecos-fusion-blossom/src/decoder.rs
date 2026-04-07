@@ -205,13 +205,18 @@ impl FusionBlossomDecoder {
     ///
     /// This is the recommended way to construct a decoder:
     ///
-    /// ```rust,ignore
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use pecos_fusion_blossom::FusionBlossomDecoder;
+    ///
     /// let decoder = FusionBlossomDecoder::builder()
     ///     .num_nodes(4)
     ///     .num_observables(2)
     ///     .add_edge(0, 1, vec![0], Some(1.0))
     ///     .add_edge(1, 2, vec![1], Some(1.0))
     ///     .build()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn builder() -> crate::builder::FusionBlossomBuilder {
         crate::builder::FusionBlossomBuilder::new()
@@ -421,7 +426,7 @@ impl FusionBlossomDecoder {
             self.virtual_vertices.push(self.num_nodes as VertexIndex);
         }
 
-        let boundary_node = self.boundary_node.unwrap();
+        let boundary_node = self.boundary_node.expect("boundary_node is set above");
 
         let weight_int = if let Some(w) = weight {
             if w < 0.0 {
@@ -544,7 +549,7 @@ impl FusionBlossomDecoder {
             self.solver = Some(solver);
         }
 
-        self.solver.as_mut().unwrap()
+        self.solver.as_mut().expect("solver is initialized above")
     }
 
     /// Decode a syndrome with advanced options and decoding options

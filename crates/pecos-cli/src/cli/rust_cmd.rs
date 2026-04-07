@@ -1,14 +1,31 @@
 //! Implementation of the `rust` subcommand (CUDA-aware cargo commands)
 
-use cargo_metadata::MetadataCommand;
 use pecos_build::Result;
 use pecos_build::errors::Error;
 use serde_json::Value;
-use std::collections::BTreeSet;
 use std::process::Command;
 
 /// FFI crates that should be excluded from workspace-wide cargo commands
 const FFI_CRATES: &[&str] = &["pecos-rslib", "pecos-julia-ffi", "pecos-go-ffi"];
+
+/// Warn if shared C++ dependencies differ across per-crate pecos.toml files.
+/// This is informational -- different crates may legitimately pin different versions.
+fn check_dep_consistency() {
+    let Ok(workspace_root) = std::env::current_dir() else {
+        return;
+    };
+    let Ok(mismatches) = pecos_build::manifest::check_consistency(&workspace_root) else {
+        return;
+    };
+    if mismatches.is_empty() {
+        return;
+    }
+    eprintln!("Note: some C++ dependencies differ across per-crate pecos.toml files:");
+    for m in &mismatches {
+        eprintln!("  {} ({}): {:?}", m.dep_name, m.field, m.values);
+    }
+    eprintln!();
+}
 
 #[derive(Debug)]
 enum GpuProbeResult {
@@ -29,14 +46,35 @@ pub fn run(command: &super::RustCommands) -> Result<()> {
     }
 }
 
-/// Check if CUDA is available (local ~/.pecos/cuda/ or system)
-fn is_cuda_available() -> bool {
-    pecos_build::cuda::is_cuda_available()
-}
+/// Probe whether cuQuantum is available at runtime (SDK installed + CUDA GPU present).
+///
+/// Runs the cuda-check binary from pecos-cuquantum-sys which tries to load the
+/// cuQuantum shared libraries and call cudaDeviceSynchronize. This catches the case
+/// where the SDK is installed for compilation but no GPU is present to run code.
+fn probe_cuquantum_availability() -> bool {
+    let output = Command::new("cargo")
+        .args([
+            "run",
+            "-p",
+            "pecos-cuquantum-sys",
+            "--bin",
+            "cuda_check",
+            "-q",
+            "--",
+            "--json",
+        ])
+        .output();
 
-/// Check if cuQuantum SDK is available
-fn is_cuquantum_available() -> bool {
-    pecos_build::cuquantum::is_cuquantum_available()
+    match output {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Ok(payload) = serde_json::from_str::<Value>(stdout.trim()) {
+                return payload.get("status").and_then(Value::as_str) == Some("available");
+            }
+            true
+        }
+        _ => false,
+    }
 }
 
 /// Probe whether a GPU adapter is available for wgpu.
@@ -134,141 +172,56 @@ fn is_tool_available(tool: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Get features for a package excluding certain features
-///
-/// Uses `cargo_metadata` directly instead of spawning a subprocess to avoid
-/// Windows file locking issues (running executable can't be replaced).
-fn get_features_excluding(package: &str, exclude: &str) -> Result<String> {
-    let metadata = MetadataCommand::new()
-        .no_deps()
-        .exec()
-        .map_err(|e| Error::Config(format!("Failed to get cargo metadata: {e}")))?;
-
-    let pkg = metadata
-        .packages
-        .iter()
-        .find(|p| p.name == package)
-        .ok_or_else(|| Error::Config(format!("Package '{package}' not found in workspace")))?;
-
-    let exclusions: BTreeSet<&str> = exclude.split(',').map(str::trim).collect();
-
-    let features: Vec<&str> = pkg
-        .features
-        .keys()
-        .map(String::as_str)
-        .filter(|f| !exclusions.contains(f))
-        .collect();
-
-    Ok(features.join(","))
-}
-
 /// Run a cargo command and return success status
 fn run_cargo_command(args: &[&str]) -> bool {
     let status = Command::new("cargo").args(args).status();
     matches!(status, Ok(s) if s.success())
 }
 
-/// Run cargo check with CUDA-aware and GPU-aware feature handling
+/// Run cargo check with GPU-aware feature handling
 #[allow(clippy::too_many_lines)]
 fn run_check(include_ffi: bool) -> Result<()> {
-    let cuda_available = is_cuda_available();
     let gpu_probe = probe_gpu_availability();
     let include_gpu_sims = should_include_gpu_sims(&gpu_probe);
 
     maybe_print_gpu_probe_status(&gpu_probe, include_gpu_sims);
 
-    if cuda_available {
-        println!("CUDA detected - checking with all features");
+    println!("Checking workspace packages...");
+    let mut args: Vec<&str> = vec![
+        "check",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--exclude=pecos-cuquantum", // Requires cuQuantum SDK
+    ];
 
-        let mut args: Vec<&str> = vec!["check", "--workspace", "--all-targets", "--all-features"];
+    let mut exclude_flags: Vec<String> = Vec::new();
+    if !include_ffi {
+        exclude_flags.extend(FFI_CRATES.iter().map(|c| format!("--exclude={c}")));
+    }
+    if !include_gpu_sims {
+        exclude_flags.push("--exclude=pecos-gpu-sims".to_string());
+    }
+    for flag in &exclude_flags {
+        args.push(flag);
+    }
 
-        let mut exclude_flags: Vec<String> = Vec::new();
-        if !include_ffi {
-            exclude_flags.extend(FFI_CRATES.iter().map(|c| format!("--exclude={c}")));
-        }
-        if !include_gpu_sims {
-            exclude_flags.push("--exclude=pecos-gpu-sims".to_string());
-        }
-        for flag in &exclude_flags {
-            args.push(flag);
-        }
-
-        if !run_cargo_command(&args) {
-            return Err(Error::Config("cargo check failed".to_string()));
-        }
-    } else {
-        println!("CUDA not detected - checking all features except CUDA");
-
-        println!(
-            "Checking workspace packages (excluding FFI crates and those with CUDA features)..."
-        );
-        let mut args: Vec<&str> = vec![
-            "check",
-            "--workspace",
-            "--all-targets",
-            "--all-features",
-            "--exclude=pecos",
-            "--exclude=pecos-quest",
-            "--exclude=pecos-cuquantum", // Requires cuQuantum SDK
-            // benchmarks depends on pecos, and --all-features enables pecos/cuda
-            "--exclude=benchmarks",
-        ];
-
-        let mut exclude_flags: Vec<String> = FFI_CRATES
-            .iter()
-            .map(|c| format!("--exclude={c}"))
-            .collect();
-        if !include_gpu_sims {
-            exclude_flags.push("--exclude=pecos-gpu-sims".to_string());
-        }
-        for flag in &exclude_flags {
-            args.push(flag);
-        }
-
-        if !run_cargo_command(&args) {
-            return Err(Error::Config("cargo check (workspace) failed".to_string()));
-        }
-
-        println!("Checking pecos with all features except cuda...");
-        let pecos_features = get_features_excluding("pecos", "cuda")?;
-        let features_arg = format!("--features={pecos_features}");
-        if !run_cargo_command(&["check", "-p", "pecos", "--all-targets", &features_arg]) {
-            return Err(Error::Config("cargo check (pecos) failed".to_string()));
-        }
-
-        println!("Checking pecos-quest with all features except cuda...");
-        let quest_features = get_features_excluding("pecos-quest", "cuda")?;
-        let features_arg = format!("--features={quest_features}");
-        if !run_cargo_command(&["check", "-p", "pecos-quest", "--all-targets", &features_arg]) {
-            return Err(Error::Config(
-                "cargo check (pecos-quest) failed".to_string(),
-            ));
-        }
+    if !run_cargo_command(&args) {
+        return Err(Error::Config("cargo check failed".to_string()));
     }
 
     if include_ffi {
         println!("Checking pecos-rslib...");
-        // Only use --all-features if CUDA is available, otherwise exclude cuda
-        if cuda_available {
-            if !run_cargo_command(&[
-                "check",
-                "-p",
-                "pecos-rslib",
-                "--all-targets",
-                "--all-features",
-            ]) {
-                return Err(Error::Config(
-                    "cargo check (pecos-rslib) failed".to_string(),
-                ));
-            }
-        } else {
-            let rslib_features = get_features_excluding("pecos-rslib", "cuda")?;
-            let features_arg = format!("--features={rslib_features}");
-            if !run_cargo_command(&["check", "-p", "pecos-rslib", "--all-targets", &features_arg]) {
-                return Err(Error::Config(
-                    "cargo check (pecos-rslib) failed".to_string(),
-                ));
-            }
+        if !run_cargo_command(&[
+            "check",
+            "-p",
+            "pecos-rslib",
+            "--all-targets",
+            "--all-features",
+        ]) {
+            return Err(Error::Config(
+                "cargo check (pecos-rslib) failed".to_string(),
+            ));
         }
 
         if is_tool_available("julia") {
@@ -307,10 +260,9 @@ fn run_check(include_ffi: bool) -> Result<()> {
     Ok(())
 }
 
-/// Run cargo clippy with CUDA-aware and GPU-aware feature handling
+/// Run cargo clippy with GPU-aware feature handling
 #[allow(clippy::too_many_lines)]
 fn run_clippy(include_ffi: bool, fix: bool) -> Result<()> {
-    let cuda_available = is_cuda_available();
     let gpu_probe = probe_gpu_availability();
     let include_gpu_sims = should_include_gpu_sims(&gpu_probe);
 
@@ -322,106 +274,42 @@ fn run_clippy(include_ffi: bool, fix: bool) -> Result<()> {
         vec![]
     };
 
-    if cuda_available {
-        println!("CUDA detected - running clippy with all features");
+    println!("Running clippy on workspace packages...");
+    let mut args: Vec<&str> = vec![
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--exclude=pecos-cuquantum", // Requires cuQuantum SDK
+    ];
+    args.extend(&fix_args);
 
-        let mut args: Vec<&str> = vec!["clippy", "--workspace", "--all-targets", "--all-features"];
-        args.extend(&fix_args);
+    let mut exclude_flags: Vec<String> = Vec::new();
+    if !include_ffi {
+        exclude_flags.extend(FFI_CRATES.iter().map(|c| format!("--exclude={c}")));
+    }
+    if !include_gpu_sims {
+        exclude_flags.push("--exclude=pecos-gpu-sims".to_string());
+    }
+    for flag in &exclude_flags {
+        args.push(flag);
+    }
 
-        let mut exclude_flags: Vec<String> = Vec::new();
-        if !include_ffi {
-            exclude_flags.extend(FFI_CRATES.iter().map(|c| format!("--exclude={c}")));
-        }
-        if !include_gpu_sims {
-            exclude_flags.push("--exclude=pecos-gpu-sims".to_string());
-        }
-        for flag in &exclude_flags {
-            args.push(flag);
-        }
+    args.extend(&["--", "-D", "warnings"]);
 
-        args.extend(&["--", "-D", "warnings"]);
-
-        if !run_cargo_command(&args) {
-            return Err(Error::Config("cargo clippy failed".to_string()));
-        }
-    } else {
-        println!("CUDA not detected - running clippy on all features except CUDA");
-
-        println!(
-            "Running clippy on workspace packages (excluding FFI crates and those with CUDA features)..."
-        );
-        let mut args: Vec<&str> = vec![
-            "clippy",
-            "--workspace",
-            "--all-targets",
-            "--all-features",
-            "--exclude=pecos",
-            "--exclude=pecos-quest",
-            "--exclude=pecos-cuquantum", // Requires cuQuantum SDK
-            // benchmarks depends on pecos, and --all-features enables pecos/cuda
-            "--exclude=benchmarks",
-        ];
-        args.extend(&fix_args);
-
-        let mut exclude_flags: Vec<String> = FFI_CRATES
-            .iter()
-            .map(|c| format!("--exclude={c}"))
-            .collect();
-        if !include_gpu_sims {
-            exclude_flags.push("--exclude=pecos-gpu-sims".to_string());
-        }
-        for flag in &exclude_flags {
-            args.push(flag);
-        }
-
-        args.extend(&["--", "-D", "warnings"]);
-
-        if !run_cargo_command(&args) {
-            return Err(Error::Config("cargo clippy (workspace) failed".to_string()));
-        }
-
-        println!("Running clippy on pecos with all features except cuda...");
-        let pecos_features = get_features_excluding("pecos", "cuda")?;
-        let features_arg = format!("--features={pecos_features}");
-        let mut args: Vec<&str> = vec!["clippy", "-p", "pecos", "--all-targets", &features_arg];
-        args.extend(&fix_args);
-        args.extend(&["--", "-D", "warnings"]);
-        if !run_cargo_command(&args) {
-            return Err(Error::Config("cargo clippy (pecos) failed".to_string()));
-        }
-
-        println!("Running clippy on pecos-quest with all features except cuda...");
-        let quest_features = get_features_excluding("pecos-quest", "cuda")?;
-        let features_arg = format!("--features={quest_features}");
-        let mut args: Vec<&str> = vec![
-            "clippy",
-            "-p",
-            "pecos-quest",
-            "--all-targets",
-            &features_arg,
-        ];
-        args.extend(&fix_args);
-        args.extend(&["--", "-D", "warnings"]);
-        if !run_cargo_command(&args) {
-            return Err(Error::Config(
-                "cargo clippy (pecos-quest) failed".to_string(),
-            ));
-        }
+    if !run_cargo_command(&args) {
+        return Err(Error::Config("cargo clippy failed".to_string()));
     }
 
     if include_ffi {
         println!("Running clippy on pecos-rslib...");
-        let mut args: Vec<&str> = vec!["clippy", "-p", "pecos-rslib", "--all-targets"];
-        // Only use --all-features if CUDA is available, otherwise exclude cuda
-        if cuda_available {
-            args.push("--all-features");
-        } else {
-            let rslib_features = get_features_excluding("pecos-rslib", "cuda")?;
-            let features_arg_owned = format!("--features={rslib_features}");
-            // Need to leak the string to get a &'static str for the args vec
-            let features_arg: &'static str = Box::leak(features_arg_owned.into_boxed_str());
-            args.push(features_arg);
-        }
+        let mut args: Vec<&str> = vec![
+            "clippy",
+            "-p",
+            "pecos-rslib",
+            "--all-targets",
+            "--all-features",
+        ];
         args.extend(&fix_args);
         args.extend(&["--", "-D", "warnings"]);
         if !run_cargo_command(&args) {
@@ -472,9 +360,11 @@ fn run_clippy(include_ffi: bool, fix: bool) -> Result<()> {
     Ok(())
 }
 
-/// Run cargo test with CUDA-aware and GPU-aware feature handling
+/// Run cargo test with GPU-aware feature handling
 fn run_test(release: bool, include_ffi: bool) -> Result<()> {
-    let cuda_available = is_cuda_available();
+    // Warn about any C++ dependency version differences across crates
+    check_dep_consistency();
+
     let gpu_probe = probe_gpu_availability();
     let include_gpu_sims = should_include_gpu_sims(&gpu_probe);
     let release_flag = if release { "--release" } else { "" };
@@ -495,7 +385,7 @@ fn run_test(release: bool, include_ffi: bool) -> Result<()> {
         "--exclude",
         "pecos-quest",
         "--exclude",
-        "pecos-cuquantum", // Requires cuQuantum SDK, test separately if CUDA available
+        "pecos-cuquantum", // Requires cuQuantum SDK, test separately if available
         "--exclude",
         "pecos-decoders",
         "--exclude",
@@ -510,29 +400,18 @@ fn run_test(release: bool, include_ffi: bool) -> Result<()> {
         return Err(Error::Config("cargo test (workspace) failed".to_string()));
     }
 
-    if cuda_available {
-        println!("CUDA detected - testing pecos-quest with all features");
-        let mut args = vec!["test", "-p", "pecos-quest", "--all-features"];
-        if !release_flag.is_empty() {
-            args.push(release_flag);
-        }
-        if !run_cargo_command(&args) {
-            return Err(Error::Config("cargo test (pecos-quest) failed".to_string()));
-        }
-    } else {
-        println!("CUDA not detected - testing pecos-quest with cpu features only");
-        let mut args = vec!["test", "-p", "pecos-quest", "--features=cpu"];
-        if !release_flag.is_empty() {
-            args.push(release_flag);
-        }
-        if !run_cargo_command(&args) {
-            return Err(Error::Config("cargo test (pecos-quest) failed".to_string()));
-        }
+    println!("Testing pecos-quest...");
+    let mut args = vec!["test", "-p", "pecos-quest", "--all-features"];
+    if !release_flag.is_empty() {
+        args.push(release_flag);
+    }
+    if !run_cargo_command(&args) {
+        return Err(Error::Config("cargo test (pecos-quest) failed".to_string()));
     }
 
     // Test cuQuantum if SDK is available (requires both CUDA and cuQuantum)
-    if is_cuquantum_available() {
-        println!("cuQuantum SDK detected - testing pecos-cuquantum");
+    if probe_cuquantum_availability() {
+        println!("cuQuantum runtime available - testing pecos-cuquantum");
         let mut args = vec!["test", "-p", "pecos-cuquantum"];
         if !release_flag.is_empty() {
             args.push(release_flag);
@@ -543,7 +422,7 @@ fn run_test(release: bool, include_ffi: bool) -> Result<()> {
             ));
         }
     } else {
-        println!("cuQuantum SDK not detected - skipping pecos-cuquantum");
+        println!("cuQuantum runtime not available - skipping pecos-cuquantum");
     }
 
     // Test GPU simulator if GPU is available

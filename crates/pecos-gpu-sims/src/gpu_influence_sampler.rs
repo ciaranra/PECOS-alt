@@ -177,7 +177,7 @@ impl GpuInfluenceSampler {
     }
 
     fn create_internal(map: &GpuInfluenceMapData, seed: u64) -> Result<Self, String> {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -186,15 +186,10 @@ impl GpuInfluenceSampler {
         }))
         .map_err(|_| "No GPU adapter found")?;
 
-        let limits = wgpu::Limits {
-            max_storage_buffers_per_shader_stage: 16,
-            ..wgpu::Limits::default()
-        };
-
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("InfluenceSampler Device"),
             required_features: wgpu::Features::empty(),
-            required_limits: limits,
+            required_limits: adapter.limits(),
             ..Default::default()
         }))
         .map_err(|e| format!("Failed to create device: {e}"))?;
@@ -420,7 +415,7 @@ impl GpuInfluenceSampler {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("InfluenceSampler PipelineLayout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             ..Default::default()
         });
 
@@ -647,11 +642,13 @@ impl GpuInfluenceSampler {
         let slice = staging.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
-            tx.send(result).unwrap();
+            let _ = tx.send(result);
         });
 
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-        rx.recv().unwrap().unwrap();
+        rx.recv()
+            .expect("GPU worker channel closed")
+            .expect("GPU buffer mapping failed");
 
         let data = slice.get_mapped_range();
         let raw: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
@@ -661,6 +658,8 @@ impl GpuInfluenceSampler {
         raw
     }
 }
+
+crate::impl_gpu_drop!(GpuInfluenceSampler);
 
 /// Result from GPU sampling.
 pub struct GpuSamplingResult {

@@ -26,13 +26,12 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```
 //! use pecos_cuquantum::CuStateVec;
 //! use pecos_simulators::{QuantumSimulator, CliffordGateable};
 //! use pecos_core::QubitId;
 //!
 //! fn main() -> pecos_cuquantum::Result<()> {
-//!     // Create a 4-qubit simulator
 //!     let mut sim = CuStateVec::new(4)?;
 //!
 //!     // Create a Bell state
@@ -49,13 +48,13 @@
 //! }
 //! ```
 //!
-//! # Stub Mode
+//! # Runtime Loading
 //!
-//! If cuQuantum is not installed, the underlying `pecos-cuquantum-sys` crate
-//! generates stub bindings. Code will compile and link, but constructors
+//! The underlying `pecos-cuquantum-sys` crate loads cuQuantum shared libraries
+//! at runtime via `libloading`. Code will always compile and link, but constructors
 //! (e.g., `CuStateVec::new()`) will return `Err(CuQuantumError::NotAvailable(...))`
-//! with installation instructions. Use [`is_cuquantum_available()`] to check
-//! at runtime whether the SDK was present at build time.
+//! if the libraries cannot be found. Use [`is_cuquantum_available()`] to check
+//! at runtime whether the SDK is available.
 
 pub mod densitymat;
 pub mod error;
@@ -80,14 +79,14 @@ pub use pecos_simulators::{
     ArbitraryRotationGateable, CliffordGateable, MeasurementResult, QuantumSimulator,
 };
 
-/// Check if cuQuantum was found at build time
+/// Check if cuQuantum is available at runtime
 ///
-/// Returns `true` if the cuQuantum SDK was available when this crate was compiled.
+/// Returns `true` if the cuQuantum SDK libraries can be loaded.
 /// When this returns `false`, constructors like `CuStateVec::new()` will return
 /// `Err(CuQuantumError::NotAvailable(...))` with installation instructions.
 #[must_use]
 pub fn is_cuquantum_available() -> bool {
-    cfg!(not(cuquantum_stub))
+    pecos_cuquantum_sys::is_available()
 }
 
 #[cfg(test)]

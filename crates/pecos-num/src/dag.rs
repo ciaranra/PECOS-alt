@@ -14,7 +14,7 @@
 
 //! Directed Acyclic Graph (DAG) implementation for PECOS.
 //!
-//! This module provides a DAG data structure with runtime cycle detection.
+//! DAG data structure with runtime cycle detection.
 //! Unlike [`DiGraph`](crate::digraph::DiGraph), the `DAG` type guarantees
 //! that no cycles can be introduced when adding edges.
 //!
@@ -809,10 +809,9 @@ impl DAG {
             {
                 let (weight, attrs) = edge.weight();
                 let edge_attrs = EdgeAttrs::from_edge_data(&(*weight, attrs.clone()));
-                // Safe to unwrap - we're copying a DAG, so no cycles possible
                 new_dag
                     .add_edge_with_data(new_source, new_target, edge_attrs)
-                    .unwrap();
+                    .expect("subgraph edges cannot create cycles");
             }
         }
 

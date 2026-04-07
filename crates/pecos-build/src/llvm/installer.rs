@@ -42,7 +42,8 @@ const LLVM_CHECKSUMS: &[(&str, &str)] = &[
 ///
 /// Returns an error if installation fails
 pub fn install_llvm(force: bool, no_configure: bool) -> Result<PathBuf> {
-    let llvm_dir = crate::home::get_llvm_dir_path()?;
+    // Always install to the versioned path
+    let llvm_dir = crate::home::get_versioned_dep_path("llvm", crate::home::LLVM_VERSION)?;
 
     // Check if already installed
     if !force && llvm_dir.exists() && is_valid_installation(&llvm_dir) {
@@ -261,10 +262,14 @@ fn verify_checksum(file_path: &PathBuf, archive_name: &str) -> Result<()> {
     print!("Verifying checksum... ");
     io::Write::flush(&mut io::stdout())?;
 
-    let mut file = fs::File::open(file_path)?;
+    let data = fs::read(file_path)?;
     let mut hasher = Sha256::new();
-    io::copy(&mut file, &mut hasher)?;
-    let computed_hash = format!("{:x}", hasher.finalize());
+    Digest::update(&mut hasher, &data);
+    let computed_hash = hasher.finalize().iter().fold(String::new(), |mut s, b| {
+        use std::fmt::Write;
+        write!(s, "{b:02x}").unwrap();
+        s
+    });
 
     let expected_hash = LLVM_CHECKSUMS
         .iter()

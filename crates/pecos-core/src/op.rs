@@ -149,17 +149,13 @@ pub enum Basis {
     Y,
 }
 
-// ============================================================================
-// Helper
-// ============================================================================
+// --- Helper ---
 
 fn cliff(cr: CliffordRep, ur: UnitaryRep) -> Op {
     Op::Clifford(cr, ur)
 }
 
-// ============================================================================
-// Core methods
-// ============================================================================
+// --- Core methods ---
 
 impl Op {
     /// Returns the algebraic level of this expression.
@@ -343,9 +339,7 @@ impl Op {
     }
 }
 
-// ============================================================================
-// ChannelExpr methods
-// ============================================================================
+// --- ChannelExpr methods ---
 
 impl ChannelExpr {
     /// Returns the set of qubit indices this channel expression acts on.
@@ -437,9 +431,7 @@ impl fmt::Display for ChannelExpr {
     }
 }
 
-// ============================================================================
-// Promotion helpers
-// ============================================================================
+// --- Promotion helpers ---
 
 /// Promotes a `PauliString` to a `(CliffordRep, UnitaryRep)` pair.
 fn pauli_to_cliff_pair(ps: PauliString) -> (CliffordRep, UnitaryRep) {
@@ -447,9 +439,7 @@ fn pauli_to_cliff_pair(ps: PauliString) -> (CliffordRep, UnitaryRep) {
     (CliffordRep::from(ps), ur)
 }
 
-// ============================================================================
-// Tensor product: & operator
-// ============================================================================
+// --- Tensor product: & operator ---
 
 impl BitAnd for Op {
     type Output = Op;
@@ -458,8 +448,8 @@ impl BitAnd for Op {
         let max_level = self.level().max(rhs.level());
         match max_level {
             Level::Pauli => {
-                let a = self.into_pauli().unwrap();
-                let b = rhs.into_pauli().unwrap();
+                let a = self.into_pauli().expect("max_level is Pauli");
+                let b = rhs.into_pauli().expect("max_level is Pauli");
                 Op::Pauli(&a & &b)
             }
             Level::Clifford => {
@@ -476,8 +466,8 @@ impl BitAnd for Op {
                 cliff(cr_a.compose(&cr_b), ur_a & ur_b)
             }
             Level::Unitary => {
-                let a = self.into_unitary().unwrap();
-                let b = rhs.into_unitary().unwrap();
+                let a = self.into_unitary().expect("max_level is Unitary");
+                let b = rhs.into_unitary().expect("max_level is Unitary");
                 Op::Unitary(a & b)
             }
             Level::Channel => {
@@ -489,9 +479,7 @@ impl BitAnd for Op {
     }
 }
 
-// ============================================================================
-// Composition: * operator
-// ============================================================================
+// --- Composition: * operator ---
 
 impl Mul for Op {
     type Output = Op;
@@ -500,8 +488,8 @@ impl Mul for Op {
         let max_level = self.level().max(rhs.level());
         match max_level {
             Level::Pauli => {
-                let a = self.into_pauli().unwrap();
-                let b = rhs.into_pauli().unwrap();
+                let a = self.into_pauli().expect("max_level is Pauli");
+                let b = rhs.into_pauli().expect("max_level is Pauli");
                 Op::Pauli(a * &b)
             }
             Level::Clifford => {
@@ -518,8 +506,8 @@ impl Mul for Op {
                 cliff(cr_a.compose(&cr_b), ur_a * ur_b)
             }
             Level::Unitary => {
-                let a = self.into_unitary().unwrap();
-                let b = rhs.into_unitary().unwrap();
+                let a = self.into_unitary().expect("max_level is Unitary");
+                let b = rhs.into_unitary().expect("max_level is Unitary");
                 Op::Unitary(a * b)
             }
             Level::Channel => {
@@ -531,9 +519,7 @@ impl Mul for Op {
     }
 }
 
-// ============================================================================
-// Reference overloads for & (tensor) and * (compose)
-// ============================================================================
+// --- Reference overloads for & (tensor) and * (compose) ---
 
 impl BitAnd<&Op> for Op {
     type Output = Op;
@@ -577,9 +563,7 @@ impl Mul<&Op> for &Op {
     }
 }
 
-// ============================================================================
-// Negation and phase multiplication
-// ============================================================================
+// --- Negation and phase multiplication ---
 
 impl Neg for Op {
     type Output = Op;
@@ -663,7 +647,9 @@ impl Mul<Op> for PhaseValue {
                 panic!("phase multiplication is not defined for Channel-level operations")
             }
             other => {
-                let ur = other.into_unitary().unwrap();
+                let ur = other
+                    .into_unitary()
+                    .expect("non-Channel Op is convertible to Unitary");
                 Op::Unitary(self * ur)
             }
         }
@@ -702,9 +688,7 @@ impl Mul<&Op> for i32 {
     }
 }
 
-// ============================================================================
-// From conversions
-// ============================================================================
+// --- From conversions ---
 
 impl From<PauliString> for Op {
     fn from(ps: PauliString) -> Op {
@@ -718,9 +702,7 @@ impl From<UnitaryRep> for Op {
     }
 }
 
-// ============================================================================
-// Display
-// ============================================================================
+// --- Display ---
 
 impl fmt::Display for Op {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -733,9 +715,7 @@ impl fmt::Display for Op {
     }
 }
 
-// ============================================================================
-// Gate constructors — Pauli level
-// ============================================================================
+// --- Gate constructors — Pauli level ---
 
 /// Identity operator.
 #[allow(non_snake_case)]
@@ -766,9 +746,7 @@ pub fn Z(qubit: impl Into<QubitId>) -> Op {
     Op::Pauli(PauliString::z(qubit.into().0))
 }
 
-// ============================================================================
-// Gate constructors — Clifford level (1-qubit)
-// ============================================================================
+// --- Gate constructors — Clifford level (1-qubit) ---
 
 /// Hadamard gate.
 #[allow(non_snake_case)]
@@ -969,9 +947,7 @@ pub fn F4dg(qubit: impl Into<QubitId>) -> Op {
     )
 }
 
-// ============================================================================
-// Gate constructors — Clifford level (2-qubit)
-// ============================================================================
+// --- Gate constructors — Clifford level (2-qubit) ---
 
 /// CNOT gate (controlled-X).
 #[allow(non_snake_case)]
@@ -1138,9 +1114,7 @@ pub fn Gdg(q0: impl Into<QubitId>, q1: impl Into<QubitId>) -> Op {
     )
 }
 
-// ============================================================================
-// Gate constructors — Unitary level
-// ============================================================================
+// --- Gate constructors — Unitary level ---
 
 /// T gate (pi/8 gate).
 #[allow(non_snake_case)]
@@ -1205,9 +1179,7 @@ pub fn CCX(c0: impl Into<QubitId>, c1: impl Into<QubitId>, target: impl Into<Qub
     Op::Unitary(crate::unitary_rep::CCX(c0, c1, target))
 }
 
-// ============================================================================
-// Gate constructors — Channel level
-// ============================================================================
+// --- Gate constructors — Channel level ---
 
 /// Prepare qubit in the |0> state (Z-basis preparation).
 #[allow(non_snake_case)]
@@ -1249,9 +1221,7 @@ pub fn MX(qubit: impl Into<QubitId>) -> Op {
     })
 }
 
-// ============================================================================
-// Noise channel constructors
-// ============================================================================
+// --- Noise channel constructors ---
 
 /// Single-qubit depolarizing channel: ρ → (1−p)ρ + (p/3)(XρX + `YρY` + `ZρZ`).
 ///
@@ -1457,10 +1427,6 @@ pub fn Leakage(rate: f64, qubit: impl Into<QubitId>) -> Op {
         qubit: qubit.into().0,
     })
 }
-
-// ============================================================================
-// Tests
-// ============================================================================
 
 #[cfg(test)]
 mod tests {

@@ -133,7 +133,7 @@ impl GpuPauliProp {
     #[allow(clippy::cast_possible_truncation)] // GPU params: qubit/shot counts fit in u32
     pub fn with_seed(num_qubits: usize, num_shots: u32, seed: u64) -> Result<Self, String> {
         // Initialize wgpu
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -145,7 +145,7 @@ impl GpuPauliProp {
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("PauliProp Device"),
             required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::default(),
+            required_limits: adapter.limits(),
             ..Default::default()
         }))
         .map_err(|e| format!("Failed to create device: {e}"))?;
@@ -302,7 +302,7 @@ impl GpuPauliProp {
         // Create pipeline
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("PauliProp Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -784,11 +784,13 @@ impl GpuPauliProp {
         let slice = staging.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
-            tx.send(result).unwrap();
+            let _ = tx.send(result);
         });
 
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-        rx.recv().unwrap().unwrap();
+        rx.recv()
+            .expect("GPU worker channel closed")
+            .expect("GPU buffer mapping failed");
 
         let data = slice.get_mapped_range();
         let result: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
@@ -798,6 +800,8 @@ impl GpuPauliProp {
         result
     }
 }
+
+crate::impl_gpu_drop!(GpuPauliProp);
 
 #[cfg(test)]
 mod tests {

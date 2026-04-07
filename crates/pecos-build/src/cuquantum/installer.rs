@@ -8,10 +8,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use super::{
-    CUQUANTUM_VERSION, config, get_lib_dir, get_pecos_cuquantum_dir,
-    is_valid_cuquantum_installation,
-};
+use super::{CUQUANTUM_VERSION, config, get_pecos_cuquantum_dir, is_valid_cuquantum_installation};
 
 /// cuQuantum download information
 struct CuQuantumDownload {
@@ -99,7 +96,7 @@ fn get_download_info() -> Result<CuQuantumDownload> {
 /// - Download or extraction fails
 /// - Installation verification fails
 pub fn install_cuquantum(force: bool) -> Result<PathBuf> {
-    let cuquantum_dir = get_pecos_cuquantum_dir()?;
+    let cuquantum_dir = crate::home::get_versioned_dep_path("cuquantum", super::CUQUANTUM_VERSION)?;
 
     // Check if already installed
     if !force && cuquantum_dir.exists() && is_valid_cuquantum_installation(&cuquantum_dir) {
@@ -201,16 +198,6 @@ pub fn install_cuquantum(force: bool) -> Result<PathBuf> {
         }
     }
 
-    // Print runtime library path hint
-    if let Some(lib_dir) = get_lib_dir(&cuquantum_dir) {
-        println!();
-        println!("For runtime library loading, add to your shell profile:");
-        println!(
-            "  export LD_LIBRARY_PATH=\"{}:$LD_LIBRARY_PATH\"",
-            lib_dir.display()
-        );
-    }
-
     Ok(cuquantum_dir)
 }
 
@@ -268,10 +255,14 @@ fn verify_checksum(file_path: &Path, expected: &str) -> Result<()> {
     print!("Verifying checksum... ");
     io::stdout().flush()?;
 
-    let mut file = fs::File::open(file_path)?;
+    let data = fs::read(file_path)?;
     let mut hasher = Sha256::new();
-    io::copy(&mut file, &mut hasher)?;
-    let computed_hash = format!("{:x}", hasher.finalize());
+    Digest::update(&mut hasher, &data);
+    let computed_hash = hasher.finalize().iter().fold(String::new(), |mut s, b| {
+        use std::fmt::Write;
+        write!(s, "{b:02x}").unwrap();
+        s
+    });
 
     if computed_hash == expected {
         println!("OK");

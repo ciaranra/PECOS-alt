@@ -33,12 +33,37 @@ use std::collections::HashMap;
 /// Convert a Rust Attribute to a Python object.
 fn attribute_to_py(py: Python<'_>, attr: &Attribute) -> Py<PyAny> {
     match attr {
-        Attribute::Float(f) => f.into_pyobject(py).unwrap().into_any().unbind(),
-        Attribute::Int(i) => i.into_pyobject(py).unwrap().into_any().unbind(),
-        Attribute::String(s) => s.into_pyobject(py).unwrap().into_any().unbind(),
-        Attribute::Bool(b) => b.into_pyobject(py).unwrap().to_owned().into_any().unbind(),
-        Attribute::IntList(list) => list.into_pyobject(py).unwrap().into_any().unbind(),
-        Attribute::StringList(list) => list.into_pyobject(py).unwrap().into_any().unbind(),
+        Attribute::Float(f) => f
+            .into_pyobject(py)
+            .expect("f64 to Python conversion failed")
+            .into_any()
+            .unbind(),
+        Attribute::Int(i) => i
+            .into_pyobject(py)
+            .expect("i64 to Python conversion failed")
+            .into_any()
+            .unbind(),
+        Attribute::String(s) => s
+            .into_pyobject(py)
+            .expect("String to Python conversion failed")
+            .into_any()
+            .unbind(),
+        Attribute::Bool(b) => b
+            .into_pyobject(py)
+            .expect("bool to Python conversion failed")
+            .to_owned()
+            .into_any()
+            .unbind(),
+        Attribute::IntList(list) => list
+            .into_pyobject(py)
+            .expect("Vec<i64> to Python conversion failed")
+            .into_any()
+            .unbind(),
+        Attribute::StringList(list) => list
+            .into_pyobject(py)
+            .expect("Vec<String> to Python conversion failed")
+            .into_any()
+            .unbind(),
         Attribute::Json(value) => {
             // Convert serde_json::Value to Python via JSON string
             let json_str = serde_json::to_string(value).unwrap_or_default();
@@ -1060,7 +1085,7 @@ impl PyDagCircuit {
         self.inner.wires_for_qubit(QubitId::from(qubit))
     }
 
-    // ==================== Builder Methods ====================
+    // --- Builder Methods ---
     //
     // These methods provide a fluent API for building circuits, matching
     // the simulator APIs. Each method returns self for method chaining.
@@ -1278,7 +1303,7 @@ impl PyDagCircuit {
         Ok(slf)
     }
 
-    // ==================== Attributes ====================
+    // --- Attributes ---
 
     /// Get all circuit-level attributes as a dictionary.
     ///
@@ -1554,7 +1579,7 @@ fn py_is_quantum_operation(op_name: &str) -> bool {
     is_quantum_operation(op_name)
 }
 
-// ==================== Time Unit Types ====================
+// --- Time Unit Types ---
 
 /// Python wrapper for nanosecond durations.
 ///
@@ -1765,9 +1790,7 @@ impl From<PyTimeUnits> for TimeUnits {
     }
 }
 
-// ============================================================================
-// TickCircuit bindings
-// ============================================================================
+// --- TickCircuit bindings ---
 
 /// Python wrapper for a single tick (parallel time slice).
 #[pyclass(name = "Tick", module = "pecos_rslib.quantum")]
@@ -1992,9 +2015,7 @@ impl PyTickCircuit {
             .map(|attr| attribute_to_py(py, attr))
     }
 
-    // =========================================================================
-    // Circuit manipulation
-    // =========================================================================
+    // --- Circuit manipulation ---
 
     /// Clear the circuit and start fresh.
     ///
@@ -2075,9 +2096,7 @@ impl PyTickCircuit {
         })
     }
 
-    // =========================================================================
-    // Iteration helpers
-    // =========================================================================
+    // --- Iteration helpers ---
 
     /// Get all qubits used in the circuit.
     ///
@@ -2140,9 +2159,7 @@ impl PyTickCircuit {
         self.inner.discard(&qubits, tick_idx)
     }
 
-    // =========================================================================
-    // Tick-level and gate-level metadata setters (by index)
-    // =========================================================================
+    // --- Tick-level and gate-level metadata setters (by index) ---
 
     /// Set tick-level metadata on a specific tick by index.
     ///
@@ -2257,9 +2274,7 @@ impl PyTickCircuit {
         }
     }
 
-    // =========================================================================
-    // Gate signature validation
-    // =========================================================================
+    // --- Gate signature validation ---
 
     /// Import gate signatures for validation.
     ///
@@ -2525,9 +2540,7 @@ impl PyTickHandle {
         Ok(slf)
     }
 
-    // =========================================================================
-    // Single-qubit gates
-    // =========================================================================
+    // --- Single-qubit gates ---
 
     /// Apply a Hadamard gate.
     fn h(slf: Py<Self>, py: Python<'_>, qubits: Vec<usize>) -> PyResult<Py<Self>> {
@@ -2689,9 +2702,7 @@ impl PyTickHandle {
         Ok(slf)
     }
 
-    // =========================================================================
-    // Two-qubit gates
-    // =========================================================================
+    // --- Two-qubit gates ---
 
     /// Apply a CNOT (CX) gate.
     fn cx(slf: Py<Self>, py: Python<'_>, pairs: Vec<(usize, usize)>) -> PyResult<Py<Self>> {
@@ -2838,9 +2849,7 @@ impl PyTickHandle {
         Ok(slf)
     }
 
-    // =========================================================================
-    // Generic gate dispatch (name-based)
-    // =========================================================================
+    // --- Generic gate dispatch (name-based) ---
 
     /// Add a gate by name, resolving to a native `GateType` if possible.
     ///
@@ -2968,9 +2977,7 @@ impl PyTickHandle {
         }
     }
 
-    // =========================================================================
-    // Custom (unrecognized) gates
-    // =========================================================================
+    // --- Custom (unrecognized) gates ---
 
     /// Add a custom (unrecognized) gate on the given qubits.
     fn custom(slf: Py<Self>, py: Python<'_>, qubits: Vec<usize>) -> PyResult<Py<Self>> {
@@ -3055,9 +3062,7 @@ impl PyTickHandle {
         }
     }
 
-    // =========================================================================
-    // State preparation and measurement
-    // =========================================================================
+    // --- State preparation and measurement ---
 
     /// Prepare qubits in the |0> state.
     ///
@@ -3109,9 +3114,7 @@ impl PyTickHandle {
         })
     }
 
-    // =========================================================================
-    // Resource management
-    // =========================================================================
+    // --- Resource management ---
 
     /// Allocate qubits.
     fn qalloc(slf: Py<Self>, py: Python<'_>, qubits: Vec<usize>) -> PyResult<Py<Self>> {
@@ -3127,9 +3130,7 @@ impl PyTickHandle {
         Ok(slf)
     }
 
-    // =========================================================================
-    // Timing
-    // =========================================================================
+    // --- Timing ---
 
     /// Apply an idle gate with a specified duration.
     ///

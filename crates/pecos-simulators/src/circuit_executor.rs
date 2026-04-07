@@ -24,16 +24,17 @@
 //!
 //! # Example
 //!
-//! ```ignore
+//! ```
 //! use pecos_simulators::{SparseStab, CircuitExecutor};
 //! use pecos_quantum::TickCircuitSoA;
 //!
-//! let circuit = TickCircuitSoA::builder()
+//! let mut builder = TickCircuitSoA::builder();
+//! builder
 //!     .tick().pz(&[0, 1, 2, 3])
 //!     .tick().h(&[0, 1, 2, 3])
 //!     .tick().cx(&[(0, 1), (2, 3)])
-//!     .tick().mz(&[0, 1, 2, 3])
-//!     .build();
+//!     .tick().mz(&[0, 1, 2, 3]);
+//! let circuit = builder.build();
 //!
 //! let mut sim = SparseStab::new(4);
 //! let executor = CircuitExecutor::new(&circuit);
@@ -235,7 +236,7 @@ fn execute_single_batch<S: CliffordGateable>(
 
 /// A DOD/ECS-style execution system that processes gate batches.
 ///
-/// This trait represents a "system" in ECS terminology - a function that
+/// A "system" in ECS terminology - a function that
 /// operates on components (gate batches) to produce effects (simulator state changes).
 pub trait GateSystem<S: CliffordGateable> {
     /// The gate type this system handles.

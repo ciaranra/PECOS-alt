@@ -117,9 +117,13 @@ fn verify_sha256(data: &[u8], expected: &str) -> Result<String> {
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
-    hasher.update(data);
+    Digest::update(&mut hasher, data);
     let result = hasher.finalize();
-    let actual = format!("{result:x}");
+    let actual = result.iter().fold(String::new(), |mut s, b| {
+        use std::fmt::Write;
+        write!(s, "{b:02x}").unwrap();
+        s
+    });
 
     if actual == expected {
         Ok(actual)
@@ -137,9 +141,13 @@ fn verify_sha256(data: &[u8], expected: &str) -> Result<String> {
 ///
 /// Returns an error if any download fails
 ///
+/// # Errors
+///
+/// Returns an error if any download fails or a thread panics.
+///
 /// # Panics
 ///
-/// Panics if the mutex is poisoned
+/// Panics if an internal mutex is poisoned (indicates a prior thread panic).
 pub fn download_all_cached(downloads: Vec<DownloadInfo>) -> Result<Vec<(String, Vec<u8>)>> {
     use std::sync::{Arc, Mutex};
     use std::thread;
@@ -155,26 +163,37 @@ pub fn download_all_cached(downloads: Vec<DownloadInfo>) -> Result<Vec<(String, 
 
             thread::spawn(move || match download_cached(&info) {
                 Ok(data) => {
-                    results.lock().unwrap().push((info.name.clone(), data));
+                    results
+                        .lock()
+                        .expect("results mutex poisoned")
+                        .push((info.name.clone(), data));
                 }
                 Err(e) => {
-                    errors.lock().unwrap().push(format!("{}: {}", info.name, e));
+                    errors
+                        .lock()
+                        .expect("errors mutex poisoned")
+                        .push(format!("{}: {}", info.name, e));
                 }
             })
         })
         .collect();
 
     for handle in handles {
-        handle.join().unwrap();
+        handle
+            .join()
+            .map_err(|_| Error::Download("download thread panicked".to_string()))?;
     }
 
-    let errors = errors.lock().unwrap();
+    let errors = errors.lock().expect("errors mutex poisoned");
     if !errors.is_empty() {
         return Err(Error::Download(format!(
             "Download failures:\n{}",
             errors.join("\n")
         )));
     }
+    drop(errors);
 
-    Ok(Arc::try_unwrap(results).unwrap().into_inner().unwrap())
+    let results = Arc::try_unwrap(results)
+        .map_err(|_| Error::Download("unexpected outstanding Arc reference".to_string()))?;
+    Ok(results.into_inner().expect("results mutex poisoned"))
 }

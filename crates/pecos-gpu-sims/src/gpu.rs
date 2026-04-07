@@ -168,10 +168,7 @@ impl GpuStateVec {
         let num_amplitudes = 1u64 << num_qubits;
 
         // Initialize wgpu
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -180,19 +177,10 @@ impl GpuStateVec {
         }))
         .map_err(|_| GpuError::NoAdapter)?;
 
-        // Request the adapter's maximum buffer size limits for large qubit counts
-        // This allows supporting as many qubits as the GPU hardware allows
-        let adapter_limits = adapter.limits();
-        let limits = wgpu::Limits {
-            max_buffer_size: adapter_limits.max_buffer_size,
-            max_storage_buffer_binding_size: adapter_limits.max_storage_buffer_binding_size,
-            ..Default::default()
-        };
-
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("PECOS wgpu simulator"),
             required_features: wgpu::Features::empty(),
-            required_limits: limits,
+            required_limits: adapter.limits(),
             memory_hints: wgpu::MemoryHints::Performance,
             trace: wgpu::Trace::Off,
             experimental_features: wgpu::ExperimentalFeatures::default(),
@@ -311,14 +299,14 @@ impl GpuStateVec {
         // Create pipeline layouts
         let gate_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Gate pipeline layout"),
-            bind_group_layouts: &[&gate_bind_group_layout],
+            bind_group_layouts: &[Some(&gate_bind_group_layout)],
             immediate_size: 0,
         });
 
         let collapse_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Collapse pipeline layout"),
-                bind_group_layouts: &[&collapse_bind_group_layout],
+                bind_group_layouts: &[Some(&collapse_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -460,7 +448,7 @@ impl GpuStateVec {
         let marginal_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Marginal probability pipeline layout"),
-                bind_group_layouts: &[&marginal_bind_group_layout],
+                bind_group_layouts: &[Some(&marginal_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -925,7 +913,7 @@ impl GpuStateVec {
         buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
         self.device
             .poll(wgpu::PollType::wait_indefinitely())
-            .unwrap();
+            .expect("GPU device poll failed");
 
         let prob_one: f32 = {
             let data = buffer_slice.get_mapped_range();
@@ -1021,7 +1009,7 @@ impl GpuStateVec {
         buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
         self.device
             .poll(wgpu::PollType::wait_indefinitely())
-            .unwrap();
+            .expect("GPU device poll failed");
 
         let state: Vec<[f32; 2]> = {
             let data = buffer_slice.get_mapped_range();
@@ -1136,6 +1124,8 @@ impl ArbitraryRotationGateable for GpuStateVec {
         self
     }
 }
+
+crate::impl_gpu_drop!(GpuStateVec);
 
 #[cfg(test)]
 mod tests {

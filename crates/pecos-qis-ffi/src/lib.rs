@@ -1,6 +1,6 @@
 //! Minimal QIS Interface for Fast Linking
 //!
-//! This crate provides the minimal FFI interface needed to link QIS (Quantum Instruction Set)
+//! Minimal FFI interface needed to link QIS (Quantum Instruction Set)
 //! programs with Rust functions. It's designed to be lightweight and compile quickly.
 //!
 //! The interface collects quantum operations during program execution without performing
@@ -31,9 +31,7 @@ use std::sync::{Condvar, Mutex};
 
 pub mod ffi;
 
-// =============================================================================
-// Per-Execution Context for Parallel Execution Support
-// =============================================================================
+// --- Per-Execution Context for Parallel Execution Support ---
 
 /// State for dynamic circuit synchronization
 #[derive(Debug, Default)]
@@ -261,11 +259,13 @@ pub fn set_measurements(measurements: impl IntoIterator<Item = (usize, bool)>) {
 /// operations and return measurement results.
 ///
 /// # Example
-/// ```ignore
+/// ```
+/// use pecos_qis_ffi::set_quantum_executor;
+/// use std::collections::BTreeMap;
+///
 /// set_quantum_executor(|collector| {
-///     let ops = collector.take_operations();
-///     let results = my_simulator.execute(ops);
-///     results
+///     let _ops = collector.take_operations();
+///     BTreeMap::new() // return measurement results
 /// });
 /// ```
 pub fn set_quantum_executor<F>(executor: F)
@@ -309,9 +309,7 @@ pub fn execute_pending_and_get_results() -> bool {
     })
 }
 
-// =============================================================================
-// FFI functions for cross-library dynamic circuit coordination
-// =============================================================================
+// --- FFI functions for cross-library dynamic circuit coordination ---
 
 /// Enable dynamic execution mode (called via FFI from executor)
 ///
@@ -762,9 +760,7 @@ mod tests {
         }
     }
 
-    // =========================================================================
-    // ExecutionContext tests
-    // =========================================================================
+    // --- ExecutionContext tests ---
 
     #[test]
     fn test_execution_context_creation() {
@@ -824,9 +820,7 @@ mod tests {
         unsafe { pecos_destroy_execution_context(ctx) };
     }
 
-    // =========================================================================
-    // Dynamic mode tests (with context)
-    // =========================================================================
+    // --- Dynamic mode tests (with context) ---
 
     #[test]
     fn test_enable_disable_dynamic_mode() {
@@ -943,9 +937,7 @@ mod tests {
         teardown_context(ctx);
     }
 
-    // =========================================================================
-    // Cross-thread tests with shared context
-    // =========================================================================
+    // --- Cross-thread tests with shared context ---
 
     #[test]
     fn test_cross_thread_result_signaling() {
@@ -1065,9 +1057,7 @@ mod tests {
         assert!(ptr.is_null());
     }
 
-    // =========================================================================
-    // Thread-local interface tests (don't require execution context)
-    // =========================================================================
+    // --- Thread-local interface tests (don't require execution context) ---
 
     #[test]
     fn test_interface_reset() {
@@ -1159,9 +1149,7 @@ mod tests {
         });
     }
 
-    // =========================================================================
-    // wait_for_result_ready tests
-    // =========================================================================
+    // --- wait_for_result_ready tests ---
 
     #[test]
     fn test_wait_for_result_ready_no_context() {
@@ -1395,9 +1383,7 @@ mod tests {
         assert_eq!(get_measurement_result(0), None);
     }
 
-    // =========================================================================
-    // Parallel execution isolation tests
-    // =========================================================================
+    // --- Parallel execution isolation tests ---
 
     #[test]
     fn test_parallel_contexts_are_isolated() {

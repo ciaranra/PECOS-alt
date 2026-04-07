@@ -275,7 +275,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         let rng = R::seed_from_u64(seed);
 
         // Initialize wgpu
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -298,7 +298,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("GpuStab Device"),
             required_features,
-            required_limits: wgpu::Limits::default(),
+            required_limits: adapter.limits(),
             ..Default::default()
         }))
         .map_err(|e| format!("Failed to create device: {e}"))?;
@@ -694,7 +694,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         // Create pipelines
         let main_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Main Pipeline Layout"),
-            bind_group_layouts: &[&main_bind_group_layout],
+            bind_group_layouts: &[Some(&main_bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -769,8 +769,8 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Find Anticommuting Pipeline Layout"),
                 bind_group_layouts: &[
-                    &main_bind_group_layout,
-                    &find_anticommuting_bind_group_layout,
+                    Some(&main_bind_group_layout),
+                    Some(&find_anticommuting_bind_group_layout),
                 ],
                 immediate_size: 0,
             });
@@ -932,7 +932,10 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         let batch_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Batch Pipeline Layout"),
-                bind_group_layouts: &[&main_bind_group_layout, &batch_bind_group_layout],
+                bind_group_layouts: &[
+                    Some(&main_bind_group_layout),
+                    Some(&batch_bind_group_layout),
+                ],
                 immediate_size: 0,
             });
 
@@ -1016,7 +1019,10 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         let measurement_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Measurement Pipeline Layout"),
-                bind_group_layouts: &[&main_bind_group_layout, &measurement_bind_group_layout],
+                bind_group_layouts: &[
+                    Some(&main_bind_group_layout),
+                    Some(&measurement_bind_group_layout),
+                ],
                 immediate_size: 0,
             });
 
@@ -1452,9 +1458,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         }
     }
 
-    // =========================================================================
-    // Gate-Parallel Processing
-    // =========================================================================
+    // --- Gate-Parallel Processing ---
 
     /// Enable gate-parallel processing.
     ///
@@ -1482,9 +1486,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         self.parallel_enabled
     }
 
-    // =========================================================================
-    // Compiled Circuit Support
-    // =========================================================================
+    // --- Compiled Circuit Support ---
 
     /// Compile a circuit for efficient repeated execution.
     ///
@@ -1536,7 +1538,7 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
                 self.device
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: Some(&format!("Compiled Pipeline Layout {hash:016x}")),
-                        bind_group_layouts: &[&self.compiled_bind_group_layout],
+                        bind_group_layouts: &[Some(&self.compiled_bind_group_layout)],
                         immediate_size: 0,
                     });
 
@@ -1719,11 +1721,11 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         let buffer_slice = self.staging_buffer.slice(..read_size);
         let (sender, receiver) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            sender.send(result).unwrap();
+            let _ = sender.send(result);
         });
 
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-        receiver.recv().unwrap().ok()?;
+        receiver.recv().expect("GPU worker channel closed").ok()?;
 
         let data = buffer_slice.get_mapped_range();
         let anticommuting: &[u32] = bytemuck::cast_slice(&data);
@@ -1776,11 +1778,11 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         let buffer_slice = self.staging_buffer.slice(..8);
         let (sender, receiver) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            sender.send(result).unwrap();
+            let _ = sender.send(result);
         });
 
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-        receiver.recv().unwrap().ok()?;
+        receiver.recv().expect("GPU worker channel closed").ok()?;
 
         let data = buffer_slice.get_mapped_range();
         let result_data: &[u32] = bytemuck::cast_slice(&data);
@@ -1907,11 +1909,14 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         let buffer_slice = self.staging_buffer.slice(..4);
         let (sender, receiver) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            sender.send(result).unwrap();
+            let _ = sender.send(result);
         });
 
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-        receiver.recv().unwrap().unwrap();
+        receiver
+            .recv()
+            .expect("GPU worker channel closed")
+            .expect("GPU buffer mapping failed");
 
         let data = buffer_slice.get_mapped_range();
         let result: u32 = bytemuck::cast_slice::<u8, u32>(&data)[0];
@@ -1987,11 +1992,14 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         let buffer_slice = self.staging_buffer.slice(..4);
         let (sender, receiver) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            sender.send(result).unwrap();
+            let _ = sender.send(result);
         });
 
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-        receiver.recv().unwrap().unwrap();
+        receiver
+            .recv()
+            .expect("GPU worker channel closed")
+            .expect("GPU buffer mapping failed");
 
         let data = buffer_slice.get_mapped_range();
         let result: u32 = bytemuck::cast_slice::<u8, u32>(&data)[0];
@@ -2226,11 +2234,14 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         let buffer_slice = self.staging_buffer.slice(..results_size);
         let (sender, receiver) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            sender.send(result).unwrap();
+            let _ = sender.send(result);
         });
 
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-        receiver.recv().unwrap().unwrap();
+        receiver
+            .recv()
+            .expect("GPU worker channel closed")
+            .expect("GPU buffer mapping failed");
 
         let data = buffer_slice.get_mapped_range();
         let result_data: &[u32] = bytemuck::cast_slice(&data);
@@ -2266,11 +2277,14 @@ impl<R: Rng + SeedableRng + Debug> GpuStab<R> {
         let buffer_slice = self.staging_buffer.slice(..size);
         let (sender, receiver) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            sender.send(result).unwrap();
+            let _ = sender.send(result);
         });
 
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-        receiver.recv().unwrap().unwrap();
+        receiver
+            .recv()
+            .expect("GPU worker channel closed")
+            .expect("GPU buffer mapping failed");
 
         let data = buffer_slice.get_mapped_range();
         let result: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
@@ -2467,6 +2481,8 @@ impl<R: Rng + SeedableRng + Debug> Debug for GpuStab<R> {
     }
 }
 
+crate::impl_gpu_drop!(GpuStab<R>, R: Rng + SeedableRng);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2482,9 +2498,7 @@ mod tests {
         }
     }
 
-    // ========================================================================
-    // Basic Stabilizer Test Suite (no Clone required)
-    // ========================================================================
+    // --- Basic Stabilizer Test Suite (no Clone required) ---
 
     /// Run the basic stabilizer test suite on the GPU simulator.
     /// This tests gate identities, entanglement correlations, etc.
@@ -2507,9 +2521,7 @@ mod tests {
         run_basic_stabilizer_test_suite(&mut gpu, 4);
     }
 
-    // ========================================================================
-    // GPU vs CPU Comparison Tests
-    // ========================================================================
+    // --- GPU vs CPU Comparison Tests ---
 
     /// Compare GPU and CPU simulators on random circuits.
     /// This uses the direct comparison method which doesn't require Clone.
@@ -3488,9 +3500,7 @@ mod tests {
         GpuStab::with_seed(num_qubits, seed).ok()
     }
 
-    // ========================================================================
-    // Basic Tests
-    // ========================================================================
+    // --- Basic Tests ---
 
     #[test]
     fn test_creation() {
@@ -3521,9 +3531,7 @@ mod tests {
         assert_eq!(sim.gate_queue.len() - 1, 0);
     }
 
-    // ========================================================================
-    // Deterministic Measurement Tests (|0> and |1> states)
-    // ========================================================================
+    // --- Deterministic Measurement Tests (|0> and |1> states) ---
 
     #[test]
     fn test_initial_state_measurement() {
@@ -3637,9 +3645,7 @@ mod tests {
         assert_eq!(gpu_r.outcome, cpu_r.outcome, "Y gate: outcome mismatch");
     }
 
-    // ========================================================================
-    // H Gate Tests (Non-Deterministic)
-    // ========================================================================
+    // --- H Gate Tests (Non-Deterministic) ---
 
     #[test]
     fn test_h_gate_non_deterministic() {
@@ -3686,9 +3692,7 @@ mod tests {
         );
     }
 
-    // ========================================================================
-    // S Gate Tests
-    // ========================================================================
+    // --- S Gate Tests ---
 
     #[test]
     fn test_s_gate_gpu_vs_cpu() {
@@ -3753,9 +3757,7 @@ mod tests {
         );
     }
 
-    // ========================================================================
-    // Sdg Gate Tests
-    // ========================================================================
+    // --- Sdg Gate Tests ---
 
     #[test]
     fn test_sdg_gate_gpu_vs_cpu() {
@@ -3800,9 +3802,7 @@ mod tests {
         );
     }
 
-    // ========================================================================
-    // CX Gate Tests
-    // ========================================================================
+    // --- CX Gate Tests ---
 
     #[test]
     fn test_cx_deterministic() {
@@ -3887,9 +3887,7 @@ mod tests {
         );
     }
 
-    // ========================================================================
-    // CZ Gate Tests
-    // ========================================================================
+    // --- CZ Gate Tests ---
 
     #[test]
     fn test_cz_deterministic() {
@@ -3937,9 +3935,7 @@ mod tests {
         );
     }
 
-    // ========================================================================
-    // SWAP Gate Tests
-    // ========================================================================
+    // --- SWAP Gate Tests ---
 
     #[test]
     fn test_swap_gate() {
@@ -3967,9 +3963,7 @@ mod tests {
         assert_eq!(gpu_r1.outcome, cpu_r1.outcome, "SWAP: q1 mismatch");
     }
 
-    // ========================================================================
-    // Multi-Qubit Tests
-    // ========================================================================
+    // --- Multi-Qubit Tests ---
 
     #[test]
     fn test_multi_qubit_circuit() {
@@ -4035,9 +4029,7 @@ mod tests {
         }
     }
 
-    // ========================================================================
-    // Large System Tests
-    // ========================================================================
+    // --- Large System Tests ---
 
     #[test]
     fn test_larger_system() {
