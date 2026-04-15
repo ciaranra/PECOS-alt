@@ -1272,6 +1272,10 @@ def qis_engine(**kwargs: object) -> QisEngineBuilder:
     """Create a QIS engine builder."""
     ...
 
+def selene_engine(**kwargs: object) -> QisEngineBuilder:
+    """Create a QIS engine builder configured with the Selene runtime."""
+    ...
+
 def phir_json_engine(**kwargs: object) -> PhirJsonEngineBuilder:
     """Create a PHIR JSON engine builder."""
     ...

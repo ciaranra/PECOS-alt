@@ -319,7 +319,7 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register engine builder functions
     m.add_function(wrap_pyfunction!(engine_builders::qasm_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::qis_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(engine_builders::selene_runtime, m)?)?;
+    m.add_function(wrap_pyfunction!(engine_builders::selene_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::phir_json_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::phir_engine, m)?)?;
     m.add_function(wrap_pyfunction!(engine_builders::sim_builder, m)?)?;
