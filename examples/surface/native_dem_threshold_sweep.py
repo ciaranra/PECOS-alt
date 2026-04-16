@@ -29,7 +29,7 @@ Example:
 
     python examples/surface/native_dem_threshold_sweep.py \\
         --distances 3 5 7 9 \\
-        --duration-multipliers 2 3 4 \\
+        --duration-multipliers 2 2.5 3 \\
         --error-rates 0.001 0.002 0.003 0.004 0.005 0.006 \\
         --bases X Z \\
         --shots 500 \\
@@ -95,6 +95,71 @@ class FitSummary:
     fitted_logical_error_rate_per_round: float
     fitted_projected_logical_error_rate_over_d_rounds: float
     fit_root_mean_square_error: float
+
+
+@dataclass(frozen=True)
+class DistanceScalingFitSummary:
+    """Fit ``epsilon(d) ~= A * (p / p_th) ** ((d + 1) / 2)`` at fixed ``p``."""
+
+    backend: str
+    basis: str
+    physical_error_rate: float
+    distances: tuple[int, ...]
+    fitted_prefactor: float
+    fitted_threshold: float
+    fitted_suppression_factor: float
+    fit_root_mean_square_log_error: float
+
+
+@dataclass(frozen=True)
+class GlobalScalingFitSummary:
+    """Fit the standard below-threshold surface-code scaling ansatz."""
+
+    backend: str
+    basis: str
+    distances: tuple[int, ...]
+    physical_error_rates: tuple[float, ...]
+    fitted_prefactor: float
+    fitted_threshold: float
+    fit_root_mean_square_log_error: float
+
+
+@dataclass(frozen=True)
+class PerDistancePowerLawFitSummary:
+    """Fit ``epsilon(p) ~= C_d * p ** beta_d`` for one distance."""
+
+    backend: str
+    basis: str
+    distance: int
+    physical_error_rates: tuple[float, ...]
+    fitted_prefactor: float
+    fitted_exponent: float
+    expected_distance_scaling_exponent: float
+    fit_root_mean_square_log_error: float
+
+
+@dataclass(frozen=True)
+class PairwiseLambdaSummary:
+    """Empirical ``Lambda_{d/(d+2)}`` ratios at one fixed physical error rate."""
+
+    backend: str
+    basis: str
+    physical_error_rate: float
+    distance_low: int
+    distance_high: int
+    lambda_d_over_d_plus_2: float
+
+
+@dataclass(frozen=True)
+class DashboardPlot:
+    """One SVG plot entry for the optional HTML dashboard."""
+
+    section: str
+    title: str
+    filename: str
+    backend: str
+    basis: str | None = None
+    physical_error_rate: float | None = None
 
 
 @dataclass(frozen=True)
@@ -196,6 +261,15 @@ def ler_over_rounds(per_round_rate: float, num_rounds: int) -> float:
     if per_round_rate >= 0.5:
         return 0.5
     return 0.5 * (1.0 - (1.0 - 2.0 * per_round_rate) ** num_rounds)
+
+
+def _rounds_from_multiplier(distance: int, duration_multiplier: float) -> int:
+    """Convert a duration multiplier into an integer round count."""
+    total_rounds = round(duration_multiplier * distance)
+    if total_rounds <= 0:
+        msg = f"duration multiplier {duration_multiplier!r} produced non-positive rounds for d={distance}"
+        raise ValueError(msg)
+    return total_rounds
 
 
 def _reshape_round_values(flat_values: list[int], num_rounds: int, width: int, label: str) -> list[Any]:
@@ -531,7 +605,7 @@ def _profile_gate_backends(
     distances: list[int],
     bases: list[str],
     error_rates: list[float],
-    duration_multipliers: list[int],
+    duration_multipliers: list[float],
     shots: int,
     seed: int,
     warmup_repetitions: int,
@@ -575,7 +649,7 @@ def _profile_gate_backends(
     }
 
     combinations = [
-        (distance, basis, physical_error_rate, duration_multiplier * distance)
+        (distance, basis, physical_error_rate, _rounds_from_multiplier(distance, duration_multiplier))
         for basis in bases
         for distance in distances
         for physical_error_rate in error_rates
@@ -786,6 +860,10 @@ def _fit_per_round_rate(points: list[SweepPoint]) -> float:
     if not points:
         msg = "Need at least one point to fit a per-round logical error rate"
         raise ValueError(msg)
+    if all(point.logical_error_rate <= 0.0 for point in points):
+        return 0.0
+    if all(point.logical_error_rate >= 0.5 for point in points):
+        return 0.5
     if len(points) == 1:
         point = points[0]
         return ler_per_round_exp(point.logical_error_rate, point.total_rounds)
@@ -847,6 +925,120 @@ def _fit_summary_from_points(points: list[SweepPoint]) -> FitSummary:
     )
 
 
+def _linear_regression(xs: list[float], ys: list[float]) -> tuple[float, float]:
+    """Return ``(slope, intercept)`` for a least-squares line fit."""
+    if len(xs) != len(ys):
+        msg = "xs and ys must have the same length"
+        raise ValueError(msg)
+    if len(xs) < 2:
+        msg = "Need at least two points for linear regression"
+        raise ValueError(msg)
+
+    x_mean = statistics.fmean(xs)
+    y_mean = statistics.fmean(ys)
+    ss_xx = sum((x - x_mean) ** 2 for x in xs)
+    if ss_xx <= 0.0:
+        msg = "Linear regression requires at least two distinct x values"
+        raise ValueError(msg)
+    ss_xy = sum((x - x_mean) * (y - y_mean) for x, y in zip(xs, ys, strict=False))
+    slope = ss_xy / ss_xx
+    intercept = y_mean - slope * x_mean
+    return slope, intercept
+
+
+def _fit_distance_scaling_at_fixed_p(summaries: list[FitSummary]) -> DistanceScalingFitSummary | None:
+    """Fit the standard below-threshold ansatz across distance at one fixed ``p``."""
+    usable = sorted(
+        [summary for summary in summaries if summary.fitted_logical_error_rate_per_round > 0.0],
+        key=lambda summary: summary.distance,
+    )
+    if len(usable) < 2:
+        return None
+
+    xs = [0.5 * (summary.distance + 1) for summary in usable]
+    ys = [math.log(summary.fitted_logical_error_rate_per_round) for summary in usable]
+    slope, intercept = _linear_regression(xs, ys)
+    residuals = [y - (slope * x + intercept) for x, y in zip(xs, ys, strict=False)]
+    rmse = math.sqrt(sum(residual * residual for residual in residuals) / len(residuals))
+    physical_error_rate = usable[0].physical_error_rate
+    suppression_factor = math.exp(-slope)
+    threshold = physical_error_rate * suppression_factor
+    return DistanceScalingFitSummary(
+        backend=usable[0].backend,
+        basis=usable[0].basis,
+        physical_error_rate=physical_error_rate,
+        distances=tuple(summary.distance for summary in usable),
+        fitted_prefactor=math.exp(intercept),
+        fitted_threshold=threshold,
+        fitted_suppression_factor=suppression_factor,
+        fit_root_mean_square_log_error=rmse,
+    )
+
+
+def _fit_global_scaling_law(summaries: list[FitSummary]) -> GlobalScalingFitSummary | None:
+    """Fit ``epsilon ~= A * (p / p_th) ** ((d + 1) / 2)`` across all ``(d, p)`` points."""
+    usable = [summary for summary in summaries if summary.fitted_logical_error_rate_per_round > 0.0]
+    if len(usable) < 2:
+        return None
+
+    xs = [0.5 * (summary.distance + 1) for summary in usable]
+    zs = [
+        math.log(summary.fitted_logical_error_rate_per_round) - x * math.log(summary.physical_error_rate)
+        for summary, x in zip(usable, xs, strict=False)
+    ]
+    slope, intercept = _linear_regression(xs, zs)
+    threshold = math.exp(-slope)
+    residuals = []
+    for summary in usable:
+        x = 0.5 * (summary.distance + 1)
+        predicted = intercept + x * (math.log(summary.physical_error_rate) - math.log(threshold))
+        residuals.append(math.log(summary.fitted_logical_error_rate_per_round) - predicted)
+    rmse = math.sqrt(sum(residual * residual for residual in residuals) / len(residuals))
+    return GlobalScalingFitSummary(
+        backend=usable[0].backend,
+        basis=usable[0].basis,
+        distances=tuple(sorted({summary.distance for summary in usable})),
+        physical_error_rates=tuple(sorted({summary.physical_error_rate for summary in usable})),
+        fitted_prefactor=math.exp(intercept),
+        fitted_threshold=threshold,
+        fit_root_mean_square_log_error=rmse,
+    )
+
+
+def _fit_per_distance_power_law(summaries: list[FitSummary]) -> list[PerDistancePowerLawFitSummary]:
+    """Fit ``epsilon(p) ~= C_d * p ** beta_d`` independently for each distance."""
+    fits: list[PerDistancePowerLawFitSummary] = []
+    for distance in sorted({summary.distance for summary in summaries}):
+        rows = sorted(
+            [
+                summary
+                for summary in summaries
+                if summary.distance == distance and summary.fitted_logical_error_rate_per_round > 0.0
+            ],
+            key=lambda summary: summary.physical_error_rate,
+        )
+        if len(rows) < 2:
+            continue
+        xs = [math.log(summary.physical_error_rate) for summary in rows]
+        ys = [math.log(summary.fitted_logical_error_rate_per_round) for summary in rows]
+        slope, intercept = _linear_regression(xs, ys)
+        residuals = [y - (slope * x + intercept) for x, y in zip(xs, ys, strict=False)]
+        rmse = math.sqrt(sum(residual * residual for residual in residuals) / len(residuals))
+        fits.append(
+            PerDistancePowerLawFitSummary(
+                backend=rows[0].backend,
+                basis=rows[0].basis,
+                distance=distance,
+                physical_error_rates=tuple(summary.physical_error_rate for summary in rows),
+                fitted_prefactor=math.exp(intercept),
+                fitted_exponent=slope,
+                expected_distance_scaling_exponent=0.5 * (distance + 1),
+                fit_root_mean_square_log_error=rmse,
+            ),
+        )
+    return fits
+
+
 def _estimate_threshold(summaries: list[FitSummary]) -> float | None:
     """Estimate a crossing between the smallest and largest distance curves."""
     if not summaries:
@@ -897,6 +1089,49 @@ def _suppression_summary(summaries: list[FitSummary]) -> list[tuple[float, bool]
     return rows
 
 
+def _distance_scaling_fits(summaries: list[FitSummary]) -> list[DistanceScalingFitSummary]:
+    """Fit the distance-scaling ansatz separately at each physical error rate."""
+    error_rates = sorted({summary.physical_error_rate for summary in summaries})
+    fits: list[DistanceScalingFitSummary] = []
+    for physical_error_rate in error_rates:
+        fit = _fit_distance_scaling_at_fixed_p(
+            [summary for summary in summaries if summary.physical_error_rate == physical_error_rate],
+        )
+        if fit is not None:
+            fits.append(fit)
+    return fits
+
+
+def _pairwise_lambda_ratios(summaries: list[FitSummary]) -> list[PairwiseLambdaSummary]:
+    """Compute empirical ``Lambda_{d/(d+2)}`` ratios from fitted per-round rates."""
+    distances = sorted({summary.distance for summary in summaries})
+    error_rates = sorted({summary.physical_error_rate for summary in summaries})
+    by_key = {(summary.distance, summary.physical_error_rate): summary for summary in summaries}
+
+    ratios: list[PairwiseLambdaSummary] = []
+    for physical_error_rate in error_rates:
+        for distance_low, distance_high in itertools.pairwise(distances):
+            low = by_key.get((distance_low, physical_error_rate))
+            high = by_key.get((distance_high, physical_error_rate))
+            if low is None or high is None:
+                continue
+            if low.fitted_logical_error_rate_per_round <= 0.0 or high.fitted_logical_error_rate_per_round <= 0.0:
+                continue
+            ratios.append(
+                PairwiseLambdaSummary(
+                    backend=low.backend,
+                    basis=low.basis,
+                    physical_error_rate=physical_error_rate,
+                    distance_low=distance_low,
+                    distance_high=distance_high,
+                    lambda_d_over_d_plus_2=(
+                        low.fitted_logical_error_rate_per_round / high.fitted_logical_error_rate_per_round
+                    ),
+                ),
+            )
+    return ratios
+
+
 def _print_basis_table(summaries: list[FitSummary], *, metric: str, title: str) -> None:
     """Print a compact table for one basis and one fitted metric."""
     distances = sorted({summary.distance for summary in summaries})
@@ -929,8 +1164,26 @@ def _resolve_output_dir(output_dir: str | None, *, wants_outputs: bool) -> Path 
 
 def _basis_summary(summaries: list[FitSummary]) -> dict[str, Any]:
     """Create a compact JSON-friendly summary for one basis."""
+    distance_scaling = _distance_scaling_fits(summaries)
+    global_scaling = _fit_global_scaling_law(summaries)
+    power_law_fits = _fit_per_distance_power_law(summaries)
+    lambda_ratios = _pairwise_lambda_ratios(summaries)
     return {
-        "approx_threshold_crossing": _estimate_threshold(summaries),
+        "per_distance_power_law_fits": [asdict(fit) for fit in power_law_fits],
+        "pairwise_lambda_ratios": [asdict(ratio) for ratio in lambda_ratios],
+        "fixed_p_distance_scaling_fits": [
+            {
+                "backend": fit.backend,
+                "basis": fit.basis,
+                "physical_error_rate": fit.physical_error_rate,
+                "distances": fit.distances,
+                "fitted_prefactor": fit.fitted_prefactor,
+                "fitted_lambda_d_over_d_plus_2": fit.fitted_suppression_factor,
+                "fit_root_mean_square_log_error": fit.fit_root_mean_square_log_error,
+                "background_implied_threshold": fit.fitted_threshold,
+            }
+            for fit in distance_scaling
+        ],
         "suppression": [
             {
                 "physical_error_rate": p,
@@ -938,6 +1191,8 @@ def _basis_summary(summaries: list[FitSummary]) -> dict[str, Any]:
             }
             for p, is_suppressed in _suppression_summary(summaries)
         ],
+        "background_threshold_crossing": _estimate_threshold(summaries),
+        "background_threshold_style_global_scaling_fit": None if global_scaling is None else asdict(global_scaling),
     }
 
 
@@ -1048,6 +1303,9 @@ def _write_json_results(
             },
             "noise_model": "uniform depolarizing with p1 = p2 = p_meas = p_init = p",
             "fit_model": "p_L(r) = 0.5 * (1 - (1 - 2 * epsilon) ** r)",
+            "primary_power_law_model": "epsilon_d(p) ~= A_d * p ** c_d",
+            "primary_lambda_model": "Lambda_{d/(d+2)}(p) = epsilon_d(p) / epsilon_{d+2}(p)",
+            "background_distance_scaling_model": "epsilon ~= A * (p / p_th)^((d + 1) / 2)",
         },
         "points": [asdict(point) for point in points],
         "point_timings": point_timings,
@@ -1075,11 +1333,45 @@ def _value_ticks(min_value: float, max_value: float, *, count: int = 5) -> list[
     return [min_value + (max_value - min_value) * i / (count - 1) for i in range(count)]
 
 
+def _log_ticks(min_value: float, max_value: float) -> list[float]:
+    """Produce base-10-ish ticks for a positive log-scaled axis."""
+    if min_value <= 0.0 or max_value <= 0.0:
+        msg = "log ticks require strictly positive bounds"
+        raise ValueError(msg)
+    if max_value < min_value:
+        min_value, max_value = max_value, min_value
+
+    ticks: list[float] = []
+    exp_min = math.floor(math.log10(min_value))
+    exp_max = math.ceil(math.log10(max_value))
+    for exponent in range(exp_min, exp_max + 1):
+        for mantissa in (1.0, 2.0, 5.0):
+            tick = mantissa * (10.0**exponent)
+            if min_value <= tick <= max_value:
+                ticks.append(tick)
+    if not ticks:
+        ticks = [min_value, max_value] if min_value != max_value else [min_value]
+    return sorted(set(ticks))
+
+
 def _x_pos(value: float, x_min: float, x_max: float, plot_left: float, plot_width: float) -> float:
     """Map an x value into SVG coordinates."""
     if x_max <= x_min:
         return plot_left + plot_width / 2.0
     return plot_left + (value - x_min) / (x_max - x_min) * plot_width
+
+
+def _x_pos_log(value: float, x_min: float, x_max: float, plot_left: float, plot_width: float) -> float:
+    """Map a positive x value into SVG coordinates using log scaling."""
+    if value <= 0.0 or x_min <= 0.0 or x_max <= 0.0:
+        msg = "log-scaled x coordinates require strictly positive values"
+        raise ValueError(msg)
+    if x_max <= x_min:
+        return plot_left + plot_width / 2.0
+    log_min = math.log10(x_min)
+    log_max = math.log10(x_max)
+    log_value = math.log10(value)
+    return plot_left + (log_value - log_min) / (log_max - log_min) * plot_width
 
 
 def _y_pos(value: float, y_min: float, y_max: float, plot_top: float, plot_height: float) -> float:
@@ -1091,6 +1383,363 @@ def _y_pos(value: float, y_min: float, y_max: float, plot_top: float, plot_heigh
     log_max = math.log10(y_max)
     log_value = math.log10(value)
     return plot_top + (log_max - log_value) / (log_max - log_min) * plot_height
+
+
+def _format_rate_for_filename(value: float) -> str:
+    """Render a rate in a filename-friendly compact form."""
+    return f"{value:.6g}".replace(".", "p")
+
+
+def _basis_dasharray(basis: str) -> str | None:
+    """Return the SVG dash pattern for one basis."""
+    return None if basis.upper() == "X" else "10 6"
+
+
+def _basis_linestyle(basis: str) -> str:
+    """Return the matplotlib line style for one basis."""
+    return "-" if basis.upper() == "X" else "--"
+
+
+def _write_svg_duration_overlay_plot(
+    output_path: Path,
+    *,
+    points: list[SweepPoint],
+    backend: str,
+    physical_error_rate: float,
+) -> None:
+    """Write one fixed-``p`` logical-error-vs-duration overlay with X/Z styles."""
+    if not points:
+        return
+
+    distances = sorted({point.distance for point in points})
+    bases = sorted({point.basis for point in points})
+    x_values = sorted({point.total_rounds / point.distance for point in points})
+    y_values = [point.logical_error_rate for point in points if point.logical_error_rate > 0.0]
+    y_min = max(min(y_values) * 0.8, 1e-12) if y_values else 1e-12
+    y_max = max(max(y_values) * 1.2, y_min * 10.0) if y_values else 1e-6
+
+    width = 1040.0
+    height = 700.0
+    plot_left = 120.0
+    plot_right = 48.0
+    plot_top = 78.0
+    plot_bottom = 96.0
+    plot_width = width - plot_left - plot_right
+    plot_height = height - plot_top - plot_bottom
+    colors = ["#2563eb", "#dc2626", "#059669", "#9333ea", "#ea580c", "#0f766e"]
+    color_by_distance = {distance: colors[index % len(colors)] for index, distance in enumerate(distances)}
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{int(width)}" height="{int(height)}" '
+        f'viewBox="0 0 {int(width)} {int(height)}">',
+        '<rect width="100%" height="100%" fill="white"/>',
+        f'<text x="{width / 2:.1f}" y="34" text-anchor="middle" font-size="24" fill="#0f172a">'
+        f"Logical Memory Error vs Duration ({html.escape(backend)}, p={physical_error_rate:.4g})</text>",
+        f'<text x="{width / 2:.1f}" y="{height - 20:.1f}" text-anchor="middle" font-size="18" fill="#334155">'
+        "Memory duration (rounds / d)</text>",
+        f'<text x="28" y="{height / 2:.1f}" text-anchor="middle" font-size="18" fill="#334155" '
+        'transform="rotate(-90 28 '
+        f'{height / 2:.1f})">Observed logical error rate</text>',
+    ]
+
+    for tick in _log_ticks(y_min, y_max):
+        y = _y_pos(tick, y_min, y_max, plot_top, plot_height)
+        parts.append(
+            f'<line x1="{plot_left:.1f}" y1="{y:.1f}" x2="{plot_left + plot_width:.1f}" y2="{y:.1f}" '
+            'stroke="#e2e8f0" stroke-width="1"/>',
+        )
+        parts.append(
+            f'<text x="{plot_left - 10:.1f}" y="{y + 4:.1f}" text-anchor="end" font-size="12" fill="#475569">'
+            f"{tick:.2e}</text>",
+        )
+
+    x_min = min(x_values)
+    x_max = max(x_values)
+    for value in x_values:
+        x = _x_pos(value, x_min, x_max, plot_left, plot_width)
+        parts.append(
+            f'<line x1="{x:.1f}" y1="{plot_top:.1f}" x2="{x:.1f}" y2="{plot_top + plot_height:.1f}" '
+            'stroke="#f1f5f9" stroke-width="1"/>',
+        )
+        parts.append(
+            f'<text x="{x:.1f}" y="{plot_top + plot_height + 22:.1f}" '
+            'text-anchor="middle" font-size="12" fill="#475569">'
+            f"{value:.3g}</text>",
+        )
+
+    parts.append(
+        f'<rect x="{plot_left:.1f}" y="{plot_top:.1f}" width="{plot_width:.1f}" height="{plot_height:.1f}" '
+        'fill="none" stroke="#0f172a" stroke-width="1.5"/>',
+    )
+
+    legend_x = plot_left + 14.0
+    legend_y = plot_top + 20.0
+    legend_index = 0
+    for basis in bases:
+        for distance in distances:
+            series = sorted(
+                [point for point in points if point.basis == basis and point.distance == distance],
+                key=lambda point: point.total_rounds,
+            )
+            if not series:
+                continue
+            color = color_by_distance[distance]
+            dasharray = _basis_dasharray(basis)
+            curve_points = []
+            for point in series:
+                x = _x_pos(point.total_rounds / point.distance, x_min, x_max, plot_left, plot_width)
+                y = _y_pos(max(point.logical_error_rate, y_min), y_min, y_max, plot_top, plot_height)
+                curve_points.append(f"{x:.1f},{y:.1f}")
+            style = "" if dasharray is None else f' stroke-dasharray="{dasharray}"'
+            parts.append(
+                f'<polyline fill="none" stroke="{color}" stroke-width="3" points="{" ".join(curve_points)}"{style}/>',
+            )
+            for point in series:
+                x = _x_pos(point.total_rounds / point.distance, x_min, x_max, plot_left, plot_width)
+                y = _y_pos(max(point.logical_error_rate, y_min), y_min, y_max, plot_top, plot_height)
+                parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{color}"/>')
+
+            legend_row_y = legend_y + legend_index * 24.0
+            legend_index += 1
+            parts.append(
+                f'<line x1="{legend_x:.1f}" y1="{legend_row_y:.1f}" x2="{legend_x + 22:.1f}" y2="{legend_row_y:.1f}" '
+                f'stroke="{color}" stroke-width="3"{style}/>',
+            )
+            parts.append(
+                f'<text x="{legend_x + 30:.1f}" y="{legend_row_y + 4:.1f}" font-size="14" fill="#0f172a">'
+                f"{basis} d={distance}</text>",
+            )
+
+    parts.append("</svg>")
+    output_path.write_text("\n".join(parts) + "\n")
+
+
+def _write_pdf_duration_overlay_plot(
+    output_path: Path,
+    *,
+    points: list[SweepPoint],
+    backend: str,
+    physical_error_rate: float,
+) -> None:
+    """Write the fixed-``p`` duration overlay as a PDF via matplotlib."""
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as exc:  # pragma: no cover
+        msg = "matplotlib is required for --save-pdf"
+        raise RuntimeError(msg) from exc
+
+    distances = sorted({point.distance for point in points})
+    bases = sorted({point.basis for point in points})
+    colors = ["#2563eb", "#dc2626", "#059669", "#9333ea", "#ea580c", "#0f766e"]
+    color_by_distance = {distance: colors[index % len(colors)] for index, distance in enumerate(distances)}
+
+    fig, ax = plt.subplots(figsize=(9.5, 6.5))
+    for basis in bases:
+        for distance in distances:
+            series = sorted(
+                [point for point in points if point.basis == basis and point.distance == distance],
+                key=lambda point: point.total_rounds,
+            )
+            if not series:
+                continue
+            xs = [point.total_rounds / point.distance for point in series]
+            ys = [max(point.logical_error_rate, 1e-12) for point in series]
+            ax.semilogy(
+                xs,
+                ys,
+                marker="o",
+                linewidth=2,
+                linestyle=_basis_linestyle(basis),
+                color=color_by_distance[distance],
+                label=f"{basis} d={distance}",
+            )
+
+    ax.set_title(f"Logical Memory Error vs Duration ({backend}, p={physical_error_rate:.4g})")
+    ax.set_xlabel("Memory duration (rounds / d)")
+    ax.set_ylabel("Observed logical error rate")
+    ax.grid(visible=True, which="both", alpha=0.25)
+    ax.legend(ncol=2)
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def _write_svg_per_round_overlay_plot(
+    output_path: Path,
+    *,
+    summaries: list[FitSummary],
+    backend: str,
+) -> None:
+    """Write the combined X/Z per-round-epsilon-vs-``p`` overlay."""
+    if not summaries:
+        return
+
+    distances = sorted({summary.distance for summary in summaries})
+    bases = sorted({summary.basis for summary in summaries})
+    error_rates = sorted({summary.physical_error_rate for summary in summaries})
+    y_values = [
+        summary.fitted_logical_error_rate_per_round
+        for summary in summaries
+        if summary.fitted_logical_error_rate_per_round > 0.0
+    ]
+    y_min = max(min(y_values) * 0.8, 1e-12) if y_values else 1e-12
+    y_max = max(max(y_values) * 1.2, y_min * 10.0) if y_values else 1e-6
+
+    width = 1040.0
+    height = 700.0
+    plot_left = 120.0
+    plot_right = 48.0
+    plot_top = 78.0
+    plot_bottom = 96.0
+    plot_width = width - plot_left - plot_right
+    plot_height = height - plot_top - plot_bottom
+    colors = ["#2563eb", "#dc2626", "#059669", "#9333ea", "#ea580c", "#0f766e"]
+    color_by_distance = {distance: colors[index % len(colors)] for index, distance in enumerate(distances)}
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{int(width)}" height="{int(height)}" '
+        f'viewBox="0 0 {int(width)} {int(height)}">',
+        '<rect width="100%" height="100%" fill="white"/>',
+        f'<text x="{width / 2:.1f}" y="34" text-anchor="middle" font-size="24" fill="#0f172a">'
+        f"Per-round logical error rate vs p ({html.escape(backend)})</text>",
+        f'<text x="{width / 2:.1f}" y="{height - 20:.1f}" text-anchor="middle" font-size="18" fill="#334155">'
+        "Physical error rate p</text>",
+        f'<text x="28" y="{height / 2:.1f}" text-anchor="middle" font-size="18" fill="#334155" '
+        'transform="rotate(-90 28 '
+        f'{height / 2:.1f})">Fitted logical error rate per round</text>',
+    ]
+
+    for tick in _log_ticks(y_min, y_max):
+        y = _y_pos(tick, y_min, y_max, plot_top, plot_height)
+        parts.append(
+            f'<line x1="{plot_left:.1f}" y1="{y:.1f}" x2="{plot_left + plot_width:.1f}" y2="{y:.1f}" '
+            'stroke="#e2e8f0" stroke-width="1"/>',
+        )
+        parts.append(
+            f'<text x="{plot_left - 10:.1f}" y="{y + 4:.1f}" text-anchor="end" font-size="12" fill="#475569">'
+            f"{tick:.2e}</text>",
+        )
+
+    x_min = min(error_rates)
+    x_max = max(error_rates)
+    for physical_error_rate in error_rates:
+        x = _x_pos_log(physical_error_rate, x_min, x_max, plot_left, plot_width)
+        parts.append(
+            f'<line x1="{x:.1f}" y1="{plot_top:.1f}" x2="{x:.1f}" y2="{plot_top + plot_height:.1f}" '
+            'stroke="#f1f5f9" stroke-width="1"/>',
+        )
+        parts.append(
+            f'<text x="{x:.1f}" y="{plot_top + plot_height + 22:.1f}" '
+            'text-anchor="middle" font-size="12" fill="#475569">'
+            f"{physical_error_rate:.4g}</text>",
+        )
+
+    parts.append(
+        f'<rect x="{plot_left:.1f}" y="{plot_top:.1f}" width="{plot_width:.1f}" height="{plot_height:.1f}" '
+        'fill="none" stroke="#0f172a" stroke-width="1.5"/>',
+    )
+
+    legend_x = plot_left + 14.0
+    legend_y = plot_top + 20.0
+    legend_index = 0
+    for basis in bases:
+        for distance in distances:
+            series = sorted(
+                [summary for summary in summaries if summary.basis == basis and summary.distance == distance],
+                key=lambda summary: summary.physical_error_rate,
+            )
+            if not series:
+                continue
+            color = color_by_distance[distance]
+            dasharray = _basis_dasharray(basis)
+            curve_points = []
+            for summary in series:
+                x = _x_pos_log(summary.physical_error_rate, x_min, x_max, plot_left, plot_width)
+                y = _y_pos(
+                    max(summary.fitted_logical_error_rate_per_round, y_min),
+                    y_min,
+                    y_max,
+                    plot_top,
+                    plot_height,
+                )
+                curve_points.append(f"{x:.1f},{y:.1f}")
+            style = "" if dasharray is None else f' stroke-dasharray="{dasharray}"'
+            parts.append(
+                f'<polyline fill="none" stroke="{color}" stroke-width="3" points="{" ".join(curve_points)}"{style}/>',
+            )
+            for summary in series:
+                x = _x_pos_log(summary.physical_error_rate, x_min, x_max, plot_left, plot_width)
+                y = _y_pos(
+                    max(summary.fitted_logical_error_rate_per_round, y_min),
+                    y_min,
+                    y_max,
+                    plot_top,
+                    plot_height,
+                )
+                parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{color}"/>')
+
+            legend_row_y = legend_y + legend_index * 24.0
+            legend_index += 1
+            parts.append(
+                f'<line x1="{legend_x:.1f}" y1="{legend_row_y:.1f}" x2="{legend_x + 22:.1f}" y2="{legend_row_y:.1f}" '
+                f'stroke="{color}" stroke-width="3"{style}/>',
+            )
+            parts.append(
+                f'<text x="{legend_x + 30:.1f}" y="{legend_row_y + 4:.1f}" font-size="14" fill="#0f172a">'
+                f"{basis} d={distance}</text>",
+            )
+
+    parts.append("</svg>")
+    output_path.write_text("\n".join(parts) + "\n")
+
+
+def _write_pdf_per_round_overlay_plot(
+    output_path: Path,
+    *,
+    summaries: list[FitSummary],
+    backend: str,
+) -> None:
+    """Write the combined X/Z per-round-epsilon-vs-``p`` overlay as a PDF."""
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as exc:  # pragma: no cover
+        msg = "matplotlib is required for --save-pdf"
+        raise RuntimeError(msg) from exc
+
+    distances = sorted({summary.distance for summary in summaries})
+    bases = sorted({summary.basis for summary in summaries})
+    colors = ["#2563eb", "#dc2626", "#059669", "#9333ea", "#ea580c", "#0f766e"]
+    color_by_distance = {distance: colors[index % len(colors)] for index, distance in enumerate(distances)}
+
+    fig, ax = plt.subplots(figsize=(9.5, 6.5))
+    for basis in bases:
+        for distance in distances:
+            series = sorted(
+                [summary for summary in summaries if summary.basis == basis and summary.distance == distance],
+                key=lambda summary: summary.physical_error_rate,
+            )
+            if not series:
+                continue
+            xs = [summary.physical_error_rate for summary in series]
+            ys = [max(summary.fitted_logical_error_rate_per_round, 1e-12) for summary in series]
+            ax.loglog(
+                xs,
+                ys,
+                marker="o",
+                linewidth=2,
+                linestyle=_basis_linestyle(basis),
+                color=color_by_distance[distance],
+                label=f"{basis} d={distance}",
+            )
+
+    ax.set_title(f"Per-round logical error rate vs p ({backend})")
+    ax.set_xlabel("Physical error rate p")
+    ax.set_ylabel("Fitted logical error rate per round")
+    ax.grid(visible=True, which="both", alpha=0.25)
+    ax.legend(ncol=2)
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
 
 
 def _write_svg_plot(
@@ -1238,6 +1887,211 @@ def _write_pdf_plot(
     plt.close(fig)
 
 
+def _write_html_dashboard(
+    output_path: Path,
+    *,
+    args: argparse.Namespace,
+    summaries: list[FitSummary],
+    timing_summary: dict[str, Any],
+    plots: list[DashboardPlot],
+    json_filename: str | None,
+) -> None:
+    """Write a simple browsable HTML report for the generated SVG artifacts."""
+    from textwrap import dedent
+
+    def meta_card(label: str, value_html: str) -> str:
+        return f'      <div class="meta-card"><strong>{html.escape(label)}</strong>{value_html}</div>'
+
+    def plot_card(plot: DashboardPlot) -> list[str]:
+        detail_bits = [f"backend={plot.backend}"]
+        if plot.basis is not None:
+            detail_bits.append(f"basis={plot.basis}")
+        if plot.physical_error_rate is not None:
+            detail_bits.append(f"p={plot.physical_error_rate:.4g}")
+        details = ", ".join(detail_bits)
+        image_link = html.escape(plot.filename)
+        title = html.escape(plot.title)
+        return [
+            '      <article class="plot-card">',
+            f"        <header><h3>{title}</h3><p>{html.escape(details)}</p></header>",
+            '        <div class="image-wrap">',
+            f'          <a href="{image_link}">',
+            f'            <img src="{image_link}" alt="{title}" />',
+            "          </a>",
+            "        </div>",
+            f'        <footer><a href="{image_link}">Open SVG</a></footer>',
+            "      </article>",
+        ]
+
+    backend_names = sorted({summary.backend for summary in summaries})
+    basis_names = sorted({summary.basis for summary in summaries})
+    plot_sections = [
+        ("Combined Overlays", [plot for plot in plots if plot.section == "combined"]),
+        ("Fixed-p Duration Overlays", [plot for plot in plots if plot.section == "duration"]),
+        ("Per-basis Curves", [plot for plot in plots if plot.section == "basis"]),
+    ]
+    style = dedent(
+        """
+        :root { color-scheme: light; }
+        body {
+          margin: 0;
+          font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif;
+          background: #f8fafc;
+          color: #0f172a;
+        }
+        main { max-width: 1500px; margin: 0 auto; padding: 32px 24px 56px; }
+        h1, h2, h3, p { margin-top: 0; }
+        .hero {
+          background: linear-gradient(135deg, #e0f2fe, #f8fafc 55%, #dcfce7);
+          border: 1px solid #cbd5e1;
+          border-radius: 20px;
+          padding: 24px;
+          margin-bottom: 24px;
+        }
+        .meta {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          gap: 12px;
+          margin-top: 18px;
+        }
+        .meta-card {
+          background: rgba(255,255,255,0.82);
+          border: 1px solid #dbeafe;
+          border-radius: 14px;
+          padding: 14px 16px;
+        }
+        .meta-card strong {
+          display: block;
+          font-size: 0.82rem;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: #475569;
+          margin-bottom: 6px;
+        }
+        .section { margin-top: 30px; }
+        .grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+          gap: 18px;
+        }
+        .plot-card {
+          background: white;
+          border: 1px solid #dbeafe;
+          border-radius: 18px;
+          overflow: hidden;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        }
+        .plot-card header {
+          padding: 16px 18px 10px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .plot-card header p {
+          margin-bottom: 0;
+          color: #475569;
+          font-size: 0.92rem;
+        }
+        .plot-card .image-wrap { padding: 14px; background: #fff; }
+        .plot-card img {
+          width: 100%;
+          height: auto;
+          display: block;
+          border-radius: 12px;
+          background: white;
+        }
+        .plot-card footer { padding: 0 18px 16px; font-size: 0.92rem; }
+        .plot-card a {
+          color: #2563eb;
+          text-decoration: none;
+          font-weight: 600;
+        }
+        .plot-card a:hover { text-decoration: underline; }
+        .links { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 12px; }
+        .links a {
+          color: #0369a1;
+          text-decoration: none;
+          font-weight: 600;
+        }
+        .links a:hover { text-decoration: underline; }
+        code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        """,
+    ).strip()
+    distances_text = ", ".join(str(distance) for distance in sorted(set(args.distances)))
+    multipliers_text = ", ".join(f"{value:g}" for value in sorted(set(args.duration_multipliers)))
+    error_rates_text = ", ".join(f"{value:.4g}" for value in sorted(set(args.error_rates)))
+
+    parts = [
+        "<!doctype html>",
+        '<html lang="en">',
+        "<head>",
+        '  <meta charset="utf-8" />',
+        '  <meta name="viewport" content="width=device-width, initial-scale=1" />',
+        "  <title>PECOS Surface Sweep Dashboard</title>",
+        "  <style>",
+        style,
+        "  </style>",
+        "</head>",
+        "<body>",
+        "<main>",
+        '  <section class="hero">',
+        "    <h1>PECOS Surface Sweep Dashboard</h1>",
+        (
+            "    <p>This report bundles the generated SVG plots for the rotated "
+            "surface-code memory sweep so the run is easy to browse and compare.</p>"
+        ),
+        '    <div class="meta">',
+        meta_card("Backends", html.escape(", ".join(backend_names))),
+        meta_card("Bases", html.escape(", ".join(basis_names))),
+        meta_card("Distances", html.escape(distances_text)),
+        meta_card("Round Multipliers", html.escape(multipliers_text)),
+        meta_card("Error Rates", html.escape(error_rates_text)),
+        meta_card("Shots / Point", html.escape(str(args.shots))),
+        meta_card(
+            "Noise Model",
+            "uniform depolarizing with <code>p1 = p2 = p_meas = p_init = p</code>",
+        ),
+        meta_card(
+            "Overall Throughput",
+            html.escape(f"{timing_summary['overall_shots_per_second']:.3f} shots/s"),
+        ),
+        "    </div>",
+    ]
+    if json_filename is not None:
+        parts.extend(
+            [
+                '    <div class="links">',
+                f'      <a href="{html.escape(json_filename)}">Open JSON results</a>',
+                "    </div>",
+            ],
+        )
+    parts.append("  </section>")
+
+    for section_title, section_plots in plot_sections:
+        if not section_plots:
+            continue
+        parts.extend(
+            [
+                f'  <section class="section"><h2>{html.escape(section_title)}</h2>',
+                '    <div class="grid">',
+            ],
+        )
+        for plot in section_plots:
+            parts.extend(plot_card(plot))
+        parts.extend(["    </div>", "  </section>"])
+
+    parts.extend(["</main>", "</body>", "</html>"])
+    output_path.write_text("\n".join(parts) + "\n")
+
+
+def _maybe_open_html_dashboard(output_path: Path) -> None:
+    """Open the generated dashboard in the default browser."""
+    import webbrowser
+
+    opened = webbrowser.open(output_path.resolve().as_uri())
+    if not opened:
+        msg = f"Failed to open HTML dashboard at {output_path}"
+        raise RuntimeError(msg)
+
+
 def _write_artifacts(
     output_dir: Path,
     *,
@@ -1250,6 +2104,8 @@ def _write_artifacts(
     """Write any optional JSON or plot artifacts requested by the user."""
     prefix = args.output_prefix
     backends = sorted({summary.backend for summary in summaries})
+    dashboard_plots: list[DashboardPlot] = []
+    json_filename: str | None = None
     if args.save_json:
         json_path = output_dir / f"{prefix}_results.json"
         _write_json_results(
@@ -1261,6 +2117,61 @@ def _write_artifacts(
             timing_summary=timing_summary,
         )
         print(f"Wrote JSON results to {json_path}")
+        json_filename = json_path.name
+
+    for backend in backends:
+        backend_summaries = [summary for summary in summaries if summary.backend == backend]
+        if args.save_svg:
+            overlay_svg_path = output_dir / f"{prefix}_{backend}_per_round_overlay.svg"
+            _write_svg_per_round_overlay_plot(overlay_svg_path, summaries=backend_summaries, backend=backend)
+            print(f"Wrote SVG plot to {overlay_svg_path}")
+            dashboard_plots.append(
+                DashboardPlot(
+                    section="combined",
+                    title=f"Per-round logical error rate vs p ({backend})",
+                    filename=overlay_svg_path.name,
+                    backend=backend,
+                ),
+            )
+        if args.save_pdf:
+            overlay_pdf_path = output_dir / f"{prefix}_{backend}_per_round_overlay.pdf"
+            _write_pdf_per_round_overlay_plot(overlay_pdf_path, summaries=backend_summaries, backend=backend)
+            print(f"Wrote PDF plot to {overlay_pdf_path}")
+
+        for physical_error_rate in sorted({point.physical_error_rate for point in points if point.backend == backend}):
+            rate_points = [
+                point
+                for point in points
+                if point.backend == backend and point.physical_error_rate == physical_error_rate
+            ]
+            stem = f"{prefix}_{backend}_p_{_format_rate_for_filename(physical_error_rate)}_duration_overlay"
+            if args.save_svg:
+                duration_svg_path = output_dir / f"{stem}.svg"
+                _write_svg_duration_overlay_plot(
+                    duration_svg_path,
+                    points=rate_points,
+                    backend=backend,
+                    physical_error_rate=physical_error_rate,
+                )
+                print(f"Wrote SVG plot to {duration_svg_path}")
+                dashboard_plots.append(
+                    DashboardPlot(
+                        section="duration",
+                        title=f"Logical memory error vs duration ({backend}, p={physical_error_rate:.4g})",
+                        filename=duration_svg_path.name,
+                        backend=backend,
+                        physical_error_rate=physical_error_rate,
+                    ),
+                )
+            if args.save_pdf:
+                duration_pdf_path = output_dir / f"{stem}.pdf"
+                _write_pdf_duration_overlay_plot(
+                    duration_pdf_path,
+                    points=rate_points,
+                    backend=backend,
+                    physical_error_rate=physical_error_rate,
+                )
+                print(f"Wrote PDF plot to {duration_pdf_path}")
 
     for backend in backends:
         for basis in sorted({summary.basis for summary in summaries if summary.backend == backend}):
@@ -1286,10 +2197,34 @@ def _write_artifacts(
                     svg_path = output_dir / f"{stem}.svg"
                     _write_svg_plot(svg_path, summaries=basis_summaries, metric=metric, title=title, y_label=y_label)
                     print(f"Wrote SVG plot to {svg_path}")
+                    dashboard_plots.append(
+                        DashboardPlot(
+                            section="basis",
+                            title=title,
+                            filename=svg_path.name,
+                            backend=backend,
+                            basis=basis,
+                        ),
+                    )
                 if args.save_pdf:
                     pdf_path = output_dir / f"{stem}.pdf"
                     _write_pdf_plot(pdf_path, summaries=basis_summaries, metric=metric, title=title, y_label=y_label)
                     print(f"Wrote PDF plot to {pdf_path}")
+
+    if args.save_html:
+        html_path = output_dir / f"{prefix}_dashboard.html"
+        _write_html_dashboard(
+            html_path,
+            args=args,
+            summaries=summaries,
+            timing_summary=timing_summary,
+            plots=dashboard_plots,
+            json_filename=json_filename,
+        )
+        print(f"Wrote HTML dashboard to {html_path}")
+        if args.open_html:
+            _maybe_open_html_dashboard(html_path)
+            print(f"Opened HTML dashboard at {html_path}")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -1300,11 +2235,12 @@ def _parse_args() -> argparse.Namespace:
         "--round-multipliers",
         dest="duration_multipliers",
         nargs="+",
-        type=int,
-        default=[2, 3, 4],
+        type=float,
+        default=[2.0, 3.0, 4.0],
         help=(
             "Use total memory durations r = multiplier * distance for the fit. "
-            "These multipliers are in units of code distance, not raw rounds."
+            "These multipliers are in units of code distance, not raw rounds, "
+            "so values like 2.5 are allowed."
         ),
     )
     parser.add_argument(
@@ -1362,6 +2298,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--save-json", action="store_true", help="Write a JSON artifact with all sweep results.")
     parser.add_argument("--save-svg", action="store_true", help="Write SVG plots for each basis and fitted metric.")
     parser.add_argument(
+        "--save-html",
+        action="store_true",
+        help="Write an HTML dashboard that links the generated SVG plots. Implies --save-svg.",
+    )
+    parser.add_argument(
+        "--open-html",
+        action="store_true",
+        help="Open the generated HTML dashboard after the run. Implies --save-html and --save-svg.",
+    )
+    parser.add_argument(
         "--save-pdf",
         action="store_true",
         help="Write PDF plots for each basis and fitted metric. Requires matplotlib.",
@@ -1396,7 +2342,12 @@ def _parse_args() -> argparse.Namespace:
 def main() -> int:
     """Run the threshold sweep CLI and optionally write summary artifacts."""
     args = _parse_args()
-    wants_outputs = args.save_json or args.save_svg or args.save_pdf
+    if args.open_html:
+        args.save_html = True
+    if args.save_html:
+        args.save_svg = True
+
+    wants_outputs = args.save_json or args.save_svg or args.save_pdf or args.save_html
     output_dir = _resolve_output_dir(args.output_dir, wants_outputs=wants_outputs)
     sweep_start = time.perf_counter()
 
@@ -1466,15 +2417,14 @@ def main() -> int:
         for distance in distances:
             for physical_error_rate in error_rates:
                 for duration_multiplier in duration_multipliers:
-                    total_rounds = duration_multiplier * distance
+                    total_rounds = _rounds_from_multiplier(distance, duration_multiplier)
                     for backend in backends:
                         point_idx += 1
                         point_seed = args.seed + point_idx
                         print(
-                            f"[{point_idx:>3}/{total_points}] "(
-                                f"backend={backend} basis={basis} d={distance} "
-                                f"p={physical_error_rate:.5g} r={total_rounds} ..."
-                            ),
+                            f"[{point_idx:>3}/{total_points}] "
+                            f"backend={backend} basis={basis} d={distance} "
+                            f"p={physical_error_rate:.5g} r={total_rounds} ...",
                         )
                         point_start = time.perf_counter()
                         point = _run_memory_point(
@@ -1591,25 +2541,64 @@ def main() -> int:
                 title=f"{basis}-Basis Fitted Logical Error Rate Per Round ({backend})",
             )
 
-            crossing = _estimate_threshold(basis_summaries)
-            print()
-            if crossing is None:
-                print(
-                    (
-                        f"{basis} basis [{backend}]: no d={min(distances)} vs "
-                        f"d={max(distances)} crossing was detected on this sweep."
-                    ),
-                )
-            else:
-                print(
-                    f"{basis} basis [{backend}]: approximate threshold crossing "
-                    f"(smallest vs largest distance, fitted d-round LER) is near p ~= {crossing:.6g}.",
-                )
+            power_law_fits = _fit_per_distance_power_law(basis_summaries)
+            if power_law_fits:
+                print()
+                print(f"{basis} basis [{backend}] primary epsilon_d(p) ~= A_d * p^c_d fits:")
+                for fit in power_law_fits:
+                    print(
+                        "  "
+                        f"d={fit.distance}: A_d={fit.fitted_prefactor:.4g} "
+                        f"c_d={fit.fitted_exponent:.3f} "
+                        f"log_rmse={fit.fit_root_mean_square_log_error:.3e}",
+                    )
+
+            lambda_ratios = _pairwise_lambda_ratios(basis_summaries)
+            if lambda_ratios:
+                print(f"{basis} basis [{backend}] primary Lambda_(d/(d+2)) ratios:")
+                for ratio in lambda_ratios:
+                    print(
+                        "  "
+                        f"p={ratio.physical_error_rate:.5g}: "
+                        f"Lambda_{{{ratio.distance_low}/{ratio.distance_high}}}="
+                        f"{ratio.lambda_d_over_d_plus_2:.4g}",
+                    )
 
             print(f"{basis} basis [{backend}] suppression check (fitted d-round LER decreases with distance):")
             for p, is_suppressed in _suppression_summary(basis_summaries):
                 status = "suppressed" if is_suppressed else "not suppressed"
                 print(f"  p={p:.5g}: {status}")
+
+            distance_scaling_fits = _distance_scaling_fits(basis_summaries)
+            if distance_scaling_fits:
+                print(f"{basis} basis [{backend}] background fixed-p distance-scaling fits:")
+                for fit in distance_scaling_fits:
+                    print(
+                        "  "
+                        f"p={fit.physical_error_rate:.5g}: "
+                        f"A={fit.fitted_prefactor:.4g} "
+                        f"Lambda_(d/(d+2))={fit.fitted_suppression_factor:.4g} "
+                        f"log_rmse={fit.fit_root_mean_square_log_error:.3e}",
+                    )
+
+            crossing = _estimate_threshold(basis_summaries)
+            global_scaling_fit = _fit_global_scaling_law(basis_summaries)
+            if crossing is not None or global_scaling_fit is not None:
+                print(f"{basis} basis [{backend}] background threshold-style summary:")
+                if crossing is None:
+                    print(
+                        f"  no d={min(distances)} vs d={max(distances)} crossing was detected on this sweep.",
+                    )
+                else:
+                    print(f"  approximate threshold crossing from fitted d-round curves: p ~= {crossing:.6g}")
+                if global_scaling_fit is not None:
+                    print(
+                        "  "
+                        f"global ansatz epsilon ~= A * (p / p_th)^((d + 1) / 2): "
+                        f"A={global_scaling_fit.fitted_prefactor:.4g} "
+                        f"p_th={global_scaling_fit.fitted_threshold:.4g} "
+                        f"log_rmse={global_scaling_fit.fit_root_mean_square_log_error:.3e}",
+                    )
 
     timing_summary = _timing_summary(
         point_timings,
