@@ -15,9 +15,10 @@ For the ``sim`` backend, decoding is performed relative to a cached noiseless
 reference trajectory from the same Guppy/QIS circuit. This makes the gate-level
 path compatible with the native DEM's "deviations from ideal trajectory" view.
 
-Instead of relying on one fixed memory duration, the default workflow sweeps
-round counts ``r in {2d, 3d, 4d}`` for each ``(distance, basis, p)`` point
-and fits a per-round logical error rate ``epsilon`` via
+Instead of relying on one fixed memory duration, the default workflow samples
+about four evenly spaced integer round counts across the window
+``r in [2d, 3d]`` for each ``(distance, basis, p)`` point and fits a
+per-round logical error rate ``epsilon`` via
 
     p_L(r) ~= 0.5 * (1 - (1 - 2 * epsilon) ** r)
 
@@ -29,7 +30,7 @@ Example:
 
     python examples/surface/native_dem_threshold_sweep.py \\
         --distances 3 5 7 9 \\
-        --duration-multipliers 2 2.5 3 \\
+        --duration-multipliers 2 2.25 2.5 2.75 3 \\
         --error-rates 0.001 0.002 0.003 0.004 0.005 0.006 \\
         --bases X Z \\
         --shots 500 \\
@@ -51,6 +52,7 @@ from __future__ import annotations
 import argparse
 import atexit
 import contextlib
+import hashlib
 import html
 import itertools
 import json
@@ -95,6 +97,13 @@ class FitSummary:
     fitted_logical_error_rate_per_round: float
     fitted_projected_logical_error_rate_over_d_rounds: float
     fit_root_mean_square_error: float
+    observed_logical_error_counts: tuple[int, ...] = ()
+    observed_logical_error_rate_lower_bounds: tuple[float, ...] = ()
+    observed_logical_error_rate_upper_bounds: tuple[float, ...] = ()
+    fitted_logical_error_rate_per_round_ci_low: float | None = None
+    fitted_logical_error_rate_per_round_ci_high: float | None = None
+    fitted_projected_logical_error_rate_over_d_rounds_ci_low: float | None = None
+    fitted_projected_logical_error_rate_over_d_rounds_ci_high: float | None = None
 
 
 @dataclass(frozen=True)
@@ -184,6 +193,8 @@ class _NativeSamplerRuntime:
 
 
 _CACHED_SELENE_INSTANCES: list[Any] = []
+_FIT_CONFIDENCE_LEVEL = 0.95
+_FIT_BOOTSTRAP_SAMPLES = 200
 
 
 def _cleanup_cached_selene_instances() -> None:
@@ -251,7 +262,7 @@ def ler_per_round_exp(logical_error_rate: float, num_rounds: int) -> float:
     return 0.5 * (1.0 - (1.0 - 2.0 * logical_error_rate) ** (1.0 / num_rounds))
 
 
-def ler_over_rounds(per_round_rate: float, num_rounds: int) -> float:
+def ler_over_rounds(per_round_rate: float, num_rounds: float) -> float:
     """Project a per-round logical error rate over ``num_rounds`` rounds."""
     if num_rounds <= 0:
         msg = "num_rounds must be positive"
@@ -263,6 +274,143 @@ def ler_over_rounds(per_round_rate: float, num_rounds: int) -> float:
     return 0.5 * (1.0 - (1.0 - 2.0 * per_round_rate) ** num_rounds)
 
 
+def _wilson_interval(
+    num_successes: int,
+    num_trials: int,
+    *,
+    confidence_level: float = _FIT_CONFIDENCE_LEVEL,
+) -> tuple[float, float]:
+    """Return a Wilson score interval for one binomial proportion."""
+    if num_trials <= 0:
+        msg = "num_trials must be positive"
+        raise ValueError(msg)
+    z = statistics.NormalDist().inv_cdf(0.5 + confidence_level / 2.0)
+    p_hat = num_successes / num_trials
+    z_sq_over_n = (z * z) / num_trials
+    denom = 1.0 + z_sq_over_n
+    center = (p_hat + 0.5 * z_sq_over_n) / denom
+    half_width = z * math.sqrt((p_hat * (1.0 - p_hat) + (z * z) / (4.0 * num_trials)) / num_trials) / denom
+    return max(0.0, center - half_width), min(1.0, center + half_width)
+
+
+def _fit_summary_metric_interval(summary: FitSummary, metric: str) -> tuple[float, float, float]:
+    """Return ``(value, low, high)`` for one plotted fit metric."""
+    value = getattr(summary, metric)
+    if metric == "fitted_logical_error_rate_per_round":
+        low = summary.fitted_logical_error_rate_per_round_ci_low
+        high = summary.fitted_logical_error_rate_per_round_ci_high
+    elif metric == "fitted_projected_logical_error_rate_over_d_rounds":
+        low = summary.fitted_projected_logical_error_rate_over_d_rounds_ci_low
+        high = summary.fitted_projected_logical_error_rate_over_d_rounds_ci_high
+    else:
+        low = None
+        high = None
+    return (
+        value,
+        value if low is None else low,
+        value if high is None else high,
+    )
+
+
+def _format_interval(low: float | None, high: float | None, value: float) -> str:
+    """Format one fit interval for terminal output."""
+    resolved_low = value if low is None else low
+    resolved_high = value if high is None else high
+    return f"[{resolved_low:.6e}, {resolved_high:.6e}]"
+
+
+def _stable_bootstrap_seed(points: list[SweepPoint]) -> int:
+    """Derive a stable RNG seed for one fit-summary point group."""
+    first = points[0]
+    key = "|".join(
+        [
+            first.backend,
+            first.basis,
+            str(first.distance),
+            f"{first.physical_error_rate:.12g}",
+            *(f"{point.total_rounds}:{point.num_shots}:{point.num_logical_errors}" for point in points),
+        ],
+    )
+    digest = hashlib.blake2b(key.encode("utf-8"), digest_size=8).digest()
+    return int.from_bytes(digest, byteorder="big", signed=False)
+
+
+def _percentile_interval(
+    values: list[float],
+    *,
+    confidence_level: float = _FIT_CONFIDENCE_LEVEL,
+) -> tuple[float, float]:
+    """Return an empirical central percentile interval for a sample."""
+    if not values:
+        msg = "Need at least one sample value"
+        raise ValueError(msg)
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0], ordered[0]
+
+    lower_q = 0.5 * (1.0 - confidence_level)
+    upper_q = 1.0 - lower_q
+
+    def interpolate(probability: float) -> float:
+        position = probability * (len(ordered) - 1)
+        lower_index = math.floor(position)
+        upper_index = math.ceil(position)
+        if lower_index == upper_index:
+            return ordered[lower_index]
+        fraction = position - lower_index
+        return ordered[lower_index] * (1.0 - fraction) + ordered[upper_index] * fraction
+
+    return interpolate(lower_q), interpolate(upper_q)
+
+
+def _fit_summary_confidence_intervals(points: list[SweepPoint]) -> tuple[float, float, float, float]:
+    """Bootstrap fit uncertainty for one ``(d, basis, p)`` point group."""
+    ordered = sorted(points, key=lambda point: point.total_rounds)
+    fitted_per_round = _fit_per_round_rate(ordered)
+    fitted_projected = ler_over_rounds(fitted_per_round, ordered[0].distance)
+
+    try:
+        import numpy as np
+    except ImportError:  # pragma: no cover
+        return fitted_per_round, fitted_per_round, fitted_projected, fitted_projected
+
+    shot_counts = np.asarray([point.num_shots for point in ordered], dtype=np.int64)
+    observed_rates = np.asarray(
+        [min(max(point.logical_error_rate, 0.0), 1.0) for point in ordered],
+        dtype=np.float64,
+    )
+    rng = np.random.default_rng(_stable_bootstrap_seed(ordered))
+    bootstrap_counts = rng.binomial(n=shot_counts, p=observed_rates, size=(_FIT_BOOTSTRAP_SAMPLES, len(ordered)))
+
+    bootstrap_per_round: list[float] = []
+    bootstrap_projected: list[float] = []
+    for sample_counts in bootstrap_counts:
+        sample_points: list[SweepPoint] = []
+        for point, sample_count in zip(ordered, sample_counts, strict=False):
+            count = int(sample_count)
+            sample_points.append(
+                SweepPoint(
+                    backend=point.backend,
+                    distance=point.distance,
+                    basis=point.basis,
+                    physical_error_rate=point.physical_error_rate,
+                    total_rounds=point.total_rounds,
+                    num_shots=point.num_shots,
+                    num_logical_errors=count,
+                    num_raw_errors=point.num_raw_errors,
+                    logical_error_rate=(count / point.num_shots) if point.num_shots else 0.0,
+                    raw_error_rate=point.raw_error_rate,
+                ),
+            )
+        sample_fit = _fit_per_round_rate(sample_points)
+        bootstrap_per_round.append(sample_fit)
+        bootstrap_projected.append(ler_over_rounds(sample_fit, ordered[0].distance))
+
+    per_round_low, per_round_high = _percentile_interval(bootstrap_per_round)
+    projected_low, projected_high = _percentile_interval(bootstrap_projected)
+    return per_round_low, per_round_high, projected_low, projected_high
+
+
 def _rounds_from_multiplier(distance: int, duration_multiplier: float) -> int:
     """Convert a duration multiplier into an integer round count."""
     total_rounds = round(duration_multiplier * distance)
@@ -270,6 +418,38 @@ def _rounds_from_multiplier(distance: int, duration_multiplier: float) -> int:
         msg = f"duration multiplier {duration_multiplier!r} produced non-positive rounds for d={distance}"
         raise ValueError(msg)
     return total_rounds
+
+
+def _evenly_spaced_values(start: float, stop: float, num_points: int) -> list[float]:
+    """Return ``num_points`` evenly spaced values from ``start`` to ``stop`` inclusive."""
+    if num_points <= 0:
+        msg = "num_points must be positive"
+        raise ValueError(msg)
+    if num_points == 1:
+        return [0.5 * (start + stop)]
+    step = (stop - start) / (num_points - 1)
+    return [start + index * step for index in range(num_points)]
+
+
+def _duration_rounds_for_distance(
+    distance: int,
+    *,
+    explicit_multipliers: list[float] | None,
+    duration_min_multiplier: float,
+    duration_max_multiplier: float,
+    duration_num_points: int,
+) -> tuple[int, ...]:
+    """Return the effective integer round counts to sample for one distance."""
+    if explicit_multipliers is not None:
+        return tuple(sorted({_rounds_from_multiplier(distance, multiplier) for multiplier in explicit_multipliers}))
+
+    start_round = _rounds_from_multiplier(distance, duration_min_multiplier)
+    stop_round = _rounds_from_multiplier(distance, duration_max_multiplier)
+    if stop_round < start_round:
+        msg = "duration_max_multiplier must be at least duration_min_multiplier"
+        raise ValueError(msg)
+    raw_rounds = _evenly_spaced_values(float(start_round), float(stop_round), duration_num_points)
+    return tuple(sorted({max(1, round(value)) for value in raw_rounds}))
 
 
 def _reshape_round_values(flat_values: list[int], num_rounds: int, width: int, label: str) -> list[Any]:
@@ -605,7 +785,7 @@ def _profile_gate_backends(
     distances: list[int],
     bases: list[str],
     error_rates: list[float],
-    duration_multipliers: list[float],
+    duration_rounds_by_distance: dict[int, tuple[int, ...]],
     shots: int,
     seed: int,
     warmup_repetitions: int,
@@ -649,11 +829,11 @@ def _profile_gate_backends(
     }
 
     combinations = [
-        (distance, basis, physical_error_rate, _rounds_from_multiplier(distance, duration_multiplier))
+        (distance, basis, physical_error_rate, total_rounds)
         for basis in bases
         for distance in distances
         for physical_error_rate in error_rates
-        for duration_multiplier in duration_multipliers
+        for total_rounds in duration_rounds_by_distance[distance]
     ]
 
     for combo_idx, (distance, basis, physical_error_rate, total_rounds) in enumerate(combinations, start=1):
@@ -908,8 +1088,12 @@ def _fit_summary_from_points(points: list[SweepPoint]) -> FitSummary:
     ordered = sorted(points, key=lambda point: point.total_rounds)
     first = ordered[0]
     fitted_per_round = _fit_per_round_rate(ordered)
+    per_round_ci_low, per_round_ci_high, projected_ci_low, projected_ci_high = _fit_summary_confidence_intervals(
+        ordered,
+    )
     residuals = [ler_over_rounds(fitted_per_round, point.total_rounds) - point.logical_error_rate for point in ordered]
     rms_error = math.sqrt(sum(residual * residual for residual in residuals) / len(residuals))
+    logical_rate_intervals = [_wilson_interval(point.num_logical_errors, point.num_shots) for point in ordered]
     return FitSummary(
         backend=first.backend,
         distance=first.distance,
@@ -922,6 +1106,13 @@ def _fit_summary_from_points(points: list[SweepPoint]) -> FitSummary:
         fitted_logical_error_rate_per_round=fitted_per_round,
         fitted_projected_logical_error_rate_over_d_rounds=ler_over_rounds(fitted_per_round, first.distance),
         fit_root_mean_square_error=rms_error,
+        observed_logical_error_counts=tuple(point.num_logical_errors for point in ordered),
+        observed_logical_error_rate_lower_bounds=tuple(interval[0] for interval in logical_rate_intervals),
+        observed_logical_error_rate_upper_bounds=tuple(interval[1] for interval in logical_rate_intervals),
+        fitted_logical_error_rate_per_round_ci_low=per_round_ci_low,
+        fitted_logical_error_rate_per_round_ci_high=per_round_ci_high,
+        fitted_projected_logical_error_rate_over_d_rounds_ci_low=projected_ci_low,
+        fitted_projected_logical_error_rate_over_d_rounds_ci_high=projected_ci_high,
     )
 
 
@@ -1292,6 +1483,13 @@ def _write_json_results(
             "sample_backend_mode": args.sample_backend,
             "executed_backends": sorted({point.backend for point in points}),
             "duration_multipliers": sorted(set(args.duration_multipliers)),
+            "duration_min_multiplier": args.duration_min_multiplier,
+            "duration_max_multiplier": args.duration_max_multiplier,
+            "duration_num_points": args.duration_num_points,
+            "duration_schedule_description": args.duration_schedule_description,
+            "duration_rounds_by_distance": {
+                str(distance): list(rounds) for distance, rounds in sorted(args.duration_rounds_by_distance.items())
+            },
             "error_rates": sorted(set(args.error_rates)),
             "shots": args.shots,
             "dem_mode": args.dem_mode,
@@ -1400,10 +1598,74 @@ def _basis_linestyle(basis: str) -> str:
     return "-" if basis.upper() == "X" else "--"
 
 
+def _duration_fit_curve_points(
+    summary: FitSummary,
+    *,
+    num_samples: int = 120,
+) -> list[tuple[float, float]]:
+    """Return a smooth fitted duration curve for one ``(basis, distance, p)`` summary."""
+    if not summary.round_values:
+        return []
+
+    min_rounds = float(min(summary.round_values))
+    max_rounds = float(max(summary.round_values))
+    if math.isclose(min_rounds, max_rounds):
+        round_samples = [min_rounds]
+    else:
+        round_samples = [
+            min_rounds + (max_rounds - min_rounds) * index / (num_samples - 1) for index in range(num_samples)
+        ]
+
+    return [
+        (
+            total_rounds / summary.distance,
+            ler_over_rounds(summary.fitted_logical_error_rate_per_round, total_rounds),
+        )
+        for total_rounds in round_samples
+    ]
+
+
+def _append_svg_error_bar(
+    parts: list[str],
+    *,
+    x: float,
+    low_value: float,
+    high_value: float,
+    y_min: float,
+    y_max: float,
+    plot_top: float,
+    plot_height: float,
+    color: str,
+    cap_width: float = 8.0,
+) -> None:
+    """Append a vertical SVG error bar to ``parts``."""
+    lower = max(low_value, y_min)
+    upper = max(high_value, y_min)
+    if upper < lower:
+        lower, upper = upper, lower
+    y_low = _y_pos(lower, y_min, y_max, plot_top, plot_height)
+    y_high = _y_pos(upper, y_min, y_max, plot_top, plot_height)
+    parts.append(
+        f'<line x1="{x:.1f}" y1="{y_high:.1f}" x2="{x:.1f}" y2="{y_low:.1f}" '
+        f'stroke="{color}" stroke-width="1.75" opacity="0.85"/>',
+    )
+    parts.append(
+        f'<line x1="{x - cap_width / 2.0:.1f}" y1="{y_high:.1f}" '
+        f'x2="{x + cap_width / 2.0:.1f}" y2="{y_high:.1f}" '
+        f'stroke="{color}" stroke-width="1.75" opacity="0.85"/>',
+    )
+    parts.append(
+        f'<line x1="{x - cap_width / 2.0:.1f}" y1="{y_low:.1f}" '
+        f'x2="{x + cap_width / 2.0:.1f}" y2="{y_low:.1f}" '
+        f'stroke="{color}" stroke-width="1.75" opacity="0.85"/>',
+    )
+
+
 def _write_svg_duration_overlay_plot(
     output_path: Path,
     *,
     points: list[SweepPoint],
+    summaries: list[FitSummary],
     backend: str,
     physical_error_rate: float,
 ) -> None:
@@ -1414,7 +1676,15 @@ def _write_svg_duration_overlay_plot(
     distances = sorted({point.distance for point in points})
     bases = sorted({point.basis for point in points})
     x_values = sorted({point.total_rounds / point.distance for point in points})
-    y_values = [point.logical_error_rate for point in points if point.logical_error_rate > 0.0]
+    y_values = []
+    for point in points:
+        _, upper = _wilson_interval(point.num_logical_errors, point.num_shots)
+        if upper > 0.0:
+            y_values.append(upper)
+    for summary in summaries:
+        for _, fitted_rate in _duration_fit_curve_points(summary):
+            if fitted_rate > 0.0:
+                y_values.append(fitted_rate)
     y_min = max(min(y_values) * 0.8, 1e-12) if y_values else 1e-12
     y_max = max(max(y_values) * 1.2, y_min * 10.0) if y_values else 1e-6
 
@@ -1435,6 +1705,8 @@ def _write_svg_duration_overlay_plot(
         '<rect width="100%" height="100%" fill="white"/>',
         f'<text x="{width / 2:.1f}" y="34" text-anchor="middle" font-size="24" fill="#0f172a">'
         f"Logical Memory Error vs Duration ({html.escape(backend)}, p={physical_error_rate:.4g})</text>",
+        f'<text x="{width / 2:.1f}" y="58" text-anchor="middle" font-size="14" fill="#475569">'
+        "Points show observed logical error rates with 95% Wilson intervals; lines show fitted duration curves.</text>",
         f'<text x="{width / 2:.1f}" y="{height - 20:.1f}" text-anchor="middle" font-size="18" fill="#334155">'
         "Memory duration (rounds / d)</text>",
         f'<text x="28" y="{height / 2:.1f}" text-anchor="middle" font-size="18" fill="#334155" '
@@ -1475,6 +1747,7 @@ def _write_svg_duration_overlay_plot(
     legend_x = plot_left + 14.0
     legend_y = plot_top + 20.0
     legend_index = 0
+    summary_by_series = {(summary.basis, summary.distance): summary for summary in summaries}
     for basis in bases:
         for distance in distances:
             series = sorted(
@@ -1485,19 +1758,37 @@ def _write_svg_duration_overlay_plot(
                 continue
             color = color_by_distance[distance]
             dasharray = _basis_dasharray(basis)
-            curve_points = []
-            for point in series:
-                x = _x_pos(point.total_rounds / point.distance, x_min, x_max, plot_left, plot_width)
-                y = _y_pos(max(point.logical_error_rate, y_min), y_min, y_max, plot_top, plot_height)
-                curve_points.append(f"{x:.1f},{y:.1f}")
             style = "" if dasharray is None else f' stroke-dasharray="{dasharray}"'
-            parts.append(
-                f'<polyline fill="none" stroke="{color}" stroke-width="3" points="{" ".join(curve_points)}"{style}/>',
-            )
+            summary = summary_by_series.get((basis, distance))
+            if summary is not None:
+                curve_points = []
+                for curve_x, curve_y in _duration_fit_curve_points(summary):
+                    x = _x_pos(curve_x, x_min, x_max, plot_left, plot_width)
+                    y = _y_pos(max(curve_y, y_min), y_min, y_max, plot_top, plot_height)
+                    curve_points.append(f"{x:.1f},{y:.1f}")
+                curve_points_attr = " ".join(curve_points)
+                parts.append(
+                    f'<polyline fill="none" stroke="{color}" stroke-width="3.25" '
+                    f'points="{curve_points_attr}"{style}/>',
+                )
             for point in series:
                 x = _x_pos(point.total_rounds / point.distance, x_min, x_max, plot_left, plot_width)
+                low, high = _wilson_interval(point.num_logical_errors, point.num_shots)
+                _append_svg_error_bar(
+                    parts,
+                    x=x,
+                    low_value=low,
+                    high_value=high,
+                    y_min=y_min,
+                    y_max=y_max,
+                    plot_top=plot_top,
+                    plot_height=plot_height,
+                    color=color,
+                )
                 y = _y_pos(max(point.logical_error_rate, y_min), y_min, y_max, plot_top, plot_height)
-                parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{color}"/>')
+                parts.append(
+                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="white" stroke="{color}" stroke-width="2"/>',
+                )
 
             legend_row_y = legend_y + legend_index * 24.0
             legend_index += 1
@@ -1518,6 +1809,7 @@ def _write_pdf_duration_overlay_plot(
     output_path: Path,
     *,
     points: list[SweepPoint],
+    summaries: list[FitSummary],
     backend: str,
     physical_error_rate: float,
 ) -> None:
@@ -1534,6 +1826,7 @@ def _write_pdf_duration_overlay_plot(
     color_by_distance = {distance: colors[index % len(colors)] for index, distance in enumerate(distances)}
 
     fig, ax = plt.subplots(figsize=(9.5, 6.5))
+    summary_by_series = {(summary.basis, summary.distance): summary for summary in summaries}
     for basis in bases:
         for distance in distances:
             series = sorted(
@@ -1542,21 +1835,49 @@ def _write_pdf_duration_overlay_plot(
             )
             if not series:
                 continue
+            summary = summary_by_series.get((basis, distance))
+            color = color_by_distance[distance]
+            if summary is not None:
+                fit_curve = _duration_fit_curve_points(summary)
+                fit_xs = [curve_x for curve_x, _ in fit_curve]
+                fit_ys = [max(curve_y, 1e-12) for _, curve_y in fit_curve]
+                ax.plot(
+                    fit_xs,
+                    fit_ys,
+                    linewidth=2.5,
+                    linestyle=_basis_linestyle(basis),
+                    color=color,
+                    label=f"{basis} d={distance}",
+                )
             xs = [point.total_rounds / point.distance for point in series]
             ys = [max(point.logical_error_rate, 1e-12) for point in series]
-            ax.semilogy(
+            lower_bounds = [_wilson_interval(point.num_logical_errors, point.num_shots)[0] for point in series]
+            upper_bounds = [_wilson_interval(point.num_logical_errors, point.num_shots)[1] for point in series]
+            yerr_lower = [max(y - low, 0.0) for y, low in zip(ys, lower_bounds, strict=False)]
+            yerr_upper = [max(high - y, 0.0) for y, high in zip(ys, upper_bounds, strict=False)]
+            ax.errorbar(
                 xs,
                 ys,
+                yerr=[yerr_lower, yerr_upper],
                 marker="o",
-                linewidth=2,
-                linestyle=_basis_linestyle(basis),
-                color=color_by_distance[distance],
-                label=f"{basis} d={distance}",
+                linestyle="none",
+                color=color,
+                markerfacecolor="white",
+                markeredgecolor=color,
+                markeredgewidth=1.5,
+                elinewidth=1.2,
+                alpha=0.85,
+                capsize=3,
             )
 
-    ax.set_title(f"Logical Memory Error vs Duration ({backend}, p={physical_error_rate:.4g})")
+    ax.set_title(
+        "Logical Memory Error vs Duration "
+        f"({backend}, p={physical_error_rate:.4g})\n"
+        "Points show observed logical error rates with 95% Wilson intervals; lines show fitted duration curves.",
+    )
     ax.set_xlabel("Memory duration (rounds / d)")
     ax.set_ylabel("Observed logical error rate")
+    ax.set_yscale("log")
     ax.grid(visible=True, which="both", alpha=0.25)
     ax.legend(ncol=2)
     fig.tight_layout()
@@ -1577,11 +1898,11 @@ def _write_svg_per_round_overlay_plot(
     distances = sorted({summary.distance for summary in summaries})
     bases = sorted({summary.basis for summary in summaries})
     error_rates = sorted({summary.physical_error_rate for summary in summaries})
-    y_values = [
-        summary.fitted_logical_error_rate_per_round
-        for summary in summaries
-        if summary.fitted_logical_error_rate_per_round > 0.0
-    ]
+    y_values = []
+    for summary in summaries:
+        _, _, upper = _fit_summary_metric_interval(summary, "fitted_logical_error_rate_per_round")
+        if upper > 0.0:
+            y_values.append(upper)
     y_min = max(min(y_values) * 0.8, 1e-12) if y_values else 1e-12
     y_max = max(max(y_values) * 1.2, y_min * 10.0) if y_values else 1e-6
 
@@ -1669,8 +1990,20 @@ def _write_svg_per_round_overlay_plot(
             )
             for summary in series:
                 x = _x_pos_log(summary.physical_error_rate, x_min, x_max, plot_left, plot_width)
+                value, low, high = _fit_summary_metric_interval(summary, "fitted_logical_error_rate_per_round")
+                _append_svg_error_bar(
+                    parts,
+                    x=x,
+                    low_value=low,
+                    high_value=high,
+                    y_min=y_min,
+                    y_max=y_max,
+                    plot_top=plot_top,
+                    plot_height=plot_height,
+                    color=color,
+                )
                 y = _y_pos(
-                    max(summary.fitted_logical_error_rate_per_round, y_min),
+                    max(value, y_min),
                     y_min,
                     y_max,
                     plot_top,
@@ -1721,20 +2054,29 @@ def _write_pdf_per_round_overlay_plot(
             if not series:
                 continue
             xs = [summary.physical_error_rate for summary in series]
-            ys = [max(summary.fitted_logical_error_rate_per_round, 1e-12) for summary in series]
-            ax.loglog(
+            intervals = [
+                _fit_summary_metric_interval(summary, "fitted_logical_error_rate_per_round") for summary in series
+            ]
+            ys = [max(value, 1e-12) for value, _, _ in intervals]
+            yerr_lower = [max(value - low, 0.0) for value, low, _ in intervals]
+            yerr_upper = [max(high - value, 0.0) for value, _, high in intervals]
+            ax.errorbar(
                 xs,
                 ys,
+                yerr=[yerr_lower, yerr_upper],
                 marker="o",
                 linewidth=2,
                 linestyle=_basis_linestyle(basis),
                 color=color_by_distance[distance],
                 label=f"{basis} d={distance}",
+                capsize=3,
             )
 
     ax.set_title(f"Per-round logical error rate vs p ({backend})")
     ax.set_xlabel("Physical error rate p")
     ax.set_ylabel("Fitted logical error rate per round")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
     ax.grid(visible=True, which="both", alpha=0.25)
     ax.legend(ncol=2)
     fig.tight_layout()
@@ -1755,7 +2097,11 @@ def _write_svg_plot(
     error_rates = sorted({summary.physical_error_rate for summary in summaries})
     by_key = {(summary.distance, summary.physical_error_rate): summary for summary in summaries}
 
-    values = [getattr(summary, metric) for summary in summaries if getattr(summary, metric) > 0.0]
+    values = []
+    for summary in summaries:
+        _, _, upper = _fit_summary_metric_interval(summary, metric)
+        if upper > 0.0:
+            values.append(upper)
     if values:
         y_min = max(min(values) * 0.8, 1e-12)
         y_max = max(max(values) * 1.2, y_min * 10.0)
@@ -1835,8 +2181,20 @@ def _write_svg_plot(
         )
         for p in error_rates:
             summary = by_key[(distance, p)]
+            value, low, high = _fit_summary_metric_interval(summary, metric)
             x = _x_pos(p, x_min, x_max, plot_left, plot_width)
-            y = _y_pos(max(getattr(summary, metric), y_min), y_min, y_max, plot_top, plot_height)
+            _append_svg_error_bar(
+                parts,
+                x=x,
+                low_value=low,
+                high_value=high,
+                y_min=y_min,
+                y_max=y_max,
+                plot_top=plot_top,
+                plot_height=plot_height,
+                color=color,
+            )
+            y = _y_pos(max(value, y_min), y_min, y_max, plot_top, plot_height)
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{color}"/>')
 
         legend_row_y = legend_y + index * 24.0
@@ -1874,12 +2232,24 @@ def _write_pdf_plot(
 
     fig, ax = plt.subplots(figsize=(9, 6))
     for distance in distances:
-        ys = [max(getattr(by_key[(distance, p)], metric), 1e-12) for p in error_rates]
-        ax.semilogy(error_rates, ys, marker="o", linewidth=2, label=f"d={distance}")
+        intervals = [_fit_summary_metric_interval(by_key[(distance, p)], metric) for p in error_rates]
+        ys = [max(value, 1e-12) for value, _, _ in intervals]
+        yerr_lower = [max(value - low, 0.0) for value, low, _ in intervals]
+        yerr_upper = [max(high - value, 0.0) for value, _, high in intervals]
+        ax.errorbar(
+            error_rates,
+            ys,
+            yerr=[yerr_lower, yerr_upper],
+            marker="o",
+            linewidth=2,
+            label=f"d={distance}",
+            capsize=3,
+        )
 
     ax.set_title(title)
     ax.set_xlabel("Physical error rate p")
     ax.set_ylabel(y_label)
+    ax.set_yscale("log")
     ax.grid(visible=True, which="both", alpha=0.25)
     ax.legend()
     fig.tight_layout()
@@ -2016,7 +2386,14 @@ def _write_html_dashboard(
         """,
     ).strip()
     distances_text = ", ".join(str(distance) for distance in sorted(set(args.distances)))
-    multipliers_text = ", ".join(f"{value:g}" for value in sorted(set(args.duration_multipliers)))
+    multipliers_text = getattr(args, "duration_schedule_description", None)
+    if not multipliers_text:
+        multipliers_text = ", ".join(f"{value:g}" for value in sorted(set(args.duration_multipliers)))
+    rounds_by_distance = getattr(args, "duration_rounds_by_distance", {})
+    rounds_text = "; ".join(
+        f"d={distance}: [{', '.join(str(value) for value in rounds)}]"
+        for distance, rounds in sorted(rounds_by_distance.items())
+    )
     error_rates_text = ", ".join(f"{value:.4g}" for value in sorted(set(args.error_rates)))
 
     parts = [
@@ -2042,7 +2419,7 @@ def _write_html_dashboard(
         meta_card("Backends", html.escape(", ".join(backend_names))),
         meta_card("Bases", html.escape(", ".join(basis_names))),
         meta_card("Distances", html.escape(distances_text)),
-        meta_card("Round Multipliers", html.escape(multipliers_text)),
+        meta_card("Round Schedule", html.escape(multipliers_text)),
         meta_card("Error Rates", html.escape(error_rates_text)),
         meta_card("Shots / Point", html.escape(str(args.shots))),
         meta_card(
@@ -2053,6 +2430,7 @@ def _write_html_dashboard(
             "Overall Throughput",
             html.escape(f"{timing_summary['overall_shots_per_second']:.3f} shots/s"),
         ),
+        meta_card("Effective Rounds", html.escape(rounds_text)) if rounds_text else "",
         "    </div>",
     ]
     if json_filename is not None:
@@ -2144,12 +2522,16 @@ def _write_artifacts(
                 for point in points
                 if point.backend == backend and point.physical_error_rate == physical_error_rate
             ]
+            rate_summaries = [
+                summary for summary in backend_summaries if summary.physical_error_rate == physical_error_rate
+            ]
             stem = f"{prefix}_{backend}_p_{_format_rate_for_filename(physical_error_rate)}_duration_overlay"
             if args.save_svg:
                 duration_svg_path = output_dir / f"{stem}.svg"
                 _write_svg_duration_overlay_plot(
                     duration_svg_path,
                     points=rate_points,
+                    summaries=rate_summaries,
                     backend=backend,
                     physical_error_rate=physical_error_rate,
                 )
@@ -2168,6 +2550,7 @@ def _write_artifacts(
                 _write_pdf_duration_overlay_plot(
                     duration_pdf_path,
                     points=rate_points,
+                    summaries=rate_summaries,
                     backend=backend,
                     physical_error_rate=physical_error_rate,
                 )
@@ -2236,11 +2619,32 @@ def _parse_args() -> argparse.Namespace:
         dest="duration_multipliers",
         nargs="+",
         type=float,
-        default=[2.0, 3.0, 4.0],
+        default=None,
         help=(
-            "Use total memory durations r = multiplier * distance for the fit. "
-            "These multipliers are in units of code distance, not raw rounds, "
-            "so values like 2.5 are allowed."
+            "Explicit duration multipliers to use for the fit, where r = multiplier * distance. "
+            "When omitted, the sweep uses about four evenly spaced integer round counts "
+            "across the default [2d, 3d] window."
+        ),
+    )
+    parser.add_argument(
+        "--duration-min-multiplier",
+        type=float,
+        default=2.0,
+        help="Lower bound of the default duration window, in units of distance.",
+    )
+    parser.add_argument(
+        "--duration-max-multiplier",
+        type=float,
+        default=3.0,
+        help="Upper bound of the default duration window, in units of distance.",
+    )
+    parser.add_argument(
+        "--duration-num-points",
+        type=int,
+        default=4,
+        help=(
+            "Number of approximately evenly spaced integer round counts to sample within the "
+            "default duration window when --duration-multipliers is not provided."
         ),
     )
     parser.add_argument(
@@ -2363,7 +2767,36 @@ def main() -> int:
         backends = ["selene_sim", "selene_stabilizer_plugin", "sim"]
     else:
         backends = [args.sample_backend]
-    duration_multipliers = sorted(set(args.duration_multipliers))
+    explicit_duration_multipliers = (
+        None if args.duration_multipliers is None else sorted(set(args.duration_multipliers))
+    )
+    if explicit_duration_multipliers is not None:
+        duration_multipliers = explicit_duration_multipliers
+        duration_schedule_description = (
+            "explicit multipliers: "
+            + ", ".join(f"{value:g}" for value in duration_multipliers)
+            + " (meaning r = multiplier * distance)"
+        )
+    else:
+        duration_multipliers = _evenly_spaced_values(
+            args.duration_min_multiplier,
+            args.duration_max_multiplier,
+            args.duration_num_points,
+        )
+        duration_schedule_description = (
+            f"about {args.duration_num_points} evenly spaced round counts over "
+            f"[{args.duration_min_multiplier:g}d, {args.duration_max_multiplier:g}d]"
+        )
+    duration_rounds_by_distance = {
+        distance: _duration_rounds_for_distance(
+            distance,
+            explicit_multipliers=explicit_duration_multipliers,
+            duration_min_multiplier=args.duration_min_multiplier,
+            duration_max_multiplier=args.duration_max_multiplier,
+            duration_num_points=args.duration_num_points,
+        )
+        for distance in distances
+    }
     error_rates = sorted(set(args.error_rates))
 
     if any(distance <= 0 or distance % 2 == 0 for distance in distances):
@@ -2372,12 +2805,31 @@ def main() -> int:
     if any(multiplier <= 0 for multiplier in duration_multipliers):
         msg = "Duration multipliers must be positive"
         raise ValueError(msg)
+    if args.duration_min_multiplier <= 0.0 or args.duration_max_multiplier <= 0.0:
+        msg = "Duration window multipliers must be positive"
+        raise ValueError(msg)
+    if args.duration_max_multiplier < args.duration_min_multiplier:
+        msg = "duration-max-multiplier must be at least duration-min-multiplier"
+        raise ValueError(msg)
+    if args.duration_num_points <= 0:
+        msg = "duration-num-points must be positive"
+        raise ValueError(msg)
+
+    args.duration_multipliers = duration_multipliers
+    args.duration_rounds_by_distance = duration_rounds_by_distance
+    args.duration_schedule_description = duration_schedule_description
 
     print("Native PECOS Surface Threshold Sweep")
     print("=" * 40)
     print(f"distances        : {distances}")
     print(f"bases            : {bases}")
-    print(f"duration multipliers: {duration_multipliers} (meaning r = multiplier * distance)")
+    print(f"duration schedule: {duration_schedule_description}")
+    print(
+        "effective rounds : "
+        + "; ".join(
+            f"d={distance} -> {list(rounds)}" for distance, rounds in sorted(duration_rounds_by_distance.items())
+        ),
+    )
     print(f"error rates      : {error_rates}")
     print(f"shots / point    : {args.shots}")
     print(f"sample backend mode: {args.sample_backend}")
@@ -2398,7 +2850,7 @@ def main() -> int:
             distances=distances,
             bases=bases,
             error_rates=error_rates,
-            duration_multipliers=duration_multipliers,
+            duration_rounds_by_distance=duration_rounds_by_distance,
             shots=args.shots,
             seed=args.seed,
             warmup_repetitions=args.benchmark_warmup,
@@ -2410,14 +2862,18 @@ def main() -> int:
     fit_summaries: list[FitSummary] = []
     point_timings: list[dict[str, Any]] = []
 
-    total_points = len(distances) * len(bases) * len(error_rates) * len(duration_multipliers) * len(backends)
+    total_points = (
+        sum(len(duration_rounds_by_distance[distance]) for distance in distances)
+        * len(bases)
+        * len(error_rates)
+        * len(backends)
+    )
     point_idx = 0
 
     for basis in bases:
         for distance in distances:
             for physical_error_rate in error_rates:
-                for duration_multiplier in duration_multipliers:
-                    total_rounds = _rounds_from_multiplier(distance, duration_multiplier)
+                for total_rounds in duration_rounds_by_distance[distance]:
                     for backend in backends:
                         point_idx += 1
                         point_seed = args.seed + point_idx
@@ -2485,7 +2941,17 @@ def main() -> int:
                         "    "
                         f"[{backend}] "
                         f"fit_epsilon={fit_summary.fitted_logical_error_rate_per_round:.6e} "
+                        f"{_format_interval(
+                            fit_summary.fitted_logical_error_rate_per_round_ci_low,
+                            fit_summary.fitted_logical_error_rate_per_round_ci_high,
+                            fit_summary.fitted_logical_error_rate_per_round,
+                        )} "
                         f"fit_proj_d={fit_summary.fitted_projected_logical_error_rate_over_d_rounds:.6e} "
+                        f"{_format_interval(
+                            fit_summary.fitted_projected_logical_error_rate_over_d_rounds_ci_low,
+                            fit_summary.fitted_projected_logical_error_rate_over_d_rounds_ci_high,
+                            fit_summary.fitted_projected_logical_error_rate_over_d_rounds,
+                        )} "
                         f"fit_rms={fit_summary.fit_root_mean_square_error:.3e} "
                         f"[{observed}]",
                     )

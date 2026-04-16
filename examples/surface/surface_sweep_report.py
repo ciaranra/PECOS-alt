@@ -157,6 +157,10 @@ def _dashboard_args(payload: dict[str, Any] | None) -> argparse.Namespace:
     return argparse.Namespace(
         distances=config.get("distances", []),
         duration_multipliers=config.get("duration_multipliers", []),
+        duration_schedule_description=config.get("duration_schedule_description"),
+        duration_rounds_by_distance={
+            int(distance): tuple(values) for distance, values in config.get("duration_rounds_by_distance", {}).items()
+        },
         error_rates=config.get("error_rates", []),
         shots=config.get("shots", "?"),
     )
