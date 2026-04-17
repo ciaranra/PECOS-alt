@@ -1591,10 +1591,7 @@ impl ControlEngine for QASMEngine {
     ) -> Result<EngineStage<ByteMessage, Shot>, PecosError> {
         debug!("QASMEngine::continue_processing() called");
 
-        let measurement_count = measurements
-            .outcomes()
-            .map(|outcomes| outcomes.len())
-            .unwrap_or(0);
+        let measurement_count = measurements.outcomes().map_or(0, |outcomes| outcomes.len());
         debug!("Received {measurement_count} measurements");
 
         debug!("Processing measurement results");

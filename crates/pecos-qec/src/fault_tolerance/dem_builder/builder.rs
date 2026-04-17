@@ -235,25 +235,21 @@ impl<'a> DemBuilder<'a> {
 
         for (loc_idx, loc) in locations.iter().enumerate() {
             match loc.gate_type {
-                GateType::PZ | GateType::QAlloc => {
-                    if self.noise.p_init > 0.0 && !loc.before {
-                        self.process_prep_fault_source_tracked(
-                            loc_idx,
-                            dem,
-                            meas_to_detectors,
-                            meas_to_observables,
-                        );
-                    }
+                GateType::PZ | GateType::QAlloc if self.noise.p_init > 0.0 && !loc.before => {
+                    self.process_prep_fault_source_tracked(
+                        loc_idx,
+                        dem,
+                        meas_to_detectors,
+                        meas_to_observables,
+                    );
                 }
-                GateType::MZ | GateType::MeasureFree => {
-                    if self.noise.p_meas > 0.0 && loc.before {
-                        self.process_meas_fault_source_tracked(
-                            loc_idx,
-                            dem,
-                            meas_to_detectors,
-                            meas_to_observables,
-                        );
-                    }
+                GateType::MZ | GateType::MeasureFree if self.noise.p_meas > 0.0 && loc.before => {
+                    self.process_meas_fault_source_tracked(
+                        loc_idx,
+                        dem,
+                        meas_to_detectors,
+                        meas_to_observables,
+                    );
                 }
                 GateType::CX
                 | GateType::CZ
@@ -261,10 +257,10 @@ impl<'a> DemBuilder<'a> {
                 | GateType::SWAP
                 | GateType::RXX
                 | GateType::RYY
-                | GateType::RZZ => {
-                    if !loc.before {
-                        cx_groups.entry(loc.node).or_default().push(loc_idx);
-                    }
+                | GateType::RZZ
+                    if !loc.before =>
+                {
+                    cx_groups.entry(loc.node).or_default().push(loc_idx);
                 }
                 GateType::H
                 | GateType::SZ
@@ -282,15 +278,15 @@ impl<'a> DemBuilder<'a> {
                 | GateType::RY
                 | GateType::RZ
                 | GateType::U
-                | GateType::R1XY => {
-                    if self.noise.p1 > 0.0 && !loc.before {
-                        self.process_single_qubit_fault_source_tracked(
-                            loc_idx,
-                            dem,
-                            meas_to_detectors,
-                            meas_to_observables,
-                        );
-                    }
+                | GateType::R1XY
+                    if self.noise.p1 > 0.0 && !loc.before =>
+                {
+                    self.process_single_qubit_fault_source_tracked(
+                        loc_idx,
+                        dem,
+                        meas_to_detectors,
+                        meas_to_observables,
+                    );
                 }
                 _ => {}
             }

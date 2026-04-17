@@ -347,45 +347,41 @@ impl<'a> TickFaultAnalyzerSoA<'a> {
         let qubits = storage.qubits_unchecked(idx);
 
         match gate_type {
-            GateType::CX => {
-                if qubits.len() >= 2 {
-                    let control = qubits[0].index();
-                    let target = qubits[1].index();
+            GateType::CX if qubits.len() >= 2 => {
+                let control = qubits[0].index();
+                let target = qubits[1].index();
 
-                    let ctrl_x = prop.contains_x(control);
-                    let tgt_z = prop.contains_z(target);
+                let ctrl_x = prop.contains_x(control);
+                let tgt_z = prop.contains_z(target);
 
-                    if ctrl_x {
-                        prop.track_x(&[target]);
-                    }
-                    if tgt_z {
-                        prop.track_z(&[control]);
-                    }
-
-                    // Update active qubits
-                    Self::update_active_qubit(control, prop, buffers);
-                    Self::update_active_qubit(target, prop, buffers);
+                if ctrl_x {
+                    prop.track_x(&[target]);
                 }
+                if tgt_z {
+                    prop.track_z(&[control]);
+                }
+
+                // Update active qubits
+                Self::update_active_qubit(control, prop, buffers);
+                Self::update_active_qubit(target, prop, buffers);
             }
 
-            GateType::CZ => {
-                if qubits.len() >= 2 {
-                    let q0 = qubits[0].index();
-                    let q1 = qubits[1].index();
+            GateType::CZ if qubits.len() >= 2 => {
+                let q0 = qubits[0].index();
+                let q1 = qubits[1].index();
 
-                    let x0 = prop.contains_x(q0);
-                    let x1 = prop.contains_x(q1);
+                let x0 = prop.contains_x(q0);
+                let x1 = prop.contains_x(q1);
 
-                    if x0 {
-                        prop.track_z(&[q1]);
-                    }
-                    if x1 {
-                        prop.track_z(&[q0]);
-                    }
-
-                    Self::update_active_qubit(q0, prop, buffers);
-                    Self::update_active_qubit(q1, prop, buffers);
+                if x0 {
+                    prop.track_z(&[q1]);
                 }
+                if x1 {
+                    prop.track_z(&[q0]);
+                }
+
+                Self::update_active_qubit(q0, prop, buffers);
+                Self::update_active_qubit(q1, prop, buffers);
             }
 
             GateType::H => {
