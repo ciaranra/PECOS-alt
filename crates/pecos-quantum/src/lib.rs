@@ -63,16 +63,18 @@
 //! circuit2.tick().mz(&[0, 1, 2, 3]);    // Measure multiple qubits
 //! ```
 
+pub mod channel;
 mod circuit;
 mod circuit_display;
 mod dag_circuit;
+pub mod diamond_norm;
+pub mod measures;
 pub mod pass;
 pub mod pauli_group;
 pub mod pauli_sequence;
 pub mod pauli_set;
 pub mod stabilizer_group;
 mod tick_circuit;
-pub mod tick_circuit_soa;
 pub mod unitary_matrix;
 
 #[cfg(feature = "hugr")]
@@ -80,15 +82,12 @@ pub mod hugr_convert;
 
 pub use circuit::{Circuit, CircuitMut, GateHandle, GateView};
 pub use dag_circuit::{
-    Attribute, DagCircuit, DagTraversalIndex, MeasureHandle, PrepHandle, TraversalWorkBuffers,
+    AnnotationKind, Attribute, DagCircuit, DagTraversalIndex, MeasRef, PauliAnnotation,
+    TraversalWorkBuffers,
 };
 pub use tick_circuit::{
-    CustomGateError, GateSignatureMismatchError, QubitConflictError, Tick, TickCircuit, TickHandle,
-    TickMeasureHandle, TickPrepHandle,
-};
-pub use tick_circuit_soa::{
-    CircuitIndexes, GateBatch, GateId, GateStorage, MetadataStorage, TickBatches, TickCircuitSoA,
-    TickCircuitSoABuilder, TickGateGroups,
+    CustomGateError, GateSignatureMismatchError, QubitConflictError, Tick, TickCircuit,
+    TickGateError, TickHandle, TickMeasRef, TickMeasureHandle, TickPrepHandle,
 };
 
 // Re-export commonly used types from dependencies
@@ -96,8 +95,31 @@ pub use pecos_core::gate_type::GateType;
 pub use pecos_core::{ClassicalBitId, Gate, QubitId, TimeScale, TimeUnits};
 pub use pecos_num::dag::DagWouldCycleError;
 
+// Concrete channel representation types
+pub use channel::{
+    ChannelError, ChiMatrix, ChoiMatrix, DiagonalPtm, KrausOps, MatrixUnitTomographyInput,
+    PauliChannel, PauliSum, ProcessTomographyDesign, Ptm, PtmBasisOrder, Stinespring, SuperOp,
+    basis_bitmask, basis_digit_to_pauli, basis_element, basis_index, basis_label, bitmask_label,
+    matrix_unit_basis, partial_trace, pauli_basis_len, pauli_string_to_bitmask,
+    pauli_to_basis_digit, random_1q_clifford, random_2q_clifford, random_clifford,
+    random_density_matrix, random_density_matrix_with_rank, random_pauli, random_quantum_channel,
+};
+pub use diamond_norm::{
+    DiamondNormError, choi_to_watrous_row_transpose, hermitian_to_real_symmetric,
+    hermitian_to_real_symmetric_with_tolerance, pauli_channel_diamond_distance,
+    pauli_channel_diamond_norm, scaled_psd_triangle_len, smat_real_symmetric, svec_real_symmetric,
+    svec_real_symmetric_with_tolerance,
+};
+pub use measures::{
+    DensityMatrixPartialTrace, MeasureError, SchmidtTerm, average_gate_fidelity, concurrence,
+    entanglement_of_formation, entropy, entropy_with_base, gate_error, hellinger_distance,
+    hellinger_fidelity, logarithmic_negativity, mutual_information, negativity,
+    partial_trace_qubits, partial_trace_subsystems, process_fidelity, purity,
+    schmidt_decomposition, shannon_entropy, state_fidelity, state_fidelity_with_density_matrix,
+};
+
 // Re-export operator matrix types for convenient method-style matrix conversion
-pub use unitary_matrix::{ToMatrix, UnitaryMatrix};
+pub use unitary_matrix::{ToMatrix, UnitaryMatrix, UnitaryMatrixError, random_unitary};
 
 // Pauli collection and stabilizer group types
 pub use pauli_group::{PauliGroup, PauliGroupError};

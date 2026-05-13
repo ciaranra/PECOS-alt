@@ -18,7 +18,7 @@
 //! For better performance, consider using [`DagFaultAnalyzer`](super::DagFaultAnalyzer)
 //! with DAG circuits, which provides 5-50x speedup through sparse traversal.
 
-use super::types::{DetectorId, FaultInfluence, FaultInfluenceMap, LogicalId, MeasurementId};
+use super::types::{DetectorId, FaultInfluence, FaultInfluenceMap, MeasurementId, TrackedPauliId};
 use super::{Direction, SpacetimeLocation, apply_gate, extract_spacetime_locations};
 use pecos_core::gate_type::GateType;
 use pecos_quantum::TickCircuit;
@@ -64,7 +64,7 @@ impl<'a> TickFaultAnalyzer<'a> {
         // Find max qubit for active qubit tracking
         let mut max_qubit = 0;
         for tick in circuit.ticks() {
-            for gate in tick.gates() {
+            for gate in tick.iter_gate_batches() {
                 for qubit in &gate.qubits {
                     max_qubit = max_qubit.max(qubit.index());
                 }
@@ -85,20 +85,20 @@ impl<'a> TickFaultAnalyzer<'a> {
     /// creates a lookup table for fault classification.
     #[must_use]
     pub fn build_influence_map(&self) -> FaultInfluenceMap {
-        self.build_influence_map_with_logicals(&[])
+        self.build_influence_map_with_tracked_paulis(&[])
     }
 
-    /// Builds the fault influence map with logical operator tracking.
+    /// Builds the fault influence map with tracked Pauli tracking.
     ///
     /// # Arguments
     ///
-    /// * `logicals` - Logical operators as (`x_positions`, `z_positions`) pairs.
+    /// * `tracked_paulis` - Tracked Paulis as (`x_positions`, `z_positions`) pairs.
     ///   The first element of each pair is the X component positions,
     ///   the second is the Z component positions.
     #[must_use]
-    pub fn build_influence_map_with_logicals(
+    pub fn build_influence_map_with_tracked_paulis(
         &self,
-        logicals: &[(&[usize], &[usize])],
+        tracked_paulis: &[(&[usize], &[usize])],
     ) -> FaultInfluenceMap {
         let mut map = FaultInfluenceMap::new();
 
@@ -112,11 +112,11 @@ impl<'a> TickFaultAnalyzer<'a> {
             map.detectors.push(DetectorId::single(*m));
         }
 
-        // Create logical IDs
-        for (i, _) in logicals.iter().enumerate() {
-            map.logicals.push(LogicalId {
-                logical_qubit: i,
-                observable: 0, // Z observable
+        // Create tracked-Pauli IDs
+        for (i, _) in tracked_paulis.iter().enumerate() {
+            map.tracked_paulis.push(TrackedPauliId {
+                op_index: i,
+                component: 0,
             });
         }
 
@@ -131,13 +131,13 @@ impl<'a> TickFaultAnalyzer<'a> {
             self.propagate_from_measurement(measurement, &mut map);
         }
 
-        // Backward propagate from each logical operator
-        for (i, (x_pos, z_pos)) in logicals.iter().enumerate() {
-            let logical_id = LogicalId {
-                logical_qubit: i,
-                observable: 0,
+        // Backward propagate from each tracked Pauli
+        for (i, (x_pos, z_pos)) in tracked_paulis.iter().enumerate() {
+            let tracked_pauli_id = TrackedPauliId {
+                op_index: i,
+                component: 0,
             };
-            self.propagate_from_logical(x_pos, z_pos, &logical_id, &mut map);
+            self.propagate_from_tracked_pauli(x_pos, z_pos, &tracked_pauli_id, &mut map);
         }
 
         // Build reverse maps
@@ -151,7 +151,7 @@ impl<'a> TickFaultAnalyzer<'a> {
         let mut measurements = Vec::new();
 
         for (tick_idx, tick) in self.circuit.iter_ticks() {
-            for gate in tick.gates() {
+            for gate in tick.iter_gate_batches() {
                 // Currently only Z-basis measurements are supported
                 let basis = match gate.gate_type {
                     GateType::MZ | GateType::MeasureFree => 0, // Z-basis
@@ -229,7 +229,7 @@ impl<'a> TickFaultAnalyzer<'a> {
             // Apply gates at this tick backward - SPARSE: only gates touching active qubits
             if tick_idx < self.circuit.ticks().len() {
                 let tick = &self.circuit.ticks()[tick_idx];
-                for gate in tick.gates() {
+                for gate in tick.iter_gate_batches() {
                     // Check if this gate touches any active qubit
                     let touches_active = gate.qubits.iter().any(|q| {
                         let idx = q.index();
@@ -238,7 +238,7 @@ impl<'a> TickFaultAnalyzer<'a> {
 
                     if touches_active {
                         // Apply gate backward
-                        Self::apply_gate_backward(&mut prop, gate);
+                        Self::apply_gate_backward(&mut prop, gate.as_gate());
 
                         // Update active qubits based on new Pauli state
                         for q in &gate.qubits {
@@ -259,37 +259,37 @@ impl<'a> TickFaultAnalyzer<'a> {
         }
     }
 
-    /// Propagates backward from a logical operator.
+    /// Propagates backward from a tracked Pauli.
     ///
-    /// We propagate the logical OBSERVABLE backward through the circuit.
-    /// An error P at location L flips the logical if P anticommutes with
-    /// the back-propagated observable at L.
+    /// We propagate the tracked Pauli backward through the circuit. An error
+    /// P at location L flips it if P anticommutes with the back-propagated
+    /// operator at L.
     ///
     /// This uses sparse traversal: only gates touching qubits with non-trivial
     /// Paulis are processed, providing significant speedup for circuits with
     /// local connectivity.
-    fn propagate_from_logical(
+    fn propagate_from_tracked_pauli(
         &self,
         x_positions: &[usize],
         z_positions: &[usize],
-        logical_id: &LogicalId,
+        tracked_pauli_id: &TrackedPauliId,
         map: &mut FaultInfluenceMap,
     ) {
-        // Start with the logical observable itself (not swapped)
+        // Start with the tracked Pauli itself (not swapped)
         // The recording function handles anticommutation checking
         let mut prop = PauliProp::new();
 
         // Track active qubits for sparse traversal
         let mut active_qubits = vec![false; self.max_qubit + 1];
 
-        // X positions in logical -> X in prop
+        // X positions in tracked Pauli -> X in prop
         for &q in x_positions {
             prop.track_x(&[q]);
             if q <= self.max_qubit {
                 active_qubits[q] = true;
             }
         }
-        // Z positions in logical -> Z in prop
+        // Z positions in tracked Pauli -> Z in prop
         for &q in z_positions {
             prop.track_z(&[q]);
             if q <= self.max_qubit {
@@ -312,14 +312,14 @@ impl<'a> TickFaultAnalyzer<'a> {
                 tick_idx,
                 &prop,
                 &dummy_detector,
-                Some(logical_id),
+                Some(tracked_pauli_id),
                 map,
                 false,
             );
 
             // Apply gates backward - SPARSE: only gates touching active qubits
             let tick = &self.circuit.ticks()[tick_idx];
-            for gate in tick.gates() {
+            for gate in tick.iter_gate_batches() {
                 // Check if this gate touches any active qubit
                 let touches_active = gate.qubits.iter().any(|q| {
                     let idx = q.index();
@@ -328,7 +328,7 @@ impl<'a> TickFaultAnalyzer<'a> {
 
                 if touches_active {
                     // Apply gate backward
-                    Self::apply_gate_backward(&mut prop, gate);
+                    Self::apply_gate_backward(&mut prop, gate.as_gate());
 
                     // Update active qubits based on new Pauli state
                     for q in &gate.qubits {
@@ -345,7 +345,7 @@ impl<'a> TickFaultAnalyzer<'a> {
                 tick_idx,
                 &prop,
                 &dummy_detector,
-                Some(logical_id),
+                Some(tracked_pauli_id),
                 map,
                 true,
             );
@@ -368,7 +368,7 @@ impl<'a> TickFaultAnalyzer<'a> {
         tick_idx: usize,
         prop: &PauliProp,
         detector: &DetectorId,
-        logical: Option<&LogicalId>,
+        tracked_pauli: Option<&TrackedPauliId>,
         map: &mut FaultInfluenceMap,
         only_before: bool,
     ) {
@@ -400,8 +400,8 @@ impl<'a> TickFaultAnalyzer<'a> {
                     // X fault anticommutes with Z or Y observable
                     let x_flips = obs_z; // Z or Y (both have Z component)
                     if x_flips {
-                        if let Some(log) = logical {
-                            influence.logical_flips[1].push(*log);
+                        if let Some(op) = tracked_pauli {
+                            influence.tracked_pauli_flips[1].push(*op);
                         } else {
                             influence.detector_flips[1].push(detector.clone());
                             influence.measurement_flips[1]
@@ -419,8 +419,8 @@ impl<'a> TickFaultAnalyzer<'a> {
                     // (Z anticommutes with X, Z anticommutes with Y=iXZ)
                     let z_flips = obs_x; // X or Y (both have X component)
                     if z_flips {
-                        if let Some(log) = logical {
-                            influence.logical_flips[3].push(*log);
+                        if let Some(op) = tracked_pauli {
+                            influence.tracked_pauli_flips[3].push(*op);
                         } else {
                             influence.detector_flips[3].push(detector.clone());
                             influence.measurement_flips[3]
@@ -434,12 +434,11 @@ impl<'a> TickFaultAnalyzer<'a> {
                         }
                     }
 
-                    // Y fault = iXZ: Y anticommutes with X, Z, and Y
-                    // Y anticommutes with observable if observable has X or Z component
-                    let y_flips = obs_x || obs_z;
+                    // Y fault: Y anticommutes with X or Z but NOT both (Y commutes with Y)
+                    let y_flips = obs_x ^ obs_z;
                     if y_flips {
-                        if let Some(log) = logical {
-                            influence.logical_flips[2].push(*log);
+                        if let Some(op) = tracked_pauli {
+                            influence.tracked_pauli_flips[2].push(*op);
                         } else {
                             influence.detector_flips[2].push(detector.clone());
                             influence.measurement_flips[2]
@@ -486,7 +485,7 @@ impl<'a> TickFaultAnalyzer<'a> {
         apply_gate(prop, gate, Direction::Backward);
     }
 
-    /// Builds reverse maps (detector -> faults, logical -> faults).
+    /// Builds reverse maps (detector -> faults, tracked Pauli -> faults).
     fn build_reverse_maps(map: &mut FaultInfluenceMap) {
         for (loc, influence) in &map.influences {
             for (pauli, detectors) in influence.detector_flips.iter().enumerate() {
@@ -500,12 +499,12 @@ impl<'a> TickFaultAnalyzer<'a> {
                 }
             }
 
-            for (pauli, logicals) in influence.logical_flips.iter().enumerate() {
+            for (pauli, tracked_paulis) in influence.tracked_pauli_flips.iter().enumerate() {
                 #[allow(clippy::cast_possible_truncation)] // Pauli index 0..2
                 let pauli_u8 = pauli as u8;
-                for logical in logicals {
-                    map.logical_to_faults
-                        .entry(*logical)
+                for tracked_pauli in tracked_paulis {
+                    map.tracked_pauli_to_faults
+                        .entry(*tracked_pauli)
                         .or_default()
                         .push((loc.clone(), pauli_u8));
                 }

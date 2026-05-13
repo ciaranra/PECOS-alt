@@ -6,6 +6,22 @@ This directory contains the current rotated-surface-code memory sweep tooling:
   logical error rate, and writes plots plus optional JSON/HTML reports.
 - `surface_sweep_report.py`: rebuilds an HTML dashboard from already-generated
   sweep artifacts without rerunning simulations.
+- `d3_fault_catalog_lookup.rs`: Rust example that builds a distance-3
+  surface-code memory experiment, enumerates low-weight fault configurations
+  with the fault catalog API, and aggregates a truncated lookup decoder table.
+
+## Rust Fault-Catalog Lookup Example
+
+Run the d=3 lookup-table example from the PECOS repo root:
+
+```bash
+cargo run -p pecos-qec --example surface_d3_fault_catalog_lookup
+```
+
+The expensive loop stays in Rust: for `k = 0..=2`, the example lazily walks
+`catalog.fault_configurations(k)`, XORs detector/tracked-Pauli effects via the
+catalog iterator, and sums `configuration_probability` into a
+`syndrome -> logical -> probability` table.
 
 ## Typical Workflow
 

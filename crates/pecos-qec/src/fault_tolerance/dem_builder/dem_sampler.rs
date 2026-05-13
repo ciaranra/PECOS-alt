@@ -10,10 +10,18 @@
 // or implied. See the License for the specific language governing permissions and limitations under
 // the License.
 
+//! Internal sampling engine for threshold estimation.
+//!
+//! This is the core CSR/geometric-skip engine used by [`super::DemSampler`].
+//! External consumers should use `DemSampler` and `DemSamplerBuilder` from
+//! the parent module.
+#![allow(dead_code)] // Many methods are public for internal use but not called externally yet
+
 //! Fast DEM-style sampler for threshold estimation.
 //!
 //! This module provides a sampler that aggregates fault effects directly into
-//! detector/observable signatures, matching Stim's DEM sampler semantics.
+//! detector/standard observable `L<n>` signatures, matching DEM sampling
+//! semantics.
 //!
 //! # Data-Oriented Design
 //!
@@ -21,7 +29,7 @@
 //! cache-efficient sampling:
 //!
 //! - **Probabilities**: Stored in a contiguous array for sequential access
-//! - **Detector/Observable indices**: CSR layout (offsets + flat data) for variable-length lists
+//! - **Detector/observable indices**: CSR layout (offsets + flat data) for variable-length lists
 //! - **Bit-packed outcomes**: Uses `u64` words for compact detector/observable state
 //!
 //! # Example
@@ -30,8 +38,7 @@
 //! use pecos_qec::fault_tolerance::DagFaultAnalyzer;
 //! use pecos_qec::fault_tolerance::dem_builder::DemSamplerBuilder;
 //! use pecos_quantum::DagCircuit;
-//! use rand::SeedableRng;
-//! use rand::rngs::SmallRng;
+//! use pecos_random::PecosRng;
 //!
 //! let mut dag = DagCircuit::new();
 //! dag.pz(&[2]);
@@ -41,19 +48,18 @@
 //!
 //! let analyzer = DagFaultAnalyzer::new(&dag);
 //! let influence_map = analyzer.build_influence_map();
-//! let detectors_json = r#"[{"id": 0, "records": [-1]}]"#;
-//! let observables_json = "[]";
 //!
-//! // Build from circuit with detector definitions
+//! // Build sampler with detector definitions
 //! let sampler = DemSamplerBuilder::new(&influence_map)
 //!     .with_noise(0.01, 0.01, 0.01, 0.01)
-//!     .with_detectors_json(detectors_json).unwrap()
-//!     .with_observables_json(observables_json).unwrap()
-//!     .build();
+//!     .with_detectors_json(r#"[{"id": 0, "records": [-1]}]"#).unwrap()
+//!     .with_observables_json("[]").unwrap()
+//!     .build()
+//!     .unwrap();
 //!
 //! // Fast batch sampling for threshold estimation
-//! let mut rng = SmallRng::seed_from_u64(42);
-//! let (det_events, obs_flips) = sampler.sample_batch(100, &mut rng);
+//! let mut rng = PecosRng::seed_from_u64(42);
+//! let (det_events, dem_output_flips) = sampler.sample_batch(100, &mut rng);
 //! ```
 
 use crate::fault_tolerance::propagator::{DagFaultInfluenceMap, Pauli};
@@ -62,44 +68,44 @@ use pecos_random::{PecosRng, RngProbabilityExt};
 use rand_core::Rng;
 use rayon::prelude::*;
 use smallvec::SmallVec;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use wide::u64x4;
 
-use super::types::combine_probabilities;
+use super::types::{NoiseConfig, PerGateTypeNoise, combine_probabilities};
 
 // ============================================================================
 // DEM Mechanism (used during building)
 // ============================================================================
 
-/// A single fault mechanism with its detector/observable effects.
+/// A single fault mechanism with its detector and standard observable `L<n>` effects.
 /// Used during building, then converted to `SoA` layout.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct DemMechanism {
     /// Sorted detector indices that flip when this mechanism fires.
     detectors: SmallVec<[u32; 4]>,
-    /// Sorted observable indices that flip when this mechanism fires.
-    observables: SmallVec<[u32; 2]>,
+    /// Sorted standard observable `L<n>` indices that flip when this mechanism fires.
+    dem_outputs: SmallVec<[u32; 2]>,
 }
 
 impl DemMechanism {
-    fn new(mut detectors: SmallVec<[u32; 4]>, mut observables: SmallVec<[u32; 2]>) -> Self {
+    fn new(mut detectors: SmallVec<[u32; 4]>, mut dem_outputs: SmallVec<[u32; 2]>) -> Self {
         detectors.sort_unstable();
-        observables.sort_unstable();
+        dem_outputs.sort_unstable();
         Self {
             detectors,
-            observables,
+            dem_outputs,
         }
     }
 
     fn empty() -> Self {
         Self {
             detectors: SmallVec::new(),
-            observables: SmallVec::new(),
+            dem_outputs: SmallVec::new(),
         }
     }
 
     fn is_empty(&self) -> bool {
-        self.detectors.is_empty() && self.observables.is_empty()
+        self.detectors.is_empty() && self.dem_outputs.is_empty()
     }
 }
 
@@ -169,13 +175,13 @@ impl PackedBits {
 /// Fast DEM-style sampler for threshold estimation.
 ///
 /// Uses Structure of Arrays (`SoA`) layout with CSR-style indexing for
-/// cache-efficient sampling. Detector and observable outcomes are bit-packed
+/// cache-efficient sampling. Detector and `L<n>` target outcomes are bit-packed
 /// for compact storage and fast XOR operations.
 ///
 /// # Data-Oriented Design
 ///
 /// - **Precomputed thresholds**: Probabilities converted to u64 thresholds at build time
-/// - **CSR layout**: Detector/observable indices in flat arrays with offsets
+/// - **CSR layout**: Detector/`L<n>` target indices in flat arrays with offsets
 /// - **Bit-packed outcomes**: Uses u64 words for compact XOR operations
 /// - **Batch RNG**: Can use bulk random number generation for cache efficiency
 ///
@@ -185,15 +191,15 @@ impl PackedBits {
 /// thresholds:          [t0, t1, t2, ...]           (precomputed u64, sequential read)
 /// detector_offsets:    [0, 2, 3, 5, ...]           (CSR row pointers)
 /// detector_data:       [d0, d1, d2, d3, d4, ...]   (flat detector indices)
-/// observable_offsets:  [0, 0, 1, 1, ...]           (CSR row pointers)
-/// observable_data:     [o0, ...]                   (flat observable indices)
+/// dem_output_offsets:  [0, 0, 1, 1, ...]           (CSR row pointers)
+/// dem_output_data:     [t0, ...]                   (flat `L<n>` target indices)
 /// ```
 ///
 /// For mechanism i:
 /// - Detector indices: `detector_data[detector_offsets[i]..detector_offsets[i+1]]`
-/// - Observable indices: `observable_data[observable_offsets[i]..observable_offsets[i+1]]`
+/// - `L<n>` target indices: `dem_output_data[dem_output_offsets[i]..dem_output_offsets[i+1]]`
 #[derive(Debug, Clone)]
-pub struct DemSampler {
+pub struct SamplingEngine {
     // SoA layout for cache efficiency
     /// Precomputed u64 thresholds (faster than f64 comparison).
     thresholds: Vec<u64>,
@@ -207,18 +213,29 @@ pub struct DemSampler {
     /// Flat array of detector indices.
     detector_data: Vec<u32>,
 
-    /// CSR-style offsets into `observable_data`. Length = `num_mechanisms` + 1.
-    observable_offsets: Vec<u32>,
-    /// Flat array of observable indices.
-    observable_data: Vec<u32>,
+    /// CSR-style offsets into `dem_output_data`. Length = `num_mechanisms` + 1.
+    /// These are standard observable `L<n>` DEM outputs.
+    dem_output_offsets: Vec<u32>,
+    /// Flat array of `L<n>` target indices.
+    dem_output_data: Vec<u32>,
 
     /// Number of detectors.
     num_detectors: usize,
-    /// Number of observables.
-    num_observables: usize,
+    /// Number of DEM `L<n>` outputs.
+    num_dem_outputs: usize,
 }
 
-impl DemSampler {
+const U32_BASE_AS_F64: f64 = 4_294_967_296.0;
+const U64_MAX_AS_F64: f64 = 18_446_744_073_709_551_615.0;
+
+fn threshold_to_probability(threshold: u64) -> f64 {
+    let hi = u32::try_from(threshold >> 32).expect("upper threshold word fits in u32");
+    let lo =
+        u32::try_from(threshold & u64::from(u32::MAX)).expect("lower threshold word fits in u32");
+    (f64::from(hi) * U32_BASE_AS_F64 + f64::from(lo)) / U64_MAX_AS_F64
+}
+
+impl SamplingEngine {
     /// Number of mechanisms in the sampler.
     #[must_use]
     pub fn num_mechanisms(&self) -> usize {
@@ -231,25 +248,64 @@ impl DemSampler {
         self.num_detectors
     }
 
-    /// Number of observables.
+    /// Number of observables represented by `L<n>` columns.
+    ///
+    /// When no PECOS tracked-Pauli metadata is present, every `L<n>` output
+    /// is treated as an observable.
     #[must_use]
     pub fn num_observables(&self) -> usize {
-        self.num_observables
+        self.num_dem_outputs
     }
 
-    /// Create a [`DemSampler`] from raw mechanism data.
+    /// Number of DEM `L<n>` outputs.
+    #[must_use]
+    pub fn num_dem_outputs(&self) -> usize {
+        self.num_dem_outputs
+    }
+
+    /// Reconstruct a [`DetectorErrorModel`] from the aggregated `SoA`
+    /// mechanism state for text output (e.g. Stim-format via
+    /// [`DetectorErrorModel::to_string`]).
+    ///
+    /// Each stored mechanism becomes a `direct` contribution with its
+    /// approximate probability (recovered from the `u64` threshold).
+    /// Detector / observable declarations are NOT emitted -- those
+    /// require the original `DetectorDef` / observable metadata
+    /// definitions held by higher-level wrappers such as
+    /// [`crate::dem_stab::DemStabSim`]. Callers who need full metadata
+    /// should populate those on the returned DEM.
+    #[must_use]
+    pub fn to_detector_error_model(&self) -> super::types::DetectorErrorModel {
+        use super::types::{DetectorErrorModel, FaultMechanism};
+        let mut dem = DetectorErrorModel::with_capacity(self.num_detectors, self.num_dem_outputs);
+        for i in 0..self.thresholds.len() {
+            let prob = threshold_to_probability(self.thresholds[i]);
+            let det_start = self.detector_offsets[i] as usize;
+            let det_end = self.detector_offsets[i + 1] as usize;
+            let obs_start = self.dem_output_offsets[i] as usize;
+            let obs_end = self.dem_output_offsets[i + 1] as usize;
+            let mechanism = FaultMechanism::from_unsorted(
+                self.detector_data[det_start..det_end].iter().copied(),
+                self.dem_output_data[obs_start..obs_end].iter().copied(),
+            );
+            dem.add_direct_contribution(mechanism, prob);
+        }
+        dem
+    }
+
+    /// Create a [`SamplingEngine`] from raw mechanism data.
     ///
     /// This constructor is used when building from a parsed DEM string rather than
     /// from a circuit analysis. Each mechanism is specified by its probability and
-    /// the detector/observable indices it affects.
+    /// the detector/`L<n>` target indices it affects.
     ///
     /// # Arguments
     ///
-    /// * `mechanisms` - Iterator of (probability, `detector_indices`, `observable_indices`)
+    /// * `mechanisms` - Iterator of (probability, `detector_indices`, `dem_output_indices`)
     /// * `num_detectors` - Total number of detectors
-    /// * `num_observables` - Total number of observables
+    /// * `num_dem_outputs` - Total number of standard observable `L<n>` outputs
     #[must_use]
-    pub fn from_mechanisms<I>(mechanisms: I, num_detectors: usize, num_observables: usize) -> Self
+    pub fn from_mechanisms<I>(mechanisms: I, num_detectors: usize, num_dem_outputs: usize) -> Self
     where
         I: IntoIterator<Item = (f64, Vec<u32>, Vec<u32>)>,
     {
@@ -260,16 +316,16 @@ impl DemSampler {
         let mut inv_log_1_minus_p = Vec::with_capacity(num_mechanisms);
         let mut detector_offsets = Vec::with_capacity(num_mechanisms + 1);
         let mut detector_data = Vec::new();
-        let mut observable_offsets = Vec::with_capacity(num_mechanisms + 1);
-        let mut observable_data = Vec::new();
+        let mut dem_output_offsets = Vec::with_capacity(num_mechanisms + 1);
+        let mut dem_output_data = Vec::new();
 
         detector_offsets.push(0);
-        observable_offsets.push(0);
+        dem_output_offsets.push(0);
 
-        for (prob, mut detectors, mut observables) in mechanisms {
+        for (prob, mut detectors, mut dem_outputs) in mechanisms {
             // Sort for canonical representation
             detectors.sort_unstable();
-            observables.sort_unstable();
+            dem_outputs.sort_unstable();
 
             // Precompute u64 threshold: p * u64::MAX
             #[allow(
@@ -293,9 +349,9 @@ impl DemSampler {
             #[allow(clippy::cast_possible_truncation)] // detector data length fits in u32
             detector_offsets.push(detector_data.len() as u32);
 
-            observable_data.extend_from_slice(&observables);
-            #[allow(clippy::cast_possible_truncation)] // observable data length fits in u32
-            observable_offsets.push(observable_data.len() as u32);
+            dem_output_data.extend_from_slice(&dem_outputs);
+            #[allow(clippy::cast_possible_truncation)] // `L<n>` target data length fits in u32
+            dem_output_offsets.push(dem_output_data.len() as u32);
         }
 
         Self {
@@ -303,20 +359,153 @@ impl DemSampler {
             inv_log_1_minus_p,
             detector_offsets,
             detector_data,
-            observable_offsets,
-            observable_data,
+            dem_output_offsets,
+            dem_output_data,
             num_detectors,
-            num_observables,
+            num_dem_outputs,
         }
+    }
+
+    /// Create a [`SamplingEngine`] directly from a [`DagFaultInfluenceMap`] and
+    /// per-location error probabilities.
+    ///
+    /// Each fault location is treated as depolarizing: probability `p` at
+    /// location `i` means X, Y, and Z faults each occur with probability
+    /// `p/3`. Mechanisms with identical detector/`L<n>` target effects are
+    /// aggregated automatically.
+    ///
+    /// This constructor works with the influence map's raw measurement and
+    /// DEM-output indices — no explicit detector or observable metadata
+    /// definitions are needed.
+    ///
+    /// # Arguments
+    ///
+    /// * `influence_map` - Precomputed fault influence map.
+    /// * `per_location_probs` - Error probability for each per-qubit fault location
+    ///   (length must equal `influence_map.locations.len()`).
+    ///
+    /// Uses the per-gate noise model: each gate faults with probability p,
+    /// and each non-identity Pauli is equally likely (p/3 for 1-qubit,
+    /// p/15 for 2-qubit). For idle gates with T1/T2 noise, the Pauli
+    /// distribution is biased (more Z than X/Y).
+    #[must_use]
+    pub fn from_influence_map(
+        influence_map: &DagFaultInfluenceMap,
+        per_location_probs: &[f64],
+        noise: &super::NoiseConfig,
+    ) -> Self {
+        use pecos_core::gate_type::GateType;
+
+        let mut aggregated: BTreeMap<DemMechanism, f64> = BTreeMap::new();
+
+        let gate_locs = influence_map.gate_fault_locations();
+
+        for loc in &gate_locs {
+            let p = super::sampler::gate_location_prob_from_locations(
+                loc,
+                per_location_probs,
+                &influence_map.locations,
+            );
+            if p <= 0.0 {
+                continue;
+            }
+
+            let events = loc.all_events();
+            if events.is_empty() {
+                continue;
+            }
+
+            // For idle gates with T1/T2 noise, use per-Pauli probabilities.
+            // For all other gates, divide equally among events.
+            let is_idle = loc.gate_type == GateType::Idle;
+            let idle_pauli_probs = if is_idle {
+                let duration = influence_map
+                    .locations
+                    .iter()
+                    .find(|l| l.node == loc.node && l.before == loc.before)
+                    .map_or(1, |l| l.idle_duration.max(1));
+                // Duration values are small integers; precision loss is not a concern.
+                #[allow(clippy::cast_precision_loss)]
+                Some(noise.idle_pauli_probs(duration as f64))
+            } else {
+                None
+            };
+
+            // Get per-event probabilities based on gate type and noise config
+            let n_qubits = loc.num_qubits();
+            let custom_weights = if idle_pauli_probs.is_some() {
+                None
+            } else if n_qubits == 1 {
+                noise.p1_weights.as_ref()
+            } else {
+                noise.p2_weights.as_ref()
+            };
+
+            let event_weights: Vec<f64> = if let Some(pp) = &idle_pauli_probs {
+                // T1/T2 idle: absolute per-Pauli probabilities
+                events
+                    .iter()
+                    .map(|event| {
+                        let pauli = event
+                            .pauli
+                            .paulis()
+                            .first()
+                            .map_or(pecos_core::Pauli::I, |&(pa, _)| pa);
+                        match pauli {
+                            pecos_core::Pauli::X => pp.px,
+                            pecos_core::Pauli::Y => pp.py,
+                            pecos_core::Pauli::Z => pp.pz,
+                            pecos_core::Pauli::I => 0.0,
+                        }
+                    })
+                    .collect()
+            } else if let Some(weights) = custom_weights {
+                // Custom per-Pauli weights: p * weight_for(pauli)
+                events
+                    .iter()
+                    .map(|event| p * weights.weight_for(&event.pauli))
+                    .collect()
+            } else {
+                // Default uniform: p / num_events
+                // Event count is a small integer; precision loss is not a concern.
+                #[allow(clippy::cast_precision_loss)]
+                let per_event = p / events.len() as f64;
+                vec![per_event; events.len()]
+            };
+
+            for (event, &event_prob) in events.iter().zip(&event_weights) {
+                let det_indices: SmallVec<[u32; 4]> = event.detectors.iter().copied().collect();
+                let dem_output_indices: SmallVec<[u32; 2]> = event
+                    .dem_outputs
+                    .iter()
+                    .filter_map(|&idx| influence_map.observable_id_for_internal_dem_output(idx))
+                    .collect();
+
+                let mech = DemMechanism::new(det_indices, dem_output_indices);
+                if !mech.is_empty() {
+                    let entry = aggregated.entry(mech).or_insert(0.0);
+                    *entry = combine_probabilities(*entry, event_prob);
+                }
+            }
+        }
+
+        let num_detectors = influence_map.detectors.len();
+        let num_dem_outputs = influence_map.num_dem_outputs();
+
+        let mechanisms = aggregated
+            .into_iter()
+            .map(|(mech, prob)| (prob, mech.detectors.to_vec(), mech.dem_outputs.to_vec()));
+
+        Self::from_mechanisms(mechanisms, num_detectors, num_dem_outputs)
     }
 
     /// Sample a single shot.
     ///
-    /// Returns (`detection_events`, `observable_flips`) as boolean vectors.
+    /// Returns (`detection_events`, `dem_output_flips`) as boolean vectors.
     #[must_use]
     pub fn sample<R: Rng>(&self, rng: &mut R) -> (Vec<bool>, Vec<bool>) {
         let mut det_bits = PackedBits::new(self.num_detectors);
-        let mut obs_bits = PackedBits::new(self.num_observables);
+        let mut obs_bits = PackedBits::new(self.num_dem_outputs);
 
         self.sample_into_packed(&mut det_bits, &mut obs_bits, rng);
 
@@ -341,16 +530,16 @@ impl DemSampler {
         for i in 0..num_mechanisms {
             // Fast integer comparison with precomputed threshold
             if rng.check_probability(self.thresholds[i]) {
-                // Mechanism fired - XOR in detector/observable effects
+                // Mechanism fired - XOR in detector/`L<n>` target effects
                 let det_start = self.detector_offsets[i] as usize;
                 let det_end = self.detector_offsets[i + 1] as usize;
                 for &d in &self.detector_data[det_start..det_end] {
                     det_bits.flip(d as usize);
                 }
 
-                let obs_start = self.observable_offsets[i] as usize;
-                let obs_end = self.observable_offsets[i + 1] as usize;
-                for &o in &self.observable_data[obs_start..obs_end] {
+                let obs_start = self.dem_output_offsets[i] as usize;
+                let obs_end = self.dem_output_offsets[i + 1] as usize;
+                for &o in &self.dem_output_data[obs_start..obs_end] {
                     obs_bits.flip(o as usize);
                 }
             }
@@ -359,24 +548,66 @@ impl DemSampler {
 
     /// Sample multiple shots.
     ///
-    /// Returns (`all_detection_events`, `all_observable_flips`).
+    /// Uses geometric skip sampling internally — O(fired mechanisms) per
+    /// shot instead of O(all mechanisms). Automatically converts from
+    /// columnar bit-packed format to row-major `Vec<bool>`.
+    ///
+    /// Returns (`all_detection_events`, `all_dem_output_flips`).
     #[must_use]
     pub fn sample_batch<R: Rng>(
         &self,
         num_shots: usize,
         rng: &mut R,
     ) -> (Vec<Vec<bool>>, Vec<Vec<bool>>) {
-        let mut all_det_events = Vec::with_capacity(num_shots);
-        let mut all_obs_flips = Vec::with_capacity(num_shots);
+        if num_shots == 0 {
+            return (vec![], vec![]);
+        }
 
-        // Pre-allocate work arrays
-        let mut det_bits = PackedBits::new(self.num_detectors);
-        let mut obs_bits = PackedBits::new(self.num_observables);
+        // Sample using geometric skip (fast at low error rates).
+        let (det_columns, obs_columns) = self.sample_batch_columnar_geometric(num_shots, rng);
 
-        for _ in 0..num_shots {
-            self.sample_into_packed(&mut det_bits, &mut obs_bits, rng);
-            all_det_events.push(det_bits.to_vec());
-            all_obs_flips.push(obs_bits.to_vec());
+        // Convert columnar bit-packed → row-major Vec<bool>.
+        let mut all_det_events: Vec<Vec<bool>> = (0..num_shots)
+            .map(|_| vec![false; self.num_detectors])
+            .collect();
+        let mut all_obs_flips: Vec<Vec<bool>> = (0..num_shots)
+            .map(|_| vec![false; self.num_dem_outputs])
+            .collect();
+
+        for (det_idx, col) in det_columns.iter().enumerate() {
+            for (word_idx, &word) in col.iter().enumerate() {
+                if word == 0 {
+                    continue;
+                }
+                let base_shot = word_idx * BITS_PER_WORD;
+                let mut w = word;
+                while w != 0 {
+                    let bit = w.trailing_zeros() as usize;
+                    let shot = base_shot + bit;
+                    if shot < num_shots {
+                        all_det_events[shot][det_idx] = true;
+                    }
+                    w &= w - 1;
+                }
+            }
+        }
+
+        for (obs_idx, col) in obs_columns.iter().enumerate() {
+            for (word_idx, &word) in col.iter().enumerate() {
+                if word == 0 {
+                    continue;
+                }
+                let base_shot = word_idx * BITS_PER_WORD;
+                let mut w = word;
+                while w != 0 {
+                    let bit = w.trailing_zeros() as usize;
+                    let shot = base_shot + bit;
+                    if shot < num_shots {
+                        all_obs_flips[shot][obs_idx] = true;
+                    }
+                    w &= w - 1;
+                }
+            }
         }
 
         (all_det_events, all_obs_flips)
@@ -411,6 +642,31 @@ impl DemSampler {
         self.sample_statistics_auto_internal(&mut rng, num_shots)
     }
 
+    /// Compute statistics where only the specified DEM outputs count as observables.
+    ///
+    /// The sampler still reports per-DEM-output flip counts for every `L<n>`
+    /// output. `logical_error_count` and `undetectable_count` are computed
+    /// from the selected observable outputs only, so unmeasured tracked
+    /// Paulis do not affect decoder-style observable statistics.
+    #[must_use]
+    pub fn sample_statistics_for_observable_indices(
+        &self,
+        num_shots: usize,
+        seed: u64,
+        observable_indices: &[usize],
+    ) -> SamplingStatistics {
+        if self.all_dem_outputs_selected(observable_indices) {
+            return self.sample_statistics(num_shots, seed);
+        }
+
+        let mut rng = PecosRng::seed_from_u64(seed);
+        self.sample_statistics_with_rng_for_observable_indices(
+            num_shots,
+            &mut rng,
+            observable_indices,
+        )
+    }
+
     /// Compute statistics with a user-provided RNG.
     ///
     /// Use this when you need control over the random number generator,
@@ -429,6 +685,43 @@ impl DemSampler {
         self.sample_statistics_auto_internal(rng, num_shots)
     }
 
+    /// Compute statistics with a user-provided RNG and explicit observable DEM-output indices.
+    #[must_use]
+    pub fn sample_statistics_with_rng_for_observable_indices<R: Rng>(
+        &self,
+        num_shots: usize,
+        rng: &mut R,
+        observable_indices: &[usize],
+    ) -> SamplingStatistics {
+        if self.all_dem_outputs_selected(observable_indices) {
+            return self.sample_statistics_with_rng(num_shots, rng);
+        }
+        if num_shots == 0 || self.thresholds.is_empty() {
+            return SamplingStatistics::with_channels(
+                num_shots,
+                self.num_detectors,
+                self.num_dem_outputs,
+            );
+        }
+
+        let (det_columns, dem_output_columns) =
+            self.sample_batch_columnar_geometric(num_shots, rng);
+        Self::compute_statistics_from_columns_for_observables(
+            &det_columns,
+            &dem_output_columns,
+            num_shots,
+            observable_indices,
+        )
+    }
+
+    fn all_dem_outputs_selected(&self, observable_indices: &[usize]) -> bool {
+        observable_indices.len() == self.num_dem_outputs
+            && observable_indices
+                .iter()
+                .copied()
+                .eq(0..self.num_dem_outputs)
+    }
+
     /// Internal: sample statistics using the most efficient method.
     ///
     /// Uses chunked processing for large working sets (>6 MB) to improve cache
@@ -445,7 +738,7 @@ impl DemSampler {
     /// Optimized statistics sampling using flat array layout.
     ///
     /// This method provides faster sampling than nested Vec<Vec<u64>> by:
-    /// - Using a flat contiguous array for detector/observable columns
+    /// - Using a flat contiguous array for detector/`L<n>` target columns
     /// - Better cache locality due to predictable memory access patterns
     ///
     /// This method is semantically equivalent to the columnar methods.
@@ -461,9 +754,9 @@ impl DemSampler {
         // XOR semantics required for correct detector behavior
         let mut det_data: Vec<u64> = vec![0u64; self.num_detectors * num_words];
 
-        // Flat array for observable columns (XOR semantics)
+        // Flat array for `L<n>` target columns (XOR semantics)
         // Layout: obs_data[obs_idx * num_words + word_idx]
-        let mut obs_data: Vec<u64> = vec![0u64; self.num_observables * num_words];
+        let mut obs_data: Vec<u64> = vec![0u64; self.num_dem_outputs * num_words];
 
         for mech_idx in 0..num_mechanisms {
             let threshold = self.thresholds[mech_idx];
@@ -473,8 +766,8 @@ impl DemSampler {
 
             let det_start = self.detector_offsets[mech_idx] as usize;
             let det_end = self.detector_offsets[mech_idx + 1] as usize;
-            let obs_start = self.observable_offsets[mech_idx] as usize;
-            let obs_end = self.observable_offsets[mech_idx + 1] as usize;
+            let obs_start = self.dem_output_offsets[mech_idx] as usize;
+            let obs_end = self.dem_output_offsets[mech_idx + 1] as usize;
 
             // Skip if mechanism affects nothing
             if det_start == det_end && obs_start == obs_end {
@@ -507,7 +800,7 @@ impl DemSampler {
                 }
 
                 // XOR each affected observable
-                for &o in &self.observable_data[obs_start..obs_end] {
+                for &o in &self.dem_output_data[obs_start..obs_end] {
                     let idx = o as usize * num_words + word_idx;
                     obs_data[idx] ^= mask;
                 }
@@ -525,20 +818,62 @@ impl DemSampler {
             }
         }
 
-        // Compute logical error mask by ORing all observable columns
-        let mut logical_words = vec![0u64; num_words];
-        for obs_idx in 0..self.num_observables {
+        // Compute logical-error mask by ORing all selected standard observable columns.
+        let mut observable_words = vec![0u64; num_words];
+        for obs_idx in 0..self.num_dem_outputs {
             let base = obs_idx * num_words;
             for word_idx in 0..num_words {
-                logical_words[word_idx] |= obs_data[base + word_idx];
+                observable_words[word_idx] |= obs_data[base + word_idx];
             }
         }
 
         // Count statistics
-        let mut stats = SamplingStatistics::new(num_shots);
+        let mut stats =
+            SamplingStatistics::with_channels(num_shots, self.num_detectors, self.num_dem_outputs);
+
+        // Per-channel counts (cheap -- data is already in cache from the OR passes above)
+        for det_idx in 0..self.num_detectors {
+            let base = det_idx * num_words;
+            let mut count = 0usize;
+            for word_idx in 0..num_words {
+                let valid_bits = if word_idx == num_words - 1 {
+                    let remaining = num_shots % BITS_PER_WORD;
+                    if remaining == 0 {
+                        !0u64
+                    } else {
+                        (1u64 << remaining) - 1
+                    }
+                } else {
+                    !0u64
+                };
+                count += (det_data[base + word_idx] & valid_bits).count_ones() as usize;
+            }
+            stats.per_detector[det_idx] = count;
+        }
+
+        for obs_idx in 0..self.num_dem_outputs {
+            let base = obs_idx * num_words;
+            let mut count = 0usize;
+            for word_idx in 0..num_words {
+                let valid_bits = if word_idx == num_words - 1 {
+                    let remaining = num_shots % BITS_PER_WORD;
+                    if remaining == 0 {
+                        !0u64
+                    } else {
+                        (1u64 << remaining) - 1
+                    }
+                } else {
+                    !0u64
+                };
+                count += (obs_data[base + word_idx] & valid_bits).count_ones() as usize;
+            }
+            stats.per_dem_output[obs_idx] = count;
+        }
+
+        // Aggregate counts
         for word_idx in 0..num_words {
             let syndrome = syndrome_words[word_idx];
-            let logical = logical_words[word_idx];
+            let observable = observable_words[word_idx];
 
             let valid_bits = if word_idx == num_words - 1 {
                 let remaining = num_shots % BITS_PER_WORD;
@@ -552,11 +887,12 @@ impl DemSampler {
             };
 
             let syndrome_masked = syndrome & valid_bits;
-            let logical_masked = logical & valid_bits;
+            let observable_masked = observable & valid_bits;
 
             stats.syndrome_count += syndrome_masked.count_ones() as usize;
-            stats.logical_error_count += logical_masked.count_ones() as usize;
-            stats.undetectable_count += (logical_masked & !syndrome_masked).count_ones() as usize;
+            stats.logical_error_count += observable_masked.count_ones() as usize;
+            stats.undetectable_count +=
+                (observable_masked & !syndrome_masked).count_ones() as usize;
         }
 
         stats
@@ -568,9 +904,9 @@ impl DemSampler {
     /// within the target cache size (L3). Returns `None` if the buffer is already
     /// small enough that chunking wouldn't help.
     fn optimal_chunk_size(&self, num_shots: usize) -> Option<usize> {
-        // Calculate full buffer size: (num_detectors + num_observables) * num_words * 8 bytes
+        // Calculate full buffer size: (num_detectors + num_dem_outputs) * num_words * 8 bytes
         let num_words = num_shots.div_ceil(BITS_PER_WORD);
-        let full_buffer_bytes = (self.num_detectors + self.num_observables) * num_words * 8;
+        let full_buffer_bytes = (self.num_detectors + self.num_dem_outputs) * num_words * 8;
 
         // Only chunk if buffer exceeds target cache size
         if full_buffer_bytes <= TARGET_CHUNK_BUFFER_BYTES {
@@ -578,9 +914,9 @@ impl DemSampler {
         }
 
         // Calculate chunk size that fits in cache
-        // Buffer = (num_detectors + num_observables) * (chunk_shots / 64) * 8
-        // chunk_shots = TARGET * 64 / ((num_detectors + num_observables) * 8)
-        let total_columns = self.num_detectors + self.num_observables;
+        // Buffer = (num_detectors + num_dem_outputs) * (chunk_shots / 64) * 8
+        // chunk_shots = TARGET * 64 / ((num_detectors + num_dem_outputs) * 8)
+        let total_columns = self.num_detectors + self.num_dem_outputs;
         if total_columns == 0 {
             return None;
         }
@@ -616,7 +952,8 @@ impl DemSampler {
             return self.sample_statistics_direct(num_shots, rng);
         };
 
-        let mut total_stats = SamplingStatistics::new(num_shots);
+        let mut total_stats =
+            SamplingStatistics::with_channels(num_shots, self.num_detectors, self.num_dem_outputs);
         let mut shot_offset = 0;
 
         while shot_offset < num_shots {
@@ -626,6 +963,20 @@ impl DemSampler {
             total_stats.syndrome_count += chunk_stats.syndrome_count;
             total_stats.logical_error_count += chunk_stats.logical_error_count;
             total_stats.undetectable_count += chunk_stats.undetectable_count;
+            for (total, chunk) in total_stats
+                .per_detector
+                .iter_mut()
+                .zip(&chunk_stats.per_detector)
+            {
+                *total += chunk;
+            }
+            for (total, chunk) in total_stats
+                .per_dem_output
+                .iter_mut()
+                .zip(&chunk_stats.per_dem_output)
+            {
+                *total += chunk;
+            }
 
             shot_offset += chunk_shots;
         }
@@ -641,25 +992,38 @@ impl DemSampler {
         num_shots: usize,
         rng: &mut R,
     ) -> SamplingStatistics {
-        let mut stats = SamplingStatistics::new(num_shots);
+        let mut stats =
+            SamplingStatistics::with_channels(num_shots, self.num_detectors, self.num_dem_outputs);
 
         let mut det_bits = PackedBits::new(self.num_detectors);
-        let mut obs_bits = PackedBits::new(self.num_observables);
+        let mut obs_bits = PackedBits::new(self.num_dem_outputs);
 
         for _ in 0..num_shots {
             self.sample_into_packed(&mut det_bits, &mut obs_bits, rng);
 
             let has_syndrome = det_bits.any();
-            let has_logical_error = obs_bits.any();
+            let has_observable_error = obs_bits.any();
 
-            if has_logical_error {
+            if has_observable_error {
                 stats.logical_error_count += 1;
             }
             if has_syndrome {
                 stats.syndrome_count += 1;
             }
-            if has_logical_error && !has_syndrome {
+            if has_observable_error && !has_syndrome {
                 stats.undetectable_count += 1;
+            }
+
+            // Per-channel counts
+            for (i, count) in stats.per_detector.iter_mut().enumerate() {
+                if det_bits.get(i) {
+                    *count += 1;
+                }
+            }
+            for (i, count) in stats.per_dem_output.iter_mut().enumerate() {
+                if obs_bits.get(i) {
+                    *count += 1;
+                }
             }
         }
 
@@ -675,7 +1039,7 @@ impl DemSampler {
     /// This method processes all shots for each mechanism at once, enabling:
     /// - Bulk random number generation (64 shots per u64)
     /// - Better cache locality for threshold comparisons
-    /// - Vectorized XOR operations on detector/observable columns
+    /// - Vectorized XOR operations on detector/`L<n>` target columns
     ///
     /// Returns columnar bit-packed results: (detector_columns, observable_columns)
     /// where each column is a Vec<u64> with bit i of word w = shot w*64 + i.
@@ -689,17 +1053,17 @@ impl DemSampler {
         if num_shots == 0 {
             return (
                 vec![vec![]; self.num_detectors],
-                vec![vec![]; self.num_observables],
+                vec![vec![]; self.num_dem_outputs],
             );
         }
 
         let num_words = num_shots.div_ceil(BITS_PER_WORD);
 
-        // Initialize detector and observable columns (all zeros)
+        // Initialize detector and `L<n>` target columns (all zeros)
         let mut det_columns: Vec<Vec<u64>> = (0..self.num_detectors)
             .map(|_| vec![0u64; num_words])
             .collect();
-        let mut obs_columns: Vec<Vec<u64>> = (0..self.num_observables)
+        let mut obs_columns: Vec<Vec<u64>> = (0..self.num_dem_outputs)
             .map(|_| vec![0u64; num_words])
             .collect();
 
@@ -716,9 +1080,7 @@ impl DemSampler {
             }
 
             // Generate bulk random numbers for this mechanism
-            for word in &mut random_words {
-                *word = rng.next_u64();
-            }
+            rng.fill_u64(&mut random_words);
 
             // For each word, check threshold and apply effects
             for word_idx in 0..num_words {
@@ -737,10 +1099,10 @@ impl DemSampler {
                     det_columns[d as usize][word_idx] ^= !0u64;
                 }
 
-                // XOR effects into observable columns
-                let obs_start = self.observable_offsets[mech_idx] as usize;
-                let obs_end = self.observable_offsets[mech_idx + 1] as usize;
-                for &o in &self.observable_data[obs_start..obs_end] {
+                // XOR effects into `L<n>` target columns
+                let obs_start = self.dem_output_offsets[mech_idx] as usize;
+                let obs_end = self.dem_output_offsets[mech_idx + 1] as usize;
+                for &o in &self.dem_output_data[obs_start..obs_end] {
                     obs_columns[o as usize][word_idx] ^= !0u64;
                 }
             }
@@ -763,17 +1125,17 @@ impl DemSampler {
         if num_shots == 0 {
             return (
                 vec![vec![]; self.num_detectors],
-                vec![vec![]; self.num_observables],
+                vec![vec![]; self.num_dem_outputs],
             );
         }
 
         let num_words = num_shots.div_ceil(BITS_PER_WORD);
 
-        // Initialize detector and observable columns (all zeros)
+        // Initialize detector and `L<n>` target columns (all zeros)
         let mut det_columns: Vec<Vec<u64>> = (0..self.num_detectors)
             .map(|_| vec![0u64; num_words])
             .collect();
-        let mut obs_columns: Vec<Vec<u64>> = (0..self.num_observables)
+        let mut obs_columns: Vec<Vec<u64>> = (0..self.num_dem_outputs)
             .map(|_| vec![0u64; num_words])
             .collect();
 
@@ -786,11 +1148,11 @@ impl DemSampler {
                 continue;
             }
 
-            // Get detector/observable indices for this mechanism
+            // Get detector/`L<n>` target indices for this mechanism
             let det_start = self.detector_offsets[mech_idx] as usize;
             let det_end = self.detector_offsets[mech_idx + 1] as usize;
-            let obs_start = self.observable_offsets[mech_idx] as usize;
-            let obs_end = self.observable_offsets[mech_idx + 1] as usize;
+            let obs_start = self.dem_output_offsets[mech_idx] as usize;
+            let obs_end = self.dem_output_offsets[mech_idx + 1] as usize;
 
             // For each word (64 shots), generate random bits and check threshold
             for word_idx in 0..num_words {
@@ -824,8 +1186,8 @@ impl DemSampler {
                     det_columns[d as usize][word_idx] ^= fired_mask;
                 }
 
-                // XOR the fired mask into affected observable columns
-                for &o in &self.observable_data[obs_start..obs_end] {
+                // XOR the fired mask into affected `L<n>` target columns
+                for &o in &self.dem_output_data[obs_start..obs_end] {
                     obs_columns[o as usize][word_idx] ^= fired_mask;
                 }
             }
@@ -858,18 +1220,18 @@ impl DemSampler {
             }
         }
 
-        // OR all observable columns to get logical error mask
-        let mut logical_words = vec![0u64; num_words];
+        // OR all standard observable columns to get a logical-error mask.
+        let mut observable_words = vec![0u64; num_words];
         for col in &obs_columns {
             for (i, &word) in col.iter().enumerate() {
-                logical_words[i] |= word;
+                observable_words[i] |= word;
             }
         }
 
-        // Count shots with syndrome, logical error, undetectable
+        // Count shots with syndrome, logical error, undetectable error
         for word_idx in 0..num_words {
             let syndrome = syndrome_words[word_idx];
-            let logical = logical_words[word_idx];
+            let observable = observable_words[word_idx];
 
             // Mask out unused bits in the last word
             let valid_bits = if word_idx == num_words - 1 {
@@ -884,11 +1246,12 @@ impl DemSampler {
             };
 
             let syndrome_masked = syndrome & valid_bits;
-            let logical_masked = logical & valid_bits;
+            let observable_masked = observable & valid_bits;
 
             stats.syndrome_count += syndrome_masked.count_ones() as usize;
-            stats.logical_error_count += logical_masked.count_ones() as usize;
-            stats.undetectable_count += (logical_masked & !syndrome_masked).count_ones() as usize;
+            stats.logical_error_count += observable_masked.count_ones() as usize;
+            stats.undetectable_count +=
+                (observable_masked & !syndrome_masked).count_ones() as usize;
         }
 
         stats
@@ -911,18 +1274,18 @@ impl DemSampler {
         if num_shots == 0 {
             return (
                 vec![vec![]; self.num_detectors],
-                vec![vec![]; self.num_observables],
+                vec![vec![]; self.num_dem_outputs],
             );
         }
 
         let num_words = num_shots.div_ceil(BITS_PER_WORD);
         let num_simd_words = num_words.div_ceil(4);
 
-        // Initialize detector and observable columns as SIMD vectors
+        // Initialize detector and `L<n>` target columns as SIMD vectors
         let mut det_columns: Vec<Vec<u64x4>> = (0..self.num_detectors)
             .map(|_| vec![u64x4::ZERO; num_simd_words])
             .collect();
-        let mut obs_columns: Vec<Vec<u64x4>> = (0..self.num_observables)
+        let mut obs_columns: Vec<Vec<u64x4>> = (0..self.num_dem_outputs)
             .map(|_| vec![u64x4::ZERO; num_simd_words])
             .collect();
 
@@ -937,11 +1300,11 @@ impl DemSampler {
                 continue;
             }
 
-            // Get detector/observable indices for this mechanism
+            // Get detector/`L<n>` target indices for this mechanism
             let det_start = self.detector_offsets[mech_idx] as usize;
             let det_end = self.detector_offsets[mech_idx + 1] as usize;
-            let obs_start = self.observable_offsets[mech_idx] as usize;
-            let obs_end = self.observable_offsets[mech_idx + 1] as usize;
+            let obs_start = self.dem_output_offsets[mech_idx] as usize;
+            let obs_end = self.dem_output_offsets[mech_idx + 1] as usize;
 
             // Generate all random numbers for this mechanism at once
             // Use fill_u64 from RngProbabilityExt for potentially optimized bulk generation
@@ -995,8 +1358,8 @@ impl DemSampler {
                     det_columns[d as usize][simd_idx] ^= fired_vec;
                 }
 
-                // XOR into affected observable columns
-                for &o in &self.observable_data[obs_start..obs_end] {
+                // XOR into affected `L<n>` target columns
+                for &o in &self.dem_output_data[obs_start..obs_end] {
                     obs_columns[o as usize][simd_idx] ^= fired_vec;
                 }
             }
@@ -1060,17 +1423,17 @@ impl DemSampler {
         if num_shots == 0 {
             return (
                 vec![vec![]; self.num_detectors],
-                vec![vec![]; self.num_observables],
+                vec![vec![]; self.num_dem_outputs],
             );
         }
 
         let num_words = num_shots.div_ceil(BITS_PER_WORD);
 
-        // Initialize detector and observable columns
+        // Initialize detector and `L<n>` target columns
         let mut det_columns: Vec<Vec<u64>> = (0..self.num_detectors)
             .map(|_| vec![0u64; num_words])
             .collect();
-        let mut obs_columns: Vec<Vec<u64>> = (0..self.num_observables)
+        let mut obs_columns: Vec<Vec<u64>> = (0..self.num_dem_outputs)
             .map(|_| vec![0u64; num_words])
             .collect();
 
@@ -1082,11 +1445,11 @@ impl DemSampler {
                 continue;
             }
 
-            // Get detector/observable indices
+            // Get detector/`L<n>` target indices
             let det_start = self.detector_offsets[mech_idx] as usize;
             let det_end = self.detector_offsets[mech_idx + 1] as usize;
-            let obs_start = self.observable_offsets[mech_idx] as usize;
-            let obs_end = self.observable_offsets[mech_idx + 1] as usize;
+            let obs_start = self.dem_output_offsets[mech_idx] as usize;
+            let obs_end = self.dem_output_offsets[mech_idx + 1] as usize;
 
             // Use precomputed 1/ln(1-p) for geometric sampling
             let inv_log = self.inv_log_1_minus_p[mech_idx];
@@ -1115,7 +1478,7 @@ impl DemSampler {
                     det_columns[d as usize][word_idx] ^= mask;
                 }
 
-                for &o in &self.observable_data[obs_start..obs_end] {
+                for &o in &self.dem_output_data[obs_start..obs_end] {
                     obs_columns[o as usize][word_idx] ^= mask;
                 }
 
@@ -1158,23 +1521,25 @@ impl DemSampler {
     ///
     /// Used to decide between geometric (low p) and SIMD (high p) sampling.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
     pub fn average_error_probability(&self) -> f64 {
         if self.thresholds.is_empty() {
             return 0.0;
         }
-        let sum: u128 = self.thresholds.iter().map(|&t| u128::from(t)).sum();
-        let avg_threshold = (sum / self.thresholds.len() as u128) as f64;
-        avg_threshold / u64::MAX as f64
+        let mut sum = 0.0;
+        let mut count = 0.0;
+        for &threshold in &self.thresholds {
+            sum += threshold_to_probability(threshold);
+            count += 1.0;
+        }
+        sum / count
     }
 
     /// Maximum error probability across all mechanisms.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)]
     pub fn max_error_probability(&self) -> f64 {
         self.thresholds
             .iter()
-            .map(|&t| t as f64 / u64::MAX as f64)
+            .map(|&t| threshold_to_probability(t))
             .fold(0.0, f64::max)
     }
 
@@ -1221,11 +1586,18 @@ impl DemSampler {
             .collect();
 
         // Sum up partial statistics
-        let mut total = SamplingStatistics::new(num_shots);
+        let mut total =
+            SamplingStatistics::with_channels(num_shots, self.num_detectors, self.num_dem_outputs);
         for stats in partial_stats {
             total.syndrome_count += stats.syndrome_count;
             total.logical_error_count += stats.logical_error_count;
             total.undetectable_count += stats.undetectable_count;
+            for (t, s) in total.per_detector.iter_mut().zip(&stats.per_detector) {
+                *t += s;
+            }
+            for (t, s) in total.per_dem_output.iter_mut().zip(&stats.per_dem_output) {
+                *t += s;
+            }
         }
 
         total
@@ -1250,29 +1622,74 @@ impl DemSampler {
         obs_columns: &[Vec<u64>],
         num_shots: usize,
     ) -> SamplingStatistics {
-        let num_words = num_shots.div_ceil(BITS_PER_WORD);
-        let mut stats = SamplingStatistics::new(num_shots);
+        let observable_indices: Vec<usize> = (0..obs_columns.len()).collect();
+        Self::compute_statistics_from_columns_for_observables(
+            det_columns,
+            obs_columns,
+            num_shots,
+            &observable_indices,
+        )
+    }
 
-        // OR all detector columns to get syndrome mask
+    fn compute_statistics_from_columns_for_observables(
+        det_columns: &[Vec<u64>],
+        obs_columns: &[Vec<u64>],
+        num_shots: usize,
+        observable_indices: &[usize],
+    ) -> SamplingStatistics {
+        let num_words = num_shots.div_ceil(BITS_PER_WORD);
+        let mut stats =
+            SamplingStatistics::with_channels(num_shots, det_columns.len(), obs_columns.len());
+
+        // Per-channel and aggregate syndrome
         let mut syndrome_words = vec![0u64; num_words];
-        for col in det_columns {
+        for (det_idx, col) in det_columns.iter().enumerate() {
+            let mut count = 0usize;
             for (i, &word) in col.iter().enumerate() {
                 syndrome_words[i] |= word;
+                let valid = if i == num_words - 1 {
+                    let r = num_shots % BITS_PER_WORD;
+                    if r == 0 { !0u64 } else { (1u64 << r) - 1 }
+                } else {
+                    !0u64
+                };
+                count += (word & valid).count_ones() as usize;
             }
+            stats.per_detector[det_idx] = count;
         }
 
-        // OR all observable columns to get logical error mask
-        let mut logical_words = vec![0u64; num_words];
-        for col in obs_columns {
+        // Per-channel DEM-output counts.
+        let mut dem_output_words = vec![vec![0u64; num_words]; obs_columns.len()];
+        for (obs_idx, col) in obs_columns.iter().enumerate() {
+            let mut count = 0usize;
             for (i, &word) in col.iter().enumerate() {
-                logical_words[i] |= word;
+                dem_output_words[obs_idx][i] = word;
+                let valid = if i == num_words - 1 {
+                    let r = num_shots % BITS_PER_WORD;
+                    if r == 0 { !0u64 } else { (1u64 << r) - 1 }
+                } else {
+                    !0u64
+                };
+                count += (word & valid).count_ones() as usize;
+            }
+            stats.per_dem_output[obs_idx] = count;
+        }
+
+        // Aggregate logical-error mask from observables only. Tracked Paulis
+        // remain in per_dem_output but do not define decoder failures.
+        let mut observable_words = vec![0u64; num_words];
+        for &obs_idx in observable_indices {
+            if let Some(col) = dem_output_words.get(obs_idx) {
+                for (i, &word) in col.iter().enumerate() {
+                    observable_words[i] |= word;
+                }
             }
         }
 
-        // Count shots with syndrome, logical error, undetectable
+        // Aggregate counts
         for word_idx in 0..num_words {
             let syndrome = syndrome_words[word_idx];
-            let logical = logical_words[word_idx];
+            let observable = observable_words[word_idx];
 
             let valid_bits = if word_idx == num_words - 1 {
                 let remaining = num_shots % BITS_PER_WORD;
@@ -1286,11 +1703,12 @@ impl DemSampler {
             };
 
             let syndrome_masked = syndrome & valid_bits;
-            let logical_masked = logical & valid_bits;
+            let observable_masked = observable & valid_bits;
 
             stats.syndrome_count += syndrome_masked.count_ones() as usize;
-            stats.logical_error_count += logical_masked.count_ones() as usize;
-            stats.undetectable_count += (logical_masked & !syndrome_masked).count_ones() as usize;
+            stats.logical_error_count += observable_masked.count_ones() as usize;
+            stats.undetectable_count +=
+                (observable_masked & !syndrome_masked).count_ones() as usize;
         }
 
         stats
@@ -1302,12 +1720,16 @@ impl DemSampler {
 pub struct SamplingStatistics {
     /// Total number of shots.
     pub total_shots: usize,
-    /// Shots with at least one logical error.
+    /// Shots with at least one selected observable flip.
     pub logical_error_count: usize,
     /// Shots with at least one detector firing.
     pub syndrome_count: usize,
-    /// Shots with logical error but no syndrome (undetectable errors).
+    /// Shots with an observable flip but no syndrome.
     pub undetectable_count: usize,
+    /// Per-detector firing counts (shots where this detector fired).
+    pub per_detector: Vec<usize>,
+    /// Per-`L<n>` DEM-output flip counts (shots where this `L<n>` output flipped).
+    pub per_dem_output: Vec<usize>,
 }
 
 impl SamplingStatistics {
@@ -1317,28 +1739,83 @@ impl SamplingStatistics {
             logical_error_count: 0,
             syndrome_count: 0,
             undetectable_count: 0,
+            per_detector: Vec::new(),
+            per_dem_output: Vec::new(),
+        }
+    }
+
+    fn with_channels(total_shots: usize, num_detectors: usize, num_dem_outputs: usize) -> Self {
+        Self {
+            total_shots,
+            logical_error_count: 0,
+            syndrome_count: 0,
+            undetectable_count: 0,
+            per_detector: vec![0; num_detectors],
+            per_dem_output: vec![0; num_dem_outputs],
         }
     }
 
     /// Logical error rate.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)] // rate calculation
+    #[allow(clippy::cast_precision_loss)]
     pub fn logical_error_rate(&self) -> f64 {
         self.logical_error_count as f64 / self.total_shots as f64
     }
 
     /// Syndrome rate (fraction of shots with non-trivial syndrome).
     #[must_use]
-    #[allow(clippy::cast_precision_loss)] // rate calculation
+    #[allow(clippy::cast_precision_loss)]
     pub fn syndrome_rate(&self) -> f64 {
         self.syndrome_count as f64 / self.total_shots as f64
     }
 
     /// Undetectable error rate.
     #[must_use]
-    #[allow(clippy::cast_precision_loss)] // rate calculation
+    #[allow(clippy::cast_precision_loss)]
     pub fn undetectable_rate(&self) -> f64 {
         self.undetectable_count as f64 / self.total_shots as f64
+    }
+
+    /// Per-detector firing rates.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn detector_rates(&self) -> Vec<f64> {
+        let n = self.total_shots as f64;
+        self.per_detector.iter().map(|&c| c as f64 / n).collect()
+    }
+
+    /// Per-`L<n>` DEM-output flip rates.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn dem_output_rates(&self) -> Vec<f64> {
+        let n = self.total_shots as f64;
+        self.per_dem_output.iter().map(|&c| c as f64 / n).collect()
+    }
+
+    /// Per-`L<n>` DEM-output flip counts.
+    #[must_use]
+    pub fn dem_output_counts(&self) -> &[usize] {
+        &self.per_dem_output
+    }
+
+    /// Per-observable flip counts selected from standard `L<n>` observable columns.
+    #[must_use]
+    pub fn observable_counts(&self, observable_indices: &[usize]) -> Vec<usize> {
+        observable_indices
+            .iter()
+            .filter_map(|&idx| self.per_dem_output.get(idx).copied())
+            .collect()
+    }
+
+    /// Per-observable flip rates selected from standard `L<n>` observable columns.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn logical_rates(&self, observable_indices: &[usize]) -> Vec<f64> {
+        let n = self.total_shots as f64;
+        self.observable_counts(observable_indices)
+            .into_iter()
+            .map(|c| c as f64 / n)
+            .collect()
     }
 }
 
@@ -1346,23 +1823,35 @@ impl SamplingStatistics {
 // DEM Sampler Builder
 // ============================================================================
 
-/// Builder for [`DemSampler`].
+/// Builder for [`SamplingEngine`].
 ///
-/// Constructs a [`DemSampler`] from a fault influence map, noise parameters,
-/// and explicit detector/observable definitions.
-pub struct DemSamplerBuilder<'a> {
+/// Constructs a [`SamplingEngine`] from a fault influence map, noise parameters,
+/// and explicit detector/standard observable `L<n>` definitions.
+pub(crate) struct SamplingEngineBuilder<'a> {
+    /// Optional per-gate-type noise specification. If set, overrides the
+    /// uniform scalar `p1, p2` for any gate type present in its maps.
+    /// Measurement / prep errors come from the scalar `p_meas` / `p_prep`
+    /// or the per-qubit overrides in the per-gate spec.
+    per_gate: Option<PerGateTypeNoise>,
     influence_map: &'a DagFaultInfluenceMap,
     p1: f64,
     p2: f64,
     p_meas: f64,
-    p_init: f64,
+    p_prep: f64,
+    idle_noise: Option<NoiseConfig>,
     detector_records: Vec<Vec<i32>>,
     observable_records: Vec<Vec<i32>>,
     measurement_order: Option<Vec<usize>>,
     num_tc_measurements: Option<usize>,
 }
 
-impl<'a> DemSamplerBuilder<'a> {
+struct FaultMechanismContext<'a> {
+    im_to_tc: Option<&'a [usize]>,
+    influence_observable_ids: &'a BTreeSet<u32>,
+    num_tc_measurements: usize,
+}
+
+impl<'a> SamplingEngineBuilder<'a> {
     /// Create a new builder from an influence map.
     #[must_use]
     pub fn new(influence_map: &'a DagFaultInfluenceMap) -> Self {
@@ -1371,7 +1860,9 @@ impl<'a> DemSamplerBuilder<'a> {
             p1: 0.01,
             p2: 0.01,
             p_meas: 0.01,
-            p_init: 0.01,
+            p_prep: 0.01,
+            idle_noise: None,
+            per_gate: None,
             detector_records: Vec::new(),
             observable_records: Vec::new(),
             measurement_order: None,
@@ -1379,13 +1870,42 @@ impl<'a> DemSamplerBuilder<'a> {
         }
     }
 
-    /// Set noise parameters.
+    /// Set uniform-depolarizing noise parameters.
     #[must_use]
-    pub fn with_noise(mut self, p1: f64, p2: f64, p_meas: f64, p_init: f64) -> Self {
+    pub fn with_noise(mut self, p1: f64, p2: f64, p_meas: f64, p_prep: f64) -> Self {
         self.p1 = p1;
         self.p2 = p2;
         self.p_meas = p_meas;
-        self.p_init = p_init;
+        self.p_prep = p_prep;
+        self
+    }
+
+    /// Set idle gate noise rate.
+    #[must_use]
+    pub fn with_idle_noise(mut self, p_idle: f64) -> Self {
+        self.idle_noise = Some(NoiseConfig::new(0.0, 0.0, 0.0, 0.0).set_idle(p_idle));
+        self
+    }
+
+    /// Set the full idle-noise model for idle gates.
+    #[must_use]
+    pub fn with_idle_noise_config(mut self, noise: NoiseConfig) -> Self {
+        self.idle_noise = Some(noise);
+        self
+    }
+
+    /// Set per-gate-type per-Pauli noise specification. When provided,
+    /// overrides the uniform `p1, p2` for any gate type present in the
+    /// spec's maps. Measurement / prep fault rates come from
+    /// `p_meas, p_init` on the [`PerGateTypeNoise`] struct.
+    ///
+    /// Intended consumer: `pecos-lindblad::PauliLindbladModel` via
+    /// per-gate-type adapter helpers.
+    #[must_use]
+    pub fn with_per_gate_noise(mut self, cfg: PerGateTypeNoise) -> Self {
+        self.p_meas = cfg.p_meas;
+        self.p_prep = cfg.p_init;
+        self.per_gate = Some(cfg);
         self
     }
 
@@ -1418,7 +1938,7 @@ impl<'a> DemSamplerBuilder<'a> {
         self
     }
 
-    /// Set observable records directly.
+    /// Set observable definitions directly.
     #[must_use]
     pub fn with_observable_records(mut self, records: Vec<Vec<i32>>) -> Self {
         self.observable_records = records;
@@ -1436,16 +1956,23 @@ impl<'a> DemSamplerBuilder<'a> {
         self
     }
 
-    /// Build the [`DemSampler`].
+    /// Build the [`SamplingEngine`].
     #[must_use]
-    pub fn build(self) -> DemSampler {
+    pub fn build(self) -> SamplingEngine {
         let num_detectors = self.detector_records.len();
-        let num_observables = self.observable_records.len();
+        let influence_observable_ids = self.influence_map.observable_ids();
+        let num_influence_observables = self.influence_map.num_observables();
+        let num_dem_outputs = num_influence_observables.max(self.observable_records.len());
         let num_im_measurements = self.influence_map.measurements.len();
         let num_tc_measurements = self.num_tc_measurements.unwrap_or(num_im_measurements);
 
         // Build IM -> TC index mapping
         let im_to_tc = self.build_im_to_tc_mapping();
+        let mechanism_context = FaultMechanismContext {
+            im_to_tc: im_to_tc.as_deref(),
+            influence_observable_ids: &influence_observable_ids,
+            num_tc_measurements,
+        };
 
         // Aggregation map: mechanism -> probability
         let mut aggregated: BTreeMap<DemMechanism, f64> = BTreeMap::new();
@@ -1458,31 +1985,43 @@ impl<'a> DemSamplerBuilder<'a> {
             match loc.gate_type {
                 GateType::PZ | GateType::QAlloc
                     // Prep errors: only "after" locations (X error for Z-basis prep)
-                    if self.p_init > 0.0 && !loc.before => {
+                    if !loc.before =>
+                {
+                    let p = self.init_rate_for_location(loc);
+                    if p > 0.0 {
                         self.process_single_pauli_fault(
                             loc_idx,
                             Pauli::X,
-                            self.p_init,
-                            im_to_tc.as_deref(),
-                            num_tc_measurements,
+                            p,
+                            &mechanism_context,
                             &mut aggregated,
                         );
                     }
+                }
                 GateType::MZ | GateType::MeasureFree
                     // Measurement errors: only "before" locations (X error = bit flip)
-                    if self.p_meas > 0.0 && loc.before => {
+                    if loc.before =>
+                {
+                    let p = self.measurement_rate_for_location(loc);
+                    if p > 0.0 {
                         self.process_single_pauli_fault(
                             loc_idx,
                             Pauli::X,
-                            self.p_meas,
-                            im_to_tc.as_deref(),
-                            num_tc_measurements,
+                            p,
+                            &mechanism_context,
                             &mut aggregated,
                         );
                     }
+                }
                 GateType::CX
                 | GateType::CZ
                 | GateType::CY
+                | GateType::SZZ
+                | GateType::SZZdg
+                | GateType::SXX
+                | GateType::SXXdg
+                | GateType::SYY
+                | GateType::SYYdg
                 | GateType::SWAP
                 | GateType::RXX
                 | GateType::RYY
@@ -1492,6 +2031,8 @@ impl<'a> DemSamplerBuilder<'a> {
                         cx_groups.entry(loc.node).or_default().push(loc_idx);
                     }
                 GateType::H
+                | GateType::F
+                | GateType::Fdg
                 | GateType::SZ
                 | GateType::SZdg
                 | GateType::SX
@@ -1509,30 +2050,68 @@ impl<'a> DemSamplerBuilder<'a> {
                 | GateType::U
                 | GateType::R1XY
                     // Single-qubit gate errors: only "after" locations, depolarizing
-                    if self.p1 > 0.0 && !loc.before => {
-                        self.process_depolarizing_fault(
+                    if !loc.before =>
+                {
+                    let rates = self.rates_1q(loc.gate_type, &loc.qubits);
+                    if rates.iter().any(|r| *r > 0.0) {
+                        self.process_depolarizing_fault_rates(
                             loc_idx,
-                            self.p1,
-                            im_to_tc.as_deref(),
-                            num_tc_measurements,
+                            rates,
+                            &mechanism_context,
                             &mut aggregated,
                         );
                     }
+                }
+                GateType::Idle
+                    // Idle gate errors: only "after" locations. Idle is
+                    // noiseless unless idle noise or per-gate Idle rates are
+                    // explicitly configured.
+                    if !loc.before =>
+                {
+                    let rates = self.idle_rates(loc);
+                    if rates.iter().any(|r| *r > 0.0) {
+                        self.process_depolarizing_fault_rates(
+                            loc_idx,
+                            rates,
+                            &mechanism_context,
+                            &mut aggregated,
+                        );
+                    }
+                }
                 _ => {}
             }
         }
 
         // Process two-qubit gates as pairs
-        if self.p2 > 0.0 {
+        let has_any_2q_noise = self.per_gate.is_some() || self.p2 > 0.0;
+        if has_any_2q_noise {
             for loc_indices in cx_groups.values() {
-                if loc_indices.len() == 2 {
-                    self.process_two_qubit_fault(
-                        loc_indices[0],
-                        loc_indices[1],
-                        im_to_tc.as_deref(),
-                        num_tc_measurements,
-                        &mut aggregated,
-                    );
+                for pair in loc_indices.chunks(2) {
+                    if pair.len() != 2 {
+                        continue;
+                    }
+                    // For 2Q gates, each fault location covers exactly one
+                    // qubit; combine the two locations' qubits into an
+                    // ordered (control, target) pair.
+                    let loc0 = &self.influence_map.locations[pair[0]];
+                    let loc1 = &self.influence_map.locations[pair[1]];
+                    let gate_type = loc0.gate_type;
+                    let pair_qubits: Vec<_> = loc0
+                        .qubits
+                        .iter()
+                        .chain(loc1.qubits.iter())
+                        .copied()
+                        .collect();
+                    let rates = self.rates_2q(gate_type, &pair_qubits);
+                    if rates.iter().any(|r| *r > 0.0) {
+                        self.process_two_qubit_fault_rates(
+                            pair[0],
+                            pair[1],
+                            rates,
+                            &mechanism_context,
+                            &mut aggregated,
+                        );
+                    }
                 }
             }
         }
@@ -1542,11 +2121,11 @@ impl<'a> DemSamplerBuilder<'a> {
         let mut thresholds = Vec::with_capacity(num_mechanisms);
         let mut detector_offsets = Vec::with_capacity(num_mechanisms + 1);
         let mut detector_data = Vec::new();
-        let mut observable_offsets = Vec::with_capacity(num_mechanisms + 1);
-        let mut observable_data = Vec::new();
+        let mut dem_output_offsets = Vec::with_capacity(num_mechanisms + 1);
+        let mut dem_output_data = Vec::new();
 
         detector_offsets.push(0);
-        observable_offsets.push(0);
+        dem_output_offsets.push(0);
 
         let mut inv_log_1_minus_p = Vec::with_capacity(num_mechanisms);
 
@@ -1575,20 +2154,20 @@ impl<'a> DemSamplerBuilder<'a> {
             #[allow(clippy::cast_possible_truncation)] // detector data length fits in u32
             detector_offsets.push(detector_data.len() as u32);
 
-            observable_data.extend_from_slice(&mech.observables);
-            #[allow(clippy::cast_possible_truncation)] // observable data length fits in u32
-            observable_offsets.push(observable_data.len() as u32);
+            dem_output_data.extend_from_slice(&mech.dem_outputs);
+            #[allow(clippy::cast_possible_truncation)] // `L<n>` target data length fits in u32
+            dem_output_offsets.push(dem_output_data.len() as u32);
         }
 
-        DemSampler {
+        SamplingEngine {
             thresholds,
             inv_log_1_minus_p,
             detector_offsets,
             detector_data,
-            observable_offsets,
-            observable_data,
+            dem_output_offsets,
+            dem_output_data,
             num_detectors,
-            num_observables,
+            num_dem_outputs,
         }
     }
 
@@ -1631,29 +2210,142 @@ impl<'a> DemSamplerBuilder<'a> {
         loc_idx: usize,
         pauli: Pauli,
         prob: f64,
-        im_to_tc: Option<&[usize]>,
-        num_tc_measurements: usize,
+        context: &FaultMechanismContext<'_>,
         aggregated: &mut BTreeMap<DemMechanism, f64>,
     ) {
-        let mechanism = self.compute_mechanism(loc_idx, pauli, im_to_tc, num_tc_measurements);
+        let mechanism = self.compute_mechanism(
+            loc_idx,
+            pauli,
+            context.im_to_tc,
+            context.influence_observable_ids,
+            context.num_tc_measurements,
+        );
         if !mechanism.is_empty() {
             let entry = aggregated.entry(mechanism).or_insert(0.0);
             *entry = combine_probabilities(*entry, prob);
         }
     }
 
-    /// Process a depolarizing fault (X, Y, Z each with prob/3).
-    fn process_depolarizing_fault(
+    /// Resolve the X-error rate for a prep location. Uses `per_gate`'s
+    /// per-qubit `init_rates` if set, otherwise the scalar `self.p_prep`.
+    fn init_rate_for_location(
+        &self,
+        loc: &super::super::propagator::dag::DagSpacetimeLocation,
+    ) -> f64 {
+        if let Some(pg) = &self.per_gate
+            && let Some(q) = loc.qubits.first()
+        {
+            return pg.init_rate_on(*q);
+        }
+        self.p_prep
+    }
+
+    /// Resolve the X-flip rate for a measurement location. Uses
+    /// `per_gate`'s per-qubit `measurement_rates` if set, otherwise the
+    /// scalar `self.p_meas`.
+    fn measurement_rate_for_location(
+        &self,
+        loc: &super::super::propagator::dag::DagSpacetimeLocation,
+    ) -> f64 {
+        if let Some(pg) = &self.per_gate
+            && let Some(q) = loc.qubits.first()
+        {
+            return pg.measurement_rate_on(*q);
+        }
+        self.p_meas
+    }
+
+    /// Resolve per-Pauli rates for a 1Q gate on a specific qubit. Uses
+    /// `per_gate`'s per-qubit map if set, falling back to per-gate-type,
+    /// then uniform `p1 / 3`.
+    fn rates_1q(&self, gate: GateType, qubits: &[pecos_core::QubitId]) -> [f64; 3] {
+        if let Some(pg) = &self.per_gate {
+            if let Some(q) = qubits.first() {
+                [
+                    pg.rate_1q_on(gate, *q, 0),
+                    pg.rate_1q_on(gate, *q, 1),
+                    pg.rate_1q_on(gate, *q, 2),
+                ]
+            } else {
+                [
+                    pg.rate_1q(gate, 0),
+                    pg.rate_1q(gate, 1),
+                    pg.rate_1q(gate, 2),
+                ]
+            }
+        } else {
+            [self.p1 / 3.0; 3]
+        }
+    }
+
+    /// Resolve per-Pauli rates for an explicit idle location.
+    fn idle_rates(
+        &self,
+        loc: &crate::fault_tolerance::propagator::dag::DagSpacetimeLocation,
+    ) -> [f64; 3] {
+        if let Some(pg) = &self.per_gate {
+            let explicit_rates = loc
+                .qubits
+                .first()
+                .and_then(|q| pg.explicit_1q_rates_on(GateType::Idle, *q))
+                .or_else(|| pg.explicit_1q_rates(GateType::Idle));
+            if let Some(rates) = explicit_rates {
+                return rates;
+            }
+            if pg.base.uses_dedicated_idle_noise() {
+                #[allow(clippy::cast_precision_loss)]
+                let duration = loc.idle_duration.max(1) as f64;
+                let probs = pg.base.idle_pauli_probs(duration);
+                return [probs.px, probs.py, probs.pz];
+            }
+            return [0.0; 3];
+        }
+
+        if let Some(noise) = &self.idle_noise
+            && noise.uses_dedicated_idle_noise()
+        {
+            #[allow(clippy::cast_precision_loss)]
+            let duration = loc.idle_duration.max(1) as f64;
+            let probs = noise.idle_pauli_probs(duration);
+            return [probs.px, probs.py, probs.pz];
+        }
+        [0.0; 3]
+    }
+
+    /// Resolve per-Pauli-pair rates for a 2Q gate (15 non-II pairs) on a
+    /// specific ordered qubit pair.
+    fn rates_2q(&self, gate: GateType, qubits: &[pecos_core::QubitId]) -> [f64; 15] {
+        if let Some(pg) = &self.per_gate {
+            if qubits.len() >= 2 {
+                let (qc, qt) = (qubits[0], qubits[1]);
+                std::array::from_fn(|i| pg.rate_2q_on(gate, qc, qt, i))
+            } else {
+                std::array::from_fn(|i| pg.rate_2q(gate, i))
+            }
+        } else {
+            [self.p2 / 15.0; 15]
+        }
+    }
+
+    /// Process a 1Q depolarizing-family fault with explicit per-Pauli rates.
+    fn process_depolarizing_fault_rates(
         &self,
         loc_idx: usize,
-        prob: f64,
-        im_to_tc: Option<&[usize]>,
-        num_tc_measurements: usize,
+        rates: [f64; 3],
+        context: &FaultMechanismContext<'_>,
         aggregated: &mut BTreeMap<DemMechanism, f64>,
     ) {
-        let per_pauli_prob = prob / 3.0;
-        for pauli in [Pauli::X, Pauli::Y, Pauli::Z] {
-            let mechanism = self.compute_mechanism(loc_idx, pauli, im_to_tc, num_tc_measurements);
+        for (pauli, &per_pauli_prob) in [Pauli::X, Pauli::Y, Pauli::Z].iter().zip(rates.iter()) {
+            if per_pauli_prob == 0.0 {
+                continue;
+            }
+            let mechanism = self.compute_mechanism(
+                loc_idx,
+                *pauli,
+                context.im_to_tc,
+                context.influence_observable_ids,
+                context.num_tc_measurements,
+            );
             if !mechanism.is_empty() {
                 let entry = aggregated.entry(mechanism).or_insert(0.0);
                 *entry = combine_probabilities(*entry, per_pauli_prob);
@@ -1661,53 +2353,63 @@ impl<'a> DemSamplerBuilder<'a> {
         }
     }
 
-    /// Process a two-qubit gate fault (15 non-identity Pauli combinations with p2/15 each).
-    fn process_two_qubit_fault(
+    /// Process a two-qubit gate fault with explicit per-Pauli-pair rates.
+    /// `rates[i]` corresponds to [`PAULI_2Q_ORDER[i]`] ordering.
+    fn process_two_qubit_fault_rates(
         &self,
         loc1: usize,
         loc2: usize,
-        im_to_tc: Option<&[usize]>,
-        num_tc_measurements: usize,
+        rates: [f64; 15],
+        context: &FaultMechanismContext<'_>,
         aggregated: &mut BTreeMap<DemMechanism, f64>,
     ) {
-        let prob = self.p2 / 15.0;
         let paulis = [Pauli::I, Pauli::X, Pauli::Y, Pauli::Z];
 
-        // Cache single-qubit mechanisms for each Pauli on each location
         let mut effects1: [Option<DemMechanism>; 4] = [None, None, None, None];
         let mut effects2: [Option<DemMechanism>; 4] = [None, None, None, None];
 
         for &p in &[Pauli::X, Pauli::Y, Pauli::Z] {
-            effects1[p as usize] =
-                Some(self.compute_mechanism(loc1, p, im_to_tc, num_tc_measurements));
-            effects2[p as usize] =
-                Some(self.compute_mechanism(loc2, p, im_to_tc, num_tc_measurements));
+            effects1[p as usize] = Some(self.compute_mechanism(
+                loc1,
+                p,
+                context.im_to_tc,
+                context.influence_observable_ids,
+                context.num_tc_measurements,
+            ));
+            effects2[p as usize] = Some(self.compute_mechanism(
+                loc2,
+                p,
+                context.im_to_tc,
+                context.influence_observable_ids,
+                context.num_tc_measurements,
+            ));
         }
 
-        // Process all 15 non-trivial Pauli combinations
+        // Iterate (p1, p2) with global index = 4*p1 + p2 (skipping II at idx 0).
         for &p1 in &paulis {
             for &p2 in &paulis {
                 if p1 == Pauli::I && p2 == Pauli::I {
-                    continue; // Skip II
+                    continue;
                 }
-
+                let flat = 4 * (p1 as usize) + (p2 as usize);
+                let prob = rates[flat - 1];
+                if prob == 0.0 {
+                    continue;
+                }
                 let mechanism = if p1 == Pauli::I {
-                    // IX, IY, IZ - only second qubit
                     effects2[p2 as usize]
                         .clone()
                         .unwrap_or_else(DemMechanism::empty)
                 } else if p2 == Pauli::I {
-                    // XI, YI, ZI - only first qubit
                     effects1[p1 as usize]
                         .clone()
                         .unwrap_or_else(DemMechanism::empty)
                 } else {
-                    // Correlated: XOR the detector/observable effects
+                    // Correlated: XOR the detector/standard observable effects
                     let e1 = effects1[p1 as usize].as_ref();
                     let e2 = effects2[p2 as usize].as_ref();
                     xor_mechanisms(e1, e2)
                 };
-
                 if !mechanism.is_empty() {
                     let entry = aggregated.entry(mechanism).or_insert(0.0);
                     *entry = combine_probabilities(*entry, prob);
@@ -1716,18 +2418,27 @@ impl<'a> DemSamplerBuilder<'a> {
         }
     }
 
-    /// Compute the mechanism (detector/observable effects) for a fault.
+    /// Compute the mechanism (detector/standard observable effects) for a fault.
     fn compute_mechanism(
         &self,
         loc_idx: usize,
         pauli: Pauli,
         im_to_tc: Option<&[usize]>,
+        influence_observable_ids: &BTreeSet<u32>,
         num_tc_measurements: usize,
     ) -> DemMechanism {
         // Get measurement indices that flip (in IM order)
         let im_meas_flips = self
             .influence_map
             .get_detector_indices(loc_idx, pauli as u8);
+
+        let mut dem_outputs: SmallVec<[u32; 2]> = SmallVec::new();
+        for dem_output_idx in self
+            .influence_map
+            .get_observable_indices(loc_idx, pauli as u8)
+        {
+            xor_toggle_u32(&mut dem_outputs, dem_output_idx);
+        }
 
         // Convert to TC order measurement outcomes
         let mut tc_outcomes = vec![false; num_tc_measurements];
@@ -1776,48 +2487,59 @@ impl<'a> DemSamplerBuilder<'a> {
             })
             .collect();
 
-        // Apply observable definitions (XOR of measurement outcomes)
-        let observables: SmallVec<[u32; 2]> = self
-            .observable_records
-            .iter()
-            .enumerate()
-            .filter_map(|(obs_id, records)| {
-                let mut xor_result = false;
-                for &offset in records {
-                    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)] // measurement count fits in i32
-                    #[allow(clippy::cast_sign_loss)]
-                    // negative offset + total count, or non-negative offset
-                    let abs_idx = if offset < 0 {
-                        (num_tc_measurements as i32 + offset) as usize
-                    } else {
-                        offset as usize
-                    };
-                    if abs_idx < num_tc_measurements && tc_outcomes[abs_idx] {
-                        xor_result = !xor_result;
-                    }
-                }
-                if xor_result {
-                    #[allow(clippy::cast_possible_truncation)] // observable ID fits in u32
-                    Some(obs_id as u32)
+        // Apply standard observable `L<n>` definitions (XOR of measurement outcomes)
+        for (obs_id, records) in self.observable_records.iter().enumerate() {
+            #[allow(clippy::cast_possible_truncation)] // observable ID fits in u32
+            let obs_id_u32 = obs_id as u32;
+            if influence_observable_ids.contains(&obs_id_u32) {
+                continue;
+            }
+            let mut xor_result = false;
+            for &offset in records {
+                #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)] // measurement count fits in i32
+                #[allow(clippy::cast_sign_loss)]
+                // negative offset + total count, or non-negative offset
+                let abs_idx = if offset < 0 {
+                    (num_tc_measurements as i32 + offset) as usize
                 } else {
-                    None
+                    offset as usize
+                };
+                if abs_idx < num_tc_measurements && tc_outcomes[abs_idx] {
+                    xor_result = !xor_result;
                 }
-            })
-            .collect();
+            }
+            if xor_result {
+                #[allow(clippy::cast_possible_truncation)] // `L<n>` target ID fits in u32
+                xor_toggle_u32(&mut dem_outputs, obs_id_u32);
+            }
+        }
+        dem_outputs.sort_unstable();
 
-        DemMechanism::new(detectors, observables)
+        DemMechanism::new(detectors, dem_outputs)
     }
 }
 
-/// XORs two [`DemMechanism`]s (symmetric difference of detectors and observables).
+/// Toggles an element in a parity vector.
+fn xor_toggle_u32<const N: usize>(values: &mut SmallVec<[u32; N]>, value: u32)
+where
+    [u32; N]: smallvec::Array<Item = u32>,
+{
+    if let Some(pos) = values.iter().position(|&v| v == value) {
+        values.remove(pos);
+    } else {
+        values.push(value);
+    }
+}
+
+/// XORs two [`DemMechanism`]s (symmetric difference of detectors and standard observables).
 fn xor_mechanisms(a: Option<&DemMechanism>, b: Option<&DemMechanism>) -> DemMechanism {
     match (a, b) {
         (Some(m1), Some(m2)) => {
             let detectors = xor_u32_vecs::<4>(&m1.detectors, &m2.detectors);
-            let observables = xor_u32_vecs::<2>(&m1.observables, &m2.observables);
+            let dem_outputs = xor_u32_vecs::<2>(&m1.dem_outputs, &m2.dem_outputs);
             DemMechanism {
                 detectors,
-                observables,
+                dem_outputs,
             }
         }
         (Some(m), None) | (None, Some(m)) => m.clone(),
@@ -1857,7 +2579,7 @@ where
     result
 }
 
-/// Parse detector or observable records from JSON.
+/// Parse detector or observable definitions from JSON.
 ///
 /// Uses a simple custom parser to avoid `serde_json` dependency.
 /// Expected format: `[{"id": 0, "records": [-1, -5]}, ...]`
@@ -1975,8 +2697,8 @@ mod tests {
 
         // Detectors: {0,1,2} XOR {1,2,3} = {0,3}
         assert_eq!(result.detectors.as_slice(), &[0, 3]);
-        // Observables: {0} XOR {0,1} = {1}
-        assert_eq!(result.observables.as_slice(), &[1]);
+        // DEM outputs: {0} XOR {0,1} = {1}
+        assert_eq!(result.dem_outputs.as_slice(), &[1]);
     }
 
     #[test]
@@ -2030,11 +2752,13 @@ mod tests {
         let influence_map = analyzer.build_influence_map();
 
         // Zero noise should produce no errors
-        let sampler = DemSamplerBuilder::new(&influence_map)
+        let sampler = SamplingEngineBuilder::new(&influence_map)
             .with_noise(0.0, 0.0, 0.0, 0.0)
             .build();
 
         assert_eq!(sampler.num_mechanisms(), 0);
+        assert_eq!(sampler.num_dem_outputs(), 0);
+        assert_eq!(sampler.num_observables(), 0);
 
         let stats = sampler.sample_statistics(100, 42);
         assert_eq!(stats.logical_error_count, 0);
@@ -2060,7 +2784,7 @@ mod tests {
         let detectors_json = r#"[{"id": 0, "records": [-1]}]"#;
         let observables_json = r"[]";
 
-        let sampler = DemSamplerBuilder::new(&influence_map)
+        let sampler = SamplingEngineBuilder::new(&influence_map)
             .with_noise(0.1, 0.1, 0.1, 0.1)
             .with_detectors_json(detectors_json)
             .unwrap()
@@ -2075,6 +2799,36 @@ mod tests {
         // Sample and verify we get detection events
         let stats = sampler.sample_statistics(1000, 42);
         assert!(stats.syndrome_count > 0);
+    }
+
+    #[test]
+    fn test_sampling_engine_builder_accepts_observable_record_inputs() {
+        use crate::fault_tolerance::propagator::DagFaultAnalyzer;
+        use pecos_quantum::DagCircuit;
+
+        let mut dag = DagCircuit::new();
+        dag.pz(&[0]);
+        dag.h(&[0]);
+        dag.mz(&[0]);
+
+        let analyzer = DagFaultAnalyzer::new(&dag);
+        let influence_map = analyzer.build_influence_map();
+
+        let json_sampler = SamplingEngineBuilder::new(&influence_map)
+            .with_detectors_json(r#"[{"id": 0, "records": [-1]}]"#)
+            .unwrap()
+            .with_observables_json(r#"[{"id": 0, "records": [-1]}]"#)
+            .unwrap()
+            .build();
+        assert_eq!(json_sampler.num_detectors(), 1);
+        assert_eq!(json_sampler.num_dem_outputs(), 1);
+
+        let record_sampler = SamplingEngineBuilder::new(&influence_map)
+            .with_detector_records(vec![vec![-1]])
+            .with_observable_records(vec![vec![-1]])
+            .build();
+        assert_eq!(record_sampler.num_detectors(), 1);
+        assert_eq!(record_sampler.num_dem_outputs(), 1);
     }
 
     #[test]
@@ -2096,7 +2850,7 @@ mod tests {
         let analyzer = DagFaultAnalyzer::new(&dag);
         let influence_map = analyzer.build_influence_map();
 
-        let sampler = DemSamplerBuilder::new(&influence_map)
+        let sampler = SamplingEngineBuilder::new(&influence_map)
             .with_noise(0.01, 0.01, 0.01, 0.01)
             .with_detector_records(vec![vec![-1], vec![-2]])
             .with_observable_records(vec![])
@@ -2140,7 +2894,7 @@ mod tests {
         let analyzer = DagFaultAnalyzer::new(&dag);
         let influence_map = analyzer.build_influence_map();
 
-        let sampler = DemSamplerBuilder::new(&influence_map)
+        let sampler = SamplingEngineBuilder::new(&influence_map)
             .with_noise(0.5, 0.0, 0.0, 0.0) // High noise rate for testing
             .with_detector_records(vec![vec![-1]])
             .with_observable_records(vec![])
@@ -2176,7 +2930,7 @@ mod tests {
         let analyzer = DagFaultAnalyzer::new(&dag);
         let influence_map = analyzer.build_influence_map();
 
-        let sampler = DemSamplerBuilder::new(&influence_map)
+        let sampler = SamplingEngineBuilder::new(&influence_map)
             .with_noise(0.01, 0.01, 0.01, 0.01)
             .with_detector_records(vec![vec![-1], vec![-2]])
             .with_observable_records(vec![])
@@ -2217,7 +2971,7 @@ mod tests {
         let influence_map = analyzer.build_influence_map();
 
         // Use low noise to exercise geometric sampling effectively
-        let sampler = DemSamplerBuilder::new(&influence_map)
+        let sampler = SamplingEngineBuilder::new(&influence_map)
             .with_noise(0.001, 0.001, 0.001, 0.001)
             .with_detector_records(vec![vec![-1], vec![-2]])
             .with_observable_records(vec![])
@@ -2261,7 +3015,7 @@ mod tests {
         let influence_map = analyzer.build_influence_map();
 
         // Low error rate - should use geometric
-        let sampler = DemSamplerBuilder::new(&influence_map)
+        let sampler = SamplingEngineBuilder::new(&influence_map)
             .with_noise(0.001, 0.001, 0.001, 0.001)
             .with_detector_records(vec![vec![-1]])
             .with_observable_records(vec![])
@@ -2291,7 +3045,7 @@ mod tests {
         let influence_map = analyzer.build_influence_map();
 
         // High error rate - should use SIMD
-        let sampler = DemSamplerBuilder::new(&influence_map)
+        let sampler = SamplingEngineBuilder::new(&influence_map)
             .with_noise(0.1, 0.1, 0.1, 0.1)
             .with_detector_records(vec![vec![-1]])
             .with_observable_records(vec![])
@@ -2323,7 +3077,7 @@ mod tests {
         let analyzer = DagFaultAnalyzer::new(&dag);
         let influence_map = analyzer.build_influence_map();
 
-        let sampler = DemSamplerBuilder::new(&influence_map)
+        let sampler = SamplingEngineBuilder::new(&influence_map)
             .with_noise(0.001, 0.001, 0.001, 0.001)
             .with_detector_records(vec![vec![-1], vec![-2]])
             .with_observable_records(vec![])
@@ -2358,7 +3112,7 @@ mod tests {
 
     #[test]
     fn test_from_mechanisms_empty() {
-        let sampler = DemSampler::from_mechanisms(std::iter::empty(), 0, 0);
+        let sampler = SamplingEngine::from_mechanisms(std::iter::empty(), 0, 0);
         assert_eq!(sampler.num_mechanisms(), 0);
         assert_eq!(sampler.num_detectors(), 0);
         assert_eq!(sampler.num_observables(), 0);
@@ -2372,7 +3126,7 @@ mod tests {
     fn test_from_mechanisms_single_detector() {
         // Single mechanism that flips D0 with p=0.5
         let mechanisms = vec![(0.5, vec![0u32], vec![])];
-        let sampler = DemSampler::from_mechanisms(mechanisms, 1, 0);
+        let sampler = SamplingEngine::from_mechanisms(mechanisms, 1, 0);
 
         assert_eq!(sampler.num_mechanisms(), 1);
         assert_eq!(sampler.num_detectors(), 1);
@@ -2390,7 +3144,7 @@ mod tests {
     fn test_from_mechanisms_multiple_detectors() {
         // Two mechanisms: D0 with p=0.1, D1 with p=0.2
         let mechanisms = vec![(0.1, vec![0u32], vec![]), (0.2, vec![1u32], vec![])];
-        let sampler = DemSampler::from_mechanisms(mechanisms, 2, 0);
+        let sampler = SamplingEngine::from_mechanisms(mechanisms, 2, 0);
 
         assert_eq!(sampler.num_mechanisms(), 2);
         assert_eq!(sampler.num_detectors(), 2);
@@ -2408,7 +3162,7 @@ mod tests {
     fn test_from_mechanisms_correlated_detectors() {
         // Single mechanism that flips both D0 and D1 together with p=0.3
         let mechanisms = vec![(0.3, vec![0u32, 1u32], vec![])];
-        let sampler = DemSampler::from_mechanisms(mechanisms, 2, 0);
+        let sampler = SamplingEngine::from_mechanisms(mechanisms, 2, 0);
 
         assert_eq!(sampler.num_mechanisms(), 1);
         assert_eq!(sampler.num_detectors(), 2);
@@ -2427,7 +3181,7 @@ mod tests {
         // Two mechanisms that both flip D0 with the same probability
         // When both fire, they XOR and cancel
         let mechanisms = vec![(0.5, vec![0u32], vec![]), (0.5, vec![0u32], vec![])];
-        let sampler = DemSampler::from_mechanisms(mechanisms, 1, 0);
+        let sampler = SamplingEngine::from_mechanisms(mechanisms, 1, 0);
 
         // With two independent p=0.5 mechanisms that both flip D0:
         // P(D0 fires) = P(exactly one fires) = 2 * 0.5 * 0.5 = 0.5
@@ -2440,15 +3194,21 @@ mod tests {
     }
 
     #[test]
-    fn test_from_mechanisms_with_observables() {
+    fn test_from_mechanisms_with_tracked_paulis() {
         // Mechanism that flips D0 and L0
         let mechanisms = vec![(0.1, vec![0u32], vec![0u32])];
-        let sampler = DemSampler::from_mechanisms(mechanisms, 1, 1);
+        let sampler = SamplingEngine::from_mechanisms(mechanisms, 1, 1);
 
-        assert_eq!(sampler.num_observables(), 1);
+        assert_eq!(sampler.num_dem_outputs(), 1);
 
         // Logical error rate should be approximately 0.1
         let stats = sampler.sample_statistics(10000, 42);
+        assert_eq!(stats.dem_output_counts(), stats.per_dem_output.as_slice());
+        assert_eq!(
+            stats.observable_counts(&[0]).as_slice(),
+            stats.per_dem_output.as_slice()
+        );
+        assert_eq!(stats.logical_rates(&[0]), stats.dem_output_rates());
         let logical_rate = stats.logical_error_rate();
         assert!(
             (logical_rate - 0.1).abs() < 0.03,
@@ -2457,10 +3217,29 @@ mod tests {
     }
 
     #[test]
+    fn test_selected_observable_statistics_ignore_unselected_tracked_outputs() {
+        // L0 is the measured observable column; L1 represents a tracked
+        // operator column. The mechanism flips only L1, so observable-only
+        // logical statistics for L0 must stay zero while per-output counts
+        // still report the tracked-column flips.
+        let mechanisms = vec![(1.0, vec![], vec![1u32])];
+        let sampler = SamplingEngine::from_mechanisms(mechanisms, 0, 2);
+
+        let stats = sampler.sample_statistics_for_observable_indices(32, 42, &[0]);
+
+        assert_eq!(stats.total_shots, 32);
+        assert_eq!(stats.per_dem_output, vec![0, 32]);
+        assert_eq!(stats.logical_error_count, 0);
+        assert_eq!(stats.undetectable_count, 0);
+        assert_eq!(stats.observable_counts(&[0]), vec![0]);
+        assert_eq!(stats.observable_counts(&[1]), vec![32]);
+    }
+
+    #[test]
     fn test_from_mechanisms_very_low_error_rate() {
         // Test geometric sampling efficiency with low error rate
         let mechanisms = vec![(0.0001, vec![0u32], vec![])];
-        let sampler = DemSampler::from_mechanisms(mechanisms, 1, 0);
+        let sampler = SamplingEngine::from_mechanisms(mechanisms, 1, 0);
 
         // Should still work correctly
         let stats = sampler.sample_statistics(100_000, 42);
@@ -2475,11 +3254,12 @@ mod tests {
     fn test_from_mechanisms_sorting() {
         // Verify that detector indices are sorted regardless of input order
         let mechanisms = vec![(0.1, vec![2u32, 0u32, 1u32], vec![1u32, 0u32])];
-        let sampler = DemSampler::from_mechanisms(mechanisms, 3, 2);
+        let sampler = SamplingEngine::from_mechanisms(mechanisms, 3, 2);
 
         // Verify internal storage is sorted (by checking that sampling works)
         assert_eq!(sampler.num_detectors(), 3);
         assert_eq!(sampler.num_observables(), 2);
+        assert_eq!(sampler.num_dem_outputs(), 2);
 
         let stats = sampler.sample_statistics(1000, 42);
         // Just verify it runs without panicking

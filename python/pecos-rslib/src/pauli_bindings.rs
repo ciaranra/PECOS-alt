@@ -16,6 +16,11 @@
 //! to Python, allowing quantum error models to use native Pauli representations
 //! instead of string-based arrays.
 
+// pyfunction generates internal modules named after the function (X, Y, Z)
+#![allow(non_snake_case)]
+
+use std::hash::{Hash, Hasher};
+
 use crate::prelude::{
     Pauli as RustPauli, PauliOperator, PauliString as RustPauliString, QuarterPhase, QubitId,
 };
@@ -201,7 +206,7 @@ impl PauliString {
         };
 
         // Build PauliString from input
-        let rust_paulis = if let Some(pauli_input) = paulis {
+        let mut rust_paulis = if let Some(pauli_input) = paulis {
             use pyo3::types::PyList;
 
             // Try to extract as a list - using cast() per PyO3 0.27 API
@@ -247,50 +252,63 @@ impl PauliString {
             Vec::new()
         };
 
+        rust_paulis.retain(|(pauli, _)| *pauli != RustPauli::I);
+        rust_paulis.sort_by_key(|(_, qubit)| *qubit);
+        for window in rust_paulis.windows(2) {
+            if window[0].1 == window[1].1 {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "multiple non-identity Pauli operators were specified for qubit {}; \
+                     use multiplication (*) if you intend to compose Paulis on the same qubit",
+                    window[0].1.index()
+                )));
+            }
+        }
+
         // Construct RustPauliString using the new constructor
         let inner = RustPauliString::with_phase_and_paulis(rust_phase, rust_paulis);
 
         Ok(PauliString { inner })
     }
 
-    /// Create `PauliString` from a string like "XYZ" or "IXZI"
+    /// Create `PauliString` from dense or sparse string notation.
     ///
     /// Args:
-    ///     s: String of Pauli operators (I, X, Y, Z)
+    ///     s: Dense notation like "XIZ" or sparse notation like "X0 Z2".
     ///
     /// Returns:
-    ///     `PauliString` with operators on sequential qubits starting at 0
+    ///     `PauliString` parsed with the same auto-detection as Rust.
     ///
     /// Examples:
-    ///     >>> ps = `PauliString.from_str("XYZ`")
+    ///     >>> ps = PauliString.from_str("XYZ")
     ///     >>> # X on qubit 0, Y on qubit 1, Z on qubit 2
+    ///     >>> ps = PauliString.from_str("X0 Z2")
+    ///     >>> # X on qubit 0, Z on qubit 2
     #[staticmethod]
     fn from_str(s: &str) -> PyResult<Self> {
-        // Parse string character by character
-        let mut paulis = Vec::new();
+        s.parse::<RustPauliString>()
+            .map(|inner| PauliString { inner })
+            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))
+    }
 
-        for (i, c) in s.chars().enumerate() {
-            let pauli = match c {
-                'I' | 'i' => RustPauli::I,
-                'X' | 'x' => RustPauli::X,
-                'Y' | 'y' => RustPauli::Y,
-                'Z' | 'z' => RustPauli::Z,
-                _ => {
-                    return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                        "Invalid Pauli character '{c}' at position {i}. Must be 'I', 'X', 'Y', or 'Z'"
-                    )));
-                }
-            };
+    /// Create `PauliString` from dense string notation.
+    ///
+    /// Dense notation uses one Pauli character per qubit index, e.g. "XIZ"
+    /// means X on qubit 0 and Z on qubit 2.
+    #[staticmethod]
+    fn from_dense_str(s: &str) -> PyResult<Self> {
+        RustPauliString::from_dense_str(s)
+            .map(|inner| PauliString { inner })
+            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))
+    }
 
-            // Only store non-identity operators (sparse representation)
-            if pauli != RustPauli::I {
-                paulis.push((pauli, QubitId::new(i)));
-            }
-        }
-
-        let inner = RustPauliString::with_phase_and_paulis(QuarterPhase::PlusOne, paulis);
-
-        Ok(PauliString { inner })
+    /// Create `PauliString` from sparse string notation.
+    ///
+    /// Sparse notation uses Pauli/qubit tokens, e.g. "X0 Z2".
+    #[staticmethod]
+    fn from_sparse_str(s: &str) -> PyResult<Self> {
+        RustPauliString::from_sparse_str(s)
+            .map(|inner| PauliString { inner })
+            .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))
     }
 
     /// String representation
@@ -324,6 +342,21 @@ impl PauliString {
             .join(" ");
 
         format!("{phase_str}{pauli_str}")
+    }
+
+    /// Dense string representation with an explicit phase prefix.
+    ///
+    /// Example: `+XIZ` for X on qubit 0 and Z on qubit 2.
+    #[pyo3(signature = (num_qubits=None))]
+    fn to_dense_str(&self, num_qubits: Option<usize>) -> String {
+        self.inner.to_dense_str(num_qubits)
+    }
+
+    /// Sparse string representation with an explicit phase prefix.
+    ///
+    /// Example: `+X0 Z2` for X on qubit 0 and Z on qubit 2.
+    fn to_sparse_str(&self) -> String {
+        self.inner.to_sparse_str()
     }
 
     /// Repr for debugging
@@ -419,11 +452,155 @@ impl PauliString {
     fn anticommutes_with(&self, other: &PauliString) -> bool {
         !self.inner.commutes_with(&other.inner)
     }
+
+    // ---- Single-qubit constructors ----
+
+    /// Create X on a single qubit: `PauliString.X(3)`
+    #[staticmethod]
+    #[allow(non_snake_case)]
+    fn X(qubit: usize) -> Self {
+        PauliString {
+            inner: RustPauliString::x(qubit),
+        }
+    }
+
+    /// Create Y on a single qubit: `PauliString.Y(3)`
+    #[staticmethod]
+    #[allow(non_snake_case)]
+    fn Y(qubit: usize) -> Self {
+        PauliString {
+            inner: RustPauliString::y(qubit),
+        }
+    }
+
+    /// Create Z on a single qubit: `PauliString.Z(3)`
+    #[staticmethod]
+    #[allow(non_snake_case)]
+    fn Z(qubit: usize) -> Self {
+        PauliString {
+            inner: RustPauliString::z(qubit),
+        }
+    }
+
+    /// Create identity: `PauliString.I()`
+    #[staticmethod]
+    #[allow(non_snake_case)]
+    fn I() -> Self {
+        PauliString {
+            inner: RustPauliString::identity(),
+        }
+    }
+
+    // ---- Tensor product operator (&) ----
+
+    /// Tensor product: `PauliString.X(0) & PauliString.Z(1)`
+    fn __and__(&self, other: &PauliString) -> PyResult<Self> {
+        let mut lhs_qubits = self.inner.qubits();
+        lhs_qubits.sort_unstable();
+        lhs_qubits.dedup();
+
+        let mut rhs_qubits = other.inner.qubits();
+        rhs_qubits.sort_unstable();
+        rhs_qubits.dedup();
+
+        let mut overlap = Vec::new();
+        let mut lhs_idx = 0;
+        let mut rhs_idx = 0;
+        while lhs_idx < lhs_qubits.len() && rhs_idx < rhs_qubits.len() {
+            match lhs_qubits[lhs_idx].cmp(&rhs_qubits[rhs_idx]) {
+                std::cmp::Ordering::Less => lhs_idx += 1,
+                std::cmp::Ordering::Greater => rhs_idx += 1,
+                std::cmp::Ordering::Equal => {
+                    overlap.push(lhs_qubits[lhs_idx]);
+                    lhs_idx += 1;
+                    rhs_idx += 1;
+                }
+            }
+        }
+
+        if !overlap.is_empty() {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "tensor product requires disjoint Pauli support; overlapping qubits: {overlap:?}"
+            )));
+        }
+
+        Ok(PauliString {
+            inner: self.inner.clone() & other.inner.clone(),
+        })
+    }
+
+    /// Pauli multiplication: `PauliString.X(0) * PauliString.Y(0)`
+    fn __mul__(&self, other: &PauliString) -> Self {
+        PauliString {
+            inner: self.inner.clone() * other.inner.clone(),
+        }
+    }
+
+    /// Negation: `-PauliString.X(0)`
+    fn __neg__(&self) -> Self {
+        PauliString {
+            inner: -self.inner.clone(),
+        }
+    }
+
+    /// Equality check.
+    fn __eq__(&self, other: &PauliString) -> bool {
+        self.inner == other.inner
+    }
+
+    /// Hash for use in dictionaries and sets.
+    fn __hash__(&self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.inner.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Number of non-identity Pauli operators.
+    fn weight(&self) -> usize {
+        self.inner.weight()
+    }
+
+    /// List of qubit indices with non-identity operators.
+    fn qubits(&self) -> Vec<usize> {
+        self.inner.qubits()
+    }
+}
+
+// Module-level constructor functions for `from pecos import X, Y, Z`
+
+/// Create a single-qubit X `PauliString`: `X(3)`
+#[pyfunction]
+#[allow(non_snake_case)]
+pub fn X(qubit: usize) -> PauliString {
+    PauliString {
+        inner: RustPauliString::x(qubit),
+    }
+}
+
+/// Create a single-qubit Y `PauliString`: `Y(3)`
+#[pyfunction]
+#[allow(non_snake_case)]
+pub fn Y(qubit: usize) -> PauliString {
+    PauliString {
+        inner: RustPauliString::y(qubit),
+    }
+}
+
+/// Create a single-qubit Z `PauliString`: `Z(3)`
+#[pyfunction]
+#[allow(non_snake_case)]
+pub fn Z(qubit: usize) -> PauliString {
+    PauliString {
+        inner: RustPauliString::z(qubit),
+    }
 }
 
 /// Register Pauli types with Python module
 pub fn register_pauli_types(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Pauli>()?;
     m.add_class::<PauliString>()?;
+    m.add_function(pyo3::wrap_pyfunction!(X, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(Y, m)?)?;
+    m.add_function(pyo3::wrap_pyfunction!(Z, m)?)?;
     Ok(())
 }

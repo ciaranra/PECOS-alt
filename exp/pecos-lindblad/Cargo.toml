@@ -1,0 +1,33 @@
+[package]
+name = "pecos-lindblad"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Lindblad-to-Pauli-Lindblad noise synthesis for PECOS"
+readme = "README.md"
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+num-complex.workspace = true
+pecos-quantum.workspace = true
+thiserror.workspace = true
+rand.workspace = true
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+approx.workspace = true
+pecos-qec.workspace = true
+proptest.workspace = true
+rand.workspace = true
+serde_json.workspace = true

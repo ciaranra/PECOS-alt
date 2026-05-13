@@ -447,6 +447,11 @@ impl RngManageable for GeneralNoiseModel {
 impl ProbabilityValidator for GeneralNoiseModel {}
 
 impl GeneralNoiseModel {
+    fn channel_gate_error() -> String {
+        "ByteMessage noise models cannot process GateType::Channel; channel operations carry typed payloads and must use a channel-aware circuit path"
+            .to_string()
+    }
+
     /// Create a new noise model with the specified error parameters
     ///
     /// Creates a `GeneralNoiseModel` with the specified error probabilities while using default values
@@ -517,6 +522,9 @@ impl GeneralNoiseModel {
         let gates = input
             .quantum_ops()
             .expect("Failed to parse input as quantum operations");
+        if gates.iter().any(Gate::is_channel) {
+            return Err(Self::channel_gate_error());
+        }
 
         for gate in gates {
             // Track which qubits are being measured for leakage handling
@@ -1559,6 +1567,8 @@ mod tests {
                 angles: vec![].into(),
                 qubits: vec![QubitId(qubit)].into(),
                 params: vec![].into(),
+                meas_ids: vec![].into(),
+                channel: None,
             });
         }
         let measurement_request = request_builder.build();
@@ -1640,6 +1650,8 @@ mod tests {
             angles: vec![].into(),
             qubits: vec![QubitId(0)].into(),
             params: vec![].into(),
+            meas_ids: vec![].into(),
+            channel: None,
         };
 
         // Create a builder and apply noise
@@ -1829,6 +1841,8 @@ mod tests {
             angles: vec![].into(),
             qubits: vec![QubitId(0)].into(),
             params: vec![].into(),
+            meas_ids: vec![].into(),
+            channel: None,
         };
         noise.apply_prep_faults(&prep_gate, &mut builder);
 
@@ -2746,6 +2760,8 @@ mod tests {
             angles: vec![].into(),
             qubits: vec![QubitId(0)].into(),
             params: vec![1.0].into(), // 1 second duration
+            meas_ids: vec![].into(),
+            channel: None,
         };
 
         // Apply idle faults - should use coherent dephasing (RZ gates)
@@ -2769,6 +2785,8 @@ mod tests {
             angles: vec![].into(),
             qubits: vec![QubitId(0), QubitId(1), QubitId(2)].into(), // 3 qubits
             params: vec![1.0].into(),                                // 1 second duration
+            meas_ids: vec![].into(),
+            channel: None,
         };
 
         model.apply_idle_faults(
@@ -2905,6 +2923,8 @@ mod tests {
             angles: vec![Angle64::from_radians(0.1)].into(),
             qubits: vec![QubitId(0)].into(),
             params: vec![].into(),
+            meas_ids: vec![].into(),
+            channel: None,
         };
 
         // Create an X gate (not noiseless - should have noise applied)
@@ -2913,6 +2933,8 @@ mod tests {
             angles: vec![].into(),
             qubits: vec![QubitId(0)].into(),
             params: vec![].into(),
+            meas_ids: vec![].into(),
+            channel: None,
         };
 
         // Make sure RZ is recognized as noiseless

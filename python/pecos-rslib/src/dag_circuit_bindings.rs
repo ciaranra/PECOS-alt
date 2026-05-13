@@ -24,11 +24,87 @@
 
 use crate::dtypes::AngleParam;
 use crate::gate_registry_bindings::PyGateRegistry;
-use pecos_core::{Angle64, GateQubits, GateSignature, TimeUnits};
-use pecos_quantum::{Attribute, DagCircuit, Gate, GateType, QubitId, Tick, TickCircuit};
+use pecos_core::{Angle64, ChannelExpr, GateQubits, GateSignature, Pauli, TimeUnits};
+use pecos_quantum::{
+    Attribute, DagCircuit, Gate, GateType, QubitId, Tick, TickCircuit, TickGateError,
+};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
-use std::collections::HashMap;
+
+type PyMixedPauliTerm = (f64, Vec<(String, usize)>);
+
+fn pauli_string_terms(pauli: &pecos_core::PauliString) -> Vec<(String, usize)> {
+    pauli
+        .paulis()
+        .iter()
+        .map(|(p, q)| {
+            let label = match p {
+                Pauli::I => "I",
+                Pauli::X => "X",
+                Pauli::Y => "Y",
+                Pauli::Z => "Z",
+            };
+            (label.to_string(), q.index())
+        })
+        .collect()
+}
+
+fn mixed_pauli_terms(channel: &ChannelExpr) -> PyResult<Vec<PyMixedPauliTerm>> {
+    match channel {
+        ChannelExpr::Unitary(unitary) => {
+            let pauli = unitary.clone().try_to_pauli_string().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(
+                    "channel unitary is not representable as a Pauli operator",
+                )
+            })?;
+            Ok(vec![(1.0, pauli_string_terms(&pauli))])
+        }
+        ChannelExpr::MixedUnitary(ops) => ops
+            .iter()
+            .map(|(prob, unitary)| {
+                let pauli = unitary.clone().try_to_pauli_string().ok_or_else(|| {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "mixed-unitary channel contains a non-Pauli unitary",
+                    )
+                })?;
+                Ok((*prob, pauli_string_terms(&pauli)))
+            })
+            .collect(),
+        _ => Err(pyo3::exceptions::PyValueError::new_err(
+            "channel is not a Pauli mixed-unitary channel",
+        )),
+    }
+}
+
+fn validate_probability(name: &str, p: f64) -> PyResult<()> {
+    if (0.0..=1.0).contains(&p) {
+        Ok(())
+    } else {
+        Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "{name} must be in [0, 1], got {p}"
+        )))
+    }
+}
+
+fn receives_two_qubit_noise(gate_type: GateType) -> bool {
+    matches!(
+        gate_type,
+        GateType::CX
+            | GateType::CY
+            | GateType::CZ
+            | GateType::SZZ
+            | GateType::SZZdg
+            | GateType::SXX
+            | GateType::SXXdg
+            | GateType::SYY
+            | GateType::SYYdg
+            | GateType::SWAP
+            | GateType::CRZ
+            | GateType::RXX
+            | GateType::RYY
+            | GateType::RZZ
+    )
+}
 
 /// Convert a Rust Attribute to a Python object.
 fn attribute_to_py(py: Python<'_>, attr: &Attribute) -> Py<PyAny> {
@@ -530,6 +606,14 @@ impl PyGateType {
     }
 
     #[classattr]
+    #[pyo3(name = "TrackedPauliMeta")]
+    fn tracked_pauli_meta() -> Self {
+        Self {
+            inner: GateType::TrackedPauliMeta,
+        }
+    }
+
+    #[classattr]
     #[pyo3(name = "Custom")]
     fn custom() -> Self {
         Self {
@@ -619,6 +703,12 @@ impl PyGate {
         self.inner.qubits.iter().map(|q| usize::from(*q)).collect()
     }
 
+    /// Measurement result identities (one per qubit for measurement gates, empty otherwise).
+    #[getter]
+    fn meas_ids(&self) -> Vec<usize> {
+        self.inner.meas_ids.iter().map(|mr| mr.0).collect()
+    }
+
     /// Check if this is a single-qubit gate.
     fn is_single_qubit(&self) -> bool {
         self.inner.is_single_qubit()
@@ -627,6 +717,22 @@ impl PyGate {
     /// Check if this is a two-qubit gate.
     fn is_two_qubit(&self) -> bool {
         self.inner.is_two_qubit()
+    }
+
+    /// Check if this gate carries a channel payload.
+    fn is_channel(&self) -> bool {
+        self.inner.is_channel()
+    }
+
+    /// Return a Pauli mixed-unitary channel payload as `(probability, terms)`.
+    ///
+    /// Each term is a list of `(pauli, qubit)` pairs. Identity terms are
+    /// represented by an empty list. Non-Pauli channels raise `ValueError`.
+    fn channel_mixed_pauli_terms(&self) -> PyResult<Vec<PyMixedPauliTerm>> {
+        let channel = self.inner.channel_expr().ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err("gate does not carry a channel payload")
+        })?;
+        mixed_pauli_terms(channel)
     }
 
     // Factory methods for common gates
@@ -866,6 +972,27 @@ pyo3::create_exception!(
     pyo3::exceptions::PyException
 );
 
+/// Extract node indices from a list of either `int` or `(int, int)` tuples.
+/// This allows `detector()` / `observable()` to accept both raw node indices
+/// and measurement refs from `mz()`.
+fn extract_measurement_nodes(list: &Bound<'_, pyo3::types::PyList>) -> PyResult<Vec<usize>> {
+    list.iter()
+        .map(|item| {
+            // Try (node, qubit) tuple first
+            if let Ok((node, _qubit)) = item.extract::<(usize, usize)>() {
+                Ok(node)
+            } else {
+                // Fall back to plain int
+                item.extract::<usize>().map_err(|_| {
+                    pyo3::exceptions::PyTypeError::new_err(
+                        "measurements must be a list of ints or (node, qubit) tuples from mz()",
+                    )
+                })
+            }
+        })
+        .collect()
+}
+
 /// Python wrapper for `DagCircuit`.
 ///
 /// A directed acyclic graph representation of a quantum circuit where nodes are gates
@@ -897,8 +1024,10 @@ impl PyDagCircuit {
     /// Add a gate to the circuit.
     ///
     /// Returns the node index of the newly added gate.
-    fn add_gate(&mut self, gate: PyGate) -> usize {
-        self.inner.add_gate(gate.inner)
+    fn add_gate(&mut self, gate: PyGate) -> PyResult<usize> {
+        self.inner
+            .try_add_gate(gate.inner)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     /// Remove a gate from the circuit.
@@ -1246,11 +1375,16 @@ impl PyDagCircuit {
 
     /// Measure qubits in the Z basis.
     ///
-    /// Note: Unlike gates, measurements break the chain in simulators.
-    /// This method still returns self for convenience in Python.
-    fn mz(slf: Py<Self>, py: Python<'_>, qubits: Vec<usize>) -> Py<Self> {
-        slf.borrow_mut(py).inner.mz(&qubits);
-        slf
+    /// Returns a list of `(node, qubit)` tuples that can be passed to
+    /// `detector()` and `observable()`.
+    ///
+    /// Example:
+    ///     >>> dag = `DagCircuit()`
+    ///     >>> ms = dag.mz([0, 1])
+    ///     >>> dag.detector(ms)
+    fn mz(slf: &Bound<'_, Self>, qubits: Vec<usize>) -> Vec<(usize, usize)> {
+        let refs = slf.borrow_mut().inner.mz(&qubits);
+        refs.iter().map(|r| (r.node, r.qubit.index())).collect()
     }
 
     /// Measure and free qubits (destructive measurement).
@@ -1276,6 +1410,113 @@ impl PyDagCircuit {
         slf.borrow_mut(py).inner.qfree(&qubits);
         slf
     }
+
+    // ==================== Annotations ====================
+
+    /// Annotate a detector: measurements whose XOR should be deterministic.
+    ///
+    /// Args:
+    ///     measurements: List of measurement refs from `mz()` (tuples of
+    ///         `(node, qubit)`), or plain node indices.
+    ///     label: Optional label string.
+    ///
+    /// Returns:
+    ///     The annotation index.
+    ///
+    /// Example:
+    ///     >>> ms = dag.mz([0, 1])
+    ///     >>> dag.detector(ms, `label="Z_0` `Z_1`")
+    #[pyo3(signature = (measurements, label=None))]
+    fn detector(
+        &mut self,
+        measurements: &Bound<'_, pyo3::types::PyList>,
+        label: Option<String>,
+    ) -> PyResult<usize> {
+        let nodes = extract_measurement_nodes(measurements)?;
+        Ok(if let Some(l) = label {
+            self.inner.detector_labeled(&l, &nodes)
+        } else {
+            self.inner.detector(&nodes)
+        })
+    }
+
+    /// Annotate a logical observable: measurements whose XOR gives a logical outcome.
+    ///
+    /// Args:
+    ///     measurements: List of measurement refs from `mz()` (tuples of
+    ///         `(node, qubit)`), or plain node indices.
+    ///     label: Optional label string.
+    ///
+    /// Returns:
+    ///     The annotation index.
+    #[pyo3(signature = (measurements, label=None))]
+    fn observable(
+        &mut self,
+        measurements: &Bound<'_, pyo3::types::PyList>,
+        label: Option<String>,
+    ) -> PyResult<usize> {
+        let nodes = extract_measurement_nodes(measurements)?;
+        Ok(if let Some(l) = label {
+            self.inner.observable_labeled(&l, &nodes)
+        } else {
+            self.inner.observable(&nodes)
+        })
+    }
+
+    /// Place a tracked-Pauli annotation at this point in the circuit.
+    ///
+    /// Only faults BEFORE this annotation can flip the operator.
+    /// Accepts a `PauliString`, which supports `PauliString.X(0) & PauliString.Z(1)`.
+    ///
+    /// Args:
+    ///     pauli: A `PauliString` to track.
+    ///     label: Optional label string.
+    ///
+    /// Returns:
+    ///     The annotation index.
+    ///
+    /// Example:
+    ///     >>> from pecos import PauliString
+    ///     >>> dag.tracked_pauli(PauliString.Z(0) & PauliString.Z(1))
+    #[pyo3(signature = (pauli, label=None))]
+    fn tracked_pauli(
+        &mut self,
+        pauli: &crate::pauli_bindings::PauliString,
+        label: Option<String>,
+    ) -> usize {
+        if let Some(l) = label {
+            self.inner.tracked_pauli_labeled(&l, pauli.inner.clone())
+        } else {
+            self.inner.tracked_pauli(pauli.inner.clone())
+        }
+    }
+
+    /// Get all annotations as a list of dicts.
+    ///
+    /// Each dict has keys: "pauli" (`PauliString`), "kind" (str), "label" (str or None).
+    fn annotations(&self, py: Python<'_>) -> PyResult<Py<pyo3::types::PyList>> {
+        let list = pyo3::types::PyList::empty(py);
+
+        for ann in self.inner.annotations() {
+            let dict = pyo3::types::PyDict::new(py);
+            let ps = crate::pauli_bindings::PauliString {
+                inner: ann.pauli.clone(),
+            };
+            dict.set_item("pauli", ps.into_pyobject(py)?)?;
+            let kind_str = match &ann.kind {
+                pecos_quantum::AnnotationKind::Detector { .. } => "detector",
+                pecos_quantum::AnnotationKind::Observable { .. } => "observable",
+                pecos_quantum::AnnotationKind::TrackedPauli => "tracked_pauli",
+            };
+            dict.set_item("kind", kind_str)?;
+            dict.set_item("label", &ann.label)?;
+            list.append(dict)?;
+        }
+
+        Ok(list.unbind())
+    }
+
+    // ==================== Metadata ====================
 
     /// Add metadata to the last added gate.
     ///
@@ -1494,6 +1735,28 @@ pyo3::create_exception!(
     QubitConflictError,
     pyo3::exceptions::PyValueError
 );
+
+fn tick_gate_error_to_pyerr(err: TickGateError, tick_idx: Option<usize>) -> PyErr {
+    match err {
+        TickGateError::QubitConflict(mut err) => {
+            if let Some(tick_idx) = tick_idx {
+                err.tick_idx = Some(tick_idx);
+            }
+            PyErr::new::<QubitConflictError, _>(err.to_string())
+        }
+        TickGateError::InvalidGate {
+            message,
+            tick_idx: err_tick_idx,
+        } => {
+            let tick_idx = tick_idx.or(err_tick_idx);
+            let msg = match tick_idx {
+                Some(tick_idx) => format!("Invalid gate in tick {tick_idx}: {message}"),
+                None => format!("Invalid gate: {message}"),
+            };
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(msg)
+        }
+    }
+}
 
 /// Convert HUGR bytes to a `DagCircuit`.
 ///
@@ -1800,9 +2063,19 @@ pub struct PyTick {
 
 #[pymethods]
 impl PyTick {
-    /// Get the number of gates in this tick.
+    /// Get the number of stored gate batches in this tick.
     fn __len__(&self) -> usize {
         self.inner.len()
+    }
+
+    /// Get the number of individual gate applications in this tick.
+    fn gate_count(&self) -> usize {
+        self.inner.gate_count()
+    }
+
+    /// Get the number of compatible gate batches in this tick.
+    fn gate_batch_count(&self) -> usize {
+        self.inner.gate_batch_count()
     }
 
     /// Check if the tick is empty.
@@ -1810,10 +2083,10 @@ impl PyTick {
         self.inner.is_empty()
     }
 
-    /// Get the gates in this tick as a list.
-    fn gates(&self) -> Vec<PyGate> {
+    /// Get the stored gate batches in this tick as a list.
+    fn gate_batches(&self) -> Vec<PyGate> {
         self.inner
-            .gates()
+            .gate_batches()
             .iter()
             .map(|g: &Gate| PyGate { inner: g.clone() })
             .collect()
@@ -1903,8 +2176,10 @@ impl PyTick {
     /// Add a gate to this tick.
     ///
     /// Returns the index of the added gate within this tick.
-    fn add_gate(&mut self, gate: &PyGate) -> usize {
-        self.inner.add_gate(gate.inner.clone())
+    fn add_gate(&mut self, gate: &PyGate) -> PyResult<usize> {
+        self.inner
+            .try_add_gate(gate.inner.clone())
+            .map_err(|e| tick_gate_error_to_pyerr(e, None))
     }
 
     /// Try to add a gate to this tick, returning an error if any qubit is already in use.
@@ -1916,7 +2191,7 @@ impl PyTick {
     fn try_add_gate(&mut self, gate: &PyGate) -> PyResult<usize> {
         self.inner
             .try_add_gate(gate.inner.clone())
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
+            .map_err(|e| tick_gate_error_to_pyerr(e, None))
     }
 
     /// Remove all gates that use any of the specified qubits.
@@ -1947,7 +2222,8 @@ impl PyTick {
 /// Use `tick()` to create a new tick and get a handle for adding gates.
 #[pyclass(name = "TickCircuit", module = "pecos_rslib.quantum")]
 pub struct PyTickCircuit {
-    inner: TickCircuit,
+    /// The underlying Rust TickCircuit.
+    pub inner: TickCircuit,
 }
 
 #[pymethods]
@@ -1968,6 +2244,16 @@ impl PyTickCircuit {
     /// Get the total number of gates across all ticks.
     fn gate_count(&self) -> usize {
         self.inner.gate_count()
+    }
+
+    /// Get the total number of compatible gate batches across all ticks.
+    fn gate_batch_count(&self) -> usize {
+        self.inner.gate_batch_count()
+    }
+
+    /// Get the total number of measurement results produced so far.
+    fn num_measurements(&self) -> usize {
+        self.inner.num_measurements()
     }
 
     /// Get the next tick index that will be allocated.
@@ -2013,6 +2299,41 @@ impl PyTickCircuit {
         self.inner
             .get_meta(key)
             .map(|attr| attribute_to_py(py, attr))
+    }
+
+    /// Add detector metadata using measurement-record offsets.
+    ///
+    /// This is the typed equivalent of appending to the circuit-level
+    /// ``"detectors"`` JSON metadata list. Use ``detector(...)`` when you
+    /// already have explicit measurement handles from this TickCircuit.
+    #[pyo3(signature = (records, coords=None, label=None, detector_id=None))]
+    fn add_detector(
+        &mut self,
+        records: Vec<i64>,
+        coords: Option<Vec<f64>>,
+        label: Option<String>,
+        detector_id: Option<usize>,
+    ) -> PyResult<usize> {
+        self.inner
+            .add_detector_metadata(&records, coords.as_deref(), label.as_deref(), detector_id)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
+    /// Add observable metadata using measurement-record offsets.
+    ///
+    /// Standard observables live in the ``L<n>`` decoder ID space. A label of
+    /// ``"L3"`` therefore selects observable id 3 unless ``observable_id`` is
+    /// provided, in which case the two must agree.
+    #[pyo3(signature = (records, observable_id=None, label=None))]
+    fn add_observable(
+        &mut self,
+        records: Vec<i64>,
+        observable_id: Option<usize>,
+        label: Option<String>,
+    ) -> PyResult<usize> {
+        self.inner
+            .add_observable_metadata(&records, observable_id, label.as_deref())
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     // --- Circuit manipulation ---
@@ -2123,18 +2444,18 @@ impl PyTickCircuit {
         Ok(dict.into())
     }
 
-    /// Get all gates in the circuit as a list.
+    /// Get all stored gate batches in the circuit as a list.
     ///
     /// Returns:
     ///     A list of (`tick_index`, gate) tuples.
-    fn gates(&self) -> Vec<(usize, PyGate)> {
+    fn gate_batches(&self) -> Vec<(usize, PyGate)> {
         self.inner
-            .iter_gates_with_tick()
+            .iter_gate_batches_with_tick()
             .map(|(tick_idx, gate)| {
                 (
                     tick_idx,
                     PyGate {
-                        inner: gate.clone(),
+                        inner: gate.as_gate().clone(),
                     },
                 )
             })
@@ -2274,6 +2595,160 @@ impl PyTickCircuit {
         }
     }
 
+    /// Lower Clifford-angle rotations to named Clifford gates.
+    ///
+    /// Replaces parameterized rotations at Clifford angles with their named
+    /// equivalents: RZ(pi/2) -> SZ, RZ(pi) -> Z, RX(pi/2) -> SX, etc.
+    ///
+    /// Use this on circuits from QIS trace (Guppy/Selene) that use
+    /// parameterized gates even for Clifford operations. Without this,
+    /// stabilizer simulators may reject the circuit.
+    ///
+    /// Modifies the circuit in place.
+    fn lower_clifford_rotations(&mut self) {
+        use pecos_quantum::pass::{CircuitPass, SimplifyRotations};
+        SimplifyRotations.apply_tick(&mut self.inner);
+    }
+
+    /// Assign MeasId to measurement gates that don't have them.
+    ///
+    /// Use on circuits from external sources (QIS trace, Stim import)
+    /// that don't assign MeasId during construction.
+    fn assign_missing_meas_ids(&mut self) {
+        use pecos_quantum::pass::{AssignMissingMeasIds, CircuitPass};
+        AssignMissingMeasIds.apply_tick(&mut self.inner);
+    }
+
+    /// Insert Idle gates after each two-qubit gate on both of its qubits.
+    ///
+    /// Models idle noise during two-qubit gate execution. The noise model
+    /// applies RZ(p_idle * duration) when it encounters an Idle gate.
+    ///
+    /// Args:
+    ///     duration: Idle time in abstract time units (default: 1.0).
+    #[pyo3(signature = (duration=1.0))]
+    fn insert_idle_after_two_qubit_gates(&mut self, duration: f64) {
+        self.inner.insert_idle_after_two_qubit_gates(duration);
+    }
+
+    /// Insert identity gates for qubits not operated on during each tick.
+    ///
+    /// For each tick, qubits not involved in any gate get an identity (I)
+    /// gate that receives `p1` noise. This matches Stim's convention of
+    /// `DEPOLARIZE1` on idle qubits between ticks.
+    fn fill_idle_gates(&mut self) {
+        self.inner.fill_idle_gates();
+    }
+
+    /// Return a new circuit with explicit Pauli channel operations inserted.
+    ///
+    /// This compiles gate-triggered quantum noise into inline channel gates.
+    /// Measurement readout noise is intentionally not represented here because
+    /// it is classical outcome noise, not a quantum channel after measurement.
+    #[pyo3(signature = (p1=0.0, p2=0.0, p_meas=0.0, p_prep=0.0))]
+    fn with_noise(&self, p1: f64, p2: f64, p_meas: f64, p_prep: f64) -> PyResult<Self> {
+        validate_probability("p1", p1)?;
+        validate_probability("p2", p2)?;
+        validate_probability("p_meas", p_meas)?;
+        validate_probability("p_prep", p_prep)?;
+
+        if p_meas > 0.0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "TickCircuit.with_noise inserts quantum channel operations and cannot represent classical measurement readout noise; use sim_neo(...).noise(...) for p_meas",
+            ));
+        }
+
+        if p2 > 0.0 {
+            for (tick_idx, gate) in self.inner.iter_gate_batches_with_tick() {
+                if receives_two_qubit_noise(gate.gate_type) && !gate.qubits.len().is_multiple_of(2)
+                {
+                    return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                        "{:?} at tick {tick_idx} has {} qubits; expected pairs",
+                        gate.gate_type,
+                        gate.qubits.len()
+                    )));
+                }
+            }
+        }
+
+        let noisy = self
+            .inner
+            .try_with_noise(&|gate: &Gate| -> Vec<ChannelExpr> {
+                let mut channels = Vec::new();
+                match gate.gate_type {
+                    GateType::PZ | GateType::QAlloc if p_prep > 0.0 => {
+                        channels.extend(
+                            gate.qubits
+                                .iter()
+                                .map(|q| pecos_core::channel::BitFlip(p_prep, q.index())),
+                        );
+                    }
+                    GateType::I
+                    | GateType::X
+                    | GateType::Y
+                    | GateType::Z
+                    | GateType::H
+                    | GateType::F
+                    | GateType::Fdg
+                    | GateType::SX
+                    | GateType::SXdg
+                    | GateType::SY
+                    | GateType::SYdg
+                    | GateType::SZ
+                    | GateType::SZdg
+                    | GateType::T
+                    | GateType::Tdg
+                    | GateType::RX
+                    | GateType::RY
+                    | GateType::RZ
+                    | GateType::U
+                    | GateType::R1XY
+                    | GateType::Idle
+                        if p1 > 0.0 =>
+                    {
+                        channels.extend(
+                            gate.qubits
+                                .iter()
+                                .map(|q| pecos_core::channel::Depolarizing(p1, q.index())),
+                        );
+                    }
+                    GateType::CX
+                    | GateType::CY
+                    | GateType::CZ
+                    | GateType::SZZ
+                    | GateType::SZZdg
+                    | GateType::SXX
+                    | GateType::SXXdg
+                    | GateType::SYY
+                    | GateType::SYYdg
+                    | GateType::SWAP
+                    | GateType::CRZ
+                    | GateType::RXX
+                    | GateType::RYY
+                    | GateType::RZZ
+                        if p2 > 0.0 =>
+                    {
+                        channels.extend(gate.qubits.chunks_exact(2).map(|pair| {
+                            pecos_core::channel::Depolarizing2(p2, pair[0].index(), pair[1].index())
+                        }));
+                    }
+                    _ => {}
+                }
+                channels
+            })
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
+        Ok(Self { inner: noisy })
+    }
+
+    /// Compact ticks by merging gates into earlier ticks when possible.
+    ///
+    /// ASAP scheduling: gates that don't share qubits are merged into the
+    /// same tick. Useful after replaying a serialized trace where each
+    /// gate got its own tick.
+    fn compact_ticks(&mut self) {
+        self.inner.compact_ticks();
+    }
+
     // --- Gate signature validation ---
 
     /// Import gate signatures for validation.
@@ -2281,7 +2756,7 @@ impl PyTickCircuit {
     /// Args:
     ///     sigs: A dictionary mapping gate names to (`quantum_arity`, `angle_arity`) tuples.
     fn import_gate_signatures(&mut self, sigs: &Bound<'_, PyDict>) -> PyResult<()> {
-        let mut sig_map = HashMap::new();
+        let mut sig_map = std::collections::BTreeMap::new();
         for (key, value) in sigs.iter() {
             let name: String = key.extract()?;
             let (quantum_arity, angle_arity): (usize, usize) = value.extract()?;
@@ -2314,7 +2789,8 @@ impl PyTickCircuit {
     /// Extracts signatures from all registered gates and imports them
     /// for validation when adding custom gates.
     fn import_registry(&mut self, registry: &PyGateRegistry) {
-        let sigs = registry.inner.signatures();
+        let sigs: std::collections::BTreeMap<_, _> =
+            registry.inner.signatures().into_iter().collect();
         self.inner.import_signatures(&sigs);
     }
 
@@ -2325,6 +2801,97 @@ impl PyTickCircuit {
             self.inner.gate_count()
         )
     }
+
+    // ==================== Annotations ====================
+
+    /// Annotate a detector: measurements whose XOR should be deterministic.
+    #[pyo3(signature = (measurements, label=None))]
+    fn detector(
+        &mut self,
+        measurements: &Bound<'_, pyo3::types::PyList>,
+        label: Option<String>,
+    ) -> PyResult<usize> {
+        let refs = extract_tick_meas_refs(measurements)?;
+        let idx = if let Some(l) = label {
+            self.inner.detector_labeled(&l, &refs)
+        } else {
+            self.inner.detector(&refs)
+        };
+        Ok(idx)
+    }
+
+    /// Annotate a logical observable.
+    #[pyo3(signature = (measurements, label=None))]
+    fn observable(
+        &mut self,
+        measurements: &Bound<'_, pyo3::types::PyList>,
+        label: Option<String>,
+    ) -> PyResult<usize> {
+        let refs = extract_tick_meas_refs(measurements)?;
+        let idx = if let Some(l) = label {
+            self.inner.observable_labeled(&l, &refs)
+        } else {
+            self.inner.observable(&refs)
+        };
+        Ok(idx)
+    }
+
+    /// Place a tracked-Pauli annotation.
+    #[pyo3(signature = (pauli, label=None))]
+    fn tracked_pauli(
+        &mut self,
+        pauli: &crate::pauli_bindings::PauliString,
+        label: Option<String>,
+    ) -> usize {
+        if let Some(l) = label {
+            self.inner.tracked_pauli_labeled(&l, pauli.inner.clone())
+        } else {
+            self.inner.tracked_pauli(pauli.inner.clone())
+        }
+    }
+
+    /// Get all annotations.
+    fn annotations(&self, py: Python<'_>) -> PyResult<Py<pyo3::types::PyList>> {
+        let list = pyo3::types::PyList::empty(py);
+        for ann in self.inner.annotations() {
+            let dict = pyo3::types::PyDict::new(py);
+            let ps = crate::pauli_bindings::PauliString {
+                inner: ann.pauli.clone(),
+            };
+            dict.set_item("pauli", ps.into_pyobject(py)?)?;
+            let kind_str = match &ann.kind {
+                pecos_quantum::AnnotationKind::Detector { .. } => "detector",
+                pecos_quantum::AnnotationKind::Observable { .. } => "observable",
+                pecos_quantum::AnnotationKind::TrackedPauli => "tracked_pauli",
+            };
+            dict.set_item("kind", kind_str)?;
+            dict.set_item("label", &ann.label)?;
+            list.append(dict)?;
+        }
+        Ok(list.unbind())
+    }
+}
+
+/// Extract `TickMeasRef` from Python list of `(tick, gate_idx, qubit)` tuples.
+fn extract_tick_meas_refs(
+    list: &Bound<'_, pyo3::types::PyList>,
+) -> PyResult<Vec<pecos_quantum::TickMeasRef>> {
+    list.iter()
+        .map(|item| {
+            let (tick, gate_idx, qubit): (usize, usize, usize) = item.extract().map_err(|_| {
+                pyo3::exceptions::PyTypeError::new_err(
+                    "measurements must be (tick, gate_idx, qubit) tuples from mz()",
+                )
+            })?;
+            Ok(pecos_quantum::TickMeasRef {
+                tick,
+                gate_idx,
+                qubit: pecos_core::QubitId::from(qubit),
+                record_idx: 0, // Populated by TickCircuit; placeholder for external construction
+                meas_id: pecos_core::MeasId(0), // Placeholder
+            })
+        })
+        .collect()
 }
 
 /// Handle to a specific tick for adding gates.
@@ -2361,17 +2928,7 @@ impl PyTickHandle {
                     self.last_gate_idx = Some(idx);
                     Ok(())
                 }
-                Err(err) => {
-                    let msg = format!(
-                        "Qubit(s) {:?} already in use in tick {}",
-                        err.conflicting_qubits
-                            .iter()
-                            .map(std::string::ToString::to_string)
-                            .collect::<Vec<_>>(),
-                        self.tick_idx
-                    );
-                    Err(PyErr::new::<QubitConflictError, _>(msg))
-                }
+                Err(err) => Err(tick_gate_error_to_pyerr(err, Some(self.tick_idx))),
             }
         } else {
             Ok(())
@@ -2386,17 +2943,7 @@ impl PyTickHandle {
                     self.last_gate_idx = Some(idx);
                     Ok(idx)
                 }
-                Err(err) => {
-                    let msg = format!(
-                        "Qubit(s) {:?} already in use in tick {}",
-                        err.conflicting_qubits
-                            .iter()
-                            .map(std::string::ToString::to_string)
-                            .collect::<Vec<_>>(),
-                        self.tick_idx
-                    );
-                    Err(PyErr::new::<QubitConflictError, _>(msg))
-                }
+                Err(err) => Err(tick_gate_error_to_pyerr(err, Some(self.tick_idx))),
             }
         } else {
             Ok(0)
@@ -2927,17 +3474,7 @@ impl PyTickHandle {
                                 );
                                 last_idx = Some(idx);
                             }
-                            Err(err) => {
-                                let msg = format!(
-                                    "Qubit(s) {:?} already in use in tick {}",
-                                    err.conflicting_qubits
-                                        .iter()
-                                        .map(std::string::ToString::to_string)
-                                        .collect::<Vec<_>>(),
-                                    tick_idx
-                                );
-                                return Err(PyErr::new::<QubitConflictError, _>(msg));
-                            }
+                            Err(err) => return Err(tick_gate_error_to_pyerr(err, Some(tick_idx))),
                         }
                     }
                     drop(circuit);
@@ -2956,17 +3493,7 @@ impl PyTickHandle {
                             slf.borrow_mut(py).last_gate_idx = Some(idx);
                             Ok(slf)
                         }
-                        Err(err) => {
-                            let msg = format!(
-                                "Qubit(s) {:?} already in use in tick {}",
-                                err.conflicting_qubits
-                                    .iter()
-                                    .map(std::string::ToString::to_string)
-                                    .collect::<Vec<_>>(),
-                                tick_idx
-                            );
-                            Err(PyErr::new::<QubitConflictError, _>(msg))
-                        }
+                        Err(err) => Err(tick_gate_error_to_pyerr(err, Some(tick_idx))),
                     }
                 }
             }
@@ -3043,17 +3570,7 @@ impl PyTickHandle {
                     slf.borrow_mut(py).last_gate_idx = Some(idx);
                     Ok(slf)
                 }
-                Err(err) => {
-                    let msg = format!(
-                        "Qubit(s) {:?} already in use in tick {}",
-                        err.conflicting_qubits
-                            .iter()
-                            .map(std::string::ToString::to_string)
-                            .collect::<Vec<_>>(),
-                        tick_idx
-                    );
-                    Err(PyErr::new::<QubitConflictError, _>(msg))
-                }
+                Err(err) => Err(tick_gate_error_to_pyerr(err, Some(tick_idx))),
             }
         } else {
             drop(circuit);
@@ -3083,35 +3600,91 @@ impl PyTickHandle {
 
     /// Measure qubits in the Z basis.
     ///
-    /// Returns a `TickMeasureHandle` that allows attaching metadata via `.meta()`.
-    /// This breaks the chain - only `.meta()` can be called on the result.
-    fn mz(slf: Py<Self>, py: Python<'_>, qubits: Vec<usize>) -> PyResult<PyTickMeasureHandle> {
-        let (circuit, tick_idx, gate_idx) = {
-            let mut handle = slf.borrow_mut(py);
-            let gate_idx = handle.add_gate_get_idx(py, Gate::mz(&qubits))?;
-            (handle.circuit.clone_ref(py), handle.tick_idx, gate_idx)
-        };
-        Ok(PyTickMeasureHandle {
-            circuit,
-            tick_idx,
-            gate_idx,
-        })
+    /// Returns a list of `(tick, gate_idx, qubit)` measurement refs
+    /// for use in `detector()` and `observable()` annotations.
+    fn mz(
+        slf: Py<Self>,
+        py: Python<'_>,
+        qubits: Vec<usize>,
+    ) -> PyResult<Vec<(usize, usize, usize)>> {
+        let mut handle = slf.borrow_mut(py);
+        let mut gate = Gate::mz(&qubits);
+        // Assign MeasId values (SSA identity for each measurement)
+        {
+            let mut circuit = handle.circuit.borrow_mut(py);
+            let base = circuit.inner.num_measurements();
+            for (i, _) in qubits.iter().enumerate() {
+                gate.meas_ids.push(pecos_core::MeasId(base + i));
+            }
+            // Increment the measurement counter
+            circuit.inner.advance_meas_counter(qubits.len());
+        }
+        let gate_idx = handle.add_gate_get_idx(py, gate)?;
+        let tick_idx = handle.tick_idx;
+        Ok(qubits.iter().map(|&q| (tick_idx, gate_idx, q)).collect())
+    }
+
+    /// Measure qubits with explicit MeasIds.
+    ///
+    /// Like ``mz()`` but assigns the given MeasIds instead of auto-assigning.
+    /// Used when MeasIds flow from an external source (e.g., Guppy result() IDs).
+    ///
+    /// The ``meas_ids`` list must have the same length as ``qubits``.
+    fn mz_with_ids(
+        slf: Py<Self>,
+        py: Python<'_>,
+        qubits: Vec<usize>,
+        meas_ids: Vec<usize>,
+    ) -> PyResult<Vec<(usize, usize, usize)>> {
+        if meas_ids.len() != qubits.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "meas_ids length {} != qubits length {}",
+                meas_ids.len(),
+                qubits.len()
+            )));
+        }
+        let mut handle = slf.borrow_mut(py);
+        let mut gate = Gate::mz(&qubits);
+        for &mid in &meas_ids {
+            gate.meas_ids.push(pecos_core::MeasId(mid));
+        }
+        {
+            let mut circuit = handle.circuit.borrow_mut(py);
+            // Advance counter to at least past the highest ID we're assigning
+            let max_id = meas_ids.iter().copied().max().unwrap_or(0);
+            let current = circuit.inner.num_measurements();
+            if max_id >= current {
+                circuit.inner.advance_meas_counter(max_id + 1 - current);
+            }
+        }
+        let gate_idx = handle.add_gate_get_idx(py, gate)?;
+        let tick_idx = handle.tick_idx;
+        Ok(qubits.iter().map(|&q| (tick_idx, gate_idx, q)).collect())
     }
 
     /// Measure and free qubits (destructive measurement).
     ///
-    /// Returns a `TickMeasureHandle` that allows attaching metadata via `.meta()`.
-    fn mz_free(slf: Py<Self>, py: Python<'_>, qubits: Vec<usize>) -> PyResult<PyTickMeasureHandle> {
-        let (circuit, tick_idx, gate_idx) = {
-            let mut handle = slf.borrow_mut(py);
-            let gate_idx = handle.add_gate_get_idx(py, Gate::mz_free(&qubits))?;
-            (handle.circuit.clone_ref(py), handle.tick_idx, gate_idx)
-        };
-        Ok(PyTickMeasureHandle {
-            circuit,
-            tick_idx,
-            gate_idx,
-        })
+    /// Measure and free qubits (destructive measurement).
+    ///
+    /// Returns measurement refs for annotations.
+    fn mz_free(
+        slf: Py<Self>,
+        py: Python<'_>,
+        qubits: Vec<usize>,
+    ) -> PyResult<Vec<(usize, usize, usize)>> {
+        let mut handle = slf.borrow_mut(py);
+        let mut gate = Gate::mz_free(&qubits);
+        {
+            let mut circuit = handle.circuit.borrow_mut(py);
+            let base = circuit.inner.num_measurements();
+            for (i, _) in qubits.iter().enumerate() {
+                gate.meas_ids.push(pecos_core::MeasId(base + i));
+            }
+            circuit.inner.advance_meas_counter(qubits.len());
+        }
+        let gate_idx = handle.add_gate_get_idx(py, gate)?;
+        let tick_idx = handle.tick_idx;
+        Ok(qubits.iter().map(|&q| (tick_idx, gate_idx, q)).collect())
     }
 
     // --- Resource management ---

@@ -27,10 +27,12 @@ pub mod gate_registry;
 pub mod gate_type;
 pub mod gates;
 pub mod index_set;
+pub mod meas_id;
 pub mod pauli;
 pub mod phase;
 pub mod prelude;
 pub mod qubit_id;
+mod qubit_support;
 pub mod rng;
 pub mod sets;
 pub mod signal;
@@ -46,6 +48,7 @@ pub use bitset::BitSet;
 pub use duration::{TimeScale, TimeUnits};
 pub use element::Element;
 pub use index_set::IndexSet;
+pub use meas_id::MeasId;
 pub use phase::GlobalPhase;
 pub use phase::quarter_phase::QuarterPhase;
 pub use phase::sign::Sign;
@@ -69,8 +72,12 @@ pub use gate_registry::{
     AngleSource, ConcreteStep, DecompStep, GateDefinition, GateDefinitionBuilder, GateRegistry,
     GateSignature,
 };
-pub use gates::{Gate, GateAngles, GateParams, GateQubits};
+pub use gates::{Gate, GateAngles, GateMeasIds, GateParams, GateQubits};
 pub use pauli::pauli_bitmap::PauliBitmap;
+pub use pauli::pauli_bitmask::{
+    BitmaskStorage, Conjugated, PauliBitmask, PauliBitmaskGeneric, PauliBitmaskSmall,
+    PauliBitmaskVec,
+};
 pub use pauli::pauli_sparse::PauliSparse;
 pub use pauli::pauli_string::{ParsePauliStringError, PauliString};
 pub use pauli::{Pauli, PauliOperator};
@@ -84,22 +91,32 @@ pub use circuit_diagram::{
     DiagramStyleBuilder, FamilyPalette, FillPattern, GraphStyle, GraphStyleBuilder, blend_hex,
 };
 
-// UnitaryRep algebra
+// --- Algebraic-level namespaces ---
+//
+// Each level is a module whose glob import gives the user the constructors and
+// types for that algebraic level:
+//
+//   use pecos_core::pauli::*;     // I, X, Y, Z, Xs, Ys, Zs -> PauliString
+//   use pecos_core::clifford::*;  // H, CX, CZ, SWAP, ... -> CliffordRep
+//   use pecos_core::unitary::*;   // T, RZ, CCX, ... -> UnitaryRep
+//   use pecos_core::gate::*;      // MZ, PZ, Reset, ... -> GateExpr
+//   use pecos_core::channel::*;   // Depolarizing, PauliChannel, ... -> ChannelExpr
+//   use pecos_core::op::*;        // MZ, PZ, Depolarizing, ... -> Op (promoted)
+
+pub mod unitary;
 pub use unitary_rep::{Is, Unitary, UnitaryRep};
 
-// PauliString constructors (primary user-facing API for Pauli algebra)
 pub use pauli::constructors::{I, X, Xs, Y, Ys, Z, Zs};
 
-// Clifford base type (single-qubit Clifford group element)
 pub mod clifford;
 pub use clifford::Clifford;
 
-// Cross-type algebraic operators (Pauli * Clifford -> CliffordRep, etc.)
+pub mod channel;
+pub mod gate;
 pub mod gate_algebra;
 
-// Unified gate algebra with automatic type promotion
 pub mod op;
-pub use op::{Basis, ChannelExpr, Level, Op};
+pub use op::{Basis, ChannelExpr, GateExpr, Level, Op};
 
 // Signals
 pub use signal::Signal;

@@ -13,8 +13,17 @@
 pub mod algebra;
 pub mod constructors;
 
+// Re-export constructors at the `pauli` level so `use pecos_core::pauli::*` works.
+pub use constructors::{I, X, Xs, Y, Ys, Z, Zs};
+
+// Re-export key types so `use pecos_core::pauli::*` gives the full Pauli toolkit.
+pub use pauli_string::PauliString;
+
 #[allow(clippy::module_name_repetitions)]
 pub mod pauli_bitmap;
+
+#[allow(clippy::module_name_repetitions)]
+pub mod pauli_bitmask;
 
 #[allow(clippy::module_name_repetitions)]
 pub mod pauli_sparse;

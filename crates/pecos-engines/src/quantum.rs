@@ -4,6 +4,7 @@ use crate::byte_message::GateType;
 use dyn_clone::DynClone;
 use log::debug;
 use pecos_core::Angle64;
+use pecos_core::ChannelExpr;
 use pecos_core::QubitId;
 use pecos_core::RngManageable;
 use pecos_core::errors::PecosError;
@@ -52,6 +53,26 @@ fn flat_to_pairs(qubits: &[QubitId]) -> Vec<(QubitId, QubitId)> {
     let mut pairs = Vec::with_capacity(qubits.len() / 2);
     pairs.extend(qubits.chunks_exact(2).map(|pair| (pair[0], pair[1])));
     pairs
+}
+
+trait ChannelDispatch {
+    fn apply_channel_expr(&mut self, channel: &ChannelExpr) -> Result<(), PecosError>;
+}
+
+impl ChannelDispatch for StabVec {
+    fn apply_channel_expr(&mut self, _channel: &ChannelExpr) -> Result<(), PecosError> {
+        Err(quantum_error(
+            "Channel gate requires a channel-aware simulator path",
+        ))
+    }
+}
+
+impl ChannelDispatch for DensityMatrix {
+    fn apply_channel_expr(&mut self, channel: &ChannelExpr) -> Result<(), PecosError> {
+        DensityMatrix::apply_channel_expr(self, channel)
+            .map(|_| ())
+            .map_err(|err| quantum_error(format!("invalid channel gate: {err}")))
+    }
 }
 
 /// Process a `ByteMessage` against any Clifford-capable simulator.
@@ -169,9 +190,9 @@ fn process_clifford_message<S: CliffordGateable + CliffordRotation + QuantumSimu
                     cmd_idx += 1;
                     mz_qubits.extend_from_slice(&batch[cmd_idx].qubits);
                 }
-                let meas_results = sim.mz(&mz_qubits);
-                for meas_result in meas_results {
-                    measurements.push(usize::from(meas_result.outcome));
+                let meas_ids = sim.mz(&mz_qubits);
+                for meas_id in meas_ids {
+                    measurements.push(usize::from(meas_id.outcome));
                 }
             }
 
@@ -274,7 +295,9 @@ fn process_clifford_message<S: CliffordGateable + CliffordRotation + QuantumSimu
 /// Shared gate dispatch for `StabVecEngine`, `DensityMatrixEngine`, etc.
 /// Supports all Clifford gates, arbitrary rotations, composite gates (CH, CCX, CRZ),
 /// preparations, and measurements with MZ batching.
-fn process_general_message<S: CliffordGateable + ArbitraryRotationGateable + QuantumSimulator>(
+fn process_general_message<
+    S: CliffordGateable + ArbitraryRotationGateable + QuantumSimulator + ChannelDispatch,
+>(
     sim: &mut S,
     message: &ByteMessage,
 ) -> Result<ByteMessage, PecosError> {
@@ -519,21 +542,27 @@ fn process_general_message<S: CliffordGateable + ArbitraryRotationGateable + Qua
                     cmd_idx += 1;
                     mz_qubits.extend_from_slice(&batch[cmd_idx].qubits);
                 }
-                let meas_results = sim.mz(&mz_qubits);
-                for meas_result in meas_results {
-                    measurements.push(usize::from(meas_result.outcome));
+                let meas_ids = sim.mz(&mz_qubits);
+                for meas_id in meas_ids {
+                    measurements.push(usize::from(meas_id.outcome));
                 }
             }
             GateType::MeasureFree => {
-                let meas_results = sim.mz(&cmd.qubits);
-                for meas_result in meas_results {
-                    measurements.push(usize::from(meas_result.outcome));
+                let meas_ids = sim.mz(&cmd.qubits);
+                for meas_id in meas_ids {
+                    measurements.push(usize::from(meas_id.outcome));
                 }
             }
 
             // State preparation
             GateType::PZ | GateType::QAlloc => {
                 sim.pz(&cmd.qubits);
+            }
+            GateType::Channel => {
+                let channel = cmd
+                    .channel_expr()
+                    .ok_or_else(|| quantum_error("Channel gate is missing its channel payload"))?;
+                sim.apply_channel_expr(channel)?;
             }
 
             // No-ops
@@ -542,7 +571,8 @@ fn process_general_message<S: CliffordGateable + ArbitraryRotationGateable + Qua
             | GateType::MeasCrosstalkLocalPayload
             | GateType::MeasCrosstalkGlobalPayload
             | GateType::QFree
-            | GateType::Custom => {}
+            | GateType::Custom
+            | GateType::TrackedPauliMeta => {}
         }
         cmd_idx += 1;
     }
@@ -1084,21 +1114,27 @@ where
                         "Processing batched measurement on {} qubits",
                         mz_qubits.len()
                     );
-                    let meas_results = self.simulator.mz(&mz_qubits);
-                    for meas_result in meas_results {
-                        measurements.push(usize::from(meas_result.outcome));
+                    let meas_ids = self.simulator.mz(&mz_qubits);
+                    for meas_id in meas_ids {
+                        measurements.push(usize::from(meas_id.outcome));
                     }
                 }
                 GateType::PZ => {
                     debug!("Processing Prep gate on qubits {:?}", cmd.qubits);
                     self.simulator.pz(&cmd.qubits);
                 }
+                GateType::Channel => {
+                    return Err(quantum_error(
+                        "Channel gate requires a channel-aware simulator path",
+                    ));
+                }
                 GateType::I
                 | GateType::Idle
                 | GateType::MeasCrosstalkLocalPayload
                 | GateType::MeasCrosstalkGlobalPayload
                 | GateType::QFree
-                | GateType::Custom => {
+                | GateType::Custom
+                | GateType::TrackedPauliMeta => {
                     // Just let the system naturally evolve for the specified duration
                     // No active operation needed in the simulator
                     // QFree is a no-op for state vector simulation (qubit tracking is handled elsewhere)
@@ -1142,9 +1178,9 @@ where
                 GateType::MeasureFree => {
                     // Measure and deallocate - measure first, then the qubit is implicitly freed
                     debug!("Processing MeasureFree gate on qubits {:?}", cmd.qubits);
-                    let meas_results = self.simulator.mz(&cmd.qubits);
-                    for meas_result in meas_results {
-                        measurements.push(usize::from(meas_result.outcome));
+                    let meas_ids = self.simulator.mz(&cmd.qubits);
+                    for meas_id in meas_ids {
+                        measurements.push(usize::from(meas_id.outcome));
                     }
                 }
                 GateType::U => {
@@ -1629,9 +1665,9 @@ impl Engine for CoinTossEngine {
                 GateType::MZ | GateType::MeasureLeaked | GateType::MeasureFree => {
                     for q in &cmd.qubits {
                         debug!("CoinToss: Processing measurement on qubit {q:?}");
-                        let meas_results = self.simulator.mz(&[*q]);
-                        for meas_result in &meas_results {
-                            let outcome = u32::from(meas_result.outcome);
+                        let meas_ids = self.simulator.mz(&[*q]);
+                        for meas_id in &meas_ids {
+                            let outcome = u32::from(meas_id.outcome);
                             measurements.push(outcome);
                         }
                     }

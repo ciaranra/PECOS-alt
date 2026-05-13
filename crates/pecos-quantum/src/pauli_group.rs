@@ -39,7 +39,7 @@
 //!
 //! ```
 //! use pecos_quantum::PauliGroup;
-//! use pecos_core::pauli::constructors::*;
+//! use pecos_core::pauli::*;
 //! use pecos_core::pauli::algebra::i;
 //!
 //! // Generators with imaginary phases are allowed
@@ -105,7 +105,7 @@ fn generator_order(phase: QuarterPhase) -> u32 {
 ///
 /// ```
 /// use pecos_quantum::PauliGroup;
-/// use pecos_core::pauli::constructors::*;
+/// use pecos_core::pauli::*;
 /// use pecos_core::pauli::algebra::i;
 ///
 /// // A group with an imaginary-phase generator
@@ -265,15 +265,15 @@ impl PauliGroup {
         for (row_idx, generator) in self.inner.paulis().iter().enumerate() {
             for q in generator.x_positions() {
                 if q < n {
-                    mat.rows[row_idx][q] = 1;
+                    mat.set(row_idx, q, 1);
                 }
             }
             for q in generator.z_positions() {
                 if q < n {
-                    mat.rows[row_idx][n + q] = 1;
+                    mat.set(row_idx, n + q, 1);
                 }
             }
-            mat.rows[row_idx][2 * n + row_idx] = 1;
+            mat.set(row_idx, 2 * n + row_idx, 1);
         }
 
         let (reduced, pivots) = mat.row_reduce();
@@ -295,7 +295,7 @@ impl PauliGroup {
         for (row_idx, &pivot_col) in pivots.iter().enumerate() {
             if target[pivot_col] == 1 {
                 for (col, t) in target.iter_mut().enumerate() {
-                    *t ^= reduced.rows[row_idx][col];
+                    *t ^= reduced.get(row_idx, col);
                 }
             }
         }
@@ -453,9 +453,11 @@ impl PauliGroup {
         self.inner.to_symplectic_matrix()
     }
 
-    /// Returns the commutation matrix (always all-true for a valid group).
+    /// Returns the pairwise anticommutation matrix.
+    ///
+    /// This is always all-zero for a valid commuting group.
     #[must_use]
-    pub fn commutation_matrix(&self) -> Vec<Vec<bool>> {
+    pub fn commutation_matrix(&self) -> F2Matrix {
         self.inner.commutation_matrix()
     }
 
@@ -682,7 +684,7 @@ impl fmt::Display for PauliGroup {
 mod tests {
     use super::*;
     use pecos_core::pauli::algebra::i;
-    use pecos_core::pauli::constructors::*;
+    use pecos_core::pauli::*;
 
     // --- Construction and basic properties ---
 
@@ -1164,14 +1166,15 @@ mod tests {
     // --- commutation_matrix for valid group ---
 
     #[test]
-    fn commutation_matrix_all_true() {
+    fn commutation_matrix_all_zero() {
         let group = PauliGroup::new(vec![X(0), Z(1), X(2)]).unwrap();
         let mat = group.commutation_matrix();
-        for row in &mat {
-            for &val in row {
-                assert!(
-                    val,
-                    "commutation matrix should be all-true for abelian group"
+        for row in 0..mat.num_rows() {
+            for col in 0..mat.num_cols() {
+                assert_eq!(
+                    mat.get(row, col),
+                    0,
+                    "anticommutation matrix should be all-zero for abelian group"
                 );
             }
         }

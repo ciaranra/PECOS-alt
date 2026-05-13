@@ -55,7 +55,7 @@ def parse_dem_with_decomposed(
 
 
 def xor_targets(parts: list[tuple[tuple[int, ...], tuple[int, ...]]]) -> tuple[tuple[int, ...], tuple[int, ...]]:
-    """XOR a decomposed list of detector/logical targets into one combined effect."""
+    """XOR a decomposed list of detector/DEM-output observables into one combined effect."""
     dets: set[int] = set()
     logs: set[int] = set()
     for part_dets, part_logs in parts:
@@ -97,10 +97,10 @@ def xor_lists(left: list[int], right: list[int]) -> list[int]:
 
 
 def xor_effect_rows(left: dict[str, list[int]], right: dict[str, list[int]]) -> tuple[list[int], list[int]]:
-    """XOR two structured detector/logical rows."""
+    """XOR two structured detector/DEM-output rows."""
     return (
         xor_lists(left["detectors"], right["detectors"]),
-        xor_lists(left["logicals"], right["logicals"]),
+        xor_lists(left["dem_outputs"], right["dem_outputs"]),
     )
 
 
@@ -144,10 +144,10 @@ def build_source_tracked_dem(distance: int, basis: str, rounds: int = 20) -> obj
     dag = tc.to_dag_circuit()
     analyzer = DagFaultAnalyzer(dag)
     influence_map = analyzer.build_influence_map()
-    noise = NoiseModel(p1=0.01, p2=0.01, p_meas=0.01, p_init=0.01)
+    noise = NoiseModel(p1=0.01, p2=0.01, p_meas=0.01, p_prep=0.01)
 
     builder = DemBuilder(influence_map)
-    builder.with_noise(noise.p1, noise.p2, noise.p_meas, noise.p_init)
+    builder.with_noise(noise.p1, noise.p2, noise.p_meas, noise.p_prep)
     builder.with_num_measurements(int(tc.get_meta("num_measurements") or "0"))
     builder.with_measurement_order(get_measurement_order_from_tick_circuit(tc))
     builder.with_detectors_json(tc.get_meta("detectors"))
@@ -173,12 +173,12 @@ def test_dem_builder_accepts_public_surface_descriptor_json() -> None:
     tc = generate_tick_circuit_from_patch(patch, num_rounds=4, basis="X")
     dag = tc.to_dag_circuit()
     influence_map = DagFaultAnalyzer(dag).build_influence_map()
-    noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_init=0.001)
+    noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_prep=0.001)
 
     def _build(detectors_json: str, observables_json: str | None) -> object:
         """Build one source-tracked DEM from serialized detector metadata."""
         builder = DemBuilder(influence_map)
-        builder.with_noise(noise.p1, noise.p2, noise.p_meas, noise.p_init)
+        builder.with_noise(noise.p1, noise.p2, noise.p_meas, noise.p_prep)
         builder.with_num_measurements(int(tc.get_meta("num_measurements") or "0"))
         builder.with_measurement_order(get_measurement_order_from_tick_circuit(tc))
         builder.with_detectors_json(detectors_json)
@@ -304,12 +304,12 @@ def test_native_decomposed_components_are_graphlike_and_map_back_to_full_dem(dis
 
     patch = SurfacePatch.create(distance=distance)
     tc = generate_tick_circuit_from_patch(patch, num_rounds=20, basis=basis)
-    params = {"p1": 0.01, "p2": 0.01, "p_meas": 0.01, "p_init": 0.01}
+    params = {"p1": 0.01, "p2": 0.01, "p_meas": 0.01, "p_prep": 0.01}
 
     full_dem = generate_dem_from_tick_circuit(tc, **params, decompose_errors=False)
     native_decomp_dem = generate_dem_from_tick_circuit(tc, **params, decompose_errors=True)
 
-    full_targets, _ = parse_dem_with_decomposed(full_dem)
+    fuldem_outputs, _ = parse_dem_with_decomposed(full_dem)
     _direct_targets, decomposed_targets = parse_dem_with_decomposed(native_decomp_dem)
 
     assert decomposed_targets, "expected representative circuit to contain decomposed terms"
@@ -322,7 +322,7 @@ def test_native_decomposed_components_are_graphlike_and_map_back_to_full_dem(dis
 
         combined = xor_targets(parts)
         msg = f"decomposed components must XOR back to an effect present in the full DEM: {parts!r} -> {combined!r}"
-        assert combined in full_targets, msg
+        assert combined in fuldem_outputs, msg
 
         if combined[1]:
             saw_l0_decomposition = True
@@ -341,7 +341,7 @@ def test_native_decomposed_matches_stim_singleton_l0_edges_for_representative_ci
 
     patch = SurfacePatch.create(distance=3)
     tc = generate_tick_circuit_from_patch(patch, num_rounds=20, basis=basis)
-    params = {"p1": 0.01, "p2": 0.01, "p_meas": 0.01, "p_init": 0.01}
+    params = {"p1": 0.01, "p2": 0.01, "p_meas": 0.01, "p_prep": 0.01}
 
     native_decomp_dem = generate_dem_from_tick_circuit(tc, **params, decompose_errors=True)
     stim_dem = generate_dem_from_tick_circuit_via_stim(tc, **params)
@@ -364,7 +364,7 @@ def test_native_decomposed_preserves_all_stim_direct_observable_targets(distance
 
     patch = SurfacePatch.create(distance=distance)
     tc = generate_tick_circuit_from_patch(patch, num_rounds=20, basis=basis)
-    params = {"p1": 0.01, "p2": 0.01, "p_meas": 0.01, "p_init": 0.01}
+    params = {"p1": 0.01, "p2": 0.01, "p_meas": 0.01, "p_prep": 0.01}
 
     native_decomp_dem = generate_dem_from_tick_circuit(tc, **params, decompose_errors=True)
     stim_dem = generate_dem_from_tick_circuit_via_stim(tc, **params)
@@ -392,7 +392,7 @@ def test_native_full_matches_stim_full_graph_summary_for_representative_circuit(
 
     patch = SurfacePatch.create(distance=distance)
     tc = generate_tick_circuit_from_patch(patch, num_rounds=20, basis=basis)
-    params = {"p1": 0.01, "p2": 0.01, "p_meas": 0.01, "p_init": 0.01}
+    params = {"p1": 0.01, "p2": 0.01, "p_meas": 0.01, "p_prep": 0.01}
 
     native_full_dem = generate_dem_from_tick_circuit(tc, **params, decompose_errors=False)
     stim_full_dem = generate_dem_from_tick_circuit_via_stim(tc, **params, decompose_errors=False)
@@ -418,7 +418,7 @@ def test_generate_dem_from_tick_circuit_via_stim_can_skip_decomposition() -> Non
         p1=0.01,
         p2=0.01,
         p_meas=0.01,
-        p_init=0.01,
+        p_prep=0.01,
         decompose_errors=False,
     )
 
@@ -434,7 +434,7 @@ def test_structured_source_tracking_summaries_include_graphlike_decomposable_cou
     summaries = dem.contribution_effect_summaries()
     assert summaries
 
-    pair_summaries = [summary for summary in summaries if len(summary["detectors"]) == 2 and not summary["logicals"]]
+    pair_summaries = [summary for summary in summaries if len(summary["detectors"]) == 2 and not summary["dem_outputs"]]
     assert pair_summaries
     assert all("graphlike_decomposable_count" in summary for summary in pair_summaries)
     assert all(summary["graphlike_decomposable_count"] >= 0 for summary in pair_summaries)
@@ -448,10 +448,10 @@ def test_structured_source_tracking_bindings_are_self_consistent(basis: str) -> 
     summaries = dem.contribution_effect_summaries()
     assert summaries
 
-    observable_summary = next(row for row in summaries if row["logicals"])
+    observable_summary = next(row for row in summaries if row["dem_outputs"])
     contributions = dem.contributions_for_effect(
         observable_summary["detectors"],
-        observable_summary["logicals"],
+        observable_summary["dem_outputs"],
     )
 
     assert contributions
@@ -489,12 +489,12 @@ def test_structured_source_tracking_y_decomposed_rows_xor_back_to_effect(basis: 
     assert summaries
 
     for summary in summaries[:20]:
-        contributions = dem.contributions_for_effect(summary["detectors"], summary["logicals"])
+        contributions = dem.contributions_for_effect(summary["detectors"], summary["dem_outputs"])
         y_rows = [row for row in contributions if row["source_type"] == "YDecomposed"]
         assert y_rows
         for row in y_rows:
             assert xor_lists(row["x_detectors"], row["z_detectors"]) == summary["detectors"]
-            assert xor_lists(row["x_logicals"], row["z_logicals"]) == summary["logicals"]
+            assert xor_lists(row["x_dem_outputs"], row["z_dem_outputs"]) == summary["dem_outputs"]
 
 
 @pytest.mark.parametrize("basis", ["X", "Z"])
@@ -504,7 +504,7 @@ def test_structured_direct_component_rows_xor_back_to_effect(basis: str) -> None
 
     rows = []
     for summary in dem.contribution_effect_summaries():
-        for row in dem.contributions_for_effect(summary["detectors"], summary["logicals"]):
+        for row in dem.contributions_for_effect(summary["detectors"], summary["dem_outputs"]):
             if row["source_type"] not in DIRECT_SOURCE_TYPES:
                 continue
             if "component_1_detectors" not in row or "component_2_detectors" not in row:
@@ -516,15 +516,15 @@ def test_structured_direct_component_rows_xor_back_to_effect(basis: str) -> None
     for summary, row in rows[:100]:
         left = {
             "detectors": row["component_1_detectors"],
-            "logicals": row["component_1_logicals"],
+            "dem_outputs": row["component_1_dem_outputs"],
         }
         right = {
             "detectors": row["component_2_detectors"],
-            "logicals": row["component_2_logicals"],
+            "dem_outputs": row["component_2_dem_outputs"],
         }
         dets, logs = xor_effect_rows(left, right)
         assert dets == summary["detectors"]
-        assert logs == summary["logicals"]
+        assert logs == summary["dem_outputs"]
 
 
 @pytest.mark.parametrize("basis", ["X", "Z"])
@@ -534,7 +534,7 @@ def test_structured_one_sided_direct_component_rows_are_exposed(basis: str) -> N
 
     rows = []
     for summary in dem.contribution_effect_summaries():
-        for row in dem.contributions_for_effect(summary["detectors"], summary["logicals"]):
+        for row in dem.contributions_for_effect(summary["detectors"], summary["dem_outputs"]):
             if row["source_type"] != "DirectOneSidedComponent":
                 continue
             rows.append((summary, row))
@@ -542,22 +542,22 @@ def test_structured_one_sided_direct_component_rows_are_exposed(basis: str) -> N
     assert rows
 
     for summary, row in rows[:100]:
-        left_non_empty = bool(row["component_1_detectors"] or row["component_1_logicals"])
-        right_non_empty = bool(row["component_2_detectors"] or row["component_2_logicals"])
+        left_non_empty = bool(row["component_1_detectors"] or row["component_1_dem_outputs"])
+        right_non_empty = bool(row["component_2_detectors"] or row["component_2_dem_outputs"])
         assert left_non_empty != right_non_empty
         assert row["direct_source_family"] == "TwoLocationOneSidedComponent"
         direct_dets, direct_logs = xor_effect_rows(
             {
                 "detectors": row["component_1_detectors"],
-                "logicals": row["component_1_logicals"],
+                "dem_outputs": row["component_1_dem_outputs"],
             },
             {
                 "detectors": row["component_2_detectors"],
-                "logicals": row["component_2_logicals"],
+                "dem_outputs": row["component_2_dem_outputs"],
             },
         )
         assert direct_dets == summary["detectors"]
-        assert direct_logs == summary["logicals"]
+        assert direct_logs == summary["dem_outputs"]
 
 
 @pytest.mark.parametrize("basis", ["X", "Z"])
@@ -569,7 +569,7 @@ def test_structured_direct_source_families_are_exposed_for_direct_rows(basis: st
     for summary in dem.contribution_effect_summaries():
         rows.extend(
             row
-            for row in dem.contributions_for_effect(summary["detectors"], summary["logicals"])
+            for row in dem.contributions_for_effect(summary["detectors"], summary["dem_outputs"])
             if row["source_type"] in DIRECT_SOURCE_TYPES
         )
 
@@ -587,17 +587,17 @@ def test_structured_source_tracking_summaries_partition_all_contributions(basis:
     summaries = dem.contribution_effect_summaries()
     assert summaries
 
-    effect_keys = {(tuple(summary["detectors"]), tuple(summary["logicals"])) for summary in summaries}
+    effect_keys = {(tuple(summary["detectors"]), tuple(summary["dem_outputs"])) for summary in summaries}
     assert len(effect_keys) == len(summaries)
 
     total_count = 0
     total_probability = 0.0
     for summary in summaries:
-        contributions = dem.contributions_for_effect(summary["detectors"], summary["logicals"])
+        contributions = dem.contributions_for_effect(summary["detectors"], summary["dem_outputs"])
         total_count += len(contributions)
         total_probability += sum(float(row["probability"]) for row in contributions)
         assert all(row["detectors"] == summary["detectors"] for row in contributions)
-        assert all(row["logicals"] == summary["logicals"] for row in contributions)
+        assert all(row["dem_outputs"] == summary["dem_outputs"] for row in contributions)
 
     assert total_count == dem.num_contributions
     assert total_count == sum(int(summary["num_contributions"]) for summary in summaries)
@@ -647,7 +647,7 @@ def test_structured_render_records_reproduce_render_summaries(basis: str) -> Non
     for row in render_records:
         key = (
             tuple(row["detectors"]),
-            tuple(row["logicals"]),
+            tuple(row["dem_outputs"]),
             str(row["rendered_targets"]),
         )
         bucket = regrouped.setdefault(
@@ -692,7 +692,7 @@ def test_structured_render_records_reproduce_render_summaries(basis: str) -> Non
     for summary in render_summaries:
         key = (
             tuple(summary["detectors"]),
-            tuple(summary["logicals"]),
+            tuple(summary["dem_outputs"]),
             str(summary["rendered_targets"]),
         )
         bucket = regrouped[key]

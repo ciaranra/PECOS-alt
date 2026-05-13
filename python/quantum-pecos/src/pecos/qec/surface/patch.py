@@ -152,7 +152,8 @@ def _get_stabilizer_schedule_metadata(stab: Stabilizer, patch: SurfacePatch) -> 
             stab.stab_type,
             stab.data_qubits,
             stab.is_boundary,
-            patch.distance,
+            patch.dx,
+            patch.dz,
         )
     ]
     rounds = [int(entry["round_0based"]) for entry in entries]
@@ -213,12 +214,11 @@ class PatchGeometry:
                 self.id_to_pos[idx] = pos
 
     def _generate_stabilizers(self) -> None:
-        d = min(self.dx, self.dz)
-
         if self.rotated:
-            x_supports = compute_rotated_x_stabilizers(d)
-            z_supports = compute_rotated_z_stabilizers(d)
+            x_supports = compute_rotated_x_stabilizers(self.dx, self.dz)
+            z_supports = compute_rotated_z_stabilizers(self.dx, self.dz)
         else:
+            d = min(self.dx, self.dz)
             x_supports = compute_x_stabilizer_supports(d)
             z_supports = compute_z_stabilizer_supports(d)
 
@@ -246,11 +246,9 @@ class PatchGeometry:
         self.num_z_stab = len(self.z_stabilizers)
 
     def _generate_logical_operators(self) -> None:
-        d = min(self.dx, self.dz)
-
         if self.rotated:
-            logical_x_qubits = get_rotated_logical_x(d)
-            logical_z_qubits = get_rotated_logical_z(d)
+            logical_x_qubits = get_rotated_logical_x(self.dx, self.dz)
+            logical_z_qubits = get_rotated_logical_z(self.dx, self.dz)
         else:
             logical_x_qubits = tuple(i * self.dz for i in range(self.dx))
             logical_z_qubits = tuple(range(self.dz))
@@ -301,27 +299,34 @@ class SurfacePatch:
     ) -> SurfacePatch:
         """Create a surface code patch.
 
+        Supports any positive dimensions:
+        - dx=dz=d (odd >= 3): standard surface code [[d^2, 1, d]]
+        - dx != dz: asymmetric surface code
+        - dx=1, dz=N: Z-repetition code [[N, 1, 1]] (N-1 X stabilizers)
+        - dx=N, dz=1: X-repetition code [[N, 1, 1]] (N-1 Z stabilizers)
+        - dx=dz=1: single physical qubit, no stabilizers
+
         Args:
-            distance: Symmetric code distance (must be odd >= 3).
-            dx: X distance for asymmetric codes.
-            dz: Z distance for asymmetric codes.
+            distance: Symmetric code distance (>= 1).
+            dx: X distance (rows) for asymmetric codes (>= 1).
+            dz: Z distance (columns) for asymmetric codes (>= 1).
             orientation: Patch boundary orientation.
             rotated: If True (default), use the rotated layout which is more
                 common and uses fewer qubits. If False, use the standard
                 (non-rotated) layout.
         """
         if distance is not None:
-            if distance < 3 or distance % 2 == 0:
-                msg = f"Distance must be odd >= 3, got {distance}"
+            if distance < 1:
+                msg = f"Distance must be >= 1, got {distance}"
                 raise ValueError(msg)
             dx = dx or distance
             dz = dz or distance
         elif dx is not None and dz is not None:
-            if dx < 3 or dx % 2 == 0:
-                msg = f"dx must be odd >= 3, got {dx}"
+            if dx < 1:
+                msg = f"dx must be >= 1, got {dx}"
                 raise ValueError(msg)
-            if dz < 3 or dz % 2 == 0:
-                msg = f"dz must be odd >= 3, got {dz}"
+            if dz < 1:
+                msg = f"dz must be >= 1, got {dz}"
                 raise ValueError(msg)
         else:
             msg = "Must provide either distance or both dx and dz"

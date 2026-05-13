@@ -108,8 +108,24 @@ pub enum GateType {
     /// Free/deallocate a qubit
     QFree = 136,
     Idle = 200,
+    /// Meta-gate: tracked-Pauli annotation for fault tracking.
+    ///
+    /// This gate carries a Pauli string but has no effect on quantum state.
+    /// Its position in the circuit determines which faults can flip the tracked Pauli
+    /// (only faults before this node are relevant). The propagator uses it as a
+    /// backward propagation start point.
+    ///
+    /// The Pauli string is encoded in `params`: each param encodes
+    /// `qubit * 4 + pauli_type` where `pauli_type` is 1=X, 2=Y, 3=Z.
+    TrackedPauliMeta = 210,
     MeasCrosstalkGlobalPayload = 218,
     MeasCrosstalkLocalPayload = 219,
+    /// Typed channel operation embedded in an annotated/noisy circuit.
+    ///
+    /// The concrete channel payload is stored on [`crate::Gate`], not in the
+    /// numeric gate type. Ideal circuits should not contain this gate type; it
+    /// represents compiled noise annotations or explicit channel placement.
+    Channel = 220,
     /// Custom/unrecognized gate type, with actual name stored in metadata
     Custom = 255,
 }
@@ -164,6 +180,8 @@ impl From<u8> for GateType {
             200 => GateType::Idle,
             218 => GateType::MeasCrosstalkGlobalPayload,
             219 => GateType::MeasCrosstalkLocalPayload,
+            210 => GateType::TrackedPauliMeta,
+            220 => GateType::Channel,
             255 => GateType::Custom,
             _ => panic!("Invalid gate type ID: {value}"),
         }
@@ -171,6 +189,15 @@ impl From<u8> for GateType {
 }
 
 impl GateType {
+    /// Returns true if this gate type is a meta-gate (annotation, not physical).
+    ///
+    /// Meta-gates have a position in the DAG but do not affect quantum state
+    /// and should not create fault locations or receive noise.
+    #[must_use]
+    pub const fn is_meta(self) -> bool {
+        matches!(self, GateType::TrackedPauliMeta)
+    }
+
     /// Returns the number of angle parameters this gate type requires
     ///
     /// # Returns
@@ -212,10 +239,12 @@ impl GateType {
             | GateType::MeasureFree
             | GateType::MeasCrosstalkGlobalPayload
             | GateType::MeasCrosstalkLocalPayload
+            | GateType::Channel
             | GateType::PZ
             | GateType::QAlloc
             | GateType::QFree
-            | GateType::Custom => 0,
+            | GateType::Custom
+            | GateType::TrackedPauliMeta => 0,
 
             // Gates with one parameter
             GateType::RX
@@ -277,7 +306,13 @@ impl GateType {
             | GateType::Idle
             | GateType::MeasCrosstalkGlobalPayload
             | GateType::MeasCrosstalkLocalPayload
-            | GateType::Custom => 1,
+            | GateType::Custom
+            // TrackedPauliMeta and Channel are variable-arity but return 1
+            // here because gate validation checks
+            // `is_multiple_of(quantum_arity())` and any count is a multiple
+            // of 1. The actual qubit count is in the gate.
+            | GateType::Channel
+            | GateType::TrackedPauliMeta => 1,
 
             // Two-qubit gates
             GateType::CX
@@ -301,6 +336,29 @@ impl GateType {
             // Three-qubit gates
             GateType::CCX => 3,
         }
+    }
+
+    /// Returns the number of gates represented by a command with `qubit_count`
+    /// qubits.
+    ///
+    /// Most gate commands are batchable: a command with 4 qubits and arity 2
+    /// represents two gates. Payload/meta gates are annotations, not physical
+    /// gates. Variable-arity custom/channel gates are counted as one
+    /// command-level gate.
+    #[must_use]
+    pub const fn num_gates(self, qubit_count: usize) -> usize {
+        if matches!(
+            self,
+            GateType::MeasCrosstalkGlobalPayload
+                | GateType::MeasCrosstalkLocalPayload
+                | GateType::TrackedPauliMeta
+        ) {
+            return 0;
+        }
+        if matches!(self, GateType::Custom | GateType::Channel) {
+            return 1;
+        }
+        qubit_count / self.quantum_arity()
     }
 
     /// Returns the number of angle parameters this gate type requires.
@@ -404,7 +462,9 @@ impl fmt::Display for GateType {
             GateType::Idle => write!(f, "Idle"),
             GateType::MeasCrosstalkGlobalPayload => write!(f, "MeasCrosstalkGlobalPayload"),
             GateType::MeasCrosstalkLocalPayload => write!(f, "MeasCrosstalkLocalPayload"),
+            GateType::Channel => write!(f, "Channel"),
             GateType::Custom => write!(f, "Custom"),
+            GateType::TrackedPauliMeta => write!(f, "TrackedPauli"),
         }
     }
 }
@@ -466,6 +526,8 @@ impl std::str::FromStr for GateType {
             "QALLOC" => Ok(GateType::QAlloc),
             "QFREE" => Ok(GateType::QFree),
             "IDLE" => Ok(GateType::Idle),
+            "TRACKEDPAULI" | "TRACKEDPAULIMETA" | "TP" => Ok(GateType::TrackedPauliMeta),
+            "CHANNEL" => Ok(GateType::Channel),
             _ => Err(format!("Unknown gate type: {s}")),
         }
     }
@@ -501,6 +563,7 @@ mod tests {
         assert_eq!(GateType::Idle as u8, 200);
         assert_eq!(GateType::MeasCrosstalkGlobalPayload as u8, 218);
         assert_eq!(GateType::MeasCrosstalkLocalPayload as u8, 219);
+        assert_eq!(GateType::Channel as u8, 220);
         assert_eq!(GateType::Custom as u8, 255);
 
         assert_eq!(GateType::from(0u8), GateType::I);
@@ -527,6 +590,7 @@ mod tests {
         assert_eq!(GateType::from(200u8), GateType::Idle);
         assert_eq!(GateType::from(218u8), GateType::MeasCrosstalkGlobalPayload);
         assert_eq!(GateType::from(219u8), GateType::MeasCrosstalkLocalPayload);
+        assert_eq!(GateType::from(220u8), GateType::Channel);
         assert_eq!(GateType::from(255u8), GateType::Custom);
     }
 
@@ -544,6 +608,7 @@ mod tests {
         assert_eq!(GateType::from_str("SXXdg").unwrap(), GateType::SXXdg);
         assert_eq!(GateType::from_str("SYY").unwrap(), GateType::SYY);
         assert_eq!(GateType::from_str("SYYdg").unwrap(), GateType::SYYdg);
+        assert_eq!(GateType::from_str("Channel").unwrap(), GateType::Channel);
         assert_eq!(GateType::from_str("SWAP").unwrap(), GateType::SWAP);
         assert_eq!(GateType::from_str("CCX").unwrap(), GateType::CCX);
 
@@ -590,6 +655,7 @@ mod tests {
         assert_eq!(GateType::MeasureFree.classical_arity(), 0);
         assert_eq!(GateType::MeasCrosstalkGlobalPayload.classical_arity(), 0);
         assert_eq!(GateType::MeasCrosstalkLocalPayload.classical_arity(), 0);
+        assert_eq!(GateType::Channel.classical_arity(), 0);
         assert_eq!(GateType::PZ.classical_arity(), 0);
         assert_eq!(GateType::QAlloc.classical_arity(), 0);
         assert_eq!(GateType::QFree.classical_arity(), 0);
@@ -626,12 +692,48 @@ mod tests {
         assert_eq!(GateType::Idle.quantum_arity(), 1);
         assert_eq!(GateType::MeasCrosstalkGlobalPayload.quantum_arity(), 1);
         assert_eq!(GateType::MeasCrosstalkLocalPayload.quantum_arity(), 1);
+        assert_eq!(GateType::Channel.quantum_arity(), 1);
 
         // Two-qubit gates
         assert_eq!(GateType::CX.quantum_arity(), 2);
         assert_eq!(GateType::SZZ.quantum_arity(), 2);
         assert_eq!(GateType::SZZdg.quantum_arity(), 2);
         assert_eq!(GateType::RZZ.quantum_arity(), 2);
+    }
+
+    #[test]
+    fn test_num_gates() {
+        assert_eq!(GateType::H.num_gates(4), 4);
+        assert_eq!(GateType::CX.num_gates(4), 2);
+        assert_eq!(GateType::CCX.num_gates(6), 2);
+        assert_eq!(GateType::Custom.num_gates(2), 1);
+        assert_eq!(GateType::Channel.num_gates(2), 1);
+        assert_eq!(GateType::TrackedPauliMeta.num_gates(3), 0);
+        assert_eq!(GateType::MeasCrosstalkGlobalPayload.num_gates(3), 0);
+        assert_eq!(GateType::MeasCrosstalkLocalPayload.num_gates(3), 0);
+    }
+
+    #[test]
+    fn test_tracked_pauli_meta_gate_type_contract() {
+        assert_eq!(
+            "TrackedPauli".parse::<GateType>().unwrap(),
+            GateType::TrackedPauliMeta
+        );
+        assert_eq!(
+            "TrackedPauliMeta".parse::<GateType>().unwrap(),
+            GateType::TrackedPauliMeta
+        );
+        assert_eq!(
+            "TP".parse::<GateType>().unwrap(),
+            GateType::TrackedPauliMeta
+        );
+
+        assert_eq!(GateType::TrackedPauliMeta.to_string(), "TrackedPauli");
+        assert_eq!(GateType::TrackedPauliMeta as u8, 210);
+        assert!(GateType::TrackedPauliMeta.is_meta());
+        assert_eq!(GateType::TrackedPauliMeta.classical_arity(), 0);
+        assert_eq!(GateType::TrackedPauliMeta.quantum_arity(), 1);
+        assert_eq!(GateType::TrackedPauliMeta.num_gates(4), 0);
     }
 
     #[test]

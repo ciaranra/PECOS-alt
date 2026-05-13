@@ -57,6 +57,15 @@ if TYPE_CHECKING:
     from pecos.qec.surface.patch import Stabilizer, SurfacePatch
 
 
+def _validate_probability(name: str, value: float) -> float:
+    """Return ``value`` as a float after validating it is a probability."""
+    probability = float(value)
+    if not 0.0 <= probability <= 1.0:
+        msg = f"{name} must be a probability in [0, 1], got {value!r}"
+        raise ValueError(msg)
+    return probability
+
+
 class DecoderType(str, Enum):
     """Available decoder backends."""
 
@@ -70,32 +79,53 @@ class DecoderType(str, Enum):
 
 @dataclass
 class NoiseModel:
-    """Depolarizing noise parameters for surface code simulation.
+    """Circuit-level noise parameters for QEC simulation.
 
-    These parameters match the DepolarizingErrorModel in selene_sim.
+    Matches the Rust ``NoiseConfig`` type. All parameters are optional
+    beyond the four base rates.
 
     Attributes:
-        p1: Single-qubit gate error rate
-        p2: Two-qubit gate error rate
-        p_meas: Measurement error rate
-        p_init: Initialization error rate
+        p1: Single-qubit gate error rate.
+        p2: Two-qubit gate error rate.
+        p_meas: Measurement error rate.
+        p_prep: Initialization error rate.
+        p_idle: Idle noise rate per time unit (uniform depolarizing).
+        t1: T1 relaxation time for idle noise (same units as idle duration).
+        t2: T2 dephasing time (must satisfy t2 <= 2*t1).
     """
 
-    p1: float = 0.0  # Single-qubit gate error rate
-    p2: float = 0.0  # Two-qubit gate error rate
-    p_meas: float = 0.0  # Measurement error rate
-    p_init: float = 0.0  # Initialization error rate
+    p1: float = 0.0
+    p2: float = 0.0
+    p_meas: float = 0.0
+    p_prep: float = 0.0
+    p_idle: float | None = None
+    t1: float | None = None
+    t2: float | None = None
+
+    @staticmethod
+    def uniform(physical_error_rate: float) -> NoiseModel:
+        """Create a uniform circuit-level noise model from one physical error rate."""
+        p = _validate_probability("physical_error_rate", physical_error_rate)
+        return NoiseModel(p1=p, p2=p, p_meas=p, p_prep=p)
 
     @property
     def is_noiseless(self) -> bool:
         """True if all error rates are zero."""
-        return self.p1 == 0.0 and self.p2 == 0.0 and self.p_meas == 0.0 and self.p_init == 0.0
+        return (
+            self.p1 == 0.0
+            and self.p2 == 0.0
+            and self.p_meas == 0.0
+            and self.p_prep == 0.0
+            and (self.p_idle is None or self.p_idle == 0.0)
+        )
 
     @property
     def physical_error_rate(self) -> float:
-        """Approximate combined physical error rate (for DEM weights)."""
-        # Use maximum as a conservative estimate
-        return max(self.p1, self.p2, self.p_meas, self.p_init)
+        """Approximate combined physical error rate."""
+        rates = [self.p1, self.p2, self.p_meas, self.p_prep]
+        if self.p_idle is not None:
+            rates.append(self.p_idle)
+        return max(rates)
 
 
 @dataclass
@@ -518,6 +548,9 @@ def _replay_qis_trace_into_tick_circuit(operations: list[dict[str, Any]]) -> Any
             msg = f"Unsupported traced QIS quantum op {op_name!r}"
             raise ValueError(msg)
 
+    # Compact: ASAP-schedule gates into minimal ticks
+    tick_circuit.compact_ticks()
+
     return tick_circuit
 
 
@@ -538,12 +571,38 @@ def _gate_triples(qubits: list[int], gate_type: str) -> list[tuple[int, int, int
 
 
 def _replay_lowered_qis_trace_into_tick_circuit(chunks: list[dict[str, Any]]) -> Any:
-    """Replay lowered post-Selene ByteMessage gate batches into a TickCircuit."""
+    """Replay lowered post-Selene ByteMessage gate batches into a TickCircuit.
+
+    The lowered trace emits gates one at a time. We replay each into its own
+    tick, then compact (ASAP schedule) so that gates on disjoint qubits share
+    a tick --- matching the parallel structure of the abstract circuit.
+
+    MeasIds flow from Guppy result() objects: AllocateResult IDs from the
+    operations stream are stamped on MZ gates via mz_with_ids().
+    """
     from pecos_rslib.quantum import TickCircuit
 
     tick_circuit = TickCircuit()
 
     for chunk in chunks:
+        # Extract AllocateResult ID → MZ qubit mapping from the operations stream.
+        # Each AllocateResult(id=N) is followed by Quantum.Measure([qubit, slot]).
+        # This gives us the MeasId to stamp on each MZ gate.
+        meas_id_queue: list[tuple[int, int]] = []  # (qubit, meas_id) pairs
+        last_alloc_id: int | None = None
+        for op in chunk.get("operations") or []:
+            op_dict = dict(op)
+            if "AllocateResult" in op_dict:
+                last_alloc_id = int(op_dict["AllocateResult"]["id"])
+            elif "Quantum" in op_dict:
+                q_op = op_dict["Quantum"]
+                if "Measure" in q_op and last_alloc_id is not None:
+                    qubit = int(q_op["Measure"][0])
+                    meas_id_queue.append((qubit, last_alloc_id))
+                    last_alloc_id = None
+
+        meas_id_idx = 0  # next MeasId to assign
+
         for gate in chunk.get("lowered_quantum_ops") or []:
             gate_type = str(gate["gate_type"])
             qubits = [int(q) for q in gate.get("qubits", [])]
@@ -569,7 +628,26 @@ def _replay_lowered_qis_trace_into_tick_circuit(chunks: list[dict[str, Any]]) ->
             elif gate_type == "PZ":
                 tick.pz(qubits)
             elif gate_type == "MZ":
-                tick.mz(qubits)
+                # Stamp MeasIds from the AllocateResult stream
+                meas_ids = []
+                for q in qubits:
+                    if meas_id_idx < len(meas_id_queue):
+                        expected_q, mid = meas_id_queue[meas_id_idx]
+                        if expected_q == q:
+                            meas_ids.append(mid)
+                            meas_id_idx += 1
+                        else:
+                            # Qubit mismatch — fall back to auto-assign
+                            meas_ids = []
+                            break
+                    else:
+                        meas_ids = []
+                        break
+
+                if meas_ids:
+                    tick.mz_with_ids(qubits, meas_ids)
+                else:
+                    tick.mz(qubits)
             elif gate_type == "RX":
                 tick.rx(angles[0], qubits)
             elif gate_type == "RY":
@@ -590,6 +668,8 @@ def _replay_lowered_qis_trace_into_tick_circuit(chunks: list[dict[str, Any]]) ->
                 tick.crz(angles[0], _gate_pairs(qubits, gate_type))
             elif gate_type == "SZZ":
                 tick.szz(_gate_pairs(qubits, gate_type))
+            elif gate_type == "SZZdg":
+                tick.szzdg(_gate_pairs(qubits, gate_type))
             elif gate_type == "RZZ":
                 tick.rzz(angles[0], _gate_pairs(qubits, gate_type))
             elif gate_type == "CCX":
@@ -597,6 +677,9 @@ def _replay_lowered_qis_trace_into_tick_circuit(chunks: list[dict[str, Any]]) ->
             else:
                 msg = f"Unsupported lowered traced gate {gate_type!r}"
                 raise ValueError(msg)
+
+    # Compact: ASAP-schedule gates into minimal ticks
+    tick_circuit.compact_ticks()
 
     return tick_circuit
 
@@ -679,12 +762,84 @@ def _build_surface_tick_circuit_for_native_model(
     return traced_tc
 
 
+def build_memory_circuit(
+    *,
+    rounds: int,
+    distance: int | None = None,
+    patch: SurfacePatch | None = None,
+    basis: str = "Z",
+    ancilla_budget: int | None = None,
+    circuit_source: Literal["abstract", "traced_qis"] = "abstract",
+) -> Any:
+    """Build the standard surface-code memory ``TickCircuit``.
+
+    This is the public, friendly entry point for the circuit used by PECOS's
+    native DEM, sampler, and decoder helpers.
+
+    Args:
+        rounds: Number of syndrome-extraction rounds.
+        distance: Rotated surface-code distance. Provide either ``distance``
+            or ``patch``.
+        patch: Explicit surface-code patch. Provide either ``patch`` or
+            ``distance``.
+        basis: Memory basis, ``"Z"`` or ``"X"``.
+        ancilla_budget: Optional cap on simultaneously live ancillas.
+        circuit_source: ``"abstract"`` for the native surface builder or
+            ``"traced_qis"`` for the lowered traced QIS gate stream.
+
+    Returns:
+        A Rust-backed ``TickCircuit`` with detector and observable metadata.
+
+    Example:
+        >>> from pecos.qec.surface import build_memory_circuit
+        >>> tc = build_memory_circuit(distance=3, rounds=3, basis="Z")
+        >>> int(tc.get_meta("num_measurements")) > 0
+        True
+    """
+    from pecos.qec.surface.patch import SurfacePatch
+
+    if rounds < 1:
+        msg = f"rounds must be >= 1, got {rounds}"
+        raise ValueError(msg)
+    if patch is None:
+        if distance is None:
+            msg = "build_memory_circuit requires either distance=... or patch=..."
+            raise ValueError(msg)
+        patch = SurfacePatch.create(distance=distance)
+    elif distance is not None:
+        msg = "build_memory_circuit accepts either distance=... or patch=..., not both"
+        raise ValueError(msg)
+
+    return _build_surface_tick_circuit_for_native_model(
+        patch,
+        rounds,
+        basis,
+        ancilla_budget=ancilla_budget,
+        circuit_source=circuit_source,
+    )
+
+
 def _can_use_cached_surface_topology(
     *,
     ancilla_budget: int | None,
 ) -> bool:
     """Return True when we can safely use the shared native topology cache."""
     return ancilla_budget is None
+
+
+def _uses_dedicated_idle_noise(
+    *,
+    p_idle: float | None,
+    t1: float | None,
+    t2: float | None,
+) -> bool:
+    """Return True when noise parameters require explicit idle locations."""
+    return (p_idle is not None and p_idle > 0.0) or (t1 is not None and t2 is not None)
+
+
+def _noise_uses_dedicated_idle_noise(noise: NoiseModel) -> bool:
+    """Return True when this noise model requires explicit idle locations."""
+    return _uses_dedicated_idle_noise(p_idle=noise.p_idle, t1=noise.t1, t2=noise.t2)
 
 
 @cache
@@ -694,6 +849,7 @@ def _cached_surface_native_topology(
     basis: str,
     ancilla_budget: int | None,
     circuit_source: Literal["abstract", "traced_qis"],
+    include_idle_gates: bool,
 ) -> _CachedNativeSurfaceTopology:
     """Cache topology-only native analysis shared across noise parameters."""
     import json
@@ -709,6 +865,12 @@ def _cached_surface_native_topology(
         ancilla_budget=ancilla_budget,
         circuit_source=circuit_source,
     )
+    if include_idle_gates:
+        # Insert idle gates only when the requested noise model includes a
+        # dedicated idle channel. Otherwise inserted idle gates receive ordinary
+        # one-qubit gate noise and change the explicit circuit-level DEM.
+        tc.fill_idle_gates()
+
     dag = tc.to_dag_circuit()
     analyzer = DagFaultAnalyzer(dag)
     influence_map = analyzer.build_influence_map()
@@ -740,7 +902,7 @@ def _dem_string_from_cached_surface_topology(
 
     dem = (
         DemBuilder(topology.influence_map)
-        .with_noise(noise.p1, noise.p2, noise.p_meas, noise.p_init)
+        .with_noise(noise.p1, noise.p2, noise.p_meas, noise.p_prep, p_idle=noise.p_idle, t1=noise.t1, t2=noise.t2)
         .with_num_measurements(topology.num_measurements)
         .with_measurement_order(list(topology.measurement_order))
         .with_detectors_json(topology.detectors_json)
@@ -760,20 +922,25 @@ def _cached_surface_native_dem_string(
     p1: float,
     p2: float,
     p_meas: float,
-    p_init: float,
+    p_prep: float,
     decompose_errors: bool,
+    p_idle: float | None = None,
+    t1: float | None = None,
+    t2: float | None = None,
 ) -> str:
     """Cache native DEM strings across callers for one topology + noise tuple."""
+    include_idle_gates = _uses_dedicated_idle_noise(p_idle=p_idle, t1=t1, t2=t2)
     topology = _cached_surface_native_topology(
         patch_key,
         num_rounds,
         basis,
         ancilla_budget,
         circuit_source,
+        include_idle_gates,
     )
     return _dem_string_from_cached_surface_topology(
         topology,
-        NoiseModel(p1=p1, p2=p2, p_meas=p_meas, p_init=p_init),
+        NoiseModel(p1=p1, p2=p2, p_meas=p_meas, p_prep=p_prep, p_idle=p_idle, t1=t1, t2=t2),
         decompose_errors=decompose_errors,
     )
 
@@ -790,10 +957,14 @@ def _build_native_sampler_from_cached_surface_topology(
     topology: _CachedNativeSurfaceTopology,
     noise: NoiseModel,
     *,
-    sampling_model: Literal["dem", "influence_dem", "mnm"] = "dem",
+    sampling_model: Literal[
+        "dem",
+        "influence_dem",
+        "mnm",
+    ] = "dem",  # "mnm" accepted for compat, mapped to "influence_dem",
 ) -> NativeSampler:
     """Construct a native sampler from cached topology-only analysis."""
-    from pecos.qec import DemSamplerBuilder, MemBuilder, ParsedDem
+    from pecos.qec import DemSampler, ParsedDem
 
     if sampling_model == "dem":
         dem_str = _dem_string_from_cached_surface_topology(
@@ -802,20 +973,25 @@ def _build_native_sampler_from_cached_surface_topology(
             decompose_errors=True,
         )
         sampler = ParsedDem.from_string(dem_str).to_dem_sampler()
-    elif sampling_model == "influence_dem":
-        sampler = (
-            DemSamplerBuilder(topology.influence_map)
-            .with_noise(noise.p1, noise.p2, noise.p_meas, noise.p_init)
-            .with_detectors_json(topology.detectors_json)
-            .with_observables_json(topology.observables_json)
-            .with_measurement_order(list(topology.measurement_order))
-            .build()
+    elif sampling_model in ("influence_dem", "mnm"):
+        import json
+
+        det_records = [d["records"] for d in json.loads(topology.detectors_json)]
+        obs_records = [o["records"] for o in json.loads(topology.observables_json)] if topology.observables_json else []
+        sampler = DemSampler.with_detectors(
+            topology.influence_map,
+            det_records,
+            obs_records,
+            noise.p1,
+            noise.p2,
+            noise.p_meas,
+            noise.p_prep,
+            p_idle=noise.p_idle,
+            t1=noise.t1,
+            t2=noise.t2,
         )
-    elif sampling_model == "mnm":
-        builder = MemBuilder(topology.influence_map)
-        builder.with_noise(noise.p1, noise.p2, noise.p_meas, noise.p_init)
-        builder.with_measurement_order(list(topology.measurement_order))
-        sampler = builder.build()
+        # Remap sampling_model for NativeSampler dispatch
+        sampling_model = "influence_dem"
     else:
         msg = f"Unknown native sampling_model {sampling_model!r}"
         raise ValueError(msg)
@@ -834,13 +1010,20 @@ def _build_native_sampler_from_tick_circuit(
     tc: Any,
     noise: NoiseModel,
     *,
-    sampling_model: Literal["dem", "influence_dem", "mnm"] = "dem",
+    sampling_model: Literal[
+        "dem",
+        "influence_dem",
+        "mnm",
+    ] = "dem",  # "mnm" accepted for compat, mapped to "influence_dem",
 ) -> NativeSampler:
     """Construct a native sampler directly from a TickCircuit."""
     import json
 
-    from pecos.qec import DagFaultAnalyzer, DemSamplerBuilder, MemBuilder, ParsedDem
-    from pecos.qec.surface.circuit_builder import _extract_measurement_order, generate_dem_from_tick_circuit
+    from pecos.qec import DagFaultAnalyzer, DemSampler, ParsedDem
+    from pecos.qec.surface.circuit_builder import generate_dem_from_tick_circuit
+
+    if _noise_uses_dedicated_idle_noise(noise):
+        tc.fill_idle_gates()
 
     dag = tc.to_dag_circuit()
     analyzer = DagFaultAnalyzer(dag)
@@ -848,8 +1031,6 @@ def _build_native_sampler_from_tick_circuit(
 
     detectors_json = tc.get_meta("detectors") or "[]"
     observables_json = tc.get_meta("observables") or "[]"
-    measurement_order = _extract_measurement_order(tc)
-
     num_detectors = len(json.loads(detectors_json)) if detectors_json else 0
     num_observables = len(json.loads(observables_json)) if observables_json else 0
 
@@ -859,24 +1040,40 @@ def _build_native_sampler_from_tick_circuit(
             p1=noise.p1,
             p2=noise.p2,
             p_meas=noise.p_meas,
-            p_init=noise.p_init,
+            p_prep=noise.p_prep,
+            p_idle=noise.p_idle,
+            t1=noise.t1,
+            t2=noise.t2,
             decompose_errors=True,
         )
         sampler = ParsedDem.from_string(dem_str).to_dem_sampler()
-    elif sampling_model == "influence_dem":
-        sampler = (
-            DemSamplerBuilder(influence_map)
-            .with_noise(noise.p1, noise.p2, noise.p_meas, noise.p_init)
-            .with_detectors_json(detectors_json)
-            .with_observables_json(observables_json)
-            .with_measurement_order(measurement_order)
-            .build()
+    elif sampling_model in ("influence_dem", "mnm"):
+        det_records = [d["records"] for d in json.loads(detectors_json)]
+        obs_records = [o["records"] for o in json.loads(observables_json)] if observables_json else []
+        sampler = DemSampler.with_detectors(
+            influence_map,
+            det_records,
+            obs_records,
+            noise.p1,
+            noise.p2,
+            noise.p_meas,
+            noise.p_prep,
+            p_idle=noise.p_idle,
+            t1=noise.t1,
+            t2=noise.t2,
         )
-    elif sampling_model == "mnm":
-        builder = MemBuilder(influence_map)
-        builder.with_noise(noise.p1, noise.p2, noise.p_meas, noise.p_init)
-        builder.with_measurement_order(measurement_order)
-        sampler = builder.build()
+        sampling_model = "influence_dem"
+    elif sampling_model == "from_circuit":
+        # Direct from_circuit path: uses DagCircuit annotations and any
+        # explicit idle locations inserted above for dedicated idle noise.
+        sampler = DemSampler.from_circuit(
+            dag,
+            p1=noise.p1,
+            p2=noise.p2,
+            p_meas=noise.p_meas,
+            p_prep=noise.p_prep,
+            p_idle=noise.p_idle,
+        )
     else:
         msg = f"Unknown native sampling_model {sampling_model!r}"
         raise ValueError(msg)
@@ -952,8 +1149,11 @@ def generate_circuit_level_dem_from_builder(
             noise.p1,
             noise.p2,
             noise.p_meas,
-            noise.p_init,
+            noise.p_prep,
             decompose_errors=decompose_errors,
+            p_idle=noise.p_idle,
+            t1=noise.t1,
+            t2=noise.t2,
         )
 
     tc = _build_surface_tick_circuit_for_native_model(
@@ -963,12 +1163,17 @@ def generate_circuit_level_dem_from_builder(
         ancilla_budget=ancilla_budget,
         circuit_source=circuit_source,
     )
+    if _noise_uses_dedicated_idle_noise(noise):
+        tc.fill_idle_gates()
     return generate_dem_from_tick_circuit(
         tc,
         p1=noise.p1,
         p2=noise.p2,
         p_meas=noise.p_meas,
-        p_init=noise.p_init,
+        p_prep=noise.p_prep,
+        p_idle=noise.p_idle,
+        t1=noise.t1,
+        t2=noise.t2,
         decompose_errors=decompose_errors,
     )
 
@@ -1020,7 +1225,7 @@ def generate_circuit_level_dem(
         rounds=num_rounds,
         after_clifford_depolarization=noise.p2 if noise.p2 > 0 else 0.0,
         before_measure_flip_probability=noise.p_meas if noise.p_meas > 0 else 0.0,
-        after_reset_flip_probability=noise.p_init if noise.p_init > 0 else 0.0,
+        after_reset_flip_probability=noise.p_prep if noise.p_prep > 0 else 0.0,
     )
 
     # Generate DEM from circuit
@@ -2157,6 +2362,67 @@ class SurfaceDecoder:
 
         return is_logical_error, result
 
+    def _get_css_uf_decoder(self) -> Any:
+        """Get or create the UIUF CSS UF decoder."""
+        if not hasattr(self, "_css_uf_decoder") or self._css_uf_decoder is None:
+            from pecos_rslib.qec import CssUfDecoder
+
+            x_dem = self.get_dem("X", circuit_level=True)
+            z_dem = self.get_dem("Z", circuit_level=True)
+            # Strip logical_observable lines (not needed for matching graph).
+            x_dem = "\n".join(line for line in x_dem.split("\n") if not line.startswith("logical_observable"))
+            z_dem = "\n".join(line for line in z_dem.split("\n") if not line.startswith("logical_observable"))
+            self._css_uf_decoder = CssUfDecoder(x_dem, z_dem)
+        return self._css_uf_decoder
+
+    def decode_memory_z_uiuf(
+        self,
+        synx_list: list,
+        synz_list: list,
+        final: NDArray[np.uint8] | list[int],
+    ) -> tuple[bool, DecodingResult]:
+        """Decode Z-basis memory using UIUF (joint X/Z intersection).
+
+        Like ``decode_memory_z`` but uses both X and Z syndromes jointly
+        to identify Y errors and improve accuracy.
+
+        Args:
+            synx_list: List of X syndrome arrays, one per round
+            synz_list: List of Z syndrome arrays, one per round
+            final: Final data qubit measurements
+
+        Returns:
+            (is_logical_error, decoding_result)
+        """
+        import numpy as np
+
+        geom = self.patch.geometry
+        logical_z_qubits = geom.logical_z.data_qubits if geom.logical_z else ()
+        final_parity = sum(final[q] for q in logical_z_qubits) % 2
+
+        # Compute detection events for both bases.
+        x_events = self._compute_dem_detection_events_x(synx_list, synz_list, final)
+        z_events = self._compute_dem_detection_events_z(synx_list, synz_list, final)
+        x_flat = x_events.ravel().astype(np.uint8)
+        z_flat = z_events.ravel().astype(np.uint8)
+
+        # Joint decode via UIUF.
+        decoder = self._get_css_uf_decoder()
+        x_obs, z_obs = decoder.decode_css(bytes(x_flat), bytes(z_flat))
+
+        # For Z-basis memory, we care about the Z observable (L0).
+        predicted_obs = z_obs & 1
+        corrected_parity = (final_parity + predicted_obs) % 2
+        is_logical_error = corrected_parity != 0
+
+        return is_logical_error, DecodingResult(
+            x_correction=np.zeros(self.patch.num_data, dtype=np.uint8),
+            z_correction=np.zeros(self.patch.num_data, dtype=np.uint8),
+            logical_x_flip=bool(x_obs & 1),
+            logical_z_flip=bool(predicted_obs),
+            decoding_weight=0.0,
+        )
+
 
 @dataclass
 class SimulationResult:
@@ -2185,6 +2451,107 @@ class SimulationResult:
     raw_error_rate: float
     decoded: bool
     decoder_type: str | None = None
+
+
+def _memory_noise_model(
+    physical_error_rate: float | None,
+    noise_model: NoiseModel | None,
+) -> NoiseModel:
+    """Resolve the surface-memory noise inputs into an explicit NoiseModel."""
+    if noise_model is not None:
+        if physical_error_rate is not None:
+            msg = "pass either physical_error_rate or noise_model, not both"
+            raise ValueError(msg)
+        return noise_model
+    p = 0.001 if physical_error_rate is None else physical_error_rate
+    return NoiseModel.uniform(p)
+
+
+def surface_code_memory(
+    *,
+    distance: int = 3,
+    physical_error_rate: float | None = None,
+    noise_model: NoiseModel | None = None,
+    shots: int = 1000,
+    rounds: int | None = None,
+    basis: str = "Z",
+    decoder_type: str = "pymatching",
+    seed: int | None = None,
+    decode: bool = True,
+    circuit_source: Literal["abstract", "traced_qis"] = "abstract",
+    ancilla_budget: int | None = None,
+) -> SimulationResult:
+    """Run the recommended native surface-code memory workflow.
+
+    This helper keeps the quick-start path short while using PECOS's Rust-backed
+    circuit-level DEM sampler and decoder machinery internally.
+
+    Args:
+        distance: Rotated surface-code distance.
+        physical_error_rate: Uniform physical error rate used for one-qubit
+            gates, two-qubit gates, measurements, and preparation. Defaults to
+            ``0.001`` when ``noise_model`` is not provided.
+        noise_model: Explicit circuit-level noise model. Mutually exclusive
+            with ``physical_error_rate``.
+        shots: Number of Monte Carlo shots.
+        rounds: Number of syndrome-extraction rounds. Defaults to ``distance``.
+        basis: Memory basis, ``"Z"`` or ``"X"``.
+        decoder_type: Decoder backend passed to ``SampleBatch.decode_count``.
+        seed: Optional sampler seed.
+        decode: If false, report the raw observable-flip rate.
+        circuit_source: ``"abstract"`` or ``"traced_qis"`` circuit source.
+        ancilla_budget: Optional cap on simultaneously live ancillas.
+
+    Returns:
+        ``SimulationResult`` with logical and raw error counts/rates.
+
+    Example:
+        >>> from pecos.qec.surface import surface_code_memory
+        >>> result = surface_code_memory(distance=3, physical_error_rate=0.0, shots=4, rounds=1)
+        >>> result.logical_error_rate
+        0.0
+    """
+    from pecos.qec import ParsedDem
+    from pecos.qec.surface.patch import SurfacePatch
+
+    if distance < 1:
+        msg = f"distance must be >= 1, got {distance}"
+        raise ValueError(msg)
+    if shots < 0:
+        msg = f"shots must be >= 0, got {shots}"
+        raise ValueError(msg)
+    num_rounds = distance if rounds is None else rounds
+    if num_rounds < 1:
+        msg = f"rounds must be >= 1, got {num_rounds}"
+        raise ValueError(msg)
+
+    noise_model = _memory_noise_model(physical_error_rate, noise_model)
+    patch = SurfacePatch.create(distance=distance)
+    dem = generate_circuit_level_dem_from_builder(
+        patch,
+        num_rounds=num_rounds,
+        noise=noise_model,
+        basis=basis,
+        decompose_errors=True,
+        ancilla_budget=ancilla_budget,
+        circuit_source=circuit_source,
+    )
+    batch = ParsedDem.from_string(dem).to_dem_sampler().generate_samples(shots, seed)
+    num_raw_errors = sum(1 for shot in range(shots) if batch.get_observable_mask(shot) != 0)
+    num_logical_errors = batch.decode_count(dem, decoder_type) if decode else num_raw_errors
+
+    return SimulationResult(
+        distance=distance,
+        num_shots=shots,
+        num_rounds=num_rounds,
+        basis=basis,
+        num_logical_errors=num_logical_errors,
+        num_raw_errors=num_raw_errors,
+        logical_error_rate=num_logical_errors / shots if shots else 0.0,
+        raw_error_rate=num_raw_errors / shots if shots else 0.0,
+        decoded=decode,
+        decoder_type=decoder_type if decode else None,
+    )
 
 
 def run_noisy_memory_experiment(
@@ -2219,7 +2586,7 @@ def run_noisy_memory_experiment(
 
     Example:
         >>> from pecos.qec.surface import run_noisy_memory_experiment, NoiseModel
-        >>> noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_init=0.001)
+        >>> noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_prep=0.001)
         >>> result = run_noisy_memory_experiment(
         ...     distance=3,
         ...     num_rounds=3,
@@ -2249,11 +2616,13 @@ def run_noisy_memory_experiment(
     # Create decoder if needed
     decoder = None
     if decode:
+        # UIUF uses pymatching-type DEMs internally (decoded via CssUfDecoder).
+        dt = "pymatching" if decoder_type == "pecos_uf_uiuf" else decoder_type
         decoder = SurfaceDecoder(
             patch,
             num_rounds=num_rounds,
             noise=noise,
-            decoder_type=decoder_type,
+            decoder_type=dt,
         )
 
     # Build and compile circuit
@@ -2267,7 +2636,7 @@ def run_noisy_memory_experiment(
         p_1q=noise.p1,
         p_2q=noise.p2,
         p_meas=noise.p_meas,
-        p_init=noise.p_init,
+        p_init=noise.p_prep,
     )
 
     # Run shots
@@ -2308,7 +2677,9 @@ def run_noisy_memory_experiment(
             final_arr = np.array(final, dtype=np.uint8)
 
             # Decode based on basis
-            if basis.upper() == "Z":
+            if decoder_type == "pecos_uf_uiuf" and basis.upper() == "Z":
+                is_error, _ = decoder.decode_memory_z_uiuf(synx_list, synz_list, final_arr)
+            elif basis.upper() == "Z":
                 is_error, _ = decoder.decode_memory_z(synx_list, synz_list, final_arr)
             else:
                 is_error, _ = decoder.decode_memory_x(synx_list, synz_list, final_arr)
@@ -2350,8 +2721,7 @@ class NativeSampler:
 
     Two sampling backends are available:
     - `dem` (default): sample the generated decomposed DEM via `ParsedDem`
-    - `influence_dem`: sample directly from the influence-map detector mechanisms
-    - `mnm`: samples measurement outcomes first via `MeasurementNoiseModel`
+    - `influence_dem`: sample directly from the influence-map via `DemSampler`
 
     Attributes:
         sampler: The underlying Rust sampler object
@@ -2367,7 +2737,9 @@ class NativeSampler:
     observables_json: str
     num_detectors: int
     num_observables: int
-    sampling_model: Literal["dem", "influence_dem", "mnm"] = "dem"
+    sampling_model: Literal["dem", "influence_dem", "mnm"] = (
+        "dem"  # "mnm" accepted for compat, mapped to "influence_dem"
+    )
 
     def sample(
         self,
@@ -2387,18 +2759,7 @@ class NativeSampler:
             - detection_events: shape (num_shots, num_detectors)
             - observable_flips: shape (num_shots, num_observables)
         """
-        if self.sampling_model in ("dem", "influence_dem"):
-            det_events, obs_flips = self.sampler.sample_batch(num_shots, seed)
-        elif self.sampling_model == "mnm":
-            det_events, obs_flips = self.sampler.sample_batch_for_decoding(
-                num_shots,
-                self.detectors_json,
-                self.observables_json,
-                seed,
-            )
-        else:
-            msg = f"Unknown native sampling_model {self.sampling_model!r}"
-            raise ValueError(msg)
+        det_events, obs_flips = self.sampler.sample_batch(num_shots, seed)
         return np.array(det_events, dtype=bool), np.array(obs_flips, dtype=bool)
 
 
@@ -2409,7 +2770,11 @@ def build_native_sampler(
     basis: str = "Z",
     ancilla_budget: int | None = None,
     circuit_source: Literal["abstract", "traced_qis"] = "abstract",
-    sampling_model: Literal["dem", "influence_dem", "mnm"] = "dem",
+    sampling_model: Literal[
+        "dem",
+        "influence_dem",
+        "mnm",
+    ] = "dem",  # "mnm" accepted for compat, mapped to "influence_dem",
 ) -> NativeSampler:
     """Build a PECOS native sampler for threshold estimation.
 
@@ -2420,10 +2785,8 @@ def build_native_sampler(
     The pipeline is:
     - `sampling_model="dem"`:
       TickCircuit -> DemBuilder -> ParsedDem -> DemSampler
-    - `sampling_model="influence_dem"`:
-      TickCircuit -> DagCircuit -> DagFaultAnalyzer -> InfluenceMap -> direct mechanism sampler
-    - `sampling_model="mnm"`:
-      TickCircuit -> DagCircuit -> DagFaultAnalyzer -> InfluenceMap -> MeasurementNoiseModel -> Sampler
+    - `sampling_model="influence_dem"` (or `"mnm"` for compat):
+      TickCircuit -> DagCircuit -> DagFaultAnalyzer -> InfluenceMap -> DemSampler (with detector defs)
 
     Args:
         patch: Surface code patch with geometry
@@ -2438,9 +2801,9 @@ def build_native_sampler(
             before native PECOS fault analysis.
         sampling_model: Which native sampling backend to use. ``"dem"``
             samples the generated decomposed DEM and is the default.
-            ``"influence_dem"`` uses the older direct influence-map sampler for
-            debugging. ``"mnm"`` preserves the measurement-noise-model
-            approximation.
+            ``"influence_dem"`` uses the influence-map-based DemSampler with
+            detector definitions. ``"mnm"`` is accepted for compatibility
+            and maps to ``"influence_dem"``.
 
     Returns:
         NativeSampler that can generate samples for threshold estimation
@@ -2461,6 +2824,7 @@ def build_native_sampler(
             basis,
             ancilla_budget,
             circuit_source,
+            _noise_uses_dedicated_idle_noise(noise),
         )
         if sampling_model == "dem":
             dem_str = _cached_surface_native_dem_string(
@@ -2472,8 +2836,11 @@ def build_native_sampler(
                 noise.p1,
                 noise.p2,
                 noise.p_meas,
-                noise.p_init,
+                noise.p_prep,
                 decompose_errors=True,
+                p_idle=noise.p_idle,
+                t1=noise.t1,
+                t2=noise.t2,
             )
             sampler = _cached_parsed_dem(dem_str).to_dem_sampler()
             return NativeSampler(

@@ -21,9 +21,10 @@ test files. This allows running doc tests with standard pytest commands:
 Supported markers in markdown:
     <!--skip--> or <!--skip: reason-->     - Skip this block
     <!--skip-if-no-cuda-->                 - Skip if CUDA+cupy not available
-    <!--skip-if-no-cuda-rust-->            - Skip if CUDA Rust bindings not available
+    <!--skip-if-no-cuda-rust-->            - Skip if CUDA Rust simulators cannot initialize
     <!--expect-error: pattern-->           - Expect error matching regex pattern
     <!--expect-output: text-->             - Expect stdout to contain text
+    <!--requires-module: package[, ...]--> - Skip if Python module is unavailable
     <!--test-name: my_test-->              - Name the test function
     <!--mark.slow-->                       - Add @pytest.mark.slow
     <!--continuation-->                    - Continue from previous block's state
@@ -69,6 +70,9 @@ class CodeBlock:
     skip_if_no_cuda_rust: bool = False
     expect_error: str | None = None
     expect_output: str | None = None
+    expect_output_block: str | None = None
+    expect_output_mode: str = "exact"  # "exact" or "ellipsis"
+    required_modules: list[str] = field(default_factory=list)
     test_name: str | None = None
     marks: list[str] = field(default_factory=list)
     is_continuation: bool = False
@@ -196,6 +200,9 @@ def _parse_marker_comment(comment: str) -> dict:
         "skip_if_no_cuda_rust": False,
         "expect_error": None,
         "expect_output": None,
+        "expect_output_block": False,
+        "expect_output_mode": "exact",
+        "required_modules": [],
         "test_name": None,
         "marks": [],
         "is_continuation": False,
@@ -239,11 +246,23 @@ def _parse_marker_comment(comment: str) -> dict:
             result["expect_error"] = match.group(1).strip()
             result["skip"] = False  # Don't skip, we want to test the error
 
-    # Check for expect-output
-    if "expect-output" in comment_lower:
+    # Check for expect-output-block (must check before expect-output substring match)
+    if "expect-output-block" in comment_lower:
+        result["expect_output_block"] = True
+        mode_match = re.search(r"expect-output-block:\s*(\w+)\s*-->", comment, re.IGNORECASE)
+        if mode_match:
+            result["expect_output_mode"] = mode_match.group(1).strip().lower()
+    # Check for expect-output (substring match)
+    elif "expect-output" in comment_lower:
         match = re.search(r"expect-output:\s*(.+?)\s*-->", comment, re.IGNORECASE)
         if match:
             result["expect_output"] = match.group(1).strip()
+
+    # Check for required Python modules
+    if "requires-module" in comment_lower:
+        match = re.search(r"requires-module:\s*(.+?)\s*-->", comment, re.IGNORECASE)
+        if match:
+            result["required_modules"] = [module.strip() for module in match.group(1).split(",") if module.strip()]
 
     # Check for test-name
     match = re.search(r"test-name:\s*(\w+)", comment, re.IGNORECASE)
@@ -381,6 +400,21 @@ def extract_code_blocks(file_path: Path, language: str = "python") -> list[CodeB
         block_skip = attrs["skip"] or doc_skip
         block_skip_reason = attrs["skip_reason"] or doc_skip_reason
 
+        # If expect-output-block, look for a ```output fence after this code block
+        output_block_text = None
+        output_mode = attrs["expect_output_mode"]
+        if attrs["expect_output_block"]:
+            after_fence = content[match.end() :]
+            output_match = re.match(r"\s*```output\n(.*?)```", after_fence, re.DOTALL)
+            if output_match:
+                output_block_text = output_match.group(1).rstrip("\n")
+            else:
+                msg = (
+                    f"{file_path}:{line_number}: expect-output-block marker "
+                    f"but no ```output fence found after code block"
+                )
+                raise ValueError(msg)
+
         block = CodeBlock(
             code=full_code,
             language=language,
@@ -393,6 +427,9 @@ def extract_code_blocks(file_path: Path, language: str = "python") -> list[CodeB
             skip_if_no_cuda_rust=attrs["skip_if_no_cuda_rust"],
             expect_error=attrs["expect_error"],
             expect_output=attrs["expect_output"],
+            expect_output_block=output_block_text,
+            expect_output_mode=output_mode,
+            required_modules=attrs["required_modules"],
             test_name=attrs["test_name"],
             marks=attrs["marks"],
             is_continuation=attrs["is_continuation"],
@@ -431,7 +468,7 @@ def generate_test_function(block: CodeBlock, file_stem: str) -> str:
         )
     elif block.skip_if_no_cuda_rust:
         lines.append(
-            '@pytest.mark.skipif(not cuda_rust_available(), reason="CUDA Rust bindings not available")',
+            '@pytest.mark.skipif(not cuda_rust_available(), reason="CUDA Rust simulator runtime not available")',
         )
 
     lines.extend(f"@pytest.mark.{mark}" for mark in block.marks)
@@ -442,6 +479,8 @@ def generate_test_function(block: CodeBlock, file_stem: str) -> str:
     # Docstring with source file and line number for easy navigation
     lines.append(f'    """Test from {block.source_file}:{block.line_number}."""')
 
+    lines.extend(f'    pytest.importorskip("{module}")' for module in block.required_modules)
+
     # Generate function body based on test type and language
     if block.language == "rust":
         if block.expect_error:
@@ -450,6 +489,8 @@ def generate_test_function(block: CodeBlock, file_stem: str) -> str:
             lines.extend(_generate_rust_exec_body(block))
     elif block.expect_error:
         lines.extend(_generate_expect_error_body(block))
+    elif block.expect_output_block is not None:
+        lines.extend(_generate_expect_output_block_body(block))
     elif block.expect_output:
         lines.extend(_generate_expect_output_body(block))
     elif _uses_guppy_decorator(block.code):
@@ -493,7 +534,7 @@ def _generate_guppy_body(block: CodeBlock) -> list[str]:
         "    # Guppy needs file-based execution for inspect.getsourcelines()",
         "    # Run in temp directory to avoid polluting project root with generated files",
         "    with tempfile.TemporaryDirectory() as tmpdir:",
-        "        temp_path = Path(tmpdir) / 'test_code.py'",
+        '        temp_path = Path(tmpdir) / "test_code.py"',
         "        temp_path.write_text(code)",
         "",
         "        result = subprocess.run(",
@@ -519,10 +560,10 @@ def _generate_expect_error_body(block: CodeBlock) -> list[str]:
         # Guppy code needs subprocess execution
         # Run in temp directory to avoid polluting project root with generated files
         lines = [
+            "    import re",
             "    import subprocess",
             "    import sys",
             "    import tempfile",
-            "    import re",
             "    from pathlib import Path",
             "",
             '    code = """',
@@ -531,7 +572,7 @@ def _generate_expect_error_body(block: CodeBlock) -> list[str]:
             f'    expected_pattern = r"{escaped_pattern}"',
             "",
             "    with tempfile.TemporaryDirectory() as tmpdir:",
-            "        temp_path = Path(tmpdir) / 'test_code.py'",
+            '        temp_path = Path(tmpdir) / "test_code.py"',
             "        temp_path.write_text(code)",
             "",
             "        result = subprocess.run(",
@@ -542,16 +583,16 @@ def _generate_expect_error_body(block: CodeBlock) -> list[str]:
             "            check=False,",
             "            cwd=tmpdir,",
             "        )",
-            "        assert result.returncode != 0, 'Expected code to fail but it succeeded'",
+            '        assert result.returncode != 0, "Expected code to fail but it succeeded"',
             "        assert re.search(expected_pattern, result.stderr), \\",
             '            f"Error did not match pattern {expected_pattern!r}:\\n{result.stderr}"',
         ]
     else:
         # Regular code can use subprocess with -c
         lines = [
+            "    import re",
             "    import subprocess",
             "    import sys",
-            "    import re",
             "",
             '    code = """',
             *[line.rstrip() for line in escaped_code.split("\n")],
@@ -565,7 +606,7 @@ def _generate_expect_error_body(block: CodeBlock) -> list[str]:
             "        timeout=30,",
             "        check=False,",
             "    )",
-            "    assert result.returncode != 0, 'Expected code to fail but it succeeded'",
+            '    assert result.returncode != 0, "Expected code to fail but it succeeded"',
             "    assert re.search(expected_pattern, result.stderr), \\",
             '        f"Error did not match pattern {expected_pattern!r}:\\n{result.stderr}"',
         ]
@@ -590,9 +631,9 @@ def _generate_rust_rustc_body(block: CodeBlock) -> list[str]:
     has_main = "fn main()" in block.code
 
     lines = [
+        "    import os",
         "    import subprocess",
         "    import tempfile",
-        "    import os",
         "    from pathlib import Path",
         "",
         '    code = """',
@@ -659,9 +700,9 @@ def _generate_rust_expect_error_body(block: CodeBlock) -> list[str]:
     escaped_pattern = block.expect_error.replace('"', '\\"') if block.expect_error else ""
 
     return [
+        "    import re",
         "    import subprocess",
         "    import tempfile",
-        "    import re",
         "    from pathlib import Path",
         "",
         '    code = """',
@@ -709,7 +750,7 @@ def _generate_expect_output_body(block: CodeBlock) -> list[str]:
             f'    expected_output = "{escaped_output}"',
             "",
             "    with tempfile.TemporaryDirectory() as tmpdir:",
-            "        temp_path = Path(tmpdir) / 'test_code.py'",
+            '        temp_path = Path(tmpdir) / "test_code.py"',
             "        temp_path.write_text(code)",
             "",
             "        result = subprocess.run(",
@@ -751,6 +792,50 @@ def _generate_expect_output_body(block: CodeBlock) -> list[str]:
     return lines
 
 
+def _generate_expect_output_block_body(block: CodeBlock) -> list[str]:
+    """Generate test body that checks stdout matches expected output exactly.
+
+    Uses Python's doctest.OutputChecker for matching. Supports exact mode
+    (default) and ellipsis mode (``...`` skips variable parts).
+    """
+    escaped_code = block.code.replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
+    escaped_expected = block.expect_output_block.replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
+    use_ellipsis = block.expect_output_mode == "ellipsis"
+
+    return [
+        "    import doctest",
+        "    import subprocess",
+        "    import sys",
+        "",
+        '    code = """',
+        *[line.rstrip() for line in escaped_code.split("\n")],
+        '"""',
+        '    expected = """',
+        *[line.rstrip() for line in escaped_expected.split("\n")],
+        '"""',
+        "",
+        "    result = subprocess.run(",
+        '        [sys.executable, "-c", code],',
+        "        capture_output=True,",
+        "        text=True,",
+        "        timeout=30,",
+        "        check=False,",
+        "    )",
+        "    if result.returncode != 0:",
+        '        pytest.fail(f"Code failed:\\n{result.stderr}")',
+        "",
+        "    checker = doctest.OutputChecker()",
+        f"    flags = doctest.ELLIPSIS if {use_ellipsis} else 0",
+        "    if not checker.check_output(expected.strip(), result.stdout.strip(), flags):",
+        "        diff = checker.output_difference(",
+        '            doctest.Example("", expected.strip()),',
+        "            result.stdout.strip(),",
+        "            flags,",
+        "        )",
+        '        pytest.fail(f"Output mismatch:\\n{diff}")',
+    ]
+
+
 def generate_test_file(file_path: Path, blocks: list[CodeBlock]) -> str:
     """Generate a complete pytest test file for a markdown file."""
     file_stem = _sanitize_name(file_path.stem)
@@ -771,7 +856,6 @@ def generate_test_file(file_path: Path, blocks: list[CodeBlock]) -> str:
     if needs_cuda_check:
         lines.extend(
             [
-                "",
                 "",
                 "def _check_cuda() -> bool:",
                 '    """Return True if CUDA toolkit and cupy are available."""',
@@ -814,12 +898,11 @@ def generate_test_file(file_path: Path, blocks: list[CodeBlock]) -> str:
         lines.extend(
             [
                 "",
-                "",
                 "def _check_cuda_rust() -> bool:",
-                '    """Return True if CUDA Rust bindings (pecos_rslib_cuda) are available."""',
+                '    """Return True if CUDA Rust simulators can initialize."""',
                 "    try:",
-                "        from pecos_rslib_cuda import is_cuquantum_available",
-                "        return is_cuquantum_available()",
+                "        from pecos_rslib_cuda import is_custabilizer_usable, is_custatevec_usable",
+                "        return is_custatevec_usable() and is_custabilizer_usable()",
                 "    except ImportError:",
                 "        return False",
                 "",
@@ -916,7 +999,7 @@ def cuda_check() -> bool:
 
 
 @pytest.fixture(autouse=True)
-def restore_cwd():  # noqa: ANN201
+def restore_cwd():
     """Restore the current working directory after each test.
 
     Some tests (e.g., WASM examples) change the working directory,
@@ -1250,6 +1333,13 @@ def main() -> None:
         # Filter out Rust-cargo blocks (tested via unified crate)
         pytest_blocks = [b for b in all_blocks if not (b.language == "rust" and _rust_needs_cargo(b.code))]
         if not pytest_blocks:
+            continue
+
+        # Skip file entirely if every block has an unconditional skip marker
+        # (e.g. document-level <!--skip-->). No point generating a test file
+        # full of skipped tests — it just adds noise to pytest output.
+        if all(b.skip for b in pytest_blocks):
+            total_skipped += len(pytest_blocks)
             continue
 
         # Count skipped blocks

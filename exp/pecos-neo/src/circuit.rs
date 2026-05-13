@@ -46,7 +46,6 @@ use smallvec::SmallVec;
 // ============================================================================
 
 impl From<pecos_core::gate_type::GateType> for GateType {
-    #[allow(clippy::match_same_arms)] // Unknown gate types explicitly map to I
     fn from(gt: pecos_core::gate_type::GateType) -> Self {
         use pecos_core::gate_type::GateType as CoreGT;
         match gt {
@@ -55,6 +54,8 @@ impl From<pecos_core::gate_type::GateType> for GateType {
             CoreGT::Y => Self::Y,
             CoreGT::Z => Self::Z,
             CoreGT::H => Self::H,
+            CoreGT::F => Self::F,
+            CoreGT::Fdg => Self::Fdg,
             CoreGT::SX => Self::SX,
             CoreGT::SXdg => Self::SXdg,
             CoreGT::SY => Self::SY,
@@ -71,6 +72,10 @@ impl From<pecos_core::gate_type::GateType> for GateType {
             CoreGT::CX => Self::CX,
             CoreGT::CY => Self::CY,
             CoreGT::CZ => Self::CZ,
+            CoreGT::SXX => Self::SXX,
+            CoreGT::SXXdg => Self::SXXdg,
+            CoreGT::SYY => Self::SYY,
+            CoreGT::SYYdg => Self::SYYdg,
             CoreGT::SZZ => Self::SZZ,
             CoreGT::SZZdg => Self::SZZdg,
             CoreGT::SWAP => Self::SWAP,
@@ -86,8 +91,7 @@ impl From<pecos_core::gate_type::GateType> for GateType {
             CoreGT::QAlloc => Self::QAlloc,
             CoreGT::QFree => Self::QFree,
             CoreGT::Idle => Self::Idle,
-            // Any unknown gate types default to identity
-            _ => Self::I,
+            other => panic!("unsupported pecos-core gate type for pecos-neo conversion: {other:?}"),
         }
     }
 }
@@ -101,6 +105,8 @@ impl From<GateType> for pecos_core::gate_type::GateType {
             GateType::Y => CoreGT::Y,
             GateType::Z => CoreGT::Z,
             GateType::H => CoreGT::H,
+            GateType::F => CoreGT::F,
+            GateType::Fdg => CoreGT::Fdg,
             GateType::SX => CoreGT::SX,
             GateType::SXdg => CoreGT::SXdg,
             GateType::SY => CoreGT::SY,
@@ -119,6 +125,10 @@ impl From<GateType> for pecos_core::gate_type::GateType {
             GateType::CZ => CoreGT::CZ,
             GateType::SZZ => CoreGT::SZZ,
             GateType::SZZdg => CoreGT::SZZdg,
+            GateType::SXX => CoreGT::SXX,
+            GateType::SXXdg => CoreGT::SXXdg,
+            GateType::SYY => CoreGT::SYY,
+            GateType::SYYdg => CoreGT::SYYdg,
             GateType::SWAP => CoreGT::SWAP,
             GateType::CRZ => CoreGT::CRZ,
             GateType::RXX => CoreGT::RXX,
@@ -178,14 +188,14 @@ impl From<Gate> for GateCommand {
 impl From<&TickCircuit> for CommandQueue {
     /// Convert a `TickCircuit` to a `CommandQueue`.
     ///
-    /// Gates are added in tick order - all gates from tick 0, then tick 1, etc.
-    /// Within each tick, gates are added in the order they appear.
+    /// Gate batches are added in tick order - all commands from tick 0, then tick 1, etc.
+    /// Within each tick, commands are added in the order they appear.
     fn from(circuit: &TickCircuit) -> Self {
         let mut queue = CommandQueue::new();
 
         for tick in circuit.ticks() {
-            for gate in tick.gates() {
-                queue.push(gate.into());
+            for gate in tick.iter_gate_batches() {
+                queue.push(gate.as_gate().into());
             }
         }
 
@@ -288,9 +298,11 @@ impl From<&CommandQueue> for TickCircuit {
                         angles,
                         params: SmallVec::new(),
                         qubits: qubit_ids,
+                        meas_ids: SmallVec::new(),
+                        channel: None,
                     };
-                    // Use try_add_gate and ignore errors (shouldn't happen with one gate per tick)
-                    let _ = tick.try_add_gate(gate);
+                    tick.try_add_gate(gate)
+                        .expect("one gate per tick should not have qubit conflicts");
                 }
             }
         }
@@ -419,6 +431,8 @@ mod tests {
             angles: smallvec::smallvec![Angle64::QUARTER_TURN],
             params: SmallVec::new(),
             qubits: smallvec::smallvec![QubitId(0)],
+            meas_ids: SmallVec::new(),
+            channel: None,
         };
 
         let cmd: GateCommand = (&gate).into();

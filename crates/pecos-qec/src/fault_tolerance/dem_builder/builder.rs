@@ -13,12 +13,13 @@
 //! DEM (Detector Error Model) builder implementation.
 //!
 //! This module provides the main builder for constructing DEMs from fault
-//! influence maps and detector/observable metadata.
+//! influence maps and detector/DEM-output metadata.
 
 use super::types::{
-    DetectorDef, DetectorErrorModel, DirectSourceComponents, FaultMechanism, LogicalObservable,
-    NoiseConfig, SourceMetadata, record_offset_to_absolute_index,
+    DemOutput, DetectorDef, DetectorErrorModel, DirectSourceComponents, FaultMechanism,
+    NoiseConfig, PerGateTypeNoise, SourceMetadata, record_offset_to_absolute_index,
 };
+use crate::fault_tolerance::propagator::dag::DagSpacetimeLocation;
 use crate::fault_tolerance::propagator::{DagFaultInfluenceMap, Pauli};
 use pecos_core::gate_type::GateType;
 use smallvec::SmallVec;
@@ -49,39 +50,56 @@ struct ParsedObservable {
 
 /// Builder for Detector Error Models (DEMs).
 ///
-/// Constructs a DEM from a fault influence map and detector/observable metadata.
-/// Uses the per-qubit fault model for accurate depolarizing noise analysis.
+/// # Simple API (recommended)
 ///
-/// # Example
+/// For most use cases, use the one-liner:
 ///
 /// ```
 /// use pecos_qec::fault_tolerance::dem_builder::DemBuilder;
-/// use pecos_qec::fault_tolerance::propagator::DagFaultInfluenceMap;
+/// use pecos_quantum::DagCircuit;
 ///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let influence_map = DagFaultInfluenceMap::with_capacity(0);
-/// let detectors_json = "[]";
-/// let observables_json = "[]";
+/// // Build DEM from circuit + noise (reads detectors from circuit metadata)
+/// let dag = DagCircuit::new();
+/// let dem = DemBuilder::from_circuit(&dag, 0.001, 0.01, 0.001, 0.001);
+/// assert_eq!(dem.num_detectors(), 0);
+/// ```
 ///
+/// Also works with `TickCircuit`:
+///
+/// ```
+/// use pecos_qec::fault_tolerance::dem_builder::DemBuilder;
+/// use pecos_quantum::TickCircuit;
+///
+/// let tc = TickCircuit::new();
+/// let dem = DemBuilder::from_tick_circuit(&tc, 0.001, 0.01, 0.001, 0.001);
+/// assert_eq!(dem.num_detectors(), 0);
+/// ```
+///
+/// # Advanced API
+///
+/// For custom influence maps, non-standard noise, or manual detector
+/// definitions, use the step-by-step builder:
+///
+/// ```no_run
+/// # use pecos_qec::fault_tolerance::dem_builder::DemBuilder;
+/// # use pecos_qec::fault_tolerance::propagator::DagFaultInfluenceMap;
+/// # let influence_map = DagFaultInfluenceMap::with_capacity(0);
 /// let dem = DemBuilder::new(&influence_map)
 ///     .with_noise(0.01, 0.01, 0.01, 0.01)
-///     .with_detectors_json(detectors_json)?
-///     .with_observables_json(observables_json)?
+///     .with_detectors_json("[]").unwrap()
 ///     .build();
-///
-/// // Non-decomposed output (matches Stim's decompose_errors=False)
-/// let _ = dem.to_string();
-///
-/// // Decomposed output (matches Stim's decompose_errors=True)
-/// let _ = dem.to_string_decomposed();
-/// # Ok(())
-/// # }
 /// ```
 pub struct DemBuilder<'a> {
     /// Reference to the fault influence map.
     influence_map: &'a DagFaultInfluenceMap,
-    /// Noise configuration.
+    /// Uniform-depolarizing noise configuration. When `per_gate` is also
+    /// set, its per-qubit / per-Pauli overrides take precedence; this
+    /// `NoiseConfig` still seeds measurement/prep scalars.
     noise: NoiseConfig,
+    /// Optional per-gate-type per-Pauli noise spec. Mirrors the
+    /// `DemSamplerBuilder` path so DEM text export reflects the same
+    /// asymmetric noise structure that the sampler does.
+    per_gate: Option<PerGateTypeNoise>,
     /// Parsed detector definitions.
     detectors: Vec<ParsedDetector>,
     /// Parsed observable definitions.
@@ -94,12 +112,56 @@ pub struct DemBuilder<'a> {
 }
 
 impl<'a> DemBuilder<'a> {
+    /// Build a `DetectorErrorModel` directly from a circuit and noise.
+    ///
+    /// One-liner for the common case. Reads detector/DEM output definitions
+    /// from circuit metadata (`"detectors"`, `"observables"` attributes).
+    ///
+    /// ```
+    /// use pecos_qec::fault_tolerance::dem_builder::DemBuilder;
+    /// use pecos_quantum::DagCircuit;
+    ///
+    /// let dag = DagCircuit::new();
+    /// let dem = DemBuilder::from_circuit(&dag, 0.001, 0.01, 0.001, 0.001);
+    /// assert_eq!(dem.num_detectors(), 0);
+    /// ```
+    /// Build a `DetectorErrorModel` directly from a `DagCircuit` and noise.
+    ///
+    /// One-liner for the common case. Reads detector/DEM output definitions
+    /// from circuit metadata.
+    #[must_use]
+    pub fn from_circuit(
+        circuit: &pecos_quantum::DagCircuit,
+        p1: f64,
+        p2: f64,
+        p_meas: f64,
+        p_prep: f64,
+    ) -> DetectorErrorModel {
+        build_dem_from_circuit(circuit, p1, p2, p_meas, p_prep)
+    }
+
+    /// Build a `DetectorErrorModel` from a `TickCircuit` and noise.
+    ///
+    /// Converts to `DagCircuit` internally.
+    #[must_use]
+    pub fn from_tick_circuit(
+        circuit: &pecos_quantum::TickCircuit,
+        p1: f64,
+        p2: f64,
+        p_meas: f64,
+        p_prep: f64,
+    ) -> DetectorErrorModel {
+        let dag = pecos_quantum::DagCircuit::from(circuit);
+        build_dem_from_circuit(&dag, p1, p2, p_meas, p_prep)
+    }
+
     /// Creates a new DEM builder from a fault influence map.
     #[must_use]
     pub fn new(influence_map: &'a DagFaultInfluenceMap) -> Self {
         Self {
             influence_map,
             noise: NoiseConfig::default(),
+            per_gate: None,
             detectors: Vec::new(),
             observables: Vec::new(),
             num_measurements: influence_map.measurements.len(),
@@ -107,11 +169,138 @@ impl<'a> DemBuilder<'a> {
         }
     }
 
-    /// Sets the noise configuration.
+    /// Sets the noise configuration from individual parameters.
     #[must_use]
-    pub fn with_noise(mut self, p1: f64, p2: f64, p_meas: f64, p_init: f64) -> Self {
-        self.noise = NoiseConfig::new(p1, p2, p_meas, p_init);
+    pub fn with_noise(mut self, p1: f64, p2: f64, p_meas: f64, p_prep: f64) -> Self {
+        self.noise = NoiseConfig::new(p1, p2, p_meas, p_prep);
         self
+    }
+
+    /// Sets the full noise configuration (supports custom weights, T1/T2, idle).
+    #[must_use]
+    pub fn with_noise_config(mut self, noise: NoiseConfig) -> Self {
+        self.noise = noise;
+        self
+    }
+
+    /// Attach per-gate-type per-Pauli noise. When present, overrides
+    /// [`Self::with_noise`] scalars for gate types in the spec's maps.
+    /// Mirrors
+    /// [`crate::fault_tolerance::dem_builder::DemSamplerBuilder::with_per_gate_noise`]
+    /// so the DEM text output reflects the same noise structure.
+    #[must_use]
+    pub fn with_per_gate_noise(mut self, cfg: PerGateTypeNoise) -> Self {
+        self.noise.p_meas = cfg.p_meas;
+        self.noise.p_prep = cfg.p_init;
+        self.per_gate = Some(cfg);
+        self
+    }
+
+    /// Resolve preparation X-error rate at a specific location.
+    fn init_rate_for_loc(&self, loc: &DagSpacetimeLocation) -> f64 {
+        if let Some(pg) = &self.per_gate
+            && let Some(q) = loc.qubits.first()
+        {
+            return pg.init_rate_on(*q);
+        }
+        self.noise.p_prep
+    }
+
+    /// Resolve measurement X-flip rate at a specific location.
+    fn measurement_rate_for_loc(&self, loc: &DagSpacetimeLocation) -> f64 {
+        if let Some(pg) = &self.per_gate
+            && let Some(q) = loc.qubits.first()
+        {
+            return pg.measurement_rate_on(*q);
+        }
+        self.noise.p_meas
+    }
+
+    /// Resolve `[rate_X, rate_Y, rate_Z]` for a 1Q gate location.
+    fn rates_1q_for_loc(&self, loc: &DagSpacetimeLocation) -> [f64; 3] {
+        if let Some(pg) = &self.per_gate {
+            if let Some(q) = loc.qubits.first() {
+                return [
+                    pg.rate_1q_on(loc.gate_type, *q, 0),
+                    pg.rate_1q_on(loc.gate_type, *q, 1),
+                    pg.rate_1q_on(loc.gate_type, *q, 2),
+                ];
+            }
+            return [
+                pg.rate_1q(loc.gate_type, 0),
+                pg.rate_1q(loc.gate_type, 1),
+                pg.rate_1q(loc.gate_type, 2),
+            ];
+        }
+        if let Some(weights) = &self.noise.p1_weights {
+            use pecos_core::pauli::{X, Y, Z};
+            return [
+                self.noise.p1 * weights.weight_for(&X(0)),
+                self.noise.p1 * weights.weight_for(&Y(0)),
+                self.noise.p1 * weights.weight_for(&Z(0)),
+            ];
+        }
+        let per = per_channel_probability(self.noise.p1, 3);
+        [per, per, per]
+    }
+
+    /// Resolve `[rate_X, rate_Y, rate_Z]` for an explicit idle location.
+    fn idle_rates_for_loc(&self, loc: &DagSpacetimeLocation) -> [f64; 3] {
+        if let Some(pg) = &self.per_gate {
+            let explicit_rates = loc
+                .qubits
+                .first()
+                .and_then(|q| pg.explicit_1q_rates_on(GateType::Idle, *q))
+                .or_else(|| pg.explicit_1q_rates(GateType::Idle));
+            if let Some(rates) = explicit_rates {
+                return rates;
+            }
+            if pg.base.uses_dedicated_idle_noise() {
+                #[allow(clippy::cast_precision_loss)]
+                let duration = loc.idle_duration.max(1) as f64;
+                let probs = pg.base.idle_pauli_probs(duration);
+                return [probs.px, probs.py, probs.pz];
+            }
+            return [0.0; 3];
+        }
+
+        if self.noise.uses_dedicated_idle_noise() {
+            #[allow(clippy::cast_precision_loss)]
+            let duration = loc.idle_duration.max(1) as f64;
+            let probs = self.noise.idle_pauli_probs(duration);
+            return [probs.px, probs.py, probs.pz];
+        }
+        [0.0; 3]
+    }
+
+    /// Resolve the 15-entry 2Q per-Pauli-pair rate array for a gate
+    /// spanning two fault locations.
+    fn rates_2q_for_locs(
+        &self,
+        loc1: &DagSpacetimeLocation,
+        loc2: &DagSpacetimeLocation,
+    ) -> [f64; 15] {
+        if let Some(pg) = &self.per_gate {
+            let gate = loc1.gate_type;
+            let mut qubits = loc1
+                .qubits
+                .iter()
+                .copied()
+                .chain(loc2.qubits.iter().copied());
+            if let (Some(qc), Some(qt)) = (qubits.next(), qubits.next()) {
+                return std::array::from_fn(|i| pg.rate_2q_on(gate, qc, qt, i));
+            }
+            return std::array::from_fn(|i| pg.rate_2q(gate, i));
+        }
+        if let Some(weights) = &self.noise.p2_weights {
+            return std::array::from_fn(|idx| {
+                let flat = idx + 1;
+                let p1 = flat / 4;
+                let p2 = flat % 4;
+                self.noise.p2 * weights.weight_for(&pauli_pair_for_weight(p1, p2))
+            });
+        }
+        [per_channel_probability(self.noise.p2, 15); 15]
     }
 
     /// Sets the number of measurements (used for record offset calculation).
@@ -129,6 +318,13 @@ impl<'a> DemBuilder<'a> {
     /// indices (which may use a different order based on DAG topology).
     ///
     /// # Arguments
+    /// Set the measurement order for legacy circuits without `MeasId` on gates.
+    ///
+    /// **Not needed for circuits built with `TickCircuit.mz()`** — the `MeasId`
+    /// values on gates ensure correct ordering automatically.
+    ///
+    /// Only use this for circuits where MZ gates lack `meas_ids` (e.g.,
+    /// circuits imported from external formats without measurement IDs).
     ///
     /// * `order` - List of qubit indices in measurement execution order.
     ///   `order[i]` is the qubit measured at `TickCircuit` measurement index `i`.
@@ -160,15 +356,10 @@ impl<'a> DemBuilder<'a> {
 
     /// Parses and sets observable definitions from JSON.
     ///
-    /// Each object accepts either `"id"` or `"observable_id"` as the identifier key.
+    /// Tracked Paulis are carried by the influence map; this helper is only
+    /// for observable metadata.
     ///
-    /// Expected format:
-    /// ```json
-    /// [
-    ///   {"id": 0, "records": [-1, -3, -5]},
-    ///   {"observable_id": 1, "records": [-2]}
-    /// ]
-    /// ```
+    /// Each object accepts either `"id"` or `"observable_id"` as the identifier key.
     ///
     /// # Errors
     ///
@@ -176,6 +367,21 @@ impl<'a> DemBuilder<'a> {
     pub fn with_observables_json(mut self, json: &str) -> Result<Self, DemBuilderError> {
         self.observables = parse_observables_json(json)?;
         Ok(self)
+    }
+
+    /// Sets observable definitions from measurement-record offsets.
+    #[must_use]
+    pub fn with_observable_records(mut self, records: Vec<Vec<i32>>) -> Self {
+        self.observables = records
+            .into_iter()
+            .enumerate()
+            .map(|(id, records)| ParsedObservable {
+                #[allow(clippy::cast_possible_truncation)] // observable count fits in u32
+                id: id as u32,
+                records,
+            })
+            .collect();
+        self
     }
 
     /// Builds the Detector Error Model with source tracking.
@@ -186,6 +392,9 @@ impl<'a> DemBuilder<'a> {
     /// Use `dem.to_string()` or `dem.to_string_decomposed()` for output.
     #[must_use]
     pub fn build(&self) -> DetectorErrorModel {
+        let num_influence_dem_outputs = self
+            .num_influence_dem_outputs()
+            .max(self.influence_map.dem_output_metadata.len());
         let mut dem =
             DetectorErrorModel::with_capacity(self.detectors.len(), self.observables.len());
 
@@ -199,13 +408,42 @@ impl<'a> DemBuilder<'a> {
             dem.add_detector(def);
         }
 
-        // Add observable definitions
+        // Add non-detector outputs carried directly by the influence map.
+        // Metadata-bearing outputs use separate compact ID spaces for standard
+        // observables and PECOS tracked Paulis.
+        if self.influence_map.dem_output_metadata.is_empty() {
+            for dem_output_idx in 0..num_influence_dem_outputs {
+                #[allow(clippy::cast_possible_truncation)] // DEM output count fits in u32
+                dem.add_observable(DemOutput::new(dem_output_idx as u32));
+            }
+        } else {
+            for (internal_idx, metadata) in
+                self.influence_map.dem_output_metadata.iter().enumerate()
+            {
+                #[allow(clippy::cast_possible_truncation)] // DEM output count fits in u32
+                let internal_id = internal_idx as u32;
+                if let Some(dem_output_id) = self
+                    .influence_map
+                    .tracked_pauli_id_for_internal_dem_output(internal_id)
+                {
+                    dem.add_tracked_pauli(DemOutput::from_metadata(dem_output_id, metadata));
+                } else if let Some(dem_output_id) = self
+                    .influence_map
+                    .observable_id_for_internal_dem_output(internal_id)
+                {
+                    dem.add_observable(DemOutput::from_metadata(dem_output_id, metadata));
+                }
+            }
+        }
+
+        // Add observable definitions in the standard `L<n>` namespace.
+        // Observable IDs are not shifted by tracked Paulis.
         for obs in &self.observables {
-            let def = LogicalObservable::new(obs.id).with_records(obs.records.iter().copied());
+            let def = DemOutput::new(obs.id).with_records(obs.records.iter().copied());
             dem.add_observable(def);
         }
 
-        // Build measurement -> detector/observable mappings
+        // Build measurement -> detector/DEM-output mappings
         let (meas_to_detectors, meas_to_observables) = self.build_measurement_mappings();
 
         // Process all fault locations with source tracking
@@ -216,6 +454,13 @@ impl<'a> DemBuilder<'a> {
         );
 
         dem
+    }
+
+    fn num_influence_dem_outputs(&self) -> usize {
+        self.influence_map
+            .influences
+            .max_dem_output_index()
+            .map_or(0, |idx| idx + 1)
     }
 
     /// Processes fault locations with source tracking.
@@ -235,7 +480,9 @@ impl<'a> DemBuilder<'a> {
 
         for (loc_idx, loc) in locations.iter().enumerate() {
             match loc.gate_type {
-                GateType::PZ | GateType::QAlloc if self.noise.p_init > 0.0 && !loc.before => {
+                GateType::PZ | GateType::QAlloc
+                    if !loc.before && self.init_rate_for_loc(loc) > 0.0 =>
+                {
                     self.process_prep_fault_source_tracked(
                         loc_idx,
                         dem,
@@ -243,7 +490,9 @@ impl<'a> DemBuilder<'a> {
                         meas_to_observables,
                     );
                 }
-                GateType::MZ | GateType::MeasureFree if self.noise.p_meas > 0.0 && loc.before => {
+                GateType::MZ | GateType::MeasureFree
+                    if loc.before && self.measurement_rate_for_loc(loc) > 0.0 =>
+                {
                     self.process_meas_fault_source_tracked(
                         loc_idx,
                         dem,
@@ -254,6 +503,12 @@ impl<'a> DemBuilder<'a> {
                 GateType::CX
                 | GateType::CZ
                 | GateType::CY
+                | GateType::SZZ
+                | GateType::SZZdg
+                | GateType::SXX
+                | GateType::SXXdg
+                | GateType::SYY
+                | GateType::SYYdg
                 | GateType::SWAP
                 | GateType::RXX
                 | GateType::RYY
@@ -263,6 +518,8 @@ impl<'a> DemBuilder<'a> {
                     cx_groups.entry(loc.node).or_default().push(loc_idx);
                 }
                 GateType::H
+                | GateType::F
+                | GateType::Fdg
                 | GateType::SZ
                 | GateType::SZdg
                 | GateType::SX
@@ -279,26 +536,49 @@ impl<'a> DemBuilder<'a> {
                 | GateType::RZ
                 | GateType::U
                 | GateType::R1XY
-                    if self.noise.p1 > 0.0 && !loc.before =>
+                    if !loc.before =>
                 {
-                    self.process_single_qubit_fault_source_tracked(
-                        loc_idx,
-                        dem,
-                        meas_to_detectors,
-                        meas_to_observables,
-                    );
+                    let rates = self.rates_1q_for_loc(loc);
+                    if rates.iter().any(|r| *r > 0.0) {
+                        self.process_single_qubit_fault_source_tracked(
+                            loc_idx,
+                            rates,
+                            dem,
+                            meas_to_detectors,
+                            meas_to_observables,
+                        );
+                    }
+                }
+                GateType::Idle if !loc.before => {
+                    let rates = self.idle_rates_for_loc(loc);
+                    if rates.iter().any(|r| *r > 0.0) {
+                        self.process_single_qubit_fault_source_tracked(
+                            loc_idx,
+                            rates,
+                            dem,
+                            meas_to_detectors,
+                            meas_to_observables,
+                        );
+                    }
                 }
                 _ => {}
             }
         }
 
-        // Process two-qubit gates
-        if self.noise.p2 > 0.0 {
-            for (_, loc_indices) in cx_groups {
-                if loc_indices.len() == 2 {
+        // Process two-qubit gates.
+        for (_, loc_indices) in cx_groups {
+            for pair in loc_indices.chunks(2) {
+                if pair.len() != 2 {
+                    continue;
+                }
+                let loc1 = &locations[pair[0]];
+                let loc2 = &locations[pair[1]];
+                let rates = self.rates_2q_for_locs(loc1, loc2);
+                if rates.iter().any(|r| *r > 0.0) {
                     self.process_two_qubit_fault_source_tracked(
-                        loc_indices[0],
-                        loc_indices[1],
+                        pair[0],
+                        pair[1],
+                        rates,
                         dem,
                         meas_to_detectors,
                         meas_to_observables,
@@ -316,19 +596,16 @@ impl<'a> DemBuilder<'a> {
         meas_to_detectors: &BTreeMap<usize, Vec<u32>>,
         meas_to_observables: &BTreeMap<usize, Vec<u32>>,
     ) {
+        let loc = &self.influence_map.locations[loc_idx];
+        let p = self.init_rate_for_loc(loc);
         // For Z-basis prep, X error matters - this is a direct source
         let mechanism =
             self.compute_mechanism(loc_idx, Pauli::X, meas_to_detectors, meas_to_observables);
         if !mechanism.is_empty() {
             dem.add_direct_contribution_with_source(
                 mechanism,
-                self.noise.p_init,
-                SourceMetadata::new(
-                    &[loc_idx],
-                    &[Pauli::X],
-                    &[self.influence_map.locations[loc_idx].gate_type],
-                    &[self.influence_map.locations[loc_idx].before],
-                ),
+                p,
+                SourceMetadata::new(&[loc_idx], &[Pauli::X], &[loc.gate_type], &[loc.before]),
             );
         }
     }
@@ -341,32 +618,31 @@ impl<'a> DemBuilder<'a> {
         meas_to_detectors: &BTreeMap<usize, Vec<u32>>,
         meas_to_observables: &BTreeMap<usize, Vec<u32>>,
     ) {
+        let loc = &self.influence_map.locations[loc_idx];
+        let p = self.measurement_rate_for_loc(loc);
         // Measurement error is a bit flip (X error) - this is a direct source
         let mechanism =
             self.compute_mechanism(loc_idx, Pauli::X, meas_to_detectors, meas_to_observables);
         if !mechanism.is_empty() {
             dem.add_direct_contribution_with_source(
                 mechanism,
-                self.noise.p_meas,
-                SourceMetadata::new(
-                    &[loc_idx],
-                    &[Pauli::X],
-                    &[self.influence_map.locations[loc_idx].gate_type],
-                    &[self.influence_map.locations[loc_idx].before],
-                ),
+                p,
+                SourceMetadata::new(&[loc_idx], &[Pauli::X], &[loc.gate_type], &[loc.before]),
             );
         }
     }
 
     /// Processes a single-qubit gate fault with source tracking.
+    /// `rates` is `[rate_X, rate_Y, rate_Z]` -- zero entries are skipped.
     fn process_single_qubit_fault_source_tracked(
         &self,
         loc_idx: usize,
+        rates: [f64; 3],
         dem: &mut DetectorErrorModel,
         meas_to_detectors: &BTreeMap<usize, Vec<u32>>,
         meas_to_observables: &BTreeMap<usize, Vec<u32>>,
     ) {
-        let prob = per_channel_probability(self.noise.p1, 3);
+        let [rate_x, rate_y, rate_z] = rates;
 
         let x_effect =
             self.compute_mechanism(loc_idx, Pauli::X, meas_to_detectors, meas_to_observables);
@@ -374,10 +650,10 @@ impl<'a> DemBuilder<'a> {
             self.compute_mechanism(loc_idx, Pauli::Z, meas_to_detectors, meas_to_observables);
 
         // X error: direct source
-        if !x_effect.is_empty() {
+        if rate_x > 0.0 && !x_effect.is_empty() {
             dem.add_direct_contribution_with_source(
                 x_effect.clone(),
-                prob,
+                rate_x,
                 SourceMetadata::new(
                     &[loc_idx],
                     &[Pauli::X],
@@ -388,10 +664,10 @@ impl<'a> DemBuilder<'a> {
         }
 
         // Z error: direct source
-        if !z_effect.is_empty() {
+        if rate_z > 0.0 && !z_effect.is_empty() {
             dem.add_direct_contribution_with_source(
                 z_effect.clone(),
-                prob,
+                rate_z,
                 SourceMetadata::new(
                     &[loc_idx],
                     &[Pauli::Z],
@@ -402,19 +678,13 @@ impl<'a> DemBuilder<'a> {
         }
 
         // Y error: Y = XZ, so effect is XOR of X and Z effects
-        // Handle all cases:
-        // 1. Both non-empty and different: decomposable Y = X ^ Z
-        // 2. X non-empty, Z empty: Y has same effect as X (direct)
-        // 3. X empty, Z non-empty: Y has same effect as Z (direct)
-        // 4. Both non-empty and equal: Y effect is empty (X XOR X = nothing)
         let y_effect = x_effect.xor(&z_effect);
-        if !y_effect.is_empty() {
+        if rate_y > 0.0 && !y_effect.is_empty() {
             if !x_effect.is_empty() && !z_effect.is_empty() {
-                // Both non-empty, so Y is decomposable as X ^ Z
                 dem.add_y_decomposed_contribution_with_source(
                     &x_effect,
                     &z_effect,
-                    prob,
+                    rate_y,
                     SourceMetadata::new(
                         &[loc_idx],
                         &[Pauli::Y],
@@ -426,7 +696,7 @@ impl<'a> DemBuilder<'a> {
                 // One is empty, so Y has same effect as the non-empty one (direct source)
                 dem.add_direct_contribution_with_source(
                     y_effect,
-                    prob,
+                    rate_y,
                     SourceMetadata::new(
                         &[loc_idx],
                         &[Pauli::Y],
@@ -439,15 +709,17 @@ impl<'a> DemBuilder<'a> {
     }
 
     /// Processes a two-qubit gate fault with source tracking and intra-channel decomposition.
+    /// `rates` is the 15-entry array in `PAULI_2Q_ORDER` order -- zero entries
+    /// are skipped.
     fn process_two_qubit_fault_source_tracked(
         &self,
         loc1: usize,
         loc2: usize,
+        rates: [f64; 15],
         dem: &mut DetectorErrorModel,
         meas_to_detectors: &BTreeMap<usize, Vec<u32>>,
         meas_to_observables: &BTreeMap<usize, Vec<u32>>,
     ) {
-        let prob = per_channel_probability(self.noise.p2, 15);
         let loc1_meta = &self.influence_map.locations[loc1];
         let loc2_meta = &self.influence_map.locations[loc2];
 
@@ -489,16 +761,23 @@ impl<'a> DemBuilder<'a> {
                     continue;
                 }
 
+                // Per-pair rate: index = 4*p1 + p2 - 1 (skipping II at idx 0).
+                let flat = 4 * (p1 as usize) + (p2 as usize);
+                let prob = rates[flat - 1];
+                if prob == 0.0 {
+                    continue;
+                }
+
                 // Get component effects (P1I and IP2)
                 let e1 = &effects[p1 as usize][0]; // P1 on qubit 1, I on qubit 2
                 let e2 = &effects[0][p2 as usize]; // I on qubit 1, P2 on qubit 2
 
                 // Check if this is a "graphlike decomposable" source:
-                // - Combined effect has exactly 2 detectors and no logicals
+                // - Combined effect has exactly 2 detectors and no dem_outputs
                 // - Both component effects are non-empty
                 // - Both component effects are graphlike (≤2 detectors)
                 let graphlike_decomposable = effect.num_detectors() == 2
-                    && effect.logicals.is_empty()
+                    && effect.dem_outputs.is_empty()
                     && !e1.is_empty()
                     && !e2.is_empty()
                     && e1.num_detectors() <= 2
@@ -547,7 +826,7 @@ impl<'a> DemBuilder<'a> {
         }
     }
 
-    /// Builds mappings from measurement indices to detector/observable IDs.
+    /// Builds mappings from measurement indices to detector/DEM-output IDs.
     ///
     /// When `measurement_order` is provided, this properly maps between
     /// `TickCircuit` measurement indices (used in record offsets) and influence
@@ -559,6 +838,7 @@ impl<'a> DemBuilder<'a> {
     fn build_measurement_mappings(&self) -> (BTreeMap<usize, Vec<u32>>, BTreeMap<usize, Vec<u32>>) {
         let mut meas_to_detectors: BTreeMap<usize, Vec<u32>> = BTreeMap::new();
         let mut meas_to_observables: BTreeMap<usize, Vec<u32>> = BTreeMap::new();
+        let influence_observable_ids = self.influence_map.observable_ids();
 
         // Build a mapping from (qubit, occurrence_index) to influence_map_index
         // This handles multi-round circuits where the same qubit is measured multiple times
@@ -622,6 +902,9 @@ impl<'a> DemBuilder<'a> {
         }
 
         for obs in &self.observables {
+            if influence_observable_ids.contains(&obs.id) {
+                continue;
+            }
             for &rec in &obs.records {
                 if let Some(tc_meas_idx) =
                     record_offset_to_absolute_index(self.num_measurements, rec)
@@ -646,7 +929,7 @@ impl<'a> DemBuilder<'a> {
         meas_to_detectors: &BTreeMap<usize, Vec<u32>>,
         meas_to_observables: &BTreeMap<usize, Vec<u32>>,
     ) -> FaultMechanism {
-        // Get the Rust detector indices that this fault flips
+        // Get the measurement indices that this fault flips
         let rust_dets = self
             .influence_map
             .get_detector_indices(loc_idx, pauli.as_u8());
@@ -654,6 +937,20 @@ impl<'a> DemBuilder<'a> {
         // Convert to pre-defined detector IDs using XOR
         let mut triggered_dets: SmallVec<[u32; 4]> = SmallVec::new();
         let mut triggered_obs: SmallVec<[u32; 2]> = SmallVec::new();
+        let mut triggered_tracked_paulis: SmallVec<[u32; 2]> = SmallVec::new();
+
+        for dem_output_idx in self
+            .influence_map
+            .get_observable_indices(loc_idx, pauli.as_u8())
+        {
+            xor_toggle_2(&mut triggered_obs, dem_output_idx);
+        }
+        for tracked_pauli_idx in self
+            .influence_map
+            .get_tracked_pauli_indices(loc_idx, pauli.as_u8())
+        {
+            xor_toggle_2(&mut triggered_tracked_paulis, tracked_pauli_idx);
+        }
 
         for &rust_det in rust_dets {
             let meas_idx = rust_det as usize;
@@ -676,8 +973,13 @@ impl<'a> DemBuilder<'a> {
         // Sort for canonical form
         triggered_dets.sort_unstable();
         triggered_obs.sort_unstable();
+        triggered_tracked_paulis.sort_unstable();
 
-        FaultMechanism::from_sorted(triggered_dets, triggered_obs)
+        FaultMechanism::from_sorted_with_tracked_paulis(
+            triggered_dets,
+            triggered_obs,
+            triggered_tracked_paulis,
+        )
     }
 }
 
@@ -697,6 +999,26 @@ fn xor_toggle_2(vec: &mut SmallVec<[u32; 2]>, value: u32) {
     } else {
         vec.push(value);
     }
+}
+
+fn pauli_pair_for_weight(p1: usize, p2: usize) -> pecos_core::PauliString {
+    let mut paulis = Vec::new();
+    let pauli_from_index = |idx| match idx {
+        0 => pecos_core::Pauli::I,
+        1 => pecos_core::Pauli::X,
+        2 => pecos_core::Pauli::Y,
+        3 => pecos_core::Pauli::Z,
+        _ => unreachable!("Pauli index must be 0-3"),
+    };
+    let pa1 = pauli_from_index(p1);
+    let pa2 = pauli_from_index(p2);
+    if pa1 != pecos_core::Pauli::I {
+        paulis.push((pa1, pecos_core::QubitId::from(0usize)));
+    }
+    if pa2 != pecos_core::Pauli::I {
+        paulis.push((pa2, pecos_core::QubitId::from(1usize)));
+    }
+    pecos_core::PauliString::with_phase_and_paulis(pecos_core::QuarterPhase::PlusOne, paulis)
 }
 
 /// Computes the per-error probability for independent error channels.
@@ -950,6 +1272,120 @@ fn extract_records(json: &str) -> Vec<i32> {
 }
 
 // ============================================================================
+// Convenience: build DEM from circuit (free function to handle lifetimes)
+// ============================================================================
+
+/// Build a `DetectorErrorModel` from a `DagCircuit` and noise parameters.
+///
+/// Reads detector/DEM output definitions from circuit metadata attributes.
+fn build_dem_from_circuit(
+    circuit: &pecos_quantum::DagCircuit,
+    p1: f64,
+    p2: f64,
+    p_meas: f64,
+    p_prep: f64,
+) -> DetectorErrorModel {
+    use crate::fault_tolerance::influence_builder::InfluenceBuilder;
+    use crate::fault_tolerance::propagator::DagFaultAnalyzer;
+    use pecos_num::graph::Attribute;
+
+    let mut influence_map = DagFaultAnalyzer::new(circuit).build_influence_map();
+    let annotated_observable_records = observable_records_from_annotations(circuit, &influence_map);
+    let annotation_map = InfluenceBuilder::new(circuit)
+        .with_circuit_annotations(circuit)
+        .build();
+    influence_map.merge_dem_outputs_from(&annotation_map);
+
+    // Extract metadata before building (to avoid borrow issues)
+    let det_json = circuit.get_attr("detectors").and_then(|a| {
+        if let Attribute::String(s) = a {
+            Some(s.clone())
+        } else {
+            None
+        }
+    });
+    let obs_json = circuit.get_attr("observables").and_then(|a| {
+        if let Attribute::String(s) = a {
+            Some(s.clone())
+        } else {
+            None
+        }
+    });
+    let num_meas = circuit.get_attr("num_measurements").and_then(|a| {
+        if let Attribute::String(s) = a {
+            s.parse::<usize>().ok()
+        } else {
+            None
+        }
+    });
+
+    let builder = DemBuilder::new(&influence_map).with_noise(p1, p2, p_meas, p_prep);
+
+    let builder = if let Some(ref dj) = det_json {
+        builder
+            .with_detectors_json(dj)
+            .unwrap_or_else(|_| DemBuilder::new(&influence_map).with_noise(p1, p2, p_meas, p_prep))
+    } else {
+        builder
+    };
+
+    let builder = if let Some(ref oj) = obs_json {
+        builder
+            .with_observables_json(oj)
+            .unwrap_or_else(|_| DemBuilder::new(&influence_map).with_noise(p1, p2, p_meas, p_prep))
+    } else if !annotated_observable_records.is_empty() {
+        builder.with_observable_records(annotated_observable_records)
+    } else {
+        builder
+    };
+
+    let builder = if let Some(n) = num_meas {
+        builder.with_num_measurements(n)
+    } else {
+        builder
+    };
+
+    builder.build()
+}
+
+fn observable_records_from_annotations(
+    circuit: &pecos_quantum::DagCircuit,
+    influence_map: &DagFaultInfluenceMap,
+) -> Vec<Vec<i32>> {
+    use pecos_quantum::AnnotationKind;
+
+    let num_measurements = influence_map.measurements.len();
+    if num_measurements == 0 {
+        return Vec::new();
+    }
+
+    let mut node_to_meas_idx: BTreeMap<usize, usize> = BTreeMap::new();
+    for (meas_idx, &(node, _qubit, _basis)) in influence_map.measurements.iter().enumerate() {
+        node_to_meas_idx.entry(node).or_insert(meas_idx);
+    }
+
+    circuit
+        .observables()
+        .map(|ann| {
+            if let AnnotationKind::Observable { measurement_nodes } = &ann.kind {
+                measurement_nodes
+                    .iter()
+                    .filter_map(|node| node_to_meas_idx.get(node).copied())
+                    .map(|meas_idx| {
+                        #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+                        {
+                            meas_idx as i32 - num_measurements as i32
+                        }
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        })
+        .collect()
+}
+
+// ============================================================================
 // Error Type
 // ============================================================================
 
@@ -973,6 +1409,497 @@ impl std::error::Error for DemBuilderError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_from_circuit_tracks_tracked_pauli() {
+        use pecos_core::pauli::X;
+        use pecos_quantum::DagCircuit;
+
+        let mut circuit = DagCircuit::new();
+        circuit.pz(&[0]);
+        circuit.h(&[0]);
+        circuit.tracked_pauli_labeled("x_check", X(0));
+
+        let dem = DemBuilder::from_circuit(&circuit, 0.03, 0.0, 0.0, 0.0);
+
+        assert_eq!(dem.num_dem_outputs(), 0);
+        assert_eq!(dem.num_tracked_paulis(), 1);
+        assert_eq!(dem.num_observables(), 0);
+        assert_eq!(
+            dem.tracked_paulis()[0].kind,
+            Some(crate::fault_tolerance::DemOutputKind::TrackedPauli)
+        );
+        assert_eq!(dem.tracked_paulis()[0].label.as_deref(), Some("x_check"));
+        assert_eq!(
+            dem.tracked_paulis()[0]
+                .pauli
+                .as_ref()
+                .unwrap()
+                .to_sparse_str(),
+            "+X0"
+        );
+        assert!(!dem.to_string().contains("logical_observable"));
+        assert!(!dem.to_string().contains("TP0"));
+        let pecos_text = dem.to_pecos_string();
+        assert!(pecos_text.contains("TP0"));
+        assert!(pecos_text.contains("pecos_tracked_pauli"));
+    }
+
+    #[test]
+    fn test_tracked_pauli_and_observable_use_distinct_tracked_paulis() {
+        use pecos_core::pauli::Z;
+        use pecos_quantum::{Attribute, DagCircuit};
+
+        let mut circuit = DagCircuit::new();
+        circuit.pz(&[0]);
+        circuit.tracked_pauli_labeled("z_check", Z(0));
+        circuit.mz(&[0]);
+        circuit.set_attr("num_measurements", Attribute::String("1".to_string()));
+        circuit.set_attr(
+            "observables",
+            Attribute::String(r#"[{"id":0,"records":[-1]}]"#.to_string()),
+        );
+
+        let dem = DemBuilder::from_circuit(&circuit, 0.0, 0.0, 0.02, 0.03);
+
+        assert_eq!(dem.num_dem_outputs(), 1);
+        assert_eq!(dem.num_tracked_paulis(), 1);
+        assert_eq!(dem.num_observables(), 1);
+        assert_eq!(
+            dem.dem_outputs()[0].kind,
+            Some(crate::fault_tolerance::DemOutputKind::Observable)
+        );
+        assert_eq!(dem.tracked_paulis()[0].label.as_deref(), Some("z_check"));
+        let dem_str = dem.to_string();
+        assert!(dem_str.contains("logical_observable L0"));
+        assert!(!dem_str.contains("logical_observable L1"));
+        assert!(!dem_str.contains("TP0"));
+        let pecos_text = dem.to_pecos_string();
+        assert!(pecos_text.contains("TP0"));
+        assert!(pecos_text.contains("pecos_tracked_pauli"));
+        let summaries = dem.contribution_effect_summaries();
+        assert!(
+            summaries
+                .iter()
+                .any(|summary| summary.effect.dem_outputs.as_slice() == [0]),
+            "observable should remain L0"
+        );
+        assert!(
+            summaries
+                .iter()
+                .any(|summary| summary.effect.tracked_paulis.as_slice() == [0]),
+            "tracked Pauli should remain TP0"
+        );
+    }
+
+    #[test]
+    fn test_tick_dag_tick_dem_keeps_detector_observable_and_tracked_pauli_distinct() {
+        use pecos_core::pauli::X;
+        use pecos_quantum::{DagCircuit, TickCircuit};
+
+        let mut circuit = TickCircuit::new();
+        circuit.tick().pz(&[0, 1]);
+        circuit.tick().h(&[0]);
+        circuit.tracked_pauli_labeled("tracked_x0", X(0));
+        circuit.tick().mz(&[0, 1]);
+        circuit.set_meta(
+            "num_measurements",
+            pecos_quantum::Attribute::String(circuit.num_measurements().to_string()),
+        );
+        circuit
+            .add_detector_metadata(&[-2], None, Some("D0"), Some(0))
+            .unwrap();
+        circuit
+            .add_observable_metadata(&[-1], Some(0), Some("L0"))
+            .unwrap();
+        let round_tripped = TickCircuit::from(&DagCircuit::from(&circuit));
+        let dem = DemBuilder::from_tick_circuit(&round_tripped, 0.03, 0.0, 0.02, 0.0);
+
+        assert_eq!(dem.num_detectors(), 1);
+        assert_eq!(dem.num_observables(), 1);
+        assert_eq!(dem.num_dem_outputs(), 1);
+        assert_eq!(dem.dem_outputs()[0].id, 0);
+        assert_eq!(dem.num_tracked_paulis(), 1);
+        assert_eq!(dem.tracked_paulis()[0].id, 0);
+        assert_eq!(dem.tracked_paulis()[0].label.as_deref(), Some("tracked_x0"));
+        assert_eq!(
+            dem.tracked_paulis()[0]
+                .pauli
+                .as_ref()
+                .unwrap()
+                .to_sparse_str(),
+            "+X0"
+        );
+
+        let standard_text = dem.to_string();
+        assert!(standard_text.contains("logical_observable L0"));
+        assert!(!standard_text.contains("logical_observable L1"));
+        assert!(!standard_text.contains("pecos_tracked_pauli"));
+
+        let pecos_text = dem.to_pecos_string();
+        assert!(pecos_text.contains("pecos_observable"));
+        assert!(pecos_text.contains("pecos_tracked_pauli"));
+
+        let summaries = dem.contribution_effect_summaries();
+        assert!(
+            summaries
+                .iter()
+                .any(|summary| summary.effect.detectors.as_slice() == [0]),
+            "detector effects should survive Tick -> DAG -> Tick"
+        );
+        assert!(
+            summaries
+                .iter()
+                .any(|summary| summary.effect.dem_outputs.as_slice() == [0]),
+            "observable effects should remain in L0"
+        );
+    }
+
+    #[test]
+    fn test_circuit_observable_annotation_is_not_double_counted() {
+        use pecos_quantum::DagCircuit;
+
+        let mut circuit = DagCircuit::new();
+        circuit.pz(&[0]);
+        let meas = circuit.mz(&[0]);
+        circuit.observable_labeled("obs0", &[meas[0]]);
+
+        let dem = DemBuilder::from_circuit(&circuit, 0.0, 0.0, 1.0, 0.0);
+
+        assert_eq!(dem.num_dem_outputs(), 1);
+        assert_eq!(dem.num_observables(), 1);
+        assert_eq!(dem.dem_outputs().len(), 1);
+        assert_eq!(dem.dem_outputs()[0].id, 0);
+        assert_eq!(dem.dem_outputs()[0].records.as_slice(), &[-1]);
+        assert_eq!(dem.dem_outputs()[0].label.as_deref(), Some("obs0"));
+
+        let logical_observable_lines = dem
+            .to_string()
+            .lines()
+            .filter(|line| *line == "logical_observable L0")
+            .count();
+        assert_eq!(logical_observable_lines, 1);
+
+        let summaries = dem.contribution_effect_summaries();
+        assert!(
+            summaries
+                .iter()
+                .any(|summary| summary.effect.dem_outputs.as_slice() == [0]),
+            "measurement fault should flip observable L0 once, not cancel"
+        );
+    }
+
+    #[test]
+    fn test_from_tick_circuit_tracks_face_gate_fault_sources() {
+        use pecos_core::QubitId;
+        use pecos_quantum::{Attribute, TickCircuit};
+
+        for gate_type in [GateType::F, GateType::Fdg] {
+            let mut circuit = TickCircuit::new();
+            circuit.tick().pz(&[QubitId(0)]);
+            match gate_type {
+                GateType::F => {
+                    circuit.tick().f(&[QubitId(0)]);
+                }
+                GateType::Fdg => {
+                    circuit.tick().fdg(&[QubitId(0)]);
+                }
+                _ => unreachable!(),
+            }
+            circuit.tick().mz(&[QubitId(0)]);
+            circuit.set_meta("num_measurements", Attribute::String("1".to_string()));
+            circuit.set_meta(
+                "detectors",
+                Attribute::String(r#"[{"id":0,"records":[-1]}]"#.to_string()),
+            );
+            circuit.set_meta("observables", Attribute::String("[]".to_string()));
+
+            let dem = DemBuilder::from_tick_circuit(&circuit, 0.03, 0.0, 0.0, 0.0);
+            let contributions = dem.contributions_for_effect(&[0], &[]);
+
+            assert!(
+                contributions
+                    .iter()
+                    .any(|contribution| contribution.source_gate_types.contains(&gate_type)),
+                "DEM should include a tracked {gate_type:?} fault source"
+            );
+        }
+    }
+
+    #[test]
+    fn test_fault_catalog_and_dem_cover_standard_clifford_gate_sources() {
+        use crate::fault_tolerance::fault_sampler::{
+            FaultCatalog, StochasticNoiseParams, build_fault_catalog,
+        };
+        use pecos_core::QubitId;
+        use pecos_quantum::{Attribute, TickCircuit};
+        use std::collections::BTreeMap;
+
+        fn set_meta(circuit: &mut TickCircuit, num_measurements: usize, detectors: &str) {
+            circuit.set_meta(
+                "num_measurements",
+                Attribute::String(num_measurements.to_string()),
+            );
+            circuit.set_meta("detectors", Attribute::String(detectors.to_string()));
+            circuit.set_meta("observables", Attribute::String("[]".to_string()));
+        }
+
+        fn add_1q_gate(circuit: &mut TickCircuit, gate_type: GateType) {
+            match gate_type {
+                GateType::X => {
+                    circuit.tick().x(&[QubitId(0)]);
+                }
+                GateType::Y => {
+                    circuit.tick().y(&[QubitId(0)]);
+                }
+                GateType::Z => {
+                    circuit.tick().z(&[QubitId(0)]);
+                }
+                GateType::H => {
+                    circuit.tick().h(&[QubitId(0)]);
+                }
+                GateType::F => {
+                    circuit.tick().f(&[QubitId(0)]);
+                }
+                GateType::Fdg => {
+                    circuit.tick().fdg(&[QubitId(0)]);
+                }
+                GateType::SX => {
+                    circuit.tick().sx(&[QubitId(0)]);
+                }
+                GateType::SXdg => {
+                    circuit.tick().sxdg(&[QubitId(0)]);
+                }
+                GateType::SY => {
+                    circuit.tick().sy(&[QubitId(0)]);
+                }
+                GateType::SYdg => {
+                    circuit.tick().sydg(&[QubitId(0)]);
+                }
+                GateType::SZ => {
+                    circuit.tick().sz(&[QubitId(0)]);
+                }
+                GateType::SZdg => {
+                    circuit.tick().szdg(&[QubitId(0)]);
+                }
+                _ => panic!("not a 1q standard Clifford gate: {gate_type:?}"),
+            }
+        }
+
+        fn add_2q_gate(circuit: &mut TickCircuit, gate_type: GateType) {
+            let pair = &[(QubitId(0), QubitId(1))];
+            match gate_type {
+                GateType::CX => {
+                    circuit.tick().cx(pair);
+                }
+                GateType::CY => {
+                    circuit.tick().cy(pair);
+                }
+                GateType::CZ => {
+                    circuit.tick().cz(pair);
+                }
+                GateType::SXX => {
+                    circuit.tick().sxx(pair);
+                }
+                GateType::SXXdg => {
+                    circuit.tick().sxxdg(pair);
+                }
+                GateType::SYY => {
+                    circuit.tick().syy(pair);
+                }
+                GateType::SYYdg => {
+                    circuit.tick().syydg(pair);
+                }
+                GateType::SZZ => {
+                    circuit.tick().szz(pair);
+                }
+                GateType::SZZdg => {
+                    circuit.tick().szzdg(pair);
+                }
+                GateType::SWAP => {
+                    circuit.tick().swap(pair);
+                }
+                _ => panic!("not a 2q standard Clifford gate: {gate_type:?}"),
+            }
+        }
+
+        fn dem_has_source(dem: &DetectorErrorModel, gate_type: GateType) -> bool {
+            dem.contribution_render_records()
+                .iter()
+                .any(|record| record.contribution.source_gate_types.contains(&gate_type))
+        }
+
+        fn catalog_dem_channel_effect_probabilities(
+            catalog: &FaultCatalog,
+        ) -> BTreeMap<(Vec<u32>, Vec<u32>), f64> {
+            let mut by_effect = BTreeMap::new();
+            for location in &catalog.locations {
+                if location.num_alternatives == 0 {
+                    continue;
+                }
+                let num_alternatives = f64::from(
+                    u32::try_from(location.num_alternatives)
+                        .expect("fault alternative count fits in u32"),
+                );
+                let per_channel_probability =
+                    1.0 - location.no_fault_probability.powf(1.0 / num_alternatives);
+                for fault in &location.faults {
+                    if fault.affected_detectors.is_empty() && fault.affected_observables.is_empty()
+                    {
+                        continue;
+                    }
+                    let detectors: Vec<u32> = fault
+                        .affected_detectors
+                        .iter()
+                        .map(|&det| u32::try_from(det).unwrap())
+                        .collect();
+                    let observables: Vec<u32> = fault
+                        .affected_observables
+                        .iter()
+                        .map(|&obs| u32::try_from(obs).unwrap())
+                        .collect();
+                    *by_effect.entry((detectors, observables)).or_insert(0.0) +=
+                        per_channel_probability;
+                }
+            }
+            by_effect
+        }
+
+        fn dem_effect_probabilities(
+            dem: &DetectorErrorModel,
+        ) -> BTreeMap<(Vec<u32>, Vec<u32>), f64> {
+            dem.contribution_effect_summaries()
+                .into_iter()
+                .filter(|summary| {
+                    !summary.effect.detectors.is_empty() || !summary.effect.dem_outputs.is_empty()
+                })
+                .map(|summary| {
+                    (
+                        (
+                            summary.effect.detectors.into_iter().collect(),
+                            summary.effect.dem_outputs.into_iter().collect(),
+                        ),
+                        summary.total_probability,
+                    )
+                })
+                .collect()
+        }
+
+        fn assert_catalog_dem_probabilities_match(
+            catalog: &FaultCatalog,
+            dem: &DetectorErrorModel,
+            gate_type: GateType,
+        ) {
+            let catalog_probs = catalog_dem_channel_effect_probabilities(catalog);
+            let dem_probs = dem_effect_probabilities(dem);
+            assert_eq!(
+                catalog_probs.keys().collect::<Vec<_>>(),
+                dem_probs.keys().collect::<Vec<_>>(),
+                "{gate_type:?} should produce the same non-empty effects in the fault catalog and DEM"
+            );
+            for (effect, catalog_probability) in catalog_probs {
+                let dem_probability = dem_probs[&effect];
+                assert!(
+                    (catalog_probability - dem_probability).abs() < 1e-12,
+                    "{gate_type:?} effect {effect:?}: catalog probability {catalog_probability} != DEM probability {dem_probability}"
+                );
+            }
+        }
+
+        for gate_type in [
+            GateType::X,
+            GateType::Y,
+            GateType::Z,
+            GateType::H,
+            GateType::F,
+            GateType::Fdg,
+            GateType::SX,
+            GateType::SXdg,
+            GateType::SY,
+            GateType::SYdg,
+            GateType::SZ,
+            GateType::SZdg,
+        ] {
+            let mut circuit = TickCircuit::new();
+            circuit.tick().pz(&[QubitId(0)]);
+            add_1q_gate(&mut circuit, gate_type);
+            circuit.tick().mz(&[QubitId(0)]);
+            set_meta(&mut circuit, 1, r#"[{"id":0,"records":[-1]}]"#);
+
+            let catalog = build_fault_catalog(
+                &circuit,
+                &StochasticNoiseParams {
+                    p1: 0.03,
+                    p2: 0.0,
+                    p_meas: 0.0,
+                    p_prep: 0.0,
+                },
+            )
+            .unwrap();
+            let locations: Vec<_> = catalog
+                .locations
+                .iter()
+                .filter(|location| location.gate_type == gate_type)
+                .collect();
+            assert_eq!(locations.len(), 1, "{gate_type:?}");
+            assert_eq!(locations[0].faults.len(), 3, "{gate_type:?}");
+
+            let dem = DemBuilder::from_tick_circuit(&circuit, 0.03, 0.0, 0.0, 0.0);
+            assert!(
+                dem_has_source(&dem, gate_type),
+                "DEM should track a source contribution for {gate_type:?}"
+            );
+            assert_catalog_dem_probabilities_match(&catalog, &dem, gate_type);
+        }
+
+        for gate_type in [
+            GateType::CX,
+            GateType::CY,
+            GateType::CZ,
+            GateType::SXX,
+            GateType::SXXdg,
+            GateType::SYY,
+            GateType::SYYdg,
+            GateType::SZZ,
+            GateType::SZZdg,
+            GateType::SWAP,
+        ] {
+            let mut circuit = TickCircuit::new();
+            circuit.tick().pz(&[QubitId(0), QubitId(1)]);
+            add_2q_gate(&mut circuit, gate_type);
+            circuit.tick().mz(&[QubitId(0), QubitId(1)]);
+            set_meta(
+                &mut circuit,
+                2,
+                r#"[{"id":0,"records":[-2]},{"id":1,"records":[-1]}]"#,
+            );
+
+            let catalog = build_fault_catalog(
+                &circuit,
+                &StochasticNoiseParams {
+                    p1: 0.0,
+                    p2: 0.15,
+                    p_meas: 0.0,
+                    p_prep: 0.0,
+                },
+            )
+            .unwrap();
+            let locations: Vec<_> = catalog
+                .locations
+                .iter()
+                .filter(|location| location.gate_type == gate_type)
+                .collect();
+            assert_eq!(locations.len(), 1, "{gate_type:?}");
+            assert_eq!(locations[0].faults.len(), 15, "{gate_type:?}");
+
+            let dem = DemBuilder::from_tick_circuit(&circuit, 0.0, 0.15, 0.0, 0.0);
+            assert!(
+                dem_has_source(&dem, gate_type),
+                "DEM should track a source contribution for {gate_type:?}"
+            );
+            assert_catalog_dem_probabilities_match(&catalog, &dem, gate_type);
+        }
+    }
 
     #[test]
     fn test_parse_detectors_json() {
@@ -1000,6 +1927,20 @@ mod tests {
         assert_eq!(observables.len(), 1);
         assert_eq!(observables[0].id, 0);
         assert_eq!(observables[0].records, vec![-1, -3, -5]);
+    }
+
+    #[test]
+    fn test_dem_builder_accepts_observables_json_alias() {
+        let influence_map = DagFaultInfluenceMap::with_capacity(0);
+        let dem = DemBuilder::new(&influence_map)
+            .with_observables_json(r#"[{"id": 0, "records": [-1, -3]}]"#)
+            .unwrap()
+            .build();
+
+        assert_eq!(dem.num_dem_outputs(), 1);
+        assert_eq!(dem.num_observables(), 1);
+        assert_eq!(dem.num_tracked_paulis(), 0);
+        assert_eq!(dem.dem_outputs()[0].records.as_slice(), &[-1, -3]);
     }
 
     #[test]

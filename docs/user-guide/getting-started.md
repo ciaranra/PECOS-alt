@@ -167,6 +167,7 @@ The Python example uses a state vector simulator, which supports all quantum gat
 ## Next Steps
 
 - **[HUGR & Guppy Simulation](hugr-simulation.md)**: Measurement-based control flow and advanced Guppy features
+- **[PECOS Concepts](pecos-concepts.md)**: Detectors, observables, tracked Paulis, gates, channels, and fault locations
 - **[QASM Simulation](qasm-simulation.md)**: Full QASM simulation API for existing OpenQASM code
 - **[Simulators](simulators.md)**: Choose the right simulation backend
 - **[Noise Model Builders](noise-model-builders.md)**: Add realistic noise to your simulations
@@ -180,7 +181,6 @@ Most users won't need these, but they're available for specialized use cases:
 |---------|-----------------|-------------|
 | **LLVM** (Rust only) | QIR/LLVM IR execution | [LLVM Setup](llvm-setup.md) |
 | **CUDA** | GPU-accelerated simulation | [CUDA Setup](cuda-setup.md) |
-| **QuEST** | Alternative simulator backend | `pip install quantum-pecos[all]` |
 
 !!! tip "Python users"
     Pre-built wheels include LLVM support—no extra setup needed.

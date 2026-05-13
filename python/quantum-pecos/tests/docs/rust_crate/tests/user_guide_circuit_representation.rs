@@ -8,7 +8,7 @@ fn test_user_guide_circuit_representation_rust_1() {
     use pecos::core::{Gate, QubitId};
     use pecos::dag::DAG;
     use pecos::digraph::DiGraph;
-    use pecos::quantum::{Attribute, DagCircuit, TickCircuit};
+    use pecos::quantum::{Attribute, DagCircuit, TickCircuit, TickGateError};
 
 // Fluent builder API
 let mut circuit = DagCircuit::new();
@@ -76,8 +76,9 @@ circuit.h(&[0]).meta("error_rate", Attribute::Float(0.001));
 // Multiple metadata entries
 circuit.cx(&[(0, 1)]).meta("duration_ns", Attribute::Int(50));
 
-// Measurements break the chain but still support metadata
-circuit.mz(&[0]).meta("basis", Attribute::String("Z".into()));
+// Measurements return refs (not &mut Self), so chain separately
+circuit.mz(&[0]);
+circuit.meta("basis", Attribute::String("Z".into()));
 
 }
 
@@ -162,6 +163,7 @@ circuit.tick().mz(&[0, 1]);
 
 println!("Number of ticks: {}", circuit.num_ticks());
 println!("Total gates: {}", circuit.gate_count());
+println!("Gate batches: {}", circuit.gate_batch_count());
 
 }
 
@@ -181,7 +183,9 @@ tick.h(&[0]);
 // tick.cx(&[(0, 1)]);
 
 // Use try_add_gate for fallible operations
-if let Err(e) = tick.try_add_gate(Gate::cx(&[(0, 1)])) {
+if let Err(pecos::quantum::TickGateError::QubitConflict(e)) =
+    tick.try_add_gate(Gate::cx(&[(0, 1)]))
+{
     println!("Conflict on qubits: {:?}", e.conflicting_qubits);
 }
 

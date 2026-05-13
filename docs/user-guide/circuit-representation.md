@@ -245,8 +245,9 @@ Gates can have arbitrary metadata attached:
     # Multiple metadata entries
     circuit.cx([(0, 1)]).meta("duration_ns", 50)
 
-    # Measurements break the chain but still support metadata
-    circuit.mz([0]).meta("basis", "Z")
+    # Measurements return refs (not the circuit), so chain separately
+    circuit.mz([0])
+    circuit.meta("basis", "Z")
     ```
 
 === ":fontawesome-brands-rust: Rust"
@@ -261,8 +262,9 @@ Gates can have arbitrary metadata attached:
     // Multiple metadata entries
     circuit.cx(&[(0, 1)]).meta("duration_ns", Attribute::Int(50));
 
-    // Measurements break the chain but still support metadata
-    circuit.mz(&[0]).meta("basis", Attribute::String("Z".into()));
+    // Measurements return refs (not &mut Self), so chain separately
+    circuit.mz(&[0]);
+    circuit.meta("basis", Attribute::String("Z".into()));
     ```
 
 ### Circuit Analysis
@@ -272,7 +274,10 @@ Gates can have arbitrary metadata attached:
     from pecos.quantum import DagCircuit
 
     circuit = DagCircuit()
-    circuit.h([0]).cx([(0, 1)]).h([1]).cx([(1, 2)]).mz([0]).mz([1]).mz([2])
+    circuit.h([0]).cx([(0, 1)]).h([1]).cx([(1, 2)])
+    circuit.mz([0])
+    circuit.mz([1])
+    circuit.mz([2])
 
     # Basic metrics
     print(f"Total gates: {circuit.gate_count()}")
@@ -391,10 +396,12 @@ A time-sliced circuit representation where gates are organized into discrete tim
 
     print(f"Number of ticks: {circuit.num_ticks()}")
     print(f"Total gates: {circuit.gate_count()}")
+    print(f"Gate batches: {circuit.gate_batch_count()}")
     ```
 
 === ":fontawesome-brands-rust: Rust"
     ```rust
+    use pecos::core::Gate;
     use pecos::quantum::TickCircuit;
 
     let mut circuit = TickCircuit::new();
@@ -410,6 +417,7 @@ A time-sliced circuit representation where gates are organized into discrete tim
 
     println!("Number of ticks: {}", circuit.num_ticks());
     println!("Total gates: {}", circuit.gate_count());
+    println!("Gate batches: {}", circuit.gate_batch_count());
     ```
 
 ### Qubit Conflict Detection
@@ -440,7 +448,9 @@ TickCircuit prevents scheduling conflicting gates in the same tick:
     // tick.cx(&[(0, 1)]);
 
     // Use try_add_gate for fallible operations
-    if let Err(e) = tick.try_add_gate(Gate::cx(&[(0, 1)])) {
+    if let Err(pecos::quantum::TickGateError::QubitConflict(e)) =
+        tick.try_add_gate(Gate::cx(&[(0, 1)]))
+    {
         println!("Conflict on qubits: {:?}", e.conflicting_qubits);
     }
     ```
@@ -646,7 +656,7 @@ A directed acyclic graph with topological ordering and cycle prevention:
 | `cx(pairs)`, `szz(pairs)`, `rzz(theta, pairs)` | Two-qubit gates |
 | `mz(qubits)`, `pz(qubits)` | Measurement and preparation |
 | `meta(key, value)` | Attach metadata to last gate |
-| `gate_count()`, `depth()`, `width()` | Circuit metrics |
+| `gate_count()`, `gate_node_count()`, `depth()`, `width()` | Circuit metrics |
 | `qubits()` | List of qubits used |
 | `topological_order()` | Gates in dependency order |
 | `layers()` | Iterator over parallel gate layers |
@@ -659,7 +669,9 @@ A directed acyclic graph with topological ordering and cycle prevention:
 | `new()` | Create empty circuit |
 | `tick()` | Start a new time step |
 | `num_ticks()` | Number of time steps |
-| `gate_count()` | Total gates across all ticks |
+| `gate_count()` | Total gate applications across all ticks |
+| `gate_batch_count()` | Total stored compatible gate batches across all ticks |
+| `gate_batches()` | Stored gate batches with tick indices |
 | `set_meta(key, value)` | Circuit-level metadata |
 
 ### DAG Methods

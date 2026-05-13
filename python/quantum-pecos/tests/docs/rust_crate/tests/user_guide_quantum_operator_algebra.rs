@@ -7,7 +7,7 @@
 
 #[test]
 fn test_user_guide_quantum_operator_algebra_rust_1() {
-    use pecos_core::pauli::constructors::*;
+    use pecos_core::pauli::*;
     use pecos_core::PauliOperator;
     let p = X(0);          // X on qubit 0
     let q = Z(3);          // Z on qubit 3
@@ -33,7 +33,7 @@ fn test_user_guide_quantum_operator_algebra_rust_1() {
 
 #[test]
 fn test_user_guide_quantum_operator_algebra_rust_2() {
-    use pecos_core::pauli::constructors::*;
+    use pecos_core::pauli::*;
     use pecos_core::pauli::algebra::i;
     let imag = i * X(0);          // iX
     let neg_imag = -i * Y(1);     // -iY
@@ -43,7 +43,7 @@ fn test_user_guide_quantum_operator_algebra_rust_2() {
 
 #[test]
 fn test_user_guide_quantum_operator_algebra_rust_3() {
-    use pecos_core::pauli::constructors::*;
+    use pecos_core::pauli::*;
     use pecos_core::{PauliOperator, QuarterPhase};
     let a = X(0) & Z(1);
     let b = Z(0) & X(1);
@@ -70,9 +70,16 @@ fn test_user_guide_quantum_operator_algebra_rust_3() {
 #[test]
 fn test_user_guide_quantum_operator_algebra_rust_4() {
     use pecos_core::PauliString;
-    let p: PauliString = "XZI".parse().unwrap();    // X(0) & Z(1)
-    let q: PauliString = "+XZZXI".parse().unwrap(); // with explicit phase
-    let r: PauliString = "-iYX".parse().unwrap();   // -i * Y(0) * X(1)
+    let sparse: PauliString = "X0 Z3".parse().unwrap();
+    let dense: PauliString = "XIIZ".parse().unwrap();
+    let explicit_sparse = PauliString::from_sparse_str("X0 Z3").unwrap();
+    let explicit_dense = PauliString::from_dense_str("XIIZ").unwrap();
+
+    assert_eq!(sparse, dense);
+    assert_eq!(sparse, explicit_sparse);
+    assert_eq!(dense, explicit_dense);
+    assert_eq!(sparse.to_sparse_str(), "+X0 Z3");
+    assert_eq!(sparse.to_dense_str(None), "+XIIZ");
 }
 
 
@@ -80,7 +87,7 @@ fn test_user_guide_quantum_operator_algebra_rust_4() {
 
 #[test]
 fn test_user_guide_quantum_operator_algebra_rust_5() {
-    use pecos_core::pauli::constructors::*;
+    use pecos_core::pauli::*;
     use pecos_core::clifford_rep::CliffordRep;
     let h = CliffordRep::h(0);
     assert_eq!(*h.x_image(0), Z(0));  // H X H^dag = Z
@@ -100,7 +107,7 @@ fn test_user_guide_quantum_operator_algebra_rust_5() {
 
 #[test]
 fn test_user_guide_quantum_operator_algebra_rust_6() {
-    use pecos_core::unitary_rep::*;
+    use pecos_core::unitary::*;
     use pecos_core::Angle64;
     let circuit = T(1) * CX(0, 1) * H(0);  // apply H, then CX, then T
 
@@ -123,7 +130,7 @@ fn test_user_guide_quantum_operator_algebra_rust_6() {
 }
 
 
-// Measurement and preparation
+// Measurement, preparation, and reset
 
 #[test]
 fn test_user_guide_quantum_operator_algebra_rust_7() {
@@ -131,25 +138,33 @@ fn test_user_guide_quantum_operator_algebra_rust_7() {
     let mz = MZ(0);           // Z-basis measurement on qubit 0
     let mx = MX(1);           // X-basis measurement on qubit 1
     let pz = PZ(0);           // Prepare |0> on qubit 0
+    let reset = Reset(0);     // Reset to |0>
+    assert!(mz.is_gate());
+}
 
-    // Noise channels
+
+// Noise channels
+
+#[test]
+fn test_user_guide_quantum_operator_algebra_rust_8() {
+    use pecos_core::op::*;
     let depol = Depolarizing(0.01, 0);            // 1% depolarizing on qubit 0
     let deph = Dephasing(0.02, 1);                // 2% dephasing on qubit 1
     let amp_damp = AmplitudeDamping(0.05, 0);     // T1 decay
     let phase_damp = PhaseDamping(0.03, 0);       // T2 dephasing
     let erasure = Erasure(0.01, 0);               // Erasure channel
-    let reset = Reset(0);                         // Reset to |0>
     let leak = Leakage(0.001, 0);                 // Leakage to non-computational state
 
     // Custom Pauli channel
     let pauli_ch = PauliChannel(0.01, 0.01, 0.01, 0);  // px, py, pz
+    assert!(depol.is_channel());
 }
 
 
 // Pauli & Pauli stays Pauli
 
 #[test]
-fn test_user_guide_quantum_operator_algebra_rust_8() {
+fn test_user_guide_quantum_operator_algebra_rust_9() {
     use pecos_core::op::*;
     let p = X(0) & Y(3);
     assert!(p.is_pauli());
@@ -162,15 +177,19 @@ fn test_user_guide_quantum_operator_algebra_rust_8() {
     let u = X(0) & H(3) & T(5);
     assert!(u.is_unitary());
 
-    // Adding a measurement promotes to Channel
-    let ch = H(0) & MZ(1);
+    // Adding a measurement promotes to Gate
+    let g = H(0) & MZ(1);
+    assert!(g.is_gate());
+
+    // Adding noise promotes to Channel
+    let ch = g & Depolarizing(0.01, 2);
     assert!(ch.is_channel());
 }
 
 
 
 #[test]
-fn test_user_guide_quantum_operator_algebra_rust_9() {
+fn test_user_guide_quantum_operator_algebra_rust_10() {
     use pecos_core::op::*;
     let p = X(0) & Z(1);
     let ps = p.as_pauli().unwrap();  // borrow the inner PauliString
@@ -188,7 +207,7 @@ fn test_user_guide_quantum_operator_algebra_rust_9() {
 
 
 #[test]
-fn test_user_guide_quantum_operator_algebra_rust_10() {
+fn test_user_guide_quantum_operator_algebra_rust_11() {
     use pecos_core::op::*;
     let circuit = T(1) * CX(0, 1) * H(0);
     let inverse = circuit.dg();  // works for Pauli, Clifford, Unitary
@@ -201,18 +220,18 @@ fn test_user_guide_quantum_operator_algebra_rust_10() {
 
 
 #[test]
-fn test_user_guide_quantum_operator_algebra_rust_11() {
+fn test_user_guide_quantum_operator_algebra_rust_12() {
     use pecos_core::op::*;
     let circuit = CX(0, 3) & H(5);
-    assert_eq!(circuit.num_qubits(), 6);     // spans qubits 0..5
-    assert_eq!(circuit.qubits(), vec![0, 1, 2, 3, 4, 5]);  // full range
+    assert_eq!(circuit.num_qubits(), 6);     // matrix span is qubits 0..5
+    assert_eq!(circuit.qubits(), vec![0, 3, 5]);  // actual support
 }
 
 
 
 #[test]
-fn test_user_guide_quantum_operator_algebra_rust_12() {
-    use pecos_core::pauli::constructors::*;
+fn test_user_guide_quantum_operator_algebra_rust_13() {
+    use pecos_core::pauli::*;
     use pecos_quantum::PauliSequence;
     let seq = PauliSequence::new(vec![
         Zs([0, 1]),
@@ -238,8 +257,8 @@ fn test_user_guide_quantum_operator_algebra_rust_12() {
 
 
 #[test]
-fn test_user_guide_quantum_operator_algebra_rust_13() {
-    use pecos_core::pauli::constructors::*;
+fn test_user_guide_quantum_operator_algebra_rust_14() {
+    use pecos_core::pauli::*;
     use pecos_quantum::PauliSet;
     let mut set = PauliSet::new();
     set.insert(&X(0));
@@ -259,8 +278,8 @@ fn test_user_guide_quantum_operator_algebra_rust_13() {
 // Generators with imaginary phase
 
 #[test]
-fn test_user_guide_quantum_operator_algebra_rust_14() {
-    use pecos_core::pauli::constructors::*;
+fn test_user_guide_quantum_operator_algebra_rust_15() {
+    use pecos_core::pauli::*;
     use pecos_core::pauli::algebra::i;
     use pecos_quantum::PauliGroup;
     let group = PauliGroup::new(vec![
@@ -280,8 +299,8 @@ fn test_user_guide_quantum_operator_algebra_rust_14() {
 // Repetition code stabilizers
 
 #[test]
-fn test_user_guide_quantum_operator_algebra_rust_15() -> Result<(), Box<dyn std::error::Error>> {
-    use pecos_core::pauli::constructors::*;
+fn test_user_guide_quantum_operator_algebra_rust_16() -> Result<(), Box<dyn std::error::Error>> {
+    use pecos_core::pauli::*;
     use pecos_core::clifford_rep::CliffordRep;
     use pecos_quantum::PauliStabilizerGroup;
     let stab = PauliStabilizerGroup::new(vec![
@@ -309,8 +328,8 @@ fn test_user_guide_quantum_operator_algebra_rust_15() -> Result<(), Box<dyn std:
 // Upward (widening) -- always succeeds
 
 #[test]
-fn test_user_guide_quantum_operator_algebra_rust_16() {
-    use pecos_core::pauli::constructors::*;
+fn test_user_guide_quantum_operator_algebra_rust_17() {
+    use pecos_core::pauli::*;
     use pecos_quantum::{PauliGroup, PauliSequence, PauliSet, PauliStabilizerGroup};
     let stab = PauliStabilizerGroup::new(vec![Zs([0, 1])]).unwrap();
     let group: PauliGroup = stab.clone().into();        // drop phase constraint
@@ -332,8 +351,8 @@ fn test_user_guide_quantum_operator_algebra_rust_16() {
 // Build a stabilizer group
 
 #[test]
-fn test_user_guide_quantum_operator_algebra_rust_17() {
-    use pecos_core::pauli::constructors::*;
+fn test_user_guide_quantum_operator_algebra_rust_18() {
+    use pecos_core::pauli::*;
     use pecos_qec::StabilizerCode;
     use pecos_quantum::PauliStabilizerGroup;
     let group = PauliStabilizerGroup::new(vec![

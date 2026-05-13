@@ -324,11 +324,35 @@ impl PyStabMps {
                 self.inner.h(q);
                 Ok(None)
             }
+            "F" | "F1" => {
+                self.inner.f(q);
+                Ok(None)
+            }
+            "Fdg" | "F1d" | "F1dg" => {
+                self.inner.fdg(q);
+                Ok(None)
+            }
+            "SX" | "SqrtX" | "Q" => {
+                self.inner.sx(q);
+                Ok(None)
+            }
+            "SXdg" | "SqrtXdg" | "SqrtXd" | "Qd" => {
+                self.inner.sxdg(q);
+                Ok(None)
+            }
+            "SY" | "SqrtY" | "R" => {
+                self.inner.sy(q);
+                Ok(None)
+            }
+            "SYdg" | "SqrtYdg" | "SqrtYd" | "Rd" => {
+                self.inner.sydg(q);
+                Ok(None)
+            }
             "S" | "SZ" | "SqrtZ" => {
                 self.inner.sz(q);
                 Ok(None)
             }
-            "Sd" | "SZdg" | "SqrtZdg" => {
+            "Sd" | "SZdg" | "SqrtZdg" | "SqrtZd" => {
                 self.inner.szdg(q);
                 Ok(None)
             }
@@ -406,6 +430,34 @@ impl PyStabMps {
             }
             "CZ" => {
                 self.inner.cz(pair);
+                Ok(None)
+            }
+            "SXX" => {
+                self.inner.sxx(pair);
+                Ok(None)
+            }
+            "SXXdg" => {
+                self.inner.sxxdg(pair);
+                Ok(None)
+            }
+            "SYY" => {
+                self.inner.syy(pair);
+                Ok(None)
+            }
+            "SYYdg" => {
+                self.inner.syydg(pair);
+                Ok(None)
+            }
+            "SZZ" => {
+                self.inner.szz(pair);
+                Ok(None)
+            }
+            "SZZdg" => {
+                self.inner.szzdg(pair);
+                Ok(None)
+            }
+            "SWAP" => {
+                self.inner.swap(pair);
                 Ok(None)
             }
             "RZZ" => {

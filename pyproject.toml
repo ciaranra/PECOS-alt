@@ -1,12 +1,15 @@
 [project]
 name = "pecos-workspace"
-version = "0.8.0.dev5"
+version = "0.8.0.dev8"
+requires-python = ">=3.10"
 # Meta-package; runtime deps live in the member packages. Test/example/dev
 # tooling is declared in [dependency-groups] below.
 dependencies = []
 
 [project.optional-dependencies]
-cuda = ["quantum-pecos[cuda]"]
+# Keep this in sync with the cuda dependency group below. The extra supports
+# `uv sync --extra cuda`; the group supports `uv run --group cuda ...`.
+cuda = ["quantum-pecos[cuda]==0.8.0.dev8"]
 
 [tool.uv.workspace]
 members = [
@@ -35,6 +38,7 @@ dev = [
   "pre-commit",                             # Git hooks
   "black",                                  # Code formatting
   "ruff",                                   # Fast Python linting
+  "tomli>=1.1.0; python_version < '3.11'",  # TOML parsing (stdlib in 3.11+)
   "mkdocs",                                 # Documentation framework
   "mkdocs-material",                        # Material theme for MkDocs
   "mkdocstrings[python]",                   # Code documentation extraction
@@ -52,7 +56,6 @@ test = [ # exact pins so workspace tests run against a reproducible environment
   "pytest-timeout==2.4.0",
   "hypothesis==6.152.1",
   "stim==1.15.0",        # Stim-comparison and decomposition-invariant tests
-  "wasmtime==43.0.0",    # WebAssembly runtime exercised by integration tests
   "matplotlib>=2.2.0",   # Surface-patch render tests import matplotlib directly
 ]
 examples = [ # extras used by the examples/ tree and notebook walkthroughs
@@ -64,15 +67,20 @@ numpy-compat = [ # NumPy/SciPy compatibility tests - verify compatibility with s
   "scipy>=1.1.0",
 ]
 cuda = [ # CUDA Python packages for GPU-accelerated simulations (requires CUDA toolkit)
-  "quantum-pecos[cuda]",
+  "quantum-pecos[cuda]==0.8.0.dev8",
 ]
 
 [tool.uv]
 default-groups = ["dev", "test"]
-# Prevent uv from caching pecos-rslib wheels - always use freshly built version
-# This fixes stale code issues when uv sync/run reinstalls cached old wheels
+# Prevent uv from caching native workspace wheels - always use freshly built versions.
+# This fixes stale code issues when uv sync/run reinstalls cached old wheels.
 # See: https://github.com/astral-sh/uv/issues/11390
-reinstall-package = ["pecos-rslib", "pecos-rslib-cuda", "pecos-rslib-llvm"]
+reinstall-package = [
+  "pecos-rslib",
+  "pecos-rslib-cuda",
+  "pecos-rslib-exp",
+  "pecos-rslib-llvm",
+]
 
 [tool.black]
 line-length = 120

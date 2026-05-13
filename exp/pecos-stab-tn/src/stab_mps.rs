@@ -338,8 +338,11 @@ impl StabMpsBuilder {
     ///   for adversarial T-heavy subcircuits before truncation hits the cap.
     ///
     /// Override any of these with subsequent builder calls:
-    /// ```ignore
-    /// StabMps::builder(n).for_qec().max_bond_dim(64).build()
+    /// ```
+    /// use pecos_stab_tn::stab_mps::StabMps;
+    ///
+    /// let sim = StabMps::builder(4).for_qec().max_bond_dim(64).build();
+    /// assert_eq!(sim.num_qubits(), 4);
     /// ```
     #[must_use]
     pub fn for_qec(self) -> Self {
@@ -1877,6 +1880,22 @@ impl QuantumSimulator for StabMps {
 
     fn num_qubits(&self) -> usize {
         self.num_qubits
+    }
+}
+
+impl pecos_random::RngManageable for StabMps {
+    type Rng = PecosRng;
+
+    fn set_rng(&mut self, rng: Self::Rng) {
+        self.rng = rng;
+    }
+
+    fn rng(&self) -> &Self::Rng {
+        &self.rng
+    }
+
+    fn rng_mut(&mut self) -> &mut Self::Rng {
+        &mut self.rng
     }
 }
 
@@ -5880,39 +5899,28 @@ mod tests {
     }
 
     #[test]
-    fn test_pauli_frame_faster_than_eager_for_many_noise_injects() {
-        // Timing sanity check: many Pauli injections into frame should
-        // be far faster than applying each to tableau.
-        use std::time::Instant;
-        let n = 32;
-        let num_injects = 10_000;
+    fn test_pauli_frame_matches_eager_for_many_noise_injects() {
+        let n = 6;
+        let num_injects = 1_000;
 
         let mut stn_frame = StabMps::builder(n)
             .seed(1)
             .pauli_frame_tracking(true)
             .build();
-        let start = Instant::now();
-        for _ in 0..num_injects {
-            stn_frame.apply_depolarizing(QubitId(0), 1.0);
-        }
-        let t_frame = start.elapsed().as_secs_f64();
-
         let mut stn_eager = StabMps::builder(n).seed(1).build();
-        let start = Instant::now();
-        for _ in 0..num_injects {
-            stn_eager.apply_depolarizing(QubitId(0), 1.0);
-        }
-        let t_eager = start.elapsed().as_secs_f64();
 
-        // Frame tracking should be at least 2x faster.
-        eprintln!(
-            "Pauli frame: {t_frame:.4}s; eager: {t_eager:.4}s  → {:.1}x",
-            t_eager / t_frame
-        );
-        assert!(
-            t_frame * 2.0 < t_eager,
-            "frame tracking should be >2x faster: frame={t_frame:.4}s eager={t_eager:.4}s"
-        );
+        for k in 0..num_injects {
+            let q = QubitId(k % n);
+            let frame_pauli = stn_frame.apply_depolarizing(q, 1.0);
+            let eager_pauli = stn_eager.apply_depolarizing(q, 1.0);
+            assert_eq!(frame_pauli, eager_pauli);
+        }
+
+        stn_frame.flush_pauli_frame_to_state();
+        let frame_sv = stn_frame.state_vector();
+        let eager_sv = stn_eager.state_vector();
+
+        assert_state_vectors_match(&frame_sv, &eager_sv, "frame vs eager Pauli injections");
     }
 
     #[test]

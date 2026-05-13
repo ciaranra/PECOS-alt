@@ -963,12 +963,30 @@ impl<'a> GadgetChecker<'a> {
     /// Propagate a `PauliProp` through the circuit without additional faults.
     fn propagate_through_circuit(&self, mut prop: PauliProp) -> PauliProp {
         for tick in self.circuit.ticks() {
-            for gate in tick.gates() {
+            for gate in tick.iter_gate_batches() {
                 let qubits: Vec<QubitId> = gate.qubits.to_vec();
 
                 match gate.gate_type {
                     pecos_core::gate_type::GateType::H => {
                         prop.h(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::F => {
+                        prop.f(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::Fdg => {
+                        prop.fdg(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::SX => {
+                        prop.sx(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::SXdg => {
+                        prop.sxdg(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::SY => {
+                        prop.sy(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::SYdg => {
+                        prop.sydg(&qubits);
                     }
                     pecos_core::gate_type::GateType::SZ => {
                         prop.sz(&qubits);
@@ -979,8 +997,32 @@ impl<'a> GadgetChecker<'a> {
                     pecos_core::gate_type::GateType::CX if qubits.len() >= 2 => {
                         prop.cx(&[(qubits[0], qubits[1])]);
                     }
+                    pecos_core::gate_type::GateType::CY if qubits.len() >= 2 => {
+                        prop.cy(&[(qubits[0], qubits[1])]);
+                    }
                     pecos_core::gate_type::GateType::CZ if qubits.len() >= 2 => {
                         prop.cz(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SXX if qubits.len() >= 2 => {
+                        prop.sxx(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SXXdg if qubits.len() >= 2 => {
+                        prop.sxxdg(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SYY if qubits.len() >= 2 => {
+                        prop.syy(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SYYdg if qubits.len() >= 2 => {
+                        prop.syydg(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SZZ if qubits.len() >= 2 => {
+                        prop.szz(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SZZdg if qubits.len() >= 2 => {
+                        prop.szzdg(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SWAP if qubits.len() >= 2 => {
+                        prop.swap(&[(qubits[0], qubits[1])]);
                     }
                     pecos_core::gate_type::GateType::X => {
                         prop.x(&qubits);
@@ -1677,7 +1719,7 @@ impl<'a> GadgetChecker<'a> {
         }
 
         // Propagate through circuit up to max_tick, injecting faults as we go
-        for (tick_idx, tick) in self.circuit.ticks().iter().enumerate() {
+        for (tick_idx, tick) in self.circuit.iter_ticks() {
             if tick_idx > max_tick {
                 break;
             }
@@ -1699,11 +1741,29 @@ impl<'a> GadgetChecker<'a> {
             }
 
             // Apply gates
-            for gate in tick.gates() {
+            for gate in tick.iter_gate_batches() {
                 let qubits: Vec<QubitId> = gate.qubits.to_vec();
                 match gate.gate_type {
                     pecos_core::gate_type::GateType::H => {
                         prop.h(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::F => {
+                        prop.f(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::Fdg => {
+                        prop.fdg(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::SX => {
+                        prop.sx(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::SXdg => {
+                        prop.sxdg(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::SY => {
+                        prop.sy(&qubits);
+                    }
+                    pecos_core::gate_type::GateType::SYdg => {
+                        prop.sydg(&qubits);
                     }
                     pecos_core::gate_type::GateType::SZ => {
                         prop.sz(&qubits);
@@ -1714,8 +1774,32 @@ impl<'a> GadgetChecker<'a> {
                     pecos_core::gate_type::GateType::CX if qubits.len() >= 2 => {
                         prop.cx(&[(qubits[0], qubits[1])]);
                     }
+                    pecos_core::gate_type::GateType::CY if qubits.len() >= 2 => {
+                        prop.cy(&[(qubits[0], qubits[1])]);
+                    }
                     pecos_core::gate_type::GateType::CZ if qubits.len() >= 2 => {
                         prop.cz(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SXX if qubits.len() >= 2 => {
+                        prop.sxx(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SXXdg if qubits.len() >= 2 => {
+                        prop.sxxdg(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SYY if qubits.len() >= 2 => {
+                        prop.syy(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SYYdg if qubits.len() >= 2 => {
+                        prop.syydg(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SZZ if qubits.len() >= 2 => {
+                        prop.szz(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SZZdg if qubits.len() >= 2 => {
+                        prop.szzdg(&[(qubits[0], qubits[1])]);
+                    }
+                    pecos_core::gate_type::GateType::SWAP if qubits.len() >= 2 => {
+                        prop.swap(&[(qubits[0], qubits[1])]);
                     }
                     pecos_core::gate_type::GateType::X => {
                         prop.x(&qubits);
@@ -1942,7 +2026,8 @@ mod tests {
         let mut circuit = TickCircuit::new();
         circuit.tick().pz(&[0, 1, 2]); // Initialize all data qubits
         circuit.tick().h(&[0]); // Some operations
-        circuit.tick().cx(&[(0, 1), (0, 2)]);
+        circuit.tick().cx(&[(0, 1)]);
+        circuit.tick().cx(&[(0, 2)]);
         // Data qubits are OUTPUT (not measured)
         circuit
     }
@@ -2347,7 +2432,8 @@ mod tests {
         let mut circuit = TickCircuit::new();
         circuit.tick().pz(&[0, 1, 2]); // All qubits prepared
         circuit.tick().h(&[0]);
-        circuit.tick().cx(&[(0, 1), (0, 2)]);
+        circuit.tick().cx(&[(0, 1)]);
+        circuit.tick().cx(&[(0, 2)]);
         // No measurement - outputs go to next stage
 
         let checker = GadgetChecker::from_circuit(&circuit);

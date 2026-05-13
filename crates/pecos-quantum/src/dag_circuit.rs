@@ -17,7 +17,7 @@
 //! This module provides [`DagCircuit`], a directed acyclic graph representation
 //! of quantum circuits where nodes are gates and edges are qubit wires.
 //!
-//! The design follows HUGR and Qiskit's `DAGCircuit`: edges represent qubit wires
+//! The design follows a wire-edge DAG model: edges represent qubit wires
 //! flowing between gates, not just abstract dependencies.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -126,10 +126,14 @@ impl DagTraversalIndex {
         self.max_qubit + 1
     }
 
-    /// Returns the number of gates.
+    /// Returns the number of gate nodes in the traversal index.
+    ///
+    /// A batched DAG node still contributes one node here. Use
+    /// [`DagCircuit::gate_count`] when you need the number of individual gates
+    /// represented by batched gate nodes.
     #[inline]
     #[must_use]
-    pub fn num_gates(&self) -> usize {
+    pub fn num_gate_nodes(&self) -> usize {
         self.topo_order.len()
     }
 
@@ -313,79 +317,11 @@ impl TraversalWorkBuffers {
     }
 }
 
-/// A handle returned by measurement operations, allowing metadata to be attached.
-///
-/// This follows the simulator pattern where measurements break the chain,
-/// but still allows attaching metadata via `.meta()`.
-///
-/// # Example
-/// ```
-/// use pecos_quantum::{DagCircuit, Attribute};
-///
-/// let mut circuit = DagCircuit::new();
-/// circuit.mz(&[0]).meta("basis", Attribute::String("Z".into()));
-/// circuit.h(&[1]);  // continue building
-/// ```
-pub struct MeasureHandle<'a> {
-    circuit: &'a mut DagCircuit,
-    node: usize,
-}
-
-impl MeasureHandle<'_> {
-    /// Returns the node ID of this measurement.
-    #[inline]
-    #[must_use]
-    pub fn node(&self) -> usize {
-        self.node
-    }
-
-    /// Add metadata to this measurement.
-    ///
-    /// Returns `()` to break the chain, matching simulator behavior.
-    pub fn meta(self, key: &str, value: impl Into<Attribute>) {
-        self.circuit.set_gate_attr(self.node, key, value.into());
-    }
-}
-
-/// Handle returned by preparation operations to allow metadata attachment.
-///
-/// This handle breaks the method chain (unlike regular gates),
-/// but still allows attaching metadata via `.meta()`.
-///
-/// # Example
-/// ```
-/// use pecos_quantum::{DagCircuit, Attribute};
-///
-/// let mut circuit = DagCircuit::new();
-/// circuit.pz(&[0]).meta("reason", Attribute::String("reset".into()));
-/// circuit.h(&[1]);  // continue building
-/// ```
-pub struct PrepHandle<'a> {
-    circuit: &'a mut DagCircuit,
-    node: usize,
-}
-
-impl PrepHandle<'_> {
-    /// Returns the node ID of this preparation.
-    #[inline]
-    #[must_use]
-    pub fn node(&self) -> usize {
-        self.node
-    }
-
-    /// Add metadata to this preparation.
-    ///
-    /// Returns `()` to break the chain.
-    pub fn meta(self, key: &str, value: impl Into<Attribute>) {
-        self.circuit.set_gate_attr(self.node, key, value.into());
-    }
-}
-
 /// A directed acyclic graph representation of a quantum circuit.
 ///
 /// Each node in the DAG represents a quantum gate. Edges represent qubit wires
 /// flowing between gates - each edge is labeled with the [`QubitId`] it carries.
-/// This design follows HUGR and Qiskit's `DAGCircuit`.
+/// This design follows a wire-edge DAG model.
 ///
 /// For a two-qubit gate like CX, there are two incoming edges (one per qubit)
 /// and two outgoing edges.
@@ -416,6 +352,72 @@ impl PrepHandle<'_> {
 /// assert_eq!(circuit.gate_count(), 2);
 /// assert_eq!(circuit.wire_count(), 1);
 /// ```
+/// A measurement reference returned by [`DagCircuit::mz`].
+///
+/// Carries both the DAG node index and the qubit that was measured.
+/// Dereferences to `usize` (the node index) for use in detector/observable
+/// definitions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MeasRef {
+    /// DAG node index.
+    pub node: usize,
+    /// Qubit that was measured.
+    pub qubit: QubitId,
+}
+
+impl std::ops::Deref for MeasRef {
+    type Target = usize;
+    fn deref(&self) -> &usize {
+        &self.node
+    }
+}
+
+impl From<MeasRef> for usize {
+    fn from(m: MeasRef) -> usize {
+        m.node
+    }
+}
+
+/// The role of a Pauli annotation in the circuit.
+///
+/// All three kinds track the same thing -- whether a Pauli string flips due to
+/// faults. The difference is how the answer is read out and what it means.
+#[derive(Debug, Clone)]
+pub enum AnnotationKind {
+    /// Stabilizer check: the Pauli should be deterministic (flip = error detected).
+    /// Stores measurement node indices for classical readout via XOR, plus
+    /// optional coordinates for visualization/matching.
+    Detector {
+        measurement_nodes: Vec<usize>,
+        coords: Vec<f64>,
+    },
+    /// Logical observable: the Pauli's flip determines a logical outcome.
+    /// Stores measurement node indices for classical readout via XOR.
+    Observable { measurement_nodes: Vec<usize> },
+    /// Tracked Pauli: no measurement readout.
+    /// Position is determined by a `TrackedPauliMeta` node in the DAG.
+    TrackedPauli,
+}
+
+/// A unified Pauli annotation: detectors, observables, and tracked Paulis
+/// are all Pauli strings tracked for flipping via backward propagation.
+///
+/// - **Detectors** are stabilizer checks that should be +1 (noiseless).
+///   Their Pauli is Z on the measured qubits.
+/// - **Observables** are logical operators read out via measurements.
+///   Their Pauli is Z on the measured qubits.
+/// - **Tracked Paulis** are arbitrary Pauli strings with no measurement readout.
+///   Their Pauli is user-specified and their position comes from a meta-gate node.
+#[derive(Debug, Clone)]
+pub struct PauliAnnotation {
+    /// The Pauli string being tracked.
+    pub pauli: pecos_core::PauliString,
+    /// What role this annotation plays.
+    pub kind: AnnotationKind,
+    /// Optional label.
+    pub label: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct DagCircuit {
     /// The underlying DAG structure.
@@ -430,6 +432,10 @@ pub struct DagCircuit {
     last_node: Option<usize>,
     /// Maximum qubit index seen so far (updated incrementally on gate addition).
     max_qubit: usize,
+    /// Unified Pauli annotations (detectors, observables, and tracked Paulis).
+    annotations: Vec<PauliAnnotation>,
+    /// Measurement labels (`node_index` → label).
+    measurement_labels: BTreeMap<usize, String>,
 }
 
 impl DagCircuit {
@@ -443,6 +449,8 @@ impl DagCircuit {
             qubit_heads: BTreeMap::new(),
             last_node: None,
             max_qubit: 0,
+            annotations: Vec::new(),
+            measurement_labels: BTreeMap::new(),
         }
     }
 
@@ -462,12 +470,14 @@ impl DagCircuit {
             qubit_heads: BTreeMap::new(),
             last_node: None,
             max_qubit: 0,
+            annotations: Vec::new(),
+            measurement_labels: BTreeMap::new(),
         }
     }
 
     // ==================== Gate operations ====================
 
-    /// Adds a gate to the circuit.
+    /// Adds a validated gate to the circuit.
     ///
     /// Returns the node index of the newly added gate.
     /// The gate is not connected to any other gates yet - use [`connect`](Self::connect)
@@ -476,7 +486,27 @@ impl DagCircuit {
     /// # Arguments
     ///
     /// * `gate` - The gate to add
+    ///
+    /// # Panics
+    ///
+    /// Panics if [`Gate::validate`] rejects the gate payload. Use
+    /// [`try_add_gate`](Self::try_add_gate) for fallible insertion.
     pub fn add_gate(&mut self, gate: Gate) -> usize {
+        self.try_add_gate(gate)
+            .unwrap_or_else(|err| panic!("Invalid gate: {err}"))
+    }
+
+    /// Try to add a validated gate to the circuit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if [`Gate::validate`] rejects the gate payload.
+    pub fn try_add_gate(&mut self, gate: Gate) -> Result<usize, String> {
+        gate.validate()?;
+        Ok(self.add_gate_unchecked(gate))
+    }
+
+    fn add_gate_unchecked(&mut self, gate: Gate) -> usize {
         let node_idx = self.dag.add_node();
         // Ensure gates vector is large enough
         if node_idx >= self.gates.len() {
@@ -525,8 +555,20 @@ impl DagCircuit {
     }
 
     /// Returns the number of gates in the circuit.
+    ///
+    /// Batched gate nodes count by individual gate. For example, a node carrying
+    /// `Gate::cx(&[(0, 1), (2, 3)])` contributes two gates.
     #[must_use]
     pub fn gate_count(&self) -> usize {
+        self.gates.iter().flatten().map(Gate::num_gates).sum()
+    }
+
+    /// Returns the number of gate nodes stored in the DAG.
+    ///
+    /// A batched node carrying `Gate::cx(&[(0, 1), (2, 3)])` contributes one
+    /// gate node and two gates.
+    #[must_use]
+    pub fn gate_node_count(&self) -> usize {
         self.dag.node_count()
     }
 
@@ -753,7 +795,8 @@ impl DagCircuit {
             .iter()
             .flatten()
             .filter(|g| g.is_single_qubit())
-            .count()
+            .map(Gate::num_gates)
+            .sum()
     }
 
     /// Returns the count of two-qubit gates.
@@ -763,7 +806,8 @@ impl DagCircuit {
             .iter()
             .flatten()
             .filter(|g| g.is_two_qubit())
-            .count()
+            .map(Gate::num_gates)
+            .sum()
     }
 
     /// Returns the count of gates of a specific type.
@@ -773,7 +817,8 @@ impl DagCircuit {
             .iter()
             .flatten()
             .filter(|g| g.gate_type == gate_type)
-            .count()
+            .map(Gate::num_gates)
+            .sum()
     }
 
     // ==================== Topological operations ====================
@@ -1532,9 +1577,7 @@ impl DagCircuit {
 
     // -------------------- Measurement and preparation --------------------
     //
-    // Measurements return MeasureHandle which allows .meta() but breaks
-    // further chaining, matching simulator behavior where mz returns
-    // MeasurementResult instead of &mut Self.
+    // Measurements return Vec<MeasRef> (lightweight Copy handles).
     // Preparations return &mut Self and are chainable.
 
     /// Measure qubit(s) in the Z basis.
@@ -1546,13 +1589,46 @@ impl DagCircuit {
     /// use pecos_quantum::DagCircuit;
     ///
     /// let mut circuit = DagCircuit::new();
-    /// circuit.h(&[0]).mz(&[0, 1]);
+    /// circuit.h(&[0]);
+    /// let nodes = circuit.mz(&[0, 1]);
+    /// assert_eq!(nodes.len(), 2);
     /// ```
-    pub fn mz(&mut self, qubits: &[impl Into<QubitId> + Copy]) -> &mut Self {
-        for &q in qubits {
-            self.add_gate_auto_wire(Gate::mz(&[q]));
-        }
-        self
+    pub fn mz(&mut self, qubits: &[impl Into<QubitId> + Copy]) -> Vec<MeasRef> {
+        qubits
+            .iter()
+            .map(|&q| {
+                let qubit = q.into();
+                let node = self.add_gate_auto_wire(Gate::mz(&[qubit]));
+                MeasRef { node, qubit }
+            })
+            .collect()
+    }
+
+    /// Measure qubits and label them.
+    ///
+    /// Labels are stored on the circuit and flow through to the sampler output.
+    pub fn mz_labeled(&mut self, entries: &[(impl Into<QubitId> + Copy, &str)]) -> Vec<MeasRef> {
+        entries
+            .iter()
+            .map(|&(q, label)| {
+                let qubit = q.into();
+                let node = self.add_gate_auto_wire(Gate::mz(&[qubit]));
+                let mref = MeasRef { node, qubit };
+                self.set_measurement_label(node, label);
+                mref
+            })
+            .collect()
+    }
+
+    /// Set a label on a measurement node.
+    pub fn set_measurement_label(&mut self, node: usize, label: &str) {
+        self.measurement_labels.insert(node, label.to_string());
+    }
+
+    /// Get the label of a measurement node, if any.
+    #[must_use]
+    pub fn measurement_label(&self, node: usize) -> Option<&str> {
+        self.measurement_labels.get(&node).map(String::as_str)
     }
 
     /// Measure and free qubit(s) (destructive measurement).
@@ -1562,6 +1638,224 @@ impl DagCircuit {
         }
         self
     }
+
+    // ========================================================================
+    // Detector and Observable Annotations
+    // ========================================================================
+
+    /// Annotate a detector: a set of measurements whose XOR should be
+    /// deterministic in the noiseless case.
+    ///
+    /// The Pauli string is automatically Z on the measured qubits.
+    ///
+    /// Returns the annotation index.
+    pub fn detector(&mut self, measurements: &[impl Into<usize> + Copy]) -> usize {
+        let meas_nodes: Vec<usize> = measurements.iter().map(|&m| m.into()).collect();
+        let pauli = self.pauli_from_measurement_nodes(&meas_nodes);
+        let idx = self.annotations.len();
+        self.annotations.push(PauliAnnotation {
+            pauli,
+            kind: AnnotationKind::Detector {
+                measurement_nodes: meas_nodes,
+                coords: Vec::new(),
+            },
+            label: None,
+        });
+        idx
+    }
+
+    /// Annotate a labeled detector.
+    pub fn detector_labeled(
+        &mut self,
+        label: &str,
+        measurements: &[impl Into<usize> + Copy],
+    ) -> usize {
+        let meas_nodes: Vec<usize> = measurements.iter().map(|&m| m.into()).collect();
+        let pauli = self.pauli_from_measurement_nodes(&meas_nodes);
+        let idx = self.annotations.len();
+        self.annotations.push(PauliAnnotation {
+            pauli,
+            kind: AnnotationKind::Detector {
+                measurement_nodes: meas_nodes,
+                coords: Vec::new(),
+            },
+            label: Some(label.to_string()),
+        });
+        idx
+    }
+
+    /// Annotate a detector with coordinates.
+    pub fn detector_with_coords(
+        &mut self,
+        measurements: &[impl Into<usize> + Copy],
+        coords: &[f64],
+    ) -> usize {
+        let meas_nodes: Vec<usize> = measurements.iter().map(|&m| m.into()).collect();
+        let pauli = self.pauli_from_measurement_nodes(&meas_nodes);
+        let idx = self.annotations.len();
+        self.annotations.push(PauliAnnotation {
+            pauli,
+            kind: AnnotationKind::Detector {
+                measurement_nodes: meas_nodes,
+                coords: coords.to_vec(),
+            },
+            label: None,
+        });
+        idx
+    }
+
+    /// Annotate a logical observable: a set of measurements whose XOR
+    /// defines whether a logical operator flipped.
+    ///
+    /// The Pauli string is automatically Z on the measured qubits.
+    ///
+    /// Returns the annotation index.
+    pub fn observable(&mut self, measurements: &[impl Into<usize> + Copy]) -> usize {
+        let meas_nodes: Vec<usize> = measurements.iter().map(|&m| m.into()).collect();
+        let pauli = self.pauli_from_measurement_nodes(&meas_nodes);
+        let idx = self.annotations.len();
+        self.annotations.push(PauliAnnotation {
+            pauli,
+            kind: AnnotationKind::Observable {
+                measurement_nodes: meas_nodes,
+            },
+            label: None,
+        });
+        idx
+    }
+
+    /// Annotate a labeled observable.
+    pub fn observable_labeled(
+        &mut self,
+        label: &str,
+        measurements: &[impl Into<usize> + Copy],
+    ) -> usize {
+        let meas_nodes: Vec<usize> = measurements.iter().map(|&m| m.into()).collect();
+        let pauli = self.pauli_from_measurement_nodes(&meas_nodes);
+        let idx = self.annotations.len();
+        self.annotations.push(PauliAnnotation {
+            pauli,
+            kind: AnnotationKind::Observable {
+                measurement_nodes: meas_nodes,
+            },
+            label: Some(label.to_string()),
+        });
+        idx
+    }
+
+    /// Derive a `PauliString` from measurement nodes.
+    /// Z-basis measurements → Z on the measured qubit.
+    fn pauli_from_measurement_nodes(&self, nodes: &[usize]) -> pecos_core::PauliString {
+        let qubits: Vec<usize> = nodes
+            .iter()
+            .filter_map(|&node| {
+                let gate = self.gate(node)?;
+                Some(gate.qubits.iter().map(pecos_core::QubitId::index))
+            })
+            .flatten()
+            .collect();
+        pecos_core::PauliString::zs(&qubits)
+    }
+
+    /// Place a tracked-Pauli meta-gate at this point in the circuit.
+    ///
+    /// This is a **positional** annotation: only faults BEFORE this node
+    /// can flip the tracked Pauli. The meta-gate does not affect quantum state
+    /// -- simulators ignore it.
+    ///
+    /// Accepts a [`PauliString`](pecos_core::PauliString), which supports
+    /// the `X(q) & Y(q) & Z(q)` composition syntax.
+    ///
+    /// Returns the annotation index.
+    ///
+    /// # Example
+    /// ```
+    /// use pecos_quantum::DagCircuit;
+    /// use pecos_core::pauli::{X, Z};
+    ///
+    /// let mut c = DagCircuit::new();
+    /// c.pz(&[0, 1, 2]);
+    /// c.cx(&[(0, 1)]);
+    /// // Place X_0 & Z_1 & Z_2 check HERE -- only faults above can flip it
+    /// c.tracked_pauli(X(0) & Z(1) & Z(2));
+    /// c.cx(&[(1, 2)]);  // faults here don't affect the check
+    /// ```
+    pub fn tracked_pauli(&mut self, mut pauli: pecos_core::PauliString) -> usize {
+        // Phase is irrelevant for flip tracking -- normalize to +1
+        pauli.set_phase(pecos_core::QuarterPhase::PlusOne);
+        let idx = self.annotations.len();
+        self.insert_pauli_meta_gate(&pauli);
+        self.annotations.push(PauliAnnotation {
+            pauli,
+            kind: AnnotationKind::TrackedPauli,
+            label: None,
+        });
+        idx
+    }
+
+    /// Place a labeled tracked-Pauli meta-gate.
+    pub fn tracked_pauli_labeled(
+        &mut self,
+        label: &str,
+        mut pauli: pecos_core::PauliString,
+    ) -> usize {
+        pauli.set_phase(pecos_core::QuarterPhase::PlusOne);
+        let idx = self.annotations.len();
+        self.insert_pauli_meta_gate(&pauli);
+        self.annotations.push(PauliAnnotation {
+            pauli,
+            kind: AnnotationKind::TrackedPauli,
+            label: Some(label.to_string()),
+        });
+        idx
+    }
+
+    /// Insert a `TrackedPauliMeta` gate node into the DAG.
+    fn insert_pauli_meta_gate(&mut self, pauli: &pecos_core::PauliString) {
+        let qubits: Vec<QubitId> = pauli.qubits().into_iter().map(QubitId::from).collect();
+        let gate = Gate::simple(GateType::TrackedPauliMeta, qubits);
+        self.add_gate_auto_wire(gate);
+    }
+
+    /// Get all annotations.
+    #[must_use]
+    pub fn annotations(&self) -> &[PauliAnnotation] {
+        &self.annotations
+    }
+
+    /// Add a pre-built annotation (used for conversion from `TickCircuit`).
+    pub fn add_annotation(&mut self, ann: PauliAnnotation) {
+        // For tracked-Pauli annotations, insert the meta-gate node.
+        if matches!(ann.kind, AnnotationKind::TrackedPauli) {
+            self.insert_pauli_meta_gate(&ann.pauli);
+        }
+        self.annotations.push(ann);
+    }
+
+    /// Get detector annotations.
+    pub fn detectors(&self) -> impl Iterator<Item = &PauliAnnotation> {
+        self.annotations
+            .iter()
+            .filter(|a| matches!(a.kind, AnnotationKind::Detector { .. }))
+    }
+
+    /// Get observable annotations.
+    pub fn observables(&self) -> impl Iterator<Item = &PauliAnnotation> {
+        self.annotations
+            .iter()
+            .filter(|a| matches!(a.kind, AnnotationKind::Observable { .. }))
+    }
+
+    /// Get tracked-Pauli annotations.
+    pub fn tracked_paulis(&self) -> impl Iterator<Item = &PauliAnnotation> {
+        self.annotations
+            .iter()
+            .filter(|a| matches!(a.kind, AnnotationKind::TrackedPauli))
+    }
+
+    // ========================================================================
+    // Preparation Gates
+    // ========================================================================
 
     /// Prepare qubit(s) in the |0> state (Z-basis preparation).
     pub fn pz(&mut self, qubits: &[impl Into<QubitId> + Copy]) -> &mut Self {
@@ -1916,6 +2210,44 @@ mod tests {
         assert_eq!(circuit.width(), 2);
         assert_eq!(circuit.single_qubit_gate_count(), 1);
         assert_eq!(circuit.two_qubit_gate_count(), 1);
+    }
+
+    #[test]
+    fn test_batched_gate_nodes_count_gates() {
+        let mut circuit = DagCircuit::new();
+
+        circuit.add_gate(Gate::h(&[0, 1, 2, 3]));
+        circuit.add_gate(Gate::cx(&[(0, 1), (2, 3)]));
+
+        assert_eq!(circuit.nodes().len(), 2);
+        assert_eq!(circuit.gate_node_count(), 2);
+        assert_eq!(circuit.gate_count(), 6);
+        assert_eq!(circuit.build_traversal_index().num_gate_nodes(), 2);
+        assert_eq!(circuit.single_qubit_gate_count(), 4);
+        assert_eq!(circuit.two_qubit_gate_count(), 2);
+        assert_eq!(circuit.gate_type_count(GateType::H), 4);
+        assert_eq!(circuit.gate_type_count(GateType::CX), 2);
+    }
+
+    #[test]
+    fn test_separate_compatible_nodes_remain_separate_nodes() {
+        let mut circuit = DagCircuit::new();
+
+        circuit.add_gate(Gate::h(&[0]));
+        circuit.add_gate(Gate::h(&[1]));
+        circuit.add_gate(Gate::cx(&[(2, 3)]));
+        circuit.add_gate(Gate::cx(&[(4, 5)]));
+
+        assert_eq!(circuit.gate_node_count(), 4);
+        assert_eq!(circuit.gate_count(), 4);
+        assert_eq!(circuit.build_traversal_index().num_gate_nodes(), 4);
+        assert_eq!(circuit.gate_type_count(GateType::H), 2);
+        assert_eq!(circuit.gate_type_count(GateType::CX), 2);
+
+        let ticks = crate::TickCircuit::from(&circuit);
+        assert_eq!(ticks.gate_count(), 4);
+        assert_eq!(ticks.gate_batch_count(), 2);
+        assert_eq!(ticks.get_tick(0).unwrap().gate_batch_count(), 2);
     }
 
     #[test]
@@ -2404,10 +2736,9 @@ mod tests {
             .cx(&[(0, 1)])
             .meta("fidelity", Attribute::Float(0.99));
 
-        // Chain meta directly from measurement (mz returns &mut Self)
-        circuit
-            .mz(&[0])
-            .meta("basis", Attribute::String("Z".to_string()));
+        // Measurement returns node indices; use last_node for meta
+        circuit.mz(&[0]);
+        circuit.meta("basis", Attribute::String("Z".to_string()));
 
         assert_eq!(circuit.gate_count(), 3);
 
@@ -2449,22 +2780,21 @@ mod tests {
     }
 
     #[test]
-    fn test_measure_handle_drops_cleanly() {
+    fn test_mz_returns_refs() {
         let mut circuit = DagCircuit::new();
 
-        // MeasureHandle can be ignored (dropped without calling .meta())
         circuit.h(&[0]);
-        circuit.mz(&[0]);
+        let refs = circuit.mz(&[0]);
+        assert_eq!(refs.len(), 1);
         circuit.h(&[1]); // continue building
 
         assert_eq!(circuit.gate_count(), 3);
     }
 
     #[test]
-    fn test_prep_handle_drops_cleanly() {
+    fn test_pz_chainable() {
         let mut circuit = DagCircuit::new();
 
-        // PrepHandle can be ignored (dropped without calling .meta())
         circuit.pz(&[0]);
         circuit.h(&[0]); // continue building
         circuit.mz(&[0]);
@@ -2563,5 +2893,23 @@ mod tests {
             .expect("gate should have attributes");
         assert_eq!(gate_attrs.get("duration"), Some(&Attribute::Float(50.0)));
         assert_eq!(gate_attrs.get("fidelity"), Some(&Attribute::Float(0.999)));
+    }
+
+    #[test]
+    fn test_try_add_gate_rejects_invalid_gate_payload() {
+        let mut circuit = DagCircuit::new();
+        let err = circuit
+            .try_add_gate(Gate::cx(&[(0, 0)]))
+            .expect_err("DAG should reject invalid gate payloads");
+
+        assert!(err.contains("requires distinct qubits"));
+        assert!(circuit.nodes().is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid gate")]
+    fn test_add_gate_panics_on_invalid_gate_payload() {
+        let mut circuit = DagCircuit::new();
+        circuit.add_gate(Gate::cx(&[(0, 0)]));
     }
 }

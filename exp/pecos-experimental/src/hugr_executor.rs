@@ -213,7 +213,8 @@ where
             | GateType::QFree
             | GateType::Idle
             | GateType::MeasCrosstalkGlobalPayload
-            | GateType::MeasCrosstalkLocalPayload => {}
+            | GateType::MeasCrosstalkLocalPayload
+            | GateType::TrackedPauliMeta => {}
 
             // Single-qubit Clifford gates
             GateType::X => {
@@ -317,6 +318,7 @@ where
             | GateType::CRZ
             | GateType::CH
             | GateType::CCX
+            | GateType::Channel
             | GateType::Custom => {
                 return Err(HugrExecutionError::UnsupportedGate {
                     gate_type: gate.gate_type,

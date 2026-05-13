@@ -82,9 +82,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 | **StateVec** | State vector | Arbitrary circuits, small systems | None |
 | **StabVec** | Clifford + Rz | Clifford circuits with Z rotations | None |
 | **PauliProp** | Fault tracking | Error propagation analysis | None |
-| **CuStateVec** | State vector (GPU) | Large circuits with GPU | CUDA, cuQuantum |
+| **CuStateVec** | State vector (GPU, Python) | Large circuits with GPU | CUDA, cuQuantum |
+| **CudaStateVec** | State vector (GPU, Rust) | Large circuits, reproducible seeded runs | CUDA, cuQuantum, cuda-rust build |
+| **CudaStabilizer** | Stabilizer (GPU, Rust) | Very large Clifford circuits (1000s of qubits) | CUDA, cuQuantum, cuda-rust build |
 | **MPS** | Tensor network | Low-entanglement circuits | CUDA, cuQuantum |
 | **density_matrix** | Density matrix | Noisy/mixed state simulation | None |
+
+Two additional specialized backends—**SparseStabPy** (pure-Python reference implementation for debugging) and **CoinToss** (random measurement outcomes for testing)—are documented below but rarely used in production.
 
 ## Choosing a Simulator
 
@@ -108,24 +112,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                  │      │
                  │      ▼
                  └── Need mixed states? ──→ density_matrix
-```
-
-## Setup
-
-The examples below use this Bell state circuit:
-
-```python
-from pecos import sim, Qasm
-
-circuit = """
-OPENQASM 2.0;
-include "qelib1.inc";
-qreg q[2];
-creg c[2];
-h q[0];
-cx q[0], q[1];
-measure q -> c;
-"""
 ```
 
 ## Stabilizer Simulators
@@ -395,6 +381,8 @@ Approximate performance characteristics (relative, not absolute):
 | StateVec | ★★★ | ★★★ | 2^n | ~25-30 |
 | StabVec | ★★★★ | Limited to Clifford + Rz | Low | 1000+ |
 | CuStateVec | ★★★★ | ★★★★★ | 2^n (GPU) | ~30-35 |
+| CudaStateVec | ★★★★ | ★★★★★ | 2^n (GPU) | ~30-35 |
+| CudaStabilizer | ★★★★★ | N/A | Low | 1000+ (GPU) |
 | MPS | ★★★ | ★★★ | ~n × chi² | Varies |
 | density_matrix | ★★ | ★★ | 4^n | ~15 |
 

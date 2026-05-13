@@ -14,11 +14,37 @@ use super::arbitrary_rotation_gateable::ArbitraryRotationGateable;
 use super::clifford_gateable::{CliffordGateable, MeasurementResult};
 use super::quantum_simulator::QuantumSimulator;
 use super::state_vec::StateVec;
-use pecos_core::{Angle64, QubitId, RngManageable};
+use super::state_vec_soa::StateVecSoA;
+use nalgebra::DMatrix;
+use pecos_core::{Angle64, ChannelExpr, QubitId, RngManageable};
+use pecos_quantum::{ChannelError, KrausOps};
 use pecos_random::{PecosRng, Rng, RngExt, SeedableRng};
 
 use core::fmt::{Debug, Display, Formatter, Write};
 use num_complex::Complex64;
+use std::error::Error;
+
+const PURE_STATE_TOLERANCE: f64 = 1e-10;
+
+/// Error returned when converting between simulator state representations.
+#[derive(Clone, Debug, PartialEq)]
+pub enum StateConversionError {
+    /// The density matrix is not rank-1 within the conversion tolerance.
+    MixedDensityMatrix { residual: f64 },
+}
+
+impl Display for StateConversionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::MixedDensityMatrix { residual } => write!(
+                f,
+                "density matrix is not a pure state; reconstruction residual is {residual}"
+            ),
+        }
+    }
+}
+
+impl Error for StateConversionError {}
 
 /// A quantum state simulator using the density matrix representation via the Choi-Jamiolkowski isomorphism
 ///
@@ -836,6 +862,143 @@ where
 
         self
     }
+
+    /// Apply a symbolic channel expression to this density matrix.
+    ///
+    /// Supported expressions are those convertible to same-Hilbert-space Kraus
+    /// operators: unitary, mixed-unitary, amplitude damping, phase damping,
+    /// tensor, and composition. Erasure, leakage, and gate instruments are
+    /// intentionally rejected because they need extra flag/outcome semantics.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the channel expression is unsupported or invalid for
+    /// this simulator's qubit count.
+    pub fn apply_channel_expr(&mut self, channel: &ChannelExpr) -> Result<&mut Self, ChannelError> {
+        let kraus = KrausOps::from_channel_expr_with_num_qubits(channel, self.num_physical_qubits)?;
+        self.apply_kraus_ops(&kraus)
+    }
+
+    /// Apply Kraus operators to this density matrix.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Kraus operators are not defined on the same
+    /// number of qubits as this density matrix.
+    pub fn apply_kraus_ops(&mut self, kraus: &KrausOps) -> Result<&mut Self, ChannelError> {
+        let num_qubits_u32 = u32::try_from(self.num_physical_qubits).map_err(|_| {
+            ChannelError::DimensionOverflow {
+                num_qubits: self.num_physical_qubits,
+            }
+        })?;
+        let dim = 1usize
+            .checked_shl(num_qubits_u32)
+            .ok_or(ChannelError::DimensionOverflow {
+                num_qubits: self.num_physical_qubits,
+            })?;
+        if kraus.num_qubits() != self.num_physical_qubits {
+            let actual_qubits_u32 =
+                u32::try_from(kraus.num_qubits()).map_err(|_| ChannelError::DimensionOverflow {
+                    num_qubits: kraus.num_qubits(),
+                })?;
+            let actual_dim =
+                1usize
+                    .checked_shl(actual_qubits_u32)
+                    .ok_or(ChannelError::DimensionOverflow {
+                        num_qubits: kraus.num_qubits(),
+                    })?;
+            return Err(ChannelError::InvalidMatrixShape {
+                expected_rows: dim,
+                expected_cols: dim,
+                rows: actual_dim,
+                cols: actual_dim,
+            });
+        }
+
+        let rho = self.get_density_matrix();
+        let flat: Vec<Complex64> = rho.iter().flat_map(|row| row.iter().copied()).collect();
+        let rho_matrix = DMatrix::from_row_slice(dim, dim, &flat);
+        let mut evolved = DMatrix::zeros(dim, dim);
+        for operator in kraus.operators() {
+            evolved += operator * &rho_matrix * operator.adjoint();
+        }
+
+        let new_rho: Vec<Vec<Complex64>> = (0..dim)
+            .map(|row| (0..dim).map(|col| evolved[(row, col)]).collect())
+            .collect();
+        self.set_from_density_matrix(&new_rho);
+        Ok(self)
+    }
+}
+
+impl<R> From<&StateVecSoA<R>> for DensityMatrix<R>
+where
+    R: Rng + SeedableRng + Debug + Clone,
+{
+    fn from(state: &StateVecSoA<R>) -> Self {
+        let mut state = state.clone();
+        let amplitudes = state.state();
+        let dim = amplitudes.len();
+        let num_physical_qubits = dim.trailing_zeros() as usize;
+        let mut purification = vec![Complex64::new(0.0, 0.0); dim * dim];
+
+        for (row, amplitude) in amplitudes.iter().enumerate() {
+            purification[row << num_physical_qubits] = *amplitude;
+        }
+
+        Self {
+            num_physical_qubits,
+            state_vector: StateVec::from_state(&purification, state.rng().clone()),
+        }
+    }
+}
+
+impl<R> TryFrom<&DensityMatrix<R>> for Vec<Complex64>
+where
+    R: Rng + SeedableRng + Debug + Clone,
+{
+    type Error = StateConversionError;
+
+    fn try_from(density_matrix: &DensityMatrix<R>) -> Result<Self, Self::Error> {
+        let mut density_matrix = density_matrix.clone();
+        let rho = density_matrix.get_density_matrix();
+        pure_state_from_density_matrix(&rho)
+    }
+}
+
+fn pure_state_from_density_matrix(
+    rho: &[Vec<Complex64>],
+) -> Result<Vec<Complex64>, StateConversionError> {
+    let dim = rho.len();
+    let (pivot, pivot_probability) = rho
+        .iter()
+        .enumerate()
+        .map(|(i, row)| (i, row[i].re.max(0.0)))
+        .max_by(|(_, left), (_, right)| left.total_cmp(right))
+        .unwrap_or((0, 0.0));
+
+    if pivot_probability <= PURE_STATE_TOLERANCE {
+        return Err(StateConversionError::MixedDensityMatrix { residual: 1.0 });
+    }
+
+    let pivot_amplitude = pivot_probability.sqrt();
+    let state: Vec<Complex64> = (0..dim)
+        .map(|row| rho[row][pivot] / pivot_amplitude)
+        .collect();
+
+    let mut residual = 0.0_f64;
+    for row in 0..dim {
+        for col in 0..dim {
+            let reconstructed = state[row] * state[col].conj();
+            residual = residual.max((rho[row][col] - reconstructed).norm());
+        }
+    }
+
+    if residual > PURE_STATE_TOLERANCE {
+        return Err(StateConversionError::MixedDensityMatrix { residual });
+    }
+
+    Ok(state)
 }
 
 impl<R> Display for DensityMatrix<R>
@@ -1320,6 +1483,92 @@ mod tests {
 
         // State should be pure
         assert!(dm.is_pure());
+    }
+
+    #[test]
+    fn channel_expr_bit_flip_applies_to_density_matrix() {
+        let mut dm = DensityMatrix::new(1);
+        dm.apply_channel_expr(&pecos_core::channel::BitFlip(1.0, 0))
+            .unwrap();
+
+        assert!(dm.probability(0) < 1e-10);
+        assert!((dm.probability(1) - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn channel_expr_embeds_local_channel_in_larger_density_matrix() {
+        let mut dm = DensityMatrix::new(2);
+        dm.apply_channel_expr(&pecos_core::channel::BitFlip(1.0, 1))
+            .unwrap();
+
+        assert!(dm.probability(0) < 1e-10);
+        assert!((dm.probability(2) - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn tensor_channel_expr_applies_to_noncontiguous_density_matrix_qubits() {
+        let mut dm = DensityMatrix::new(3);
+        let channel = ChannelExpr::Tensor(vec![
+            pecos_core::channel::BitFlip(1.0, 0),
+            pecos_core::channel::BitFlip(1.0, 2),
+        ]);
+
+        dm.apply_channel_expr(&channel).unwrap();
+
+        assert!(dm.probability(0) < 1e-10);
+        assert!((dm.probability(5) - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn out_of_range_channel_expr_is_rejected_without_mutating_state() {
+        let mut dm = DensityMatrix::new(2);
+        dm.h(&qid(0)).cx(&[(QubitId(0), QubitId(1))]);
+        let before = dm.get_flattened_density_matrix();
+
+        let err = dm
+            .apply_channel_expr(&pecos_core::channel::BitFlip(0.5, 2))
+            .expect_err("channel should not apply outside the simulator range");
+
+        assert!(matches!(
+            err,
+            ChannelError::QubitOutOfRange {
+                num_qubits: 2,
+                qubit: 2
+            }
+        ));
+        let after = dm.get_flattened_density_matrix();
+        assert_eq!(after, before);
+    }
+
+    #[test]
+    fn state_vector_converts_to_density_matrix_and_back() {
+        let mut state = StateVecSoA::new(2);
+        state.h(&qid(0)).cx(&[(QubitId(0), QubitId(1))]);
+
+        let mut density_matrix = DensityMatrix::from(&state);
+        assert!((density_matrix.probability(0) - 0.5).abs() < 1e-10);
+        assert!(density_matrix.probability(1) < 1e-10);
+        assert!(density_matrix.probability(2) < 1e-10);
+        assert!((density_matrix.probability(3) - 0.5).abs() < 1e-10);
+
+        let recovered = Vec::<Complex64>::try_from(&density_matrix).unwrap();
+        let expected = state.state();
+
+        for (actual, expected) in recovered.iter().zip(expected.iter()) {
+            assert!((*actual - *expected).norm() < 1e-10);
+        }
+    }
+
+    #[test]
+    fn mixed_density_matrix_rejects_state_vector_conversion() {
+        let mut density_matrix = DensityMatrix::new(1);
+        density_matrix.prepare_maximally_mixed();
+
+        let err = Vec::<Complex64>::try_from(&density_matrix).unwrap_err();
+        assert!(matches!(
+            err,
+            StateConversionError::MixedDensityMatrix { .. }
+        ));
     }
 
     // Additional tests for other gates and operations would be added here

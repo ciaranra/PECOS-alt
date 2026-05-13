@@ -8,8 +8,8 @@ This example runs rotated surface-code memory experiments using:
 - direct ``selene_sim`` execution with either Selene ``Stim`` or the PECOS
   Selene stabilizer plugin
 - optional native DEM sampling via ``build_native_sampler(...)``
-- a uniform depolarizing noise model with ``p1 = p2 = p_meas = p_init = p``
-- ``SurfaceDecoder(..., decoder_type="pymatching")`` with PECOS-native DEMs
+- a depolarizing noise model with ``p2 = p``, ``p1 = p/30``, ``p_meas = p_prep = p/3``
+- ``SurfaceDecoder(...)`` with PECOS-native DEMs (PyMatching or Tesseract)
 
 For the ``sim`` backend, decoding is performed relative to a cached noiseless
 reference trajectory from the same Guppy/QIS circuit. This makes the gate-level
@@ -68,6 +68,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from types import ModuleType
 
+    import numpy as np
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure
     from matplotlib.patches import Rectangle
@@ -231,6 +232,7 @@ class _NativeSamplerRuntime:
     decoder_runtime: _DecoderRuntime
     sampler: Any
     dem_decoder: Any
+    dem_str: str | None = None
 
 
 _CACHED_SELENE_INSTANCES: list[Any] = []
@@ -251,6 +253,11 @@ atexit.register(_cleanup_cached_selene_instances)
 
 def _backend_runtime_label(sample_backend: str, native_circuit_source: str = "abstract") -> str:
     """Describe one sampling backend in human-readable terms."""
+    # Handle "backend:decoder" labels from multi-decoder comparison
+    if ":" in sample_backend:
+        base, decoder = sample_backend.split(":", 1)
+        base_label = _backend_runtime_label(base, native_circuit_source)
+        return f"{base_label} [decoder={decoder}]"
     if sample_backend == "sim":
         return (
             "sim(Guppy(...)).classical(selene_engine()).quantum(pecos.stabilizer()) "
@@ -270,7 +277,7 @@ def _backend_runtime_label(sample_backend: str, native_circuit_source: str = "ab
             f"{native_circuit_source} + noiseless reference-trajectory calibration"
         )
     if sample_backend == "native_sampler":
-        return f"build_native_sampler(..., circuit_source={native_circuit_source!r}) + PyMatching on the native DEM"
+        return f"build_native_sampler(..., circuit_source={native_circuit_source!r}) + DEM decoder on the native DEM"
     msg = f"Unknown sample backend: {sample_backend}"
     raise ValueError(msg)
 
@@ -537,6 +544,106 @@ def _surface_patch(distance: int) -> object:
     return SurfacePatch.create(distance=distance)
 
 
+_CHECK_MATRIX_DECODERS = {"bp_osd", "bp_lsd", "union_find", "relay_bp", "min_sum_bp"}
+
+
+def _noise_model_description(args: argparse.Namespace) -> str:
+    """Human-readable noise model string for reports."""
+    p1s = getattr(args, "p1_scale", 1.0 / 30.0)
+    pms = getattr(args, "p_meas_scale", 1.0 / 3.0)
+    pps = getattr(args, "p_prep_scale", 1.0 / 3.0)
+    return f"depolarizing with p1={p1s:.4g}*p, p2=p, p_meas={pms:.4g}*p, p_prep={pps:.4g}*p"
+
+
+def _create_dem_decoder(decoder_type: str, dem_str: str, *, tesseract_beam: int = 5) -> object:
+    """Create a DEM-level decoder from a DEM string.
+
+    Supports MWPM decoders (pymatching), search decoders (tesseract), and
+    check-matrix decoders (bp_osd, bp_lsd, union_find, relay_bp, min_sum_bp)
+    via DemAwareDecoder which extracts the check matrix from the DEM.
+    """
+    if decoder_type == "tesseract":
+        from pecos_rslib.decoders import TesseractDecoder
+
+        dem_filtered = "\n".join(line for line in dem_str.split("\n") if not line.startswith("logical_observable"))
+        return TesseractDecoder.from_dem(dem_filtered, preset="fast", det_beam=tesseract_beam)
+
+    if decoder_type in _CHECK_MATRIX_DECODERS:
+        from pecos_rslib.decoders import DemAwareDecoder
+
+        dem_filtered = "\n".join(line for line in dem_str.split("\n") if not line.startswith("logical_observable"))
+        return DemAwareDecoder.from_dem(dem_filtered, decoder_type=decoder_type)
+
+    from pecos_rslib.decoders import PyMatchingDecoder
+
+    return PyMatchingDecoder.from_dem(dem_str)
+
+
+def _decode_one_shot(dem_decoder: object, events_flat: list[int]) -> object:
+    """Decode one shot using whichever DEM decoder was created.
+
+    Tesseract.decode() wants sparse indices; decode_syndrome() accepts dense vectors.
+    PyMatching.decode() accepts dense vectors directly.
+    """
+    if hasattr(dem_decoder, "decode_syndrome"):
+        return dem_decoder.decode_syndrome(events_flat)
+    return dem_decoder.decode(events_flat)
+
+
+def _decode_all_shots(
+    dem_decoder: object,
+    detection_events: np.ndarray,
+    observable_flips: np.ndarray,
+    num_shots: int,
+) -> int:
+    """Decode all shots using the fastest available path.
+
+    For PyMatching: uses decode_batch with flattened numpy array (no Python loop).
+    For Tesseract: uses decode_batch with parallel rayon workers.
+    For others: falls back to per-shot Python loop.
+
+    Returns the number of logical errors.
+    """
+    import numpy as np
+
+    true_flips = (
+        observable_flips[:, 0].astype(np.uint8)
+        if observable_flips.shape[1] > 0
+        else np.zeros(num_shots, dtype=np.uint8)
+    )
+
+    # PyMatching batch: takes flattened (num_shots * num_detectors) u8 array
+    from pecos_rslib.decoders import PyMatchingDecoder
+
+    if isinstance(dem_decoder, PyMatchingDecoder):
+        flat = detection_events.astype(np.uint8).flatten().tolist()
+        predictions = dem_decoder.decode_batch(flat, num_shots)
+        # Each prediction is a list of observables; check index 0
+        predicted = np.array([p[0] if p else 0 for p in predictions], dtype=np.uint8)
+        return int(np.sum(predicted != true_flips))
+
+    # Tesseract batch: takes list of syndromes, parallel rayon
+    from pecos_rslib.decoders import TesseractDecoder
+
+    if isinstance(dem_decoder, TesseractDecoder):
+        syndromes = [detection_events[i].astype(np.uint8).tolist() for i in range(num_shots)]
+        batch_results = dem_decoder.decode_batch(syndromes)
+        num_errors = 0
+        for shot_idx, result in enumerate(batch_results):
+            predicted_flip = int(result.observables_mask & 1)
+            num_errors += int(predicted_flip != true_flips[shot_idx])
+        return num_errors
+
+    # Fallback: per-shot loop (DemAwareDecoder, etc.)
+    num_errors = 0
+    for shot_idx in range(num_shots):
+        events_flat = detection_events[shot_idx].astype(np.uint8).tolist()
+        decode_result = _decode_one_shot(dem_decoder, events_flat)
+        predicted_flip = _predicted_observable_flip(decode_result)
+        num_errors += int(predicted_flip != true_flips[shot_idx])
+    return num_errors
+
+
 @cache
 def _decoder_runtime(
     distance: int,
@@ -545,6 +652,11 @@ def _decoder_runtime(
     physical_error_rate: float,
     dem_mode: str,
     native_circuit_source: str,
+    decoder_type: str = "pymatching",
+    ancilla_budget: int | None = None,
+    p1_scale: float = 0.1,
+    p_meas_scale: float = 0.5,
+    p_prep_scale: float = 0.5,
 ) -> _DecoderRuntime:
     """Build and cache the expensive native decoder-side objects once."""
     from pecos.qec.surface import NoiseModel, SurfaceDecoder
@@ -552,19 +664,20 @@ def _decoder_runtime(
     basis = basis.upper()
     patch = _surface_patch(distance)
     noise = NoiseModel(
-        p1=physical_error_rate,
+        p1=physical_error_rate * p1_scale,
         p2=physical_error_rate,
-        p_meas=physical_error_rate,
-        p_init=physical_error_rate,
+        p_meas=physical_error_rate * p_meas_scale,
+        p_prep=physical_error_rate * p_prep_scale,
     )
     decoder = SurfaceDecoder(
         patch,
         num_rounds=total_rounds,
         noise=noise,
-        decoder_type="pymatching",
+        decoder_type=decoder_type,
         use_circuit_level_dem=True,
         circuit_level_dem_mode=dem_mode,
         circuit_level_dem_source=native_circuit_source,
+        ancilla_budget=ancilla_budget,
     )
     return _DecoderRuntime(
         patch=patch,
@@ -584,10 +697,15 @@ def _native_sampler_runtime(
     physical_error_rate: float,
     dem_mode: str,
     native_circuit_source: str,
+    decoder_type: str = "pymatching",
+    ancilla_budget: int | None = None,
+    p1_scale: float = 0.1,
+    p_meas_scale: float = 0.5,
+    p_prep_scale: float = 0.5,
 ) -> _NativeSamplerRuntime:
-    """Build and cache the native sampler + PyMatching decoder bundle once."""
+    """Build and cache the native sampler + decoder bundle once."""
     from pecos.qec.surface import build_native_sampler
-    from pecos_rslib.decoders import PyMatchingDecoder
+    from pecos.qec.surface.decode import generate_circuit_level_dem_from_builder
 
     runtime = _decoder_runtime(
         distance,
@@ -596,6 +714,11 @@ def _native_sampler_runtime(
         physical_error_rate,
         dem_mode,
         native_circuit_source,
+        decoder_type=decoder_type,
+        ancilla_budget=ancilla_budget,
+        p1_scale=p1_scale,
+        p_meas_scale=p_meas_scale,
+        p_prep_scale=p_prep_scale,
     )
     sampler = build_native_sampler(
         runtime.patch,
@@ -603,18 +726,35 @@ def _native_sampler_runtime(
         runtime.noise,
         basis=basis,
         circuit_source=native_circuit_source,
+        ancilla_budget=ancilla_budget,
     )
-    dem_str = runtime.decoder.get_dem(basis.upper(), circuit_level=True)
-    dem_decoder = PyMatchingDecoder.from_dem(dem_str)
+    # PyMatching needs decomposed (graph-like) DEMs; Tesseract and check-matrix
+    # decoders handle hyperedges natively and should get the full DEM.
+    if decoder_type == "pymatching":
+        dem_str = runtime.decoder.get_dem(basis.upper(), circuit_level=True)
+    else:
+        dem_str = generate_circuit_level_dem_from_builder(
+            runtime.patch,
+            total_rounds,
+            runtime.noise,
+            basis=basis,
+            decompose_errors=False,
+            circuit_source=native_circuit_source,
+            ancilla_budget=ancilla_budget,
+        )
+    dem_decoder = _create_dem_decoder(decoder_type, dem_str)
     # The traced-QIS sampler stack has a noticeable one-time initialization cost
     # on its first sample. Pay that once when the cached runtime is created so
     # subsequent point evaluations stay on the true steady-state path.
     warm_det_events, _ = sampler.sample(num_shots=1, seed=0)
-    dem_decoder.decode(warm_det_events[0].astype(int).tolist())
+    _decode_one_shot(dem_decoder, warm_det_events[0].astype(int).tolist())
+    # Filter logical_observable lines for decoders that need it
+    dem_str_filtered = "\n".join(line for line in dem_str.split("\n") if not line.startswith("logical_observable"))
     return _NativeSamplerRuntime(
         decoder_runtime=runtime,
         sampler=sampler,
         dem_decoder=dem_decoder,
+        dem_str=dem_str_filtered,
     )
 
 
@@ -694,6 +834,9 @@ def _run_gate_backend_result_dict(
     num_shots: int,
     seed: int,
     timing_sink: dict[str, float] | None = None,
+    p1_scale: float = 0.1,
+    p_meas_scale: float = 0.5,
+    p_prep_scale: float = 0.5,
 ) -> dict[str, list[list[int]]]:
     """Run one gate-level backend and normalize results to a shot-map-like dict."""
     import os
@@ -731,10 +874,10 @@ def _run_gate_backend_result_dict(
 
         error_model_start = time.perf_counter()
         error_model = DepolarizingErrorModel(
-            p_1q=physical_error_rate,
+            p_1q=physical_error_rate * p1_scale,
             p_2q=physical_error_rate,
-            p_meas=physical_error_rate,
-            p_init=physical_error_rate,
+            p_meas=physical_error_rate * p_meas_scale,
+            p_prep=physical_error_rate * p_prep_scale,
         )
         error_model_seconds = time.perf_counter() - error_model_start
 
@@ -771,7 +914,14 @@ def _run_gate_backend_result_dict(
     if sample_backend == "sim":
         backend_start = time.perf_counter()
         noise_start = time.perf_counter()
-        noise_model = pecos.depolarizing_noise().with_uniform_probability(physical_error_rate)
+        noise_model = pecos.depolarizing_noise()
+        noise_model.set_probabilities(
+            physical_error_rate * p_prep_scale,  # p_prep
+            physical_error_rate * p_meas_scale,  # p_meas_0
+            physical_error_rate * p_meas_scale,  # p_meas_1
+            physical_error_rate * p1_scale,  # p1 (single-qubit gates)
+            physical_error_rate,  # p2 (two-qubit gates)
+        )
         noise_seconds = time.perf_counter() - noise_start
         program_start = time.perf_counter()
         program = make_surface_code(distance=distance, num_rounds=total_rounds, basis=basis)
@@ -946,6 +1096,12 @@ def _run_memory_point(
     dem_mode: str,
     native_circuit_source: str,
     seed: int,
+    decoder_type: str = "pymatching",
+    backend_label: str | None = None,
+    ancilla_budget: int | None = None,
+    p1_scale: float = 0.1,
+    p_meas_scale: float = 0.5,
+    p_prep_scale: float = 0.5,
 ) -> SweepPoint:
     """Run one surface-memory point and decode it with native PECOS DEMs."""
     import numpy as np
@@ -958,6 +1114,11 @@ def _run_memory_point(
         physical_error_rate,
         dem_mode,
         native_circuit_source,
+        decoder_type=decoder_type,
+        ancilla_budget=ancilla_budget,
+        p1_scale=p1_scale,
+        p_meas_scale=p_meas_scale,
+        p_prep_scale=p_prep_scale,
     )
     patch = decoder_runtime.patch
     num_x_stab = decoder_runtime.num_x_stab
@@ -986,6 +1147,9 @@ def _run_memory_point(
             total_rounds=total_rounds,
             num_shots=num_shots,
             seed=seed,
+            p1_scale=p1_scale,
+            p_meas_scale=p_meas_scale,
+            p_prep_scale=p_prep_scale,
         )
 
         synx_rows = _result_rows_for_key(result_dict, "synx")
@@ -1043,18 +1207,40 @@ def _run_memory_point(
             physical_error_rate,
             dem_mode,
             native_circuit_source,
+            decoder_type=decoder_type,
+            ancilla_budget=ancilla_budget,
+            p1_scale=p1_scale,
+            p_meas_scale=p_meas_scale,
+            p_prep_scale=p_prep_scale,
         )
         sampler = native_runtime.sampler
         dem_decoder = native_runtime.dem_decoder
         detection_events, observable_flips = sampler.sample(num_shots=num_shots, seed=seed)
 
         num_raw_errors = None
-        for shot_idx in range(num_shots):
-            events_flat = detection_events[shot_idx].astype(np.uint8).tolist()
-            decode_result = dem_decoder.decode(events_flat)
-            predicted_flip = _predicted_observable_flip(decode_result)
-            true_flip = int(observable_flips[shot_idx, 0]) if observable_flips.shape[1] > 0 else 0
-            num_logical_errors += int(predicted_flip != true_flip)
+        # Fast path: sample+decode entirely in Rust via ObservableDecoder trait.
+        # The DemSampler keeps all per-shot data in Rust -- nothing crosses to Python.
+        dem_str_for_rust = native_runtime.dem_str
+        rust_sampler = getattr(sampler, "sampler", None)
+        if dem_str_for_rust and rust_sampler and hasattr(rust_sampler, "sample_decode_count"):
+            # Use parallel path for slow decoders (Tesseract, BP+OSD, etc.)
+            if decoder_type != "pymatching" and hasattr(rust_sampler, "sample_decode_count_parallel"):
+                num_logical_errors = rust_sampler.sample_decode_count_parallel(
+                    dem_str_for_rust,
+                    num_shots,
+                    decoder_type,
+                    seed,
+                )
+            else:
+                num_logical_errors = rust_sampler.sample_decode_count(
+                    dem_str_for_rust,
+                    num_shots,
+                    decoder_type,
+                    seed,
+                )
+        else:
+            detection_events, observable_flips = sampler.sample(num_shots=num_shots, seed=seed)
+            num_logical_errors = _decode_all_shots(dem_decoder, detection_events, observable_flips, num_shots)
     else:
         msg = f"Unknown sample backend: {sample_backend}"
         raise ValueError(msg)
@@ -1063,7 +1249,7 @@ def _run_memory_point(
     raw_error_rate = None if num_raw_errors is None else (num_raw_errors / num_shots if num_shots else 0.0)
 
     return SweepPoint(
-        backend=sample_backend,
+        backend=backend_label or sample_backend,
         distance=distance,
         basis=basis.upper(),
         physical_error_rate=physical_error_rate,
@@ -1569,6 +1755,14 @@ def _basis_summary(summaries: list[FitSummary]) -> dict[str, Any]:
             for p, is_suppressed in _suppression_summary(summaries)
         ],
         "background_threshold_crossing": _estimate_threshold(summaries),
+        "background_threshold_crossing_per_round": _estimate_threshold(
+            summaries,
+            metric="fitted_logical_error_rate_per_round",
+        ),
+        "background_threshold_crossing_d_rounds": _estimate_threshold(
+            summaries,
+            metric="fitted_projected_logical_error_rate_over_d_rounds",
+        ),
         "background_threshold_style_global_scaling_fit": None if global_scaling is None else asdict(global_scaling),
     }
 
@@ -1685,7 +1879,7 @@ def _write_json_results(
                 backend: _backend_runtime_label(backend, args.native_circuit_source)
                 for backend in sorted({point.backend for point in points})
             },
-            "noise_model": "uniform depolarizing with p1 = p2 = p_meas = p_init = p",
+            "noise_model": _noise_model_description(args),
             "fit_model": "p_L(r) = 0.5 * (1 - (1 - 2 * epsilon) ** r)",
             "primary_power_law_model": "epsilon_d(p) ~= A_d * p ** c_d",
             "primary_lambda_model": "Lambda_{d/(d+2)}(p) = epsilon_d(p) / epsilon_{d+2}(p)",
@@ -2212,18 +2406,45 @@ def _write_html_dashboard(
     ]
     style = dedent(
         """
-        :root { color-scheme: light; }
+        :root {
+          color-scheme: light dark;
+          --bg: #f8fafc; --fg: #0f172a;
+          --hero-bg: linear-gradient(135deg, #e0f2fe, #f8fafc 55%, #dcfce7);
+          --hero-border: #cbd5e1;
+          --card-bg: white; --card-border: #dbeafe; --card-shadow: rgba(15,23,42,0.05);
+          --meta-bg: rgba(255,255,255,0.82);
+          --muted: #475569; --link: #2563eb; --link-alt: #0369a1;
+          --header-border: #e2e8f0;
+          --img-bg: white;
+        }
+        [data-theme="dark"] {
+          --bg: #0f172a; --fg: #e2e8f0;
+          --hero-bg: linear-gradient(135deg, #1e293b, #0f172a 55%, #1a2e1a);
+          --hero-border: #334155;
+          --card-bg: #1e293b; --card-border: #334155; --card-shadow: rgba(0,0,0,0.3);
+          --meta-bg: rgba(30,41,59,0.82);
+          --muted: #94a3b8; --link: #60a5fa; --link-alt: #38bdf8;
+          --header-border: #334155;
+          --img-bg: #1e293b;
+        }
         body {
           margin: 0;
           font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif;
-          background: #f8fafc;
-          color: #0f172a;
+          background: var(--bg);
+          color: var(--fg);
         }
         main { max-width: 1500px; margin: 0 auto; padding: 32px 24px 56px; }
         h1, h2, h3, p { margin-top: 0; }
+        .theme-toggle {
+          position: fixed; top: 16px; right: 16px; z-index: 100;
+          background: var(--card-bg); border: 1px solid var(--card-border);
+          border-radius: 8px; padding: 6px 12px; cursor: pointer;
+          color: var(--fg); font-size: 0.85rem; font-weight: 600;
+        }
+        .theme-toggle:hover { opacity: 0.8; }
         .hero {
-          background: linear-gradient(135deg, #e0f2fe, #f8fafc 55%, #dcfce7);
-          border: 1px solid #cbd5e1;
+          background: var(--hero-bg);
+          border: 1px solid var(--hero-border);
           border-radius: 20px;
           padding: 24px;
           margin-bottom: 24px;
@@ -2235,8 +2456,8 @@ def _write_html_dashboard(
           margin-top: 18px;
         }
         .meta-card {
-          background: rgba(255,255,255,0.82);
-          border: 1px solid #dbeafe;
+          background: var(--meta-bg);
+          border: 1px solid var(--card-border);
           border-radius: 14px;
           padding: 14px 16px;
         }
@@ -2245,7 +2466,7 @@ def _write_html_dashboard(
           font-size: 0.82rem;
           text-transform: uppercase;
           letter-spacing: 0.04em;
-          color: #475569;
+          color: var(--muted);
           margin-bottom: 6px;
         }
         .section { margin-top: 30px; }
@@ -2255,44 +2476,67 @@ def _write_html_dashboard(
           gap: 18px;
         }
         .plot-card {
-          background: white;
-          border: 1px solid #dbeafe;
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
           border-radius: 18px;
           overflow: hidden;
-          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+          box-shadow: 0 10px 24px var(--card-shadow);
         }
         .plot-card header {
           padding: 16px 18px 10px;
-          border-bottom: 1px solid #e2e8f0;
+          border-bottom: 1px solid var(--header-border);
         }
         .plot-card header p {
           margin-bottom: 0;
-          color: #475569;
+          color: var(--muted);
           font-size: 0.92rem;
         }
-        .plot-card .image-wrap { padding: 14px; background: #fff; }
+        .plot-card .image-wrap { padding: 14px; background: var(--img-bg); }
         .plot-card img {
           width: 100%;
           height: auto;
           display: block;
           border-radius: 12px;
-          background: white;
+          background: var(--img-bg);
         }
         .plot-card footer { padding: 0 18px 16px; font-size: 0.92rem; }
-        .plot-card a {
-          color: #2563eb;
-          text-decoration: none;
-          font-weight: 600;
-        }
+        .plot-card a { color: var(--link); text-decoration: none; font-weight: 600; }
         .plot-card a:hover { text-decoration: underline; }
         .links { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 12px; }
-        .links a {
-          color: #0369a1;
-          text-decoration: none;
-          font-weight: 600;
-        }
+        .links a { color: var(--link-alt); text-decoration: none; font-weight: 600; }
         .links a:hover { text-decoration: underline; }
         code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        @media (prefers-color-scheme: dark) {
+          :root:not([data-theme="light"]) {
+            --bg: #0f172a; --fg: #e2e8f0;
+            --hero-bg: linear-gradient(135deg, #1e293b, #0f172a 55%, #1a2e1a);
+            --hero-border: #334155;
+            --card-bg: #1e293b; --card-border: #334155; --card-shadow: rgba(0,0,0,0.3);
+            --meta-bg: rgba(30,41,59,0.82);
+            --muted: #94a3b8; --link: #60a5fa; --link-alt: #38bdf8;
+            --header-border: #334155;
+            --img-bg: #1e293b;
+          }
+        }
+        """,
+    ).strip()
+    theme_script = dedent(
+        """
+        <script>
+        (function() {
+          var html = document.documentElement;
+          var btn = document.getElementById('theme-toggle');
+          var stored = localStorage.getItem('pecos-theme');
+          if (stored) html.setAttribute('data-theme', stored);
+          btn.addEventListener('click', function() {
+            var current = html.getAttribute('data-theme');
+            var next = current === 'dark' ? 'light' : 'dark';
+            if (!current) next = 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('pecos-theme', next);
+          });
+        })();
+        </script>
         """,
     ).strip()
     distances_text = ", ".join(str(distance) for distance in sorted(set(args.distances)))
@@ -2321,6 +2565,7 @@ def _write_html_dashboard(
         "  </style>",
         "</head>",
         "<body>",
+        '<button id="theme-toggle" class="theme-toggle">Light / Dark</button>',
         "<main>",
         '  <section class="hero">',
         "    <h1>PECOS Surface Sweep Dashboard</h1>",
@@ -2337,7 +2582,7 @@ def _write_html_dashboard(
         meta_card("Shots / Point", html.escape(str(args.shots))),
         meta_card(
             "Noise Model",
-            "uniform depolarizing with <code>p1 = p2 = p_meas = p_init = p</code>",
+            html.escape(_noise_model_description(args)),
         ),
         meta_card(
             "Overall Throughput",
@@ -2369,7 +2614,7 @@ def _write_html_dashboard(
             parts.extend(plot_card(plot))
         parts.extend(["    </div>", "  </section>"])
 
-    parts.extend(["</main>", "</body>", "</html>"])
+    parts.extend(["</main>", theme_script, "</body>", "</html>"])
     output_path.write_text("\n".join(parts) + "\n")
 
 
@@ -2831,7 +3076,7 @@ def _build_report_cover_figure(
         ("Error Rates", [", ".join(f"{p:.4g}" for p in config.get("error_rates", [])) or "(none)"], 1),
         (
             "Noise Model",
-            ["uniform depolarizing", "p1 = p2 = p_meas = p_init = p"],
+            [config.get("noise_model", "depolarizing")],
             2,
         ),
     ]
@@ -3266,6 +3511,8 @@ def _config_for_report(args: argparse.Namespace) -> dict[str, Any]:
         # appendix page can read the same field from either source.
         "sample_backend_mode": getattr(args, "sample_backend", None),
         "native_circuit_source": getattr(args, "native_circuit_source", None),
+        "decoder": getattr(args, "decoder", ["pymatching"]),
+        "noise_model": _noise_model_description(args),
         "seed": getattr(args, "seed", None),
     }
 
@@ -3308,6 +3555,26 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--p1-scale",
+        type=float,
+        default=1.0 / 30.0,
+        help=(
+            "Scale factor for single-qubit gate error rate relative to p. p1 = p * p1_scale. Default: 1/30 (~0.033)."
+        ),
+    )
+    parser.add_argument(
+        "--p-meas-scale",
+        type=float,
+        default=1.0 / 3.0,
+        help="Scale factor for measurement error rate. p_meas = p * p_meas_scale. Default: 1/3.",
+    )
+    parser.add_argument(
+        "--p-prep-scale",
+        type=float,
+        default=1.0 / 3.0,
+        help="Scale factor for preparation error rate. p_prep = p * p_prep_scale. Default: 1/3.",
+    )
+    parser.add_argument(
         "--error-rates",
         nargs="+",
         type=float,
@@ -3344,12 +3611,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--native-circuit-source",
         choices=["abstract", "traced_qis"],
-        default="abstract",
+        default="traced_qis",
         help=(
             "Which ideal circuit the native PECOS DEM/sampler path should analyze. "
-            "'abstract' uses the existing high-level surface TickCircuit, while "
-            "'traced_qis' traces the lowered ideal Selene/QIS gate stream and "
-            "replays that exact circuit into the native PECOS analysis."
+            "'traced_qis' (default) traces the lowered ideal Selene/QIS gate stream "
+            "(decomposed into native gates like RZZ+rotations), matching the actual "
+            "hardware gate set. Use this for hardware-realistic threshold estimation. "
+            "'abstract' uses the high-level surface TickCircuit with CX/H gates, "
+            "matching the standard circuit-level noise model from the QEC literature."
         ),
     )
     parser.add_argument(
@@ -3357,6 +3626,28 @@ def _parse_args() -> argparse.Namespace:
         choices=["native_decomposed", "native_full"],
         default="native_decomposed",
         help="PECOS native DEM mode. PyMatching typically wants native_decomposed.",
+    )
+    parser.add_argument(
+        "--decoder",
+        nargs="+",
+        choices=["pymatching", "tesseract", "bp_osd", "bp_lsd", "union_find", "relay_bp", "min_sum_bp"],
+        default=["pymatching"],
+        help=(
+            "Decoder(s) for circuit-level DEM decoding. Specify multiple to "
+            "compare them side-by-side in plots and reports. Default: pymatching. "
+            "Check-matrix decoders (bp_osd, bp_lsd, union_find, relay_bp, min_sum_bp) "
+            "extract a check matrix from the DEM automatically."
+        ),
+    )
+    parser.add_argument(
+        "--tesseract-beam",
+        type=int,
+        default=5,
+        help=(
+            "Tesseract det_beam parameter (number of detectors to consider in beam search). "
+            "Default: 5 (matches upstream). With BFS orderings, det_beam=5 gives identical "
+            "accuracy to 50 or 100 at d<=5 while being 10x faster."
+        ),
     )
     parser.add_argument("--seed", type=int, default=12345, help="Base RNG seed for the runtime noise model.")
     parser.add_argument("--save-json", action="store_true", help="Write a JSON artifact with all sweep results.")
@@ -3397,6 +3688,41 @@ def _parse_args() -> argparse.Namespace:
         help="Filename prefix for optional artifacts.",
     )
     parser.add_argument(
+        "--refine-threshold",
+        action="store_true",
+        help=(
+            "After the initial sweep, estimate the threshold and automatically "
+            "run a refined sweep with tighter error-rate spacing around it. "
+            "The refinement uses the same distances, bases, and shots."
+        ),
+    )
+    parser.add_argument(
+        "--refine-window",
+        type=float,
+        default=0.5,
+        help=(
+            "Half-width of the refinement window as a fraction of the estimated "
+            "threshold. E.g., 0.5 means sweep from 0.5*p_th to 1.5*p_th. "
+            "Default: 0.5."
+        ),
+    )
+    parser.add_argument(
+        "--refine-points",
+        type=int,
+        default=6,
+        help="Number of error-rate points in the refinement sweep. Default: 6.",
+    )
+    parser.add_argument(
+        "--ancilla-budget",
+        type=int,
+        default=None,
+        help=(
+            "Optional cap on simultaneously live ancilla qubits. When set, the "
+            "circuit builder batches stabilizer measurements to stay within this "
+            "budget. Affects both the abstract and traced_qis circuit sources."
+        ),
+    )
+    parser.add_argument(
         "--benchmark-repetitions",
         type=int,
         default=3,
@@ -3419,9 +3745,18 @@ _BACKEND_MODE_EXPANSIONS: dict[str, list[str]] = {
 }
 
 
-def _resolve_backends(sample_backend: str) -> list[str]:
-    """Resolve ``--sample-backend`` to the concrete list of backends to run."""
-    return _BACKEND_MODE_EXPANSIONS.get(sample_backend, [sample_backend])
+def _resolve_backends(sample_backend: str, decoders: list[str] | None = None) -> list[str]:
+    """Resolve ``--sample-backend`` and ``--decoder`` to the concrete list of backends to run.
+
+    When multiple decoders are given, each base backend is expanded to
+    ``backend:decoder`` pairs so the plotting infrastructure sees them as
+    separate series.  With a single decoder the backend name is unchanged
+    for backwards compatibility.
+    """
+    base = _BACKEND_MODE_EXPANSIONS.get(sample_backend, [sample_backend])
+    if decoders is None or len(decoders) <= 1:
+        return base
+    return [f"{b}:{d}" for b in base for d in decoders]
 
 
 def _resolve_duration_schedule(
@@ -3512,13 +3847,30 @@ def _print_config_banner(
     print(f"executed backends: {backends}")
     print(f"DEM mode         : {args.dem_mode}")
     print(f"native circuit source: {args.native_circuit_source}")
-    print("decoder          : PyMatching via SurfaceDecoder(native PECOS DEM)")
+    decoders = getattr(args, "decoder", ["pymatching"])
+    print(f"decoder(s)       : {', '.join(decoders)} via SurfaceDecoder(native PECOS DEM)")
     for backend in backends:
         print(f"runtime[{backend}]  : {_backend_runtime_label(backend, args.native_circuit_source)}")
-    print("noise model      : depolarizing with p1 = p2 = p_meas = p_init = p")
+    p1s = getattr(args, "p1_scale", 0.1)
+    pms = getattr(args, "p_meas_scale", 0.5)
+    pps = getattr(args, "p_prep_scale", 0.5)
+    print(f"noise model      : depolarizing with p1={p1s}*p, p2=p, p_meas={pms}*p, p_prep={pps}*p")
     print("fit model        : p_L(r) = 0.5 * (1 - (1 - 2 * epsilon) ** r)")
     if output_dir is not None:
         print(f"artifact dir     : {output_dir}")
+
+
+def _parse_backend_decoder(backend: str, args: argparse.Namespace) -> tuple[str, str]:
+    """Split ``backend:decoder`` into base backend and decoder type.
+
+    When a single decoder is configured the backend string has no colon
+    and the decoder comes from ``args.decoder[0]``.
+    """
+    if ":" in backend:
+        base, decoder = backend.split(":", 1)
+        return base, decoder
+    decoders = getattr(args, "decoder", ["pymatching"])
+    return backend, decoders[0] if isinstance(decoders, list) else decoders
 
 
 def _run_one_memory_point(
@@ -3532,9 +3884,10 @@ def _run_one_memory_point(
     seed: int,
 ) -> tuple[SweepPoint, dict[str, Any]]:
     """Run one sampling point, print the per-point line, return the point + its timing row."""
+    base_backend, decoder_type = _parse_backend_decoder(backend, args)
     point_start = time.perf_counter()
     point = _run_memory_point(
-        sample_backend=backend,
+        sample_backend=base_backend,
         distance=distance,
         basis=basis,
         physical_error_rate=physical_error_rate,
@@ -3543,6 +3896,12 @@ def _run_one_memory_point(
         dem_mode=args.dem_mode,
         native_circuit_source=args.native_circuit_source,
         seed=seed,
+        decoder_type=decoder_type,
+        backend_label=backend,
+        ancilla_budget=getattr(args, "ancilla_budget", None),
+        p1_scale=getattr(args, "p1_scale", 0.1),
+        p_meas_scale=getattr(args, "p_meas_scale", 0.5),
+        p_prep_scale=getattr(args, "p_prep_scale", 0.5),
     )
     elapsed_seconds = time.perf_counter() - point_start
     naive_per_round = ler_per_round_exp(point.logical_error_rate, point.total_rounds)
@@ -3784,15 +4143,31 @@ def _print_post_sweep_analysis(
                         f"log_rmse={fit.fit_root_mean_square_log_error:.3e}",
                     )
 
-            crossing = _estimate_threshold(basis_summaries)
+            crossing_per_round = _estimate_threshold(
+                basis_summaries,
+                metric="fitted_logical_error_rate_per_round",
+            )
+            crossing_d_rounds = _estimate_threshold(
+                basis_summaries,
+                metric="fitted_projected_logical_error_rate_over_d_rounds",
+            )
             global_scaling_fit = _fit_global_scaling_law(basis_summaries)
-            fss_fit = _fit_fss_threshold(basis_summaries, seed_threshold=crossing)
-            if crossing is not None or global_scaling_fit is not None or fss_fit is not None:
+            # Try FSS fit seeded from both crossings; prefer d-round seed
+            fss_seed = crossing_d_rounds or crossing_per_round
+            fss_fit = _fit_fss_threshold(basis_summaries, seed_threshold=fss_seed)
+            if (
+                crossing_per_round is not None
+                or crossing_d_rounds is not None
+                or global_scaling_fit is not None
+                or fss_fit is not None
+            ):
                 print(f"{basis} basis [{backend}] background threshold-style summary:")
-                if crossing is None:
+                if crossing_per_round is None and crossing_d_rounds is None:
                     print(f"  no d={min(distances)} vs d={max(distances)} crossing was detected on this sweep.")
-                else:
-                    print(f"  approximate threshold crossing from fitted d-round curves: p ~= {crossing:.6g}")
+                if crossing_per_round is not None:
+                    print(f"  per-round epsilon crossing: p ~= {crossing_per_round:.6g}")
+                if crossing_d_rounds is not None:
+                    print(f"  projected d-round crossing: p ~= {crossing_d_rounds:.6g}")
                 if global_scaling_fit is not None:
                     print(
                         "  "
@@ -3830,7 +4205,7 @@ def main() -> int:
 
     distances = sorted(set(args.distances))
     bases = [basis.upper() for basis in args.bases]
-    backends = _resolve_backends(args.sample_backend)
+    backends = _resolve_backends(args.sample_backend, args.decoder)
     duration_multipliers, duration_rounds_by_distance, duration_schedule_description = _resolve_duration_schedule(
         args,
         distances,
@@ -3883,6 +4258,71 @@ def main() -> int:
         distances=distances,
         fit_summaries=fit_summaries,
     )
+
+    # --- Adaptive threshold refinement ---
+    if args.refine_threshold:
+        # Estimate threshold from the initial sweep
+        threshold_estimates = []
+        for basis in bases:
+            basis_summaries = [s for s in fit_summaries if s.basis == basis]
+            for backend in backends:
+                backend_summaries = [s for s in basis_summaries if s.backend == backend]
+                if not backend_summaries:
+                    continue
+                # Use d-round crossing as initial estimate (more conservative)
+                crossing = _estimate_threshold(
+                    backend_summaries,
+                    metric="fitted_projected_logical_error_rate_over_d_rounds",
+                )
+                if crossing is None:
+                    # Fall back to per-round crossing
+                    crossing = _estimate_threshold(backend_summaries)
+                if crossing is not None:
+                    threshold_estimates.append((backend, basis, crossing))
+
+        if threshold_estimates:
+            # Use the median estimate across all backends/bases
+            median_th = sorted(t[2] for t in threshold_estimates)[len(threshold_estimates) // 2]
+            half_w = args.refine_window
+            p_low = median_th * (1.0 - half_w)
+            p_high = median_th * (1.0 + half_w)
+            n_pts = args.refine_points
+            import numpy as np
+
+            refined_rates = sorted({float(f"{r:.6g}") for r in np.linspace(p_low, p_high, n_pts)})
+            # Exclude rates already in the initial sweep
+            refined_rates = [r for r in refined_rates if r not in error_rates and r > 0]
+
+            if refined_rates:
+                print()
+                print(
+                    f"=== Threshold refinement: {len(refined_rates)} additional points "
+                    f"in [{p_low:.5g}, {p_high:.5g}] around estimate p_th ~= {median_th:.5g} ===",
+                )
+                refine_points, refine_fits, refine_timings = _run_sweep_and_fit(
+                    args,
+                    backends=backends,
+                    distances=distances,
+                    bases=bases,
+                    error_rates=refined_rates,
+                    duration_rounds_by_distance=duration_rounds_by_distance,
+                )
+                # Merge with initial results
+                all_points.extend(refine_points)
+                fit_summaries.extend(refine_fits)
+                point_timings.extend(refine_timings)
+
+                # Re-run analysis with merged data
+                print()
+                print("=== Combined analysis (initial + refinement) ===")
+                _print_post_sweep_analysis(
+                    backends=backends,
+                    bases=bases,
+                    distances=distances,
+                    fit_summaries=fit_summaries,
+                )
+        else:
+            print("\n  No threshold detected -- skipping refinement.")
 
     timing_summary = _timing_summary(
         point_timings,

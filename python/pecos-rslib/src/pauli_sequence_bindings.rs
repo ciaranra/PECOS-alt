@@ -126,9 +126,18 @@ impl PyPauliSequence {
         self.inner.is_abelian()
     }
 
-    /// Commutation matrix: result[i][j] is True if i and j commute.
-    fn commutation_matrix(&self) -> Vec<Vec<bool>> {
-        self.inner.commutation_matrix()
+    /// Anticommutation matrix: result[i][j] is 1 if i and j anticommute.
+    fn commutation_matrix(&self) -> Vec<Vec<u8>> {
+        self.inner.commutation_matrix().rows()
+    }
+
+    /// Greedily partition Pauli strings into mutually commuting groups.
+    fn group_commuting(&self) -> Vec<Self> {
+        self.inner
+            .group_commuting()
+            .into_iter()
+            .map(|inner| Self { inner })
+            .collect()
     }
 
     /// Row-reduced form: independent Pauli strings in echelon form.

@@ -13,9 +13,10 @@
 //! Pauli propagation infrastructure and fault analysis.
 //!
 //! This module provides bidirectional Pauli propagation through quantum circuits,
-//! with specialized support for fault tolerance analysis. By propagating observables
-//! backward from measurements/logicals, we can efficiently determine which faults
-//! affect which detectors:
+//! with specialized support for fault tolerance analysis. By propagating
+//! detector/observable measurement parities and unmeasured tracked Pauli
+//! operators backward through the circuit, we can efficiently determine which
+//! faults affect which outputs:
 //!
 //! 1. **Speed up fault enumeration** - O(1) lookup instead of `O(circuit_depth)` propagation
 //! 2. **Build detector error models** - Direct mapping from faults to detectors
@@ -43,9 +44,16 @@
 //! let analyzer = DagFaultAnalyzer::new(&dag);
 //! let map = analyzer.build_influence_map();
 //!
-//! // O(1) lookup: which measurements does a fault at location L flip?
-//! let (has_syndrome, has_logical) = map.classify_fault(0, 1); // loc 0, X fault
+//! // O(1) lookup: which detector/non-detector outputs does a fault at location L flip?
+//! let (has_syndrome, _flips_non_detector_output) = map.classify_fault(0, 1); // loc 0, X fault
 //! ```
+//!
+//! Observables and tracked Paulis are distinct. Observables are values
+//! observed through measurement-record parities and become standard `L<n>`
+//! outputs in DEM text. Tracked Paulis are Pauli operators annotated at
+//! circuit points; they are not measured and are not applied to the computation.
+//! PECOS records whether each fault anticommutes with, and therefore would flip,
+//! the propagated operator.
 //!
 //! # Concept
 //!
@@ -89,14 +97,15 @@ mod checker;
 pub mod dag;
 mod pauli;
 mod tick;
-mod tick_soa;
+mod tick_batched;
 pub mod types;
 
 // Re-export from submodules
 pub use checker::InfluenceBasedChecker;
 pub use dag::{
     BucketRecorder, CsrArray, DagFaultAnalyzer, DagFaultInfluenceMap, DagSpacetimeLocation,
-    FaultLocations, InfluencesSoA, InfluencesSoAStats, SoARecorderBuilder,
+    DemOutputKind, DemOutputMetadata, FaultCombo, FaultComponent, FaultEffect, FaultLocations,
+    GateFaultLocation, InfluencesSoA, InfluencesSoAStats, SoARecorderBuilder,
 };
 pub use pauli::{
     Direction, apply_gate, init_pauli_prop_with_fault, propagate_backward_from_tick,
@@ -104,10 +113,10 @@ pub use pauli::{
     propagate_tick_range,
 };
 pub use tick::TickFaultAnalyzer;
-pub use tick_soa::TickFaultAnalyzerSoA;
+pub use tick_batched::TickFaultAnalyzerBatched;
 pub use types::{
-    DetectorId, DetectorIdx, FaultInfluence, FaultInfluenceMap, LocationId, LogicalId, LogicalIdx,
-    MeasurementId, NodeId, Pauli,
+    DemOutputIdx, DetectorId, DetectorIdx, FaultInfluence, FaultInfluenceMap, LocationId,
+    MeasurementId, NodeId, Pauli, TrackedPauliId, TrackedPauliIdx,
 };
 
 // Internal imports
@@ -199,7 +208,7 @@ pub trait InfluenceRecorder {
 /// clean separation between traversal and recording.
 #[derive(Debug)]
 pub struct PropagationContext<'a> {
-    /// Current Pauli observable being propagated.
+    /// Current Pauli operator being propagated.
     pub prop: PauliProp,
     /// Work buffers for traversal.
     pub buffers: &'a mut PropagatorWorkBuffers,
@@ -218,17 +227,17 @@ impl<'a> PropagationContext<'a> {
         }
     }
 
-    /// Initializes the Pauli observable for a Z-basis measurement.
+    /// Initializes the Pauli operator for a Z-basis measurement.
     pub fn init_z_measurement(&mut self, qubit: usize) {
         self.prop.track_z(&[qubit]);
     }
 
-    /// Initializes the Pauli observable for an X-basis measurement.
+    /// Initializes the Pauli operator for an X-basis measurement.
     pub fn init_x_measurement(&mut self, qubit: usize) {
         self.prop.track_x(&[qubit]);
     }
 
-    /// Initializes the Pauli observable based on measurement basis.
+    /// Initializes the Pauli operator based on measurement basis.
     pub fn init_measurement(&mut self, qubit: usize, basis: u8) {
         if basis == 0 {
             self.prop.track_z(&[qubit]);
@@ -354,7 +363,7 @@ impl InfluenceRecorder for CountingRecorder {
         if obs_x {
             self.by_pauli[3] += 1; // Z fault
         }
-        if obs_x || obs_z {
+        if obs_x ^ obs_z {
             self.by_pauli[2] += 1; // Y fault
         }
     }
@@ -766,8 +775,10 @@ mod tests {
 
         // Get any fault location and check classification
         if let Some((loc, _)) = map.influences.iter().next() {
-            let (has_syndrome, has_logical) = checker.classify(loc, 1); // X fault
-            println!("Location {loc:?}: syndrome={has_syndrome}, logical={has_logical}");
+            let (has_syndrome, flips_tracked_pauli) = checker.classify(loc, 1); // X fault
+            println!(
+                "Location {loc:?}: syndrome={has_syndrome}, tracked_pauli={flips_tracked_pauli}"
+            );
         }
     }
 
@@ -950,33 +961,36 @@ mod tests {
     }
 
     #[test]
-    fn test_backward_vs_forward_with_logicals() {
-        // Test that logical tracking works with backward propagation
+    fn test_backward_vs_forward_with_tracked_paulis() {
+        // Test that tracked-Pauli propagation works with backward propagation
         let mut circuit = TickCircuit::new();
         circuit.tick().pz(&[0, 1, 2]);
         circuit.tick().cx(&[(0, 2)]);
         circuit.tick().cx(&[(1, 2)]);
         circuit.tick().mz(&[2]);
 
-        // Define a simple logical Z = Z0 Z1
-        let logicals: &[(&[usize], &[usize])] = &[(&[], &[0, 1])];
+        // Define a simple tracked Z Pauli = Z0 Z1
+        let tracked_paulis: &[(&[usize], &[usize])] = &[(&[], &[0, 1])];
 
         let propagator = TickFaultAnalyzer::new(&circuit);
-        let map = propagator.build_influence_map_with_logicals(logicals);
+        let map = propagator.build_influence_map_with_tracked_paulis(tracked_paulis);
 
-        // Check that logical tracking is populated
-        assert_eq!(map.logicals.len(), 1);
+        // Check that tracked-Pauli propagation is populated
+        assert_eq!(map.tracked_paulis.len(), 1);
 
-        // X errors on data qubits should flip the logical
-        let mut found_logical_flip = false;
+        // X errors on data qubits should flip the tracked Pauli
+        let mut found_tracked_pauli_flip = false;
         for (loc, influence) in &map.influences {
             if loc.qubits.iter().any(|q| q.index() == 0 || q.index() == 1)
-                && !influence.logicals_for_pauli(1).is_empty()
+                && !influence.tracked_paulis_for_pauli(1).is_empty()
             {
-                found_logical_flip = true;
+                found_tracked_pauli_flip = true;
             }
         }
-        assert!(found_logical_flip, "Should find X errors that flip logical");
+        assert!(
+            found_tracked_pauli_flip,
+            "Should find X errors that flip tracked Pauli"
+        );
     }
 
     #[test]
@@ -1071,6 +1085,149 @@ mod tests {
             .iter()
             .map(|&q| (prop.contains_x(q), prop.contains_z(q)))
             .collect()
+    }
+
+    fn pauli_prop_from_signature(signature: &[(bool, bool)]) -> PauliProp {
+        let mut prop = PauliProp::new();
+        for (qubit, &(has_x, has_z)) in signature.iter().enumerate() {
+            if has_x {
+                prop.track_x(&[qubit]);
+            }
+            if has_z {
+                prop.track_z(&[qubit]);
+            }
+        }
+        prop
+    }
+
+    fn add_standard_clifford_gate(circuit: &mut TickCircuit, gate_type: GateType) {
+        match gate_type {
+            GateType::I => {
+                circuit.tick().iden(&[0]);
+            }
+            GateType::X => {
+                circuit.tick().x(&[0]);
+            }
+            GateType::Y => {
+                circuit.tick().y(&[0]);
+            }
+            GateType::Z => {
+                circuit.tick().z(&[0]);
+            }
+            GateType::H => {
+                circuit.tick().h(&[0]);
+            }
+            GateType::F => {
+                circuit.tick().f(&[0]);
+            }
+            GateType::Fdg => {
+                circuit.tick().fdg(&[0]);
+            }
+            GateType::SX => {
+                circuit.tick().sx(&[0]);
+            }
+            GateType::SXdg => {
+                circuit.tick().sxdg(&[0]);
+            }
+            GateType::SY => {
+                circuit.tick().sy(&[0]);
+            }
+            GateType::SYdg => {
+                circuit.tick().sydg(&[0]);
+            }
+            GateType::SZ => {
+                circuit.tick().sz(&[0]);
+            }
+            GateType::SZdg => {
+                circuit.tick().szdg(&[0]);
+            }
+            GateType::CX => {
+                circuit.tick().cx(&[(0, 1)]);
+            }
+            GateType::CY => {
+                circuit.tick().cy(&[(0, 1)]);
+            }
+            GateType::CZ => {
+                circuit.tick().cz(&[(0, 1)]);
+            }
+            GateType::SXX => {
+                circuit.tick().sxx(&[(0, 1)]);
+            }
+            GateType::SXXdg => {
+                circuit.tick().sxxdg(&[(0, 1)]);
+            }
+            GateType::SYY => {
+                circuit.tick().syy(&[(0, 1)]);
+            }
+            GateType::SYYdg => {
+                circuit.tick().syydg(&[(0, 1)]);
+            }
+            GateType::SZZ => {
+                circuit.tick().szz(&[(0, 1)]);
+            }
+            GateType::SZZdg => {
+                circuit.tick().szzdg(&[(0, 1)]);
+            }
+            GateType::SWAP => {
+                circuit.tick().swap(&[(0, 1)]);
+            }
+            _ => unreachable!("not a standard Clifford gate: {gate_type:?}"),
+        }
+    }
+
+    fn assert_pauli_signature_after_gate(
+        gate_type: GateType,
+        input: [(bool, bool); 2],
+        expected: [(bool, bool); 2],
+    ) {
+        let mut circuit = TickCircuit::new();
+        add_standard_clifford_gate(&mut circuit, gate_type);
+
+        let mut prop = pauli_prop_from_signature(&input);
+        propagate_through_circuit(&circuit, &mut prop, Direction::Forward);
+
+        assert_eq!(
+            pauli_signature(&prop, &[0, 1]),
+            expected,
+            "{gate_type:?} should map {input:?} to {expected:?} up to Pauli phase"
+        );
+    }
+
+    #[test]
+    fn test_standard_clifford_pauli_conjugation_tables() {
+        const I: (bool, bool) = (false, false);
+        const X: (bool, bool) = (true, false);
+        const Z: (bool, bool) = (false, true);
+        const Y: (bool, bool) = (true, true);
+
+        assert_pauli_signature_after_gate(GateType::H, [X, I], [Z, I]);
+        assert_pauli_signature_after_gate(GateType::H, [Z, I], [X, I]);
+        assert_pauli_signature_after_gate(GateType::F, [X, I], [Y, I]);
+        assert_pauli_signature_after_gate(GateType::F, [Y, I], [Z, I]);
+        assert_pauli_signature_after_gate(GateType::F, [Z, I], [X, I]);
+        assert_pauli_signature_after_gate(GateType::Fdg, [X, I], [Z, I]);
+        assert_pauli_signature_after_gate(GateType::Fdg, [Y, I], [X, I]);
+        assert_pauli_signature_after_gate(GateType::Fdg, [Z, I], [Y, I]);
+        assert_pauli_signature_after_gate(GateType::SX, [Z, I], [Y, I]);
+        assert_pauli_signature_after_gate(GateType::SY, [X, I], [Z, I]);
+        assert_pauli_signature_after_gate(GateType::SZ, [X, I], [Y, I]);
+
+        assert_pauli_signature_after_gate(GateType::CX, [X, I], [X, X]);
+        assert_pauli_signature_after_gate(GateType::CX, [I, Z], [Z, Z]);
+        assert_pauli_signature_after_gate(GateType::CY, [X, I], [X, Y]);
+        assert_pauli_signature_after_gate(GateType::CZ, [X, I], [X, Z]);
+        assert_pauli_signature_after_gate(GateType::SWAP, [X, Z], [Z, X]);
+
+        assert_pauli_signature_after_gate(GateType::SXX, [Z, I], [Y, X]);
+        assert_pauli_signature_after_gate(GateType::SXX, [I, Z], [X, Y]);
+        assert_pauli_signature_after_gate(GateType::SYY, [X, I], [Z, Y]);
+        assert_pauli_signature_after_gate(GateType::SYY, [I, X], [Y, Z]);
+        assert_pauli_signature_after_gate(GateType::SZZ, [X, I], [Y, Z]);
+        assert_pauli_signature_after_gate(GateType::SZZ, [I, X], [Z, Y]);
+
+        assert_pauli_signature_after_gate(GateType::SXXdg, [Z, I], [Y, X]);
+        assert_pauli_signature_after_gate(GateType::SYYdg, [X, I], [Z, Y]);
+        assert_pauli_signature_after_gate(GateType::SZZdg, [X, I], [Y, Z]);
     }
 
     #[test]

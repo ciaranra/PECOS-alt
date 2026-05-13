@@ -12,20 +12,20 @@
 
 //! Unified quantum operation algebra with automatic type promotion.
 //!
-//! [`Op`] wraps four algebraic levels — [`PauliString`], [`CliffordRep`],
-//! [`UnitaryRep`], and [`Channel`] — and automatically promotes to the
+//! [`Op`] wraps five algebraic levels — [`PauliString`], [`CliffordRep`],
+//! [`UnitaryRep`], [`GateExpr`], and [`ChannelExpr`] — and automatically promotes to the
 //! tightest level that can represent a combination.
 //!
 //! # Promotion Hierarchy
 //!
 //! ```text
-//! Pauli  ⊂  Clifford  ⊂  Unitary  ⊂  Channel
+//! Pauli  ⊂  Clifford  ⊂  Unitary  ⊂  Gate  ⊂  Channel
 //! ```
 //!
 //! Combining two `Op` values via tensor (`&`) or composition (`*`) promotes
 //! to the maximum level of the operands. The first three levels support full
-//! algebraic operations including adjoint (`dg()`). The Channel level supports
-//! tensor and composition but not adjoint.
+//! algebraic operations including adjoint (`dg()`). The Gate and Channel levels
+//! support tensor and composition but not adjoint.
 //!
 //! # Examples
 //!
@@ -44,12 +44,17 @@
 //! let u = X(0) & H(3) & T(5);
 //! assert!(u.is_unitary());
 //!
-//! // Adding a measurement promotes to Channel
-//! let ch = H(0) & MZ(1);
+//! // Adding a measurement promotes to Gate
+//! let g = H(0) & MZ(1);
+//! assert!(g.is_gate());
+//!
+//! // Adding a noise channel promotes to Channel
+//! let ch = g & Depolarizing(0.01, 2);
 //! assert!(ch.is_channel());
 //! ```
 
 use crate::clifford_rep::CliffordRep;
+use crate::qubit_support::{assert_distinct_qubits, overlapping_qubits};
 use crate::unitary_rep::{PhaseValue, UnitaryRep};
 use crate::{Angle64, PauliString, QubitId};
 use std::fmt;
@@ -61,7 +66,7 @@ pub use crate::unitary_rep::phase;
 
 /// Unified quantum operation with automatic level promotion.
 ///
-/// Wraps one of four algebraic levels and promotes to the tightest
+/// Wraps one of five algebraic levels and promotes to the tightest
 /// level when combined via `&` (tensor) or `*` (composition).
 ///
 /// The Clifford variant stores both a [`CliffordRep`] (for efficient Clifford
@@ -74,7 +79,10 @@ pub enum Op {
     Clifford(CliffordRep, UnitaryRep),
     /// General unitary level: expression tree.
     Unitary(UnitaryRep),
-    /// Channel level: non-unitary quantum operations (measurements, preparations).
+    /// Gate level: ideal circuit operations such as unitary gates, preparation,
+    /// measurement, and reset.
+    Gate(GateExpr),
+    /// Channel level: general CPTP maps and noise/decoherence operations.
     Channel(ChannelExpr),
 }
 
@@ -84,22 +92,69 @@ pub enum Level {
     Pauli = 0,
     Clifford = 1,
     Unitary = 2,
-    Channel = 3,
+    Gate = 3,
+    Channel = 4,
 }
 
-/// A non-unitary quantum operation expression.
+/// Error returned by fallible tensor-product constructors when supports overlap.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TensorProductError {
+    overlapping_qubits: Vec<usize>,
+}
+
+impl TensorProductError {
+    /// Qubits touched by both operands.
+    #[must_use]
+    pub fn overlapping_qubits(&self) -> &[usize] {
+        &self.overlapping_qubits
+    }
+}
+
+impl fmt::Display for TensorProductError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "tensor product requires disjoint operator support; overlapping qubits: {:?}",
+            self.overlapping_qubits
+        )
+    }
+}
+
+impl std::error::Error for TensorProductError {}
+
+/// An ideal circuit operation expression.
 ///
-/// Channels include measurements, preparations, noise channels (Kraus
-/// operators), and their compositions. They compose and tensor like
-/// unitaries but are not invertible.
+/// Gate expressions represent operations that can appear in an ideal circuit
+/// block: unitaries, preparations, measurements, resets, and their tensor or
+/// sequential combinations. Measurement record allocation is owned by the
+/// surrounding circuit representation, not by this expression.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ChannelExpr {
+pub enum GateExpr {
+    /// A unitary operation lifted to the gate level.
+    Unitary(UnitaryRep),
     /// Prepare qubit in a given basis eigenstate.
     Prep { basis: Basis, qubit: usize },
-    /// Measure qubit (produces classical bit).
+    /// Measure qubit in a given basis (produces a classical outcome).
     Measure { basis: Basis, qubit: usize },
+    /// Reset qubit to the given basis eigenstate.
+    Reset { basis: Basis, qubit: usize },
+    /// Tensor product of gate expressions.
+    Tensor(Vec<GateExpr>),
+    /// Sequential composition: apply first element, then second, etc.
+    Compose(Vec<GateExpr>),
+}
+
+/// A general quantum channel expression.
+///
+/// Channels include noise/decoherence maps, mixed unitaries, lifted ideal
+/// gates, and their compositions. They compose and tensor like unitaries but
+/// are not generally invertible.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChannelExpr {
     /// A unitary operation lifted to the channel level.
     Unitary(UnitaryRep),
+    /// An ideal gate expression lifted to the channel level.
+    Gate(GateExpr),
     /// Mixed-unitary channel: ρ → `Σ_k` `p_k` `U_k` ρ `U_k`†.
     ///
     /// Each entry is `(probability, unitary)` with probabilities summing to 1.
@@ -121,10 +176,6 @@ pub enum ChannelExpr {
     /// replaced by the maximally mixed state and an erasure flag is raised.
     /// This is a heralded error — the location of the error is known.
     Erasure { prob: f64, qubit: usize },
-    /// Reset channel: ρ → |0⟩⟨0| regardless of input state.
-    ///
-    /// Kraus operators: K₀ = |0⟩⟨0|, K₁ = |0⟩⟨1|.
-    Reset { qubit: usize },
     /// Leakage channel: qubit transitions to a non-computational state
     /// with probability `rate`.
     ///
@@ -155,6 +206,15 @@ fn cliff(cr: CliffordRep, ur: UnitaryRep) -> Op {
     Op::Clifford(cr, ur)
 }
 
+fn require_disjoint_support(lhs: &[usize], rhs: &[usize]) -> Result<(), TensorProductError> {
+    let overlapping_qubits = overlapping_qubits(lhs.iter().copied(), rhs.iter().copied());
+    if overlapping_qubits.is_empty() {
+        Ok(())
+    } else {
+        Err(TensorProductError { overlapping_qubits })
+    }
+}
+
 // --- Core methods ---
 
 impl Op {
@@ -165,6 +225,7 @@ impl Op {
             Op::Pauli(_) => Level::Pauli,
             Op::Clifford(..) => Level::Clifford,
             Op::Unitary(_) => Level::Unitary,
+            Op::Gate(_) => Level::Gate,
             Op::Channel(_) => Level::Channel,
         }
     }
@@ -185,8 +246,22 @@ impl Op {
     }
 
     #[must_use]
+    pub fn is_gate(&self) -> bool {
+        matches!(self, Op::Gate(_))
+    }
+
+    #[must_use]
     pub fn is_channel(&self) -> bool {
         matches!(self, Op::Channel(_))
+    }
+
+    /// Extracts the inner `GateExpr`, if at the Gate level.
+    #[must_use]
+    pub fn as_gate(&self) -> Option<&GateExpr> {
+        match self {
+            Op::Gate(gate) => Some(gate),
+            _ => None,
+        }
     }
 
     /// Extracts the inner `ChannelExpr`, if at the Channel level.
@@ -235,34 +310,48 @@ impl Op {
     }
 
     /// Consumes and returns the inner `CliffordRep`.
-    /// Pauli promotes to Clifford. Returns `None` for Unitary/Channel (cannot demote).
+    /// Pauli promotes to Clifford. Returns `None` for Unitary/Gate/Channel (cannot demote).
     #[must_use]
     pub fn into_clifford(self) -> Option<CliffordRep> {
         match self {
             Op::Pauli(ps) => Some(CliffordRep::from(ps)),
             Op::Clifford(cr, _) => Some(cr),
-            Op::Unitary(_) | Op::Channel(_) => None,
+            Op::Unitary(_) | Op::Gate(_) | Op::Channel(_) => None,
         }
     }
 
     /// Consumes and returns a `UnitaryRep`.
-    /// Returns `None` for Channel (cannot demote).
+    /// Returns `None` for Gate/Channel (cannot demote).
     #[must_use]
     pub fn into_unitary(self) -> Option<UnitaryRep> {
         match self {
             Op::Pauli(ps) => Some(UnitaryRep::from(ps)),
             Op::Clifford(_, ur) | Op::Unitary(ur) => Some(ur),
+            Op::Gate(_) | Op::Channel(_) => None,
+        }
+    }
+
+    /// Consumes and returns a `GateExpr`. Unitary and lower levels promote to
+    /// `GateExpr::Unitary`; Channel cannot demote.
+    #[must_use]
+    pub fn into_gate(self) -> Option<GateExpr> {
+        match self {
+            Op::Pauli(ps) => Some(GateExpr::Unitary(UnitaryRep::from(ps))),
+            Op::Clifford(_, ur) | Op::Unitary(ur) => Some(GateExpr::Unitary(ur)),
+            Op::Gate(gate) => Some(gate),
             Op::Channel(_) => None,
         }
     }
 
     /// Consumes and returns a `ChannelExpr`. Always succeeds:
-    /// lower levels promote to `ChannelExpr::Unitary`.
+    /// unitary and lower levels promote to `ChannelExpr::Unitary`; Gate
+    /// promotes to `ChannelExpr::Gate`.
     #[must_use]
     pub fn into_channel(self) -> ChannelExpr {
         match self {
             Op::Pauli(ps) => ChannelExpr::Unitary(UnitaryRep::from(ps)),
             Op::Clifford(_, ur) | Op::Unitary(ur) => ChannelExpr::Unitary(ur),
+            Op::Gate(gate) => ChannelExpr::Gate(gate),
             Op::Channel(ch) => ch,
         }
     }
@@ -280,14 +369,20 @@ impl Op {
     }
 
     /// Promotes this `Op` to at least the Unitary level.
-    /// Returns `None` if at Channel level (cannot demote).
+    /// Returns `None` if at Gate or Channel level (cannot demote).
     #[must_use]
     pub fn to_unitary_level(self) -> Option<Op> {
         match self {
             Op::Pauli(ps) => Some(Op::Unitary(UnitaryRep::from(ps))),
             Op::Clifford(_, ur) | Op::Unitary(ur) => Some(Op::Unitary(ur)),
-            Op::Channel(_) => None,
+            Op::Gate(_) | Op::Channel(_) => None,
         }
+    }
+
+    /// Promotes this `Op` to the Gate level.
+    #[must_use]
+    pub fn to_gate_level(self) -> Option<Op> {
+        self.into_gate().map(Op::Gate)
     }
 
     /// Promotes this `Op` to the Channel level.
@@ -296,28 +391,83 @@ impl Op {
         Op::Channel(self.into_channel())
     }
 
+    /// Returns the tensor product of two operations.
+    ///
+    /// This is the fallible form of the `&` operator. Tensor products require
+    /// disjoint qubit support; use `*` for sequential composition on the same
+    /// qubits.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TensorProductError`] when the two operations touch any of the
+    /// same qubits.
+    pub fn try_tensor(self, rhs: Op) -> Result<Op, TensorProductError> {
+        require_disjoint_support(&self.qubits(), &rhs.qubits())?;
+        Ok(self.tensor_unchecked(rhs))
+    }
+
+    fn tensor_unchecked(self, rhs: Op) -> Op {
+        let max_level = self.level().max(rhs.level());
+        match max_level {
+            Level::Pauli => {
+                let a = self.into_pauli().expect("max_level is Pauli");
+                let b = rhs.into_pauli().expect("max_level is Pauli");
+                Op::Pauli(&a & &b)
+            }
+            Level::Clifford => {
+                let (cr_a, ur_a) = match self {
+                    Op::Pauli(ps) => pauli_to_cliff_pair(ps),
+                    Op::Clifford(cr, ur) => (cr, ur),
+                    _ => unreachable!(),
+                };
+                let (cr_b, ur_b) = match rhs {
+                    Op::Pauli(ps) => pauli_to_cliff_pair(ps),
+                    Op::Clifford(cr, ur) => (cr, ur),
+                    _ => unreachable!(),
+                };
+                cliff(cr_a.compose(&cr_b), ur_a & ur_b)
+            }
+            Level::Unitary => {
+                let a = self.into_unitary().expect("max_level is Unitary");
+                let b = rhs.into_unitary().expect("max_level is Unitary");
+                Op::Unitary(a & b)
+            }
+            Level::Gate => {
+                let a = self.into_gate().expect("max_level is Gate");
+                let b = rhs.into_gate().expect("max_level is Gate");
+                Op::Gate(GateExpr::Tensor(vec![a, b]))
+            }
+            Level::Channel => {
+                let a = self.into_channel();
+                let b = rhs.into_channel();
+                Op::Channel(ChannelExpr::Tensor(vec![a, b]))
+            }
+        }
+    }
+
     /// Returns the adjoint (dagger) of this expression.
     ///
     /// # Panics
-    /// Panics if called on a Channel-level `Op` (channels are not invertible).
+    /// Panics if called on a Gate-level or Channel-level `Op` (not generally invertible).
     #[must_use]
     pub fn dg(&self) -> Op {
         match self {
             Op::Pauli(ps) => Op::Pauli(ps.clone()),
             Op::Clifford(cr, ur) => cliff(cr.inverse(), ur.dg()),
             Op::Unitary(ur) => Op::Unitary(ur.dg()),
+            Op::Gate(_) => panic!("dg() is not defined for Gate-level operations"),
             Op::Channel(_) => panic!("dg() is not defined for Channel-level operations"),
         }
     }
 
-    /// Returns the adjoint if this is a unitary-level operation, `None` for channels.
+    /// Returns the adjoint if this is a unitary-level operation, `None` for gates/channels.
     #[must_use]
     pub fn try_dg(&self) -> Option<Op> {
         match self {
             Op::Pauli(ps) => Some(Op::Pauli(ps.clone())),
             Op::Clifford(cr, ur) => Some(cliff(cr.inverse(), ur.dg())),
             Op::Unitary(ur) => Some(Op::Unitary(ur.dg())),
-            Op::Channel(_) => None,
+            Op::Gate(_) | Op::Channel(_) => None,
         }
     }
 
@@ -326,8 +476,15 @@ impl Op {
     pub fn qubits(&self) -> Vec<usize> {
         match self {
             Op::Pauli(ps) => ps.qubits(),
-            Op::Clifford(cr, _) => (0..cr.num_qubits()).collect(),
+            Op::Clifford(cr, ur) => {
+                let mut qs = cr.support_qubits();
+                qs.extend(ur.qubits());
+                qs.sort_unstable();
+                qs.dedup();
+                qs
+            }
             Op::Unitary(ur) => ur.qubits(),
+            Op::Gate(gate) => gate.qubits(),
             Op::Channel(ch) => ch.qubits(),
         }
     }
@@ -336,6 +493,71 @@ impl Op {
     #[must_use]
     pub fn num_qubits(&self) -> usize {
         self.qubits().into_iter().max().map_or(0, |q| q + 1)
+    }
+}
+
+// --- GateExpr methods ---
+
+impl GateExpr {
+    /// Returns the set of qubit indices this gate expression acts on.
+    #[must_use]
+    pub fn qubits(&self) -> Vec<usize> {
+        let mut qs = Vec::new();
+        self.collect_qubits(&mut qs);
+        qs.sort_unstable();
+        qs.dedup();
+        qs
+    }
+
+    fn collect_qubits(&self, out: &mut Vec<usize>) {
+        match self {
+            GateExpr::Prep { qubit, .. }
+            | GateExpr::Measure { qubit, .. }
+            | GateExpr::Reset { qubit, .. } => {
+                out.push(*qubit);
+            }
+            GateExpr::Unitary(ur) => {
+                out.extend(ur.qubits());
+            }
+            GateExpr::Tensor(parts) | GateExpr::Compose(parts) => {
+                for part in parts {
+                    part.collect_qubits(out);
+                }
+            }
+        }
+    }
+}
+
+impl fmt::Display for GateExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GateExpr::Unitary(ur) => write!(f, "{ur:?}"),
+            GateExpr::Prep { basis, qubit } => write!(f, "P{basis:?}({qubit})"),
+            GateExpr::Measure { basis, qubit } => write!(f, "M{basis:?}({qubit})"),
+            GateExpr::Reset {
+                basis: Basis::Z,
+                qubit,
+            } => write!(f, "Reset({qubit})"),
+            GateExpr::Reset { basis, qubit } => write!(f, "Reset{basis:?}({qubit})"),
+            GateExpr::Tensor(parts) => {
+                for (i, part) in parts.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " & ")?;
+                    }
+                    write!(f, "{part}")?;
+                }
+                Ok(())
+            }
+            GateExpr::Compose(parts) => {
+                for (i, part) in parts.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " * ")?;
+                    }
+                    write!(f, "{part}")?;
+                }
+                Ok(())
+            }
+        }
     }
 }
 
@@ -354,17 +576,17 @@ impl ChannelExpr {
 
     fn collect_qubits(&self, out: &mut Vec<usize>) {
         match self {
-            ChannelExpr::Prep { qubit, .. }
-            | ChannelExpr::Measure { qubit, .. }
-            | ChannelExpr::AmplitudeDamping { qubit, .. }
+            ChannelExpr::AmplitudeDamping { qubit, .. }
             | ChannelExpr::PhaseDamping { qubit, .. }
             | ChannelExpr::Erasure { qubit, .. }
-            | ChannelExpr::Reset { qubit }
             | ChannelExpr::Leakage { qubit, .. } => {
                 out.push(*qubit);
             }
             ChannelExpr::Unitary(ur) => {
                 out.extend(ur.qubits());
+            }
+            ChannelExpr::Gate(gate) => {
+                out.extend(gate.qubits());
             }
             ChannelExpr::MixedUnitary(ops) => {
                 for (_, ur) in ops {
@@ -383,9 +605,8 @@ impl ChannelExpr {
 impl fmt::Display for ChannelExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ChannelExpr::Prep { basis, qubit } => write!(f, "P{basis:?}({qubit})"),
-            ChannelExpr::Measure { basis, qubit } => write!(f, "M{basis:?}({qubit})"),
             ChannelExpr::Unitary(ur) => write!(f, "{ur:?}"),
+            ChannelExpr::Gate(gate) => write!(f, "{gate}"),
             ChannelExpr::MixedUnitary(ops) => {
                 write!(f, "MixedUnitary[")?;
                 for (i, (p, ur)) in ops.iter().enumerate() {
@@ -405,7 +626,6 @@ impl fmt::Display for ChannelExpr {
             ChannelExpr::Erasure { prob, qubit } => {
                 write!(f, "Erasure({prob}, {qubit})")
             }
-            ChannelExpr::Reset { qubit } => write!(f, "Reset({qubit})"),
             ChannelExpr::Leakage { rate, qubit } => {
                 write!(f, "Leakage({rate}, {qubit})")
             }
@@ -445,37 +665,7 @@ impl BitAnd for Op {
     type Output = Op;
 
     fn bitand(self, rhs: Op) -> Op {
-        let max_level = self.level().max(rhs.level());
-        match max_level {
-            Level::Pauli => {
-                let a = self.into_pauli().expect("max_level is Pauli");
-                let b = rhs.into_pauli().expect("max_level is Pauli");
-                Op::Pauli(&a & &b)
-            }
-            Level::Clifford => {
-                let (cr_a, ur_a) = match self {
-                    Op::Pauli(ps) => pauli_to_cliff_pair(ps),
-                    Op::Clifford(cr, ur) => (cr, ur),
-                    _ => unreachable!(),
-                };
-                let (cr_b, ur_b) = match rhs {
-                    Op::Pauli(ps) => pauli_to_cliff_pair(ps),
-                    Op::Clifford(cr, ur) => (cr, ur),
-                    _ => unreachable!(),
-                };
-                cliff(cr_a.compose(&cr_b), ur_a & ur_b)
-            }
-            Level::Unitary => {
-                let a = self.into_unitary().expect("max_level is Unitary");
-                let b = rhs.into_unitary().expect("max_level is Unitary");
-                Op::Unitary(a & b)
-            }
-            Level::Channel => {
-                let a = self.into_channel();
-                let b = rhs.into_channel();
-                Op::Channel(ChannelExpr::Tensor(vec![a, b]))
-            }
-        }
+        self.try_tensor(rhs).unwrap_or_else(|err| panic!("{err}"))
     }
 }
 
@@ -509,6 +699,11 @@ impl Mul for Op {
                 let a = self.into_unitary().expect("max_level is Unitary");
                 let b = rhs.into_unitary().expect("max_level is Unitary");
                 Op::Unitary(a * b)
+            }
+            Level::Gate => {
+                let a = self.into_gate().expect("max_level is Gate");
+                let b = rhs.into_gate().expect("max_level is Gate");
+                Op::Gate(GateExpr::Compose(vec![a, b]))
             }
             Level::Channel => {
                 let a = self.into_channel();
@@ -573,6 +768,7 @@ impl Neg for Op {
             Op::Pauli(ps) => Op::Pauli(-ps),
             Op::Clifford(cr, ur) => cliff(cr, -ur),
             Op::Unitary(ur) => Op::Unitary(-ur),
+            Op::Gate(_) => panic!("negation is not defined for Gate-level operations"),
             Op::Channel(_) => panic!("negation is not defined for Channel-level operations"),
         }
     }
@@ -594,6 +790,9 @@ impl Mul<Op> for ImaginaryUnit {
             Op::Pauli(ps) => Op::Pauli(self * ps),
             Op::Clifford(cr, ur) => cliff(cr, self * ur),
             Op::Unitary(ur) => Op::Unitary(self * ur),
+            Op::Gate(_) => {
+                panic!("phase multiplication is not defined for Gate-level operations")
+            }
             Op::Channel(_) => {
                 panic!("phase multiplication is not defined for Channel-level operations")
             }
@@ -617,6 +816,9 @@ impl Mul<Op> for NegImaginaryUnit {
             Op::Pauli(ps) => Op::Pauli(self * ps),
             Op::Clifford(cr, ur) => cliff(cr, self * ur),
             Op::Unitary(ur) => Op::Unitary(self * ur),
+            Op::Gate(_) => {
+                panic!("phase multiplication is not defined for Gate-level operations")
+            }
             Op::Channel(_) => {
                 panic!("phase multiplication is not defined for Channel-level operations")
             }
@@ -637,19 +839,22 @@ impl Mul<&Op> for NegImaginaryUnit {
 /// Applies the global phase e^{i*angle} to the operation.
 ///
 /// # Panics
-/// Panics if applied to a Channel-level operation.
+/// Panics if applied to a Gate-level or Channel-level operation.
 impl Mul<Op> for PhaseValue {
     type Output = Op;
 
     fn mul(self, rhs: Op) -> Op {
         match rhs {
+            Op::Gate(_) => {
+                panic!("phase multiplication is not defined for Gate-level operations")
+            }
             Op::Channel(_) => {
                 panic!("phase multiplication is not defined for Channel-level operations")
             }
             other => {
                 let ur = other
                     .into_unitary()
-                    .expect("non-Channel Op is convertible to Unitary");
+                    .expect("non-Gate/non-Channel Op is convertible to Unitary");
                 Op::Unitary(self * ur)
             }
         }
@@ -702,6 +907,18 @@ impl From<UnitaryRep> for Op {
     }
 }
 
+impl From<GateExpr> for Op {
+    fn from(gate: GateExpr) -> Op {
+        Op::Gate(gate)
+    }
+}
+
+impl From<ChannelExpr> for Op {
+    fn from(channel: ChannelExpr) -> Op {
+        Op::Channel(channel)
+    }
+}
+
 // --- Display ---
 
 impl fmt::Display for Op {
@@ -710,6 +927,7 @@ impl fmt::Display for Op {
             Op::Pauli(ps) => write!(f, "{ps}"),
             Op::Clifford(cr, _) => write!(f, "{cr}"),
             Op::Unitary(ur) => write!(f, "{ur:?}"),
+            Op::Gate(gate) => write!(f, "{gate}"),
             Op::Channel(ch) => write!(f, "{ch}"),
         }
     }
@@ -1179,13 +1397,13 @@ pub fn CCX(c0: impl Into<QubitId>, c1: impl Into<QubitId>, target: impl Into<Qub
     Op::Unitary(crate::unitary_rep::CCX(c0, c1, target))
 }
 
-// --- Gate constructors — Channel level ---
+// --- Gate constructors — Gate level ---
 
 /// Prepare qubit in the |0> state (Z-basis preparation).
 #[allow(non_snake_case)]
 #[must_use]
 pub fn PZ(qubit: impl Into<QubitId>) -> Op {
-    Op::Channel(ChannelExpr::Prep {
+    Op::Gate(GateExpr::Prep {
         basis: Basis::Z,
         qubit: qubit.into().0,
     })
@@ -1195,8 +1413,18 @@ pub fn PZ(qubit: impl Into<QubitId>) -> Op {
 #[allow(non_snake_case)]
 #[must_use]
 pub fn PX(qubit: impl Into<QubitId>) -> Op {
-    Op::Channel(ChannelExpr::Prep {
+    Op::Gate(GateExpr::Prep {
         basis: Basis::X,
+        qubit: qubit.into().0,
+    })
+}
+
+/// Prepare qubit in the Y-basis +1 eigenstate.
+#[allow(non_snake_case)]
+#[must_use]
+pub fn PY(qubit: impl Into<QubitId>) -> Op {
+    Op::Gate(GateExpr::Prep {
+        basis: Basis::Y,
         qubit: qubit.into().0,
     })
 }
@@ -1205,7 +1433,7 @@ pub fn PX(qubit: impl Into<QubitId>) -> Op {
 #[allow(non_snake_case)]
 #[must_use]
 pub fn MZ(qubit: impl Into<QubitId>) -> Op {
-    Op::Channel(ChannelExpr::Measure {
+    Op::Gate(GateExpr::Measure {
         basis: Basis::Z,
         qubit: qubit.into().0,
     })
@@ -1215,8 +1443,18 @@ pub fn MZ(qubit: impl Into<QubitId>) -> Op {
 #[allow(non_snake_case)]
 #[must_use]
 pub fn MX(qubit: impl Into<QubitId>) -> Op {
-    Op::Channel(ChannelExpr::Measure {
+    Op::Gate(GateExpr::Measure {
         basis: Basis::X,
+        qubit: qubit.into().0,
+    })
+}
+
+/// Measure qubit in the Y basis.
+#[allow(non_snake_case)]
+#[must_use]
+pub fn MY(qubit: impl Into<QubitId>) -> Op {
+    Op::Gate(GateExpr::Measure {
+        basis: Basis::Y,
         qubit: qubit.into().0,
     })
 }
@@ -1341,6 +1579,7 @@ pub fn Depolarizing2(p: f64, q0: impl Into<QubitId>, q1: impl Into<QubitId>) -> 
     assert!((0.0..=1.0).contains(&p), "probability p must be in [0, 1]");
     let a = q0.into();
     let b = q1.into();
+    assert_distinct_qubits("Depolarizing2", [a.0, b.0]);
     let p15 = p / 15.0;
     let paulis_1q = [
         unitary_rep::I,
@@ -1405,7 +1644,8 @@ pub fn Erasure(prob: f64, qubit: impl Into<QubitId>) -> Op {
 #[allow(non_snake_case)]
 #[must_use]
 pub fn Reset(qubit: impl Into<QubitId>) -> Op {
-    Op::Channel(ChannelExpr::Reset {
+    Op::Gate(GateExpr::Reset {
+        basis: Basis::Z,
         qubit: qubit.into().0,
     })
 }
@@ -1522,6 +1762,18 @@ mod tests {
     }
 
     #[test]
+    fn clifford_tensor_uses_actual_support_not_span() {
+        let op = H(0) & SZ(3);
+        let cr = op.as_clifford().unwrap();
+
+        assert_eq!(op.qubits(), vec![0, 3]);
+        assert_eq!(cr.apply(&PauliString::x(0)), PauliString::z(0));
+        assert_eq!(cr.apply(&PauliString::z(0)), PauliString::x(0));
+        assert_eq!(cr.apply(&PauliString::x(3)), PauliString::y(3));
+        assert_eq!(cr.apply(&PauliString::z(3)), PauliString::z(3));
+    }
+
+    #[test]
     fn pauli_unitary_tensor_promotes() {
         let op = X(0) & T(3);
         assert!(op.is_unitary());
@@ -1537,6 +1789,131 @@ mod tests {
     fn three_way_promotion() {
         let op = X(0) & H(3) & T(5);
         assert!(op.is_unitary());
+    }
+
+    #[test]
+    fn try_tensor_reports_overlapping_qubits() {
+        let err = X(0).try_tensor(Z(0)).unwrap_err();
+        assert_eq!(err.overlapping_qubits(), &[0]);
+    }
+
+    #[test]
+    fn try_tensor_rejects_mixed_level_overlaps() {
+        let cases = [
+            ("pauli-clifford", X(0), H(0), vec![0]),
+            ("pauli-unitary", X(0), T(0), vec![0]),
+            ("pauli-gate", X(0), MZ(0), vec![0]),
+            ("pauli-channel", X(0), Depolarizing(0.01, 0), vec![0]),
+            ("clifford-gate", H(0), MZ(0), vec![0]),
+            ("gate-channel", MZ(0), Depolarizing(0.01, 0), vec![0]),
+            ("partial-multi-qubit", CX(0, 2), H(2), vec![2]),
+        ];
+
+        for (name, lhs, rhs, expected_overlap) in cases {
+            let err = lhs.try_tensor(rhs).unwrap_err();
+            assert_eq!(
+                err.overlapping_qubits(),
+                expected_overlap.as_slice(),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn tensor_operator_panics_are_consistent_across_levels() {
+        fn assert_overlap_panic(f: impl FnOnce() + std::panic::UnwindSafe, expected: &str) {
+            let err = std::panic::catch_unwind(f).expect_err("expected tensor overlap panic");
+            let message = if let Some(message) = err.downcast_ref::<String>() {
+                message.as_str()
+            } else if let Some(message) = err.downcast_ref::<&str>() {
+                message
+            } else {
+                panic!("unexpected non-string panic payload");
+            };
+            assert!(
+                message.contains("tensor product requires disjoint operator support"),
+                "{message}"
+            );
+            assert!(message.contains(expected), "{message}");
+        }
+
+        assert_overlap_panic(
+            || {
+                let _ = X(0) & Z(0);
+            },
+            "[0]",
+        );
+        assert_overlap_panic(
+            || {
+                let _ = H(0) & T(0);
+            },
+            "[0]",
+        );
+        assert_overlap_panic(
+            || {
+                let _ = T(0) & MZ(0);
+            },
+            "[0]",
+        );
+        assert_overlap_panic(
+            || {
+                let _ = MZ(0) & Depolarizing(0.01, 0);
+            },
+            "[0]",
+        );
+        assert_overlap_panic(
+            || {
+                let _ = CX(0, 2) & Depolarizing(0.01, 2);
+            },
+            "[2]",
+        );
+    }
+
+    #[test]
+    fn try_tensor_accepts_mixed_level_disjoint_support() {
+        assert!((X(0).try_tensor(H(1))).unwrap().is_clifford());
+        assert!((H(0).try_tensor(T(1))).unwrap().is_unitary());
+        assert!(
+            (MZ(0).try_tensor(Depolarizing(0.01, 1)))
+                .unwrap()
+                .is_channel()
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "tensor product requires disjoint operator support")]
+    fn pauli_tensor_rejects_overlapping_qubits() {
+        let _ = X(0) & Z(0);
+    }
+
+    #[test]
+    #[should_panic(expected = "tensor product requires disjoint operator support")]
+    fn clifford_tensor_rejects_overlapping_qubits() {
+        let _ = H(0) & SZ(0);
+    }
+
+    #[test]
+    #[should_panic(expected = "tensor product requires disjoint operator support")]
+    fn gate_tensor_rejects_overlapping_qubits() {
+        let _ = H(0) & MZ(0);
+    }
+
+    #[test]
+    #[should_panic(expected = "tensor product requires disjoint operator support")]
+    fn channel_tensor_rejects_overlapping_qubits() {
+        let _ = H(0) & Depolarizing(0.01, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "SWAP requires distinct qubits")]
+    fn op_two_qubit_gate_rejects_repeated_qubit() {
+        let _ = SWAP(0, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Depolarizing2 requires distinct qubits")]
+    fn op_two_qubit_channel_rejects_repeated_qubit() {
+        let _ = Depolarizing2(0.01, 2, 2);
     }
 
     // --- Composition promotion ---
@@ -1589,8 +1966,9 @@ mod tests {
     }
 
     #[test]
-    fn into_unitary_none_for_channel() {
+    fn into_unitary_none_for_gate_and_channel() {
         assert!(MZ(0).into_unitary().is_none());
+        assert!(Depolarizing(0.01, 0).into_unitary().is_none());
     }
 
     // --- Level promotion ---
@@ -1613,8 +1991,9 @@ mod tests {
     }
 
     #[test]
-    fn to_unitary_level_none_for_channel() {
+    fn to_unitary_level_none_for_gate_and_channel() {
         assert!(MZ(0).to_unitary_level().is_none());
+        assert!(Depolarizing(0.01, 0).to_unitary_level().is_none());
     }
 
     // --- Adjoint ---
@@ -1763,6 +2142,8 @@ mod tests {
     fn level_ordering() {
         assert!(Level::Pauli < Level::Clifford);
         assert!(Level::Clifford < Level::Unitary);
+        assert!(Level::Unitary < Level::Gate);
+        assert!(Level::Gate < Level::Channel);
     }
 
     // --- From conversions ---
@@ -1900,44 +2281,60 @@ mod tests {
         assert!(b.is_clifford());
     }
 
-    // --- Channel level ---
+    // --- Gate level ---
 
     #[test]
-    fn channel_level() {
-        assert!(MZ(0).is_channel());
-        assert!(MX(0).is_channel());
-        assert!(PZ(0).is_channel());
-        assert!(PX(0).is_channel());
+    fn gate_level() {
+        assert!(MZ(0).is_gate());
+        assert!(MX(0).is_gate());
+        assert!(MY(0).is_gate());
+        assert!(PZ(0).is_gate());
+        assert!(PX(0).is_gate());
+        assert!(PY(0).is_gate());
     }
 
     #[test]
-    fn channel_tensor_stays_channel() {
+    fn gate_tensor_stays_gate() {
         let op = MZ(0) & MZ(1);
-        assert!(op.is_channel());
+        assert!(op.is_gate());
     }
 
     #[test]
-    fn channel_compose_stays_channel() {
+    fn gate_compose_stays_gate() {
         let op = PZ(0) * MZ(0);
-        assert!(op.is_channel());
+        assert!(op.is_gate());
     }
 
     #[test]
-    fn unitary_channel_tensor_promotes() {
+    fn unitary_gate_tensor_promotes() {
         let op = H(0) & MZ(1);
-        assert!(op.is_channel());
+        assert!(op.is_gate());
     }
 
     #[test]
-    fn pauli_channel_tensor_promotes() {
+    fn non_clifford_unitary_gate_tensor_promotes_to_gate_tensor() {
+        let op = T(0) & MZ(1);
+        assert!(op.is_gate());
+        assert!(matches!(op, Op::Gate(GateExpr::Tensor(parts)) if parts.len() == 2));
+    }
+
+    #[test]
+    fn pauli_gate_tensor_promotes() {
         let op = X(0) & MZ(1);
-        assert!(op.is_channel());
+        assert!(op.is_gate());
     }
 
     #[test]
-    fn unitary_channel_compose_promotes() {
+    fn unitary_gate_compose_promotes() {
         let op = H(0) * MZ(0);
-        assert!(op.is_channel());
+        assert!(op.is_gate());
+    }
+
+    #[test]
+    fn non_clifford_unitary_gate_compose_promotes_to_gate_compose() {
+        let op = T(0) * MZ(0);
+        assert!(op.is_gate());
+        assert!(matches!(op, Op::Gate(GateExpr::Compose(parts)) if parts.len() == 2));
     }
 
     #[test]
@@ -1950,12 +2347,21 @@ mod tests {
     }
 
     #[test]
-    fn into_clifford_none_for_channel() {
+    fn into_gate_promotes_unitaries_and_keeps_gates() {
+        assert!(X(0).into_gate().is_some());
+        assert!(H(0).into_gate().is_some());
+        assert!(T(0).into_gate().is_some());
+        assert!(MZ(0).into_gate().is_some());
+        assert!(Depolarizing(0.01, 0).into_gate().is_none());
+    }
+
+    #[test]
+    fn into_clifford_none_for_gate() {
         assert!(MZ(0).into_clifford().is_none());
     }
 
     #[test]
-    fn try_dg_none_for_channel() {
+    fn try_dg_none_for_gate() {
         assert!(MZ(0).try_dg().is_none());
     }
 
@@ -1967,24 +2373,30 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "not defined for Channel")]
-    fn dg_panics_for_channel() {
+    #[should_panic(expected = "not defined for Gate")]
+    fn dg_panics_for_gate() {
         let _ = MZ(0).dg();
     }
 
     #[test]
-    fn channel_qubits() {
+    fn gate_qubits() {
         let op = MZ(3);
         assert_eq!(op.qubits(), vec![3]);
         assert_eq!(op.num_qubits(), 4);
     }
 
     #[test]
-    fn channel_tensor_qubits() {
+    fn gate_tensor_qubits() {
         let op = PZ(0) & MZ(2);
         let mut qs = op.qubits();
         qs.sort_unstable();
         assert_eq!(qs, vec![0, 2]);
+    }
+
+    #[test]
+    fn gate_channel_tensor_promotes_to_channel() {
+        let op = MZ(0) & Depolarizing(0.01, 1);
+        assert!(op.is_channel());
     }
 
     #[test]
@@ -1993,12 +2405,6 @@ mod tests {
         assert!(H(0).to_channel_level().is_channel());
         assert!(T(0).to_channel_level().is_channel());
         assert!(MZ(0).to_channel_level().is_channel());
-    }
-
-    #[test]
-    fn level_ordering_with_channel() {
-        assert!(Level::Unitary < Level::Channel);
-        assert!(Level::Pauli < Level::Channel);
     }
 
     // --- Noise channels ---
@@ -2092,9 +2498,23 @@ mod tests {
     }
 
     #[test]
+    fn non_clifford_unitary_channel_tensor_promotes_to_channel_tensor() {
+        let op = T(0) & Depolarizing(0.1, 1);
+        assert!(op.is_channel());
+        assert!(matches!(op, Op::Channel(ChannelExpr::Tensor(parts)) if parts.len() == 2));
+    }
+
+    #[test]
     fn noise_compose_with_gate() {
         let op = H(0) * Dephasing(0.05, 0);
         assert!(op.is_channel());
+    }
+
+    #[test]
+    fn non_clifford_unitary_channel_compose_promotes_to_channel_compose() {
+        let op = T(0) * Dephasing(0.05, 0);
+        assert!(op.is_channel());
+        assert!(matches!(op, Op::Channel(ChannelExpr::Compose(parts)) if parts.len() == 2));
     }
 
     #[test]
@@ -2170,10 +2590,32 @@ mod tests {
     }
 
     #[test]
-    fn reset_is_channel() {
+    fn reset_is_gate() {
         let op = Reset(0);
-        assert!(op.is_channel());
+        assert!(op.is_gate());
         assert_eq!(op.qubits(), vec![0]);
+
+        assert!(matches!(
+            PX(1),
+            Op::Gate(GateExpr::Prep {
+                basis: Basis::X,
+                qubit: 1
+            })
+        ));
+        assert!(matches!(
+            PY(2),
+            Op::Gate(GateExpr::Prep {
+                basis: Basis::Y,
+                qubit: 2
+            })
+        ));
+        assert!(matches!(
+            PZ(3),
+            Op::Gate(GateExpr::Prep {
+                basis: Basis::Z,
+                qubit: 3
+            })
+        ));
     }
 
     #[test]
@@ -2195,7 +2637,6 @@ mod tests {
         let ops = vec![
             PhaseDamping(0.1, 0),
             Erasure(0.05, 0),
-            Reset(0),
             Leakage(0.01, 0),
             AmplitudeDamping(0.1, 0),
         ];
@@ -2333,25 +2774,25 @@ mod tests {
     #[test]
     #[should_panic(expected = "not defined for Channel")]
     fn i_times_channel_panics() {
-        let _ = i * MZ(0);
+        let _ = i * Depolarizing(0.01, 0);
     }
 
     #[test]
     #[should_panic(expected = "not defined for Channel")]
     fn neg_channel_panics() {
-        let _ = -MZ(0);
+        let _ = -Depolarizing(0.01, 0);
     }
 
     #[test]
     #[should_panic(expected = "not defined for Channel")]
     fn generic_phase_channel_panics() {
-        let _ = phase(Angle64::QUARTER_TURN) * MZ(0);
+        let _ = phase(Angle64::QUARTER_TURN) * Depolarizing(0.01, 0);
     }
 
     #[test]
     #[should_panic(expected = "negation is not defined for Channel")]
     fn minus_one_channel_panics() {
-        let _ = -1 * MZ(0);
+        let _ = -1 * Depolarizing(0.01, 0);
     }
 
     // --- Noise boundary values ---

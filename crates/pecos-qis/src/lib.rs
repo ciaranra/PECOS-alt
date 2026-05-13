@@ -102,7 +102,6 @@ pub use engine_builder::{QisEngineBuilder, qis_engine};
 
 pub use program::{
     InterfaceChoice, IntoQisInterface, ProgramType, QisEngineProgram, QisInterfaceBuilder,
-    QisInterfaceProvider,
 };
 
 // ============================================================================
@@ -222,37 +221,4 @@ pub fn selene_soft_rz_engine() -> Result<QisEngineBuilder, RuntimeFetchError> {
     Ok(qis_engine()
         .runtime(selene_soft_rz_runtime()?)
         .interface(helios_interface_builder()))
-}
-/// Setup a QIS control engine for a program file (deprecated)
-///
-/// **Deprecated**: This function is deprecated because it relied on implicit runtime selection.
-/// Use `setup_qis_engine_with_runtime` instead and provide an explicit runtime.
-///
-/// # Parameters
-///
-/// - `program_path`: Path to the QIS program file (.ll or .bc)
-///
-/// # Returns
-///
-/// Returns an error directing users to use the explicit runtime version.
-///
-/// # Errors
-/// Always returns an error directing users to use `setup_qis_engine_with_runtime` instead.
-#[deprecated(
-    since = "0.1.1",
-    note = "Use setup_qis_engine_with_runtime with an explicit runtime instead"
-)]
-pub fn setup_qis_engine(
-    _program_path: &Path,
-) -> Result<Box<dyn ClassicalControlEngine>, PecosError> {
-    Err(PecosError::Processing(
-        "setup_qis_engine is deprecated.\n\
-        \n\
-        Please use setup_qis_engine_with_runtime and provide an explicit runtime:\n\
-        \n\
-        use pecos_qis::{setup_qis_engine_with_runtime, selene_simple_runtime};\n\
-        \n\
-        let engine = setup_qis_engine_with_runtime(path, selene_simple_runtime()?)?;"
-            .to_string(),
-    ))
 }

@@ -363,6 +363,20 @@ where
     }
 }
 
+/// Create a custom backend from a `SimulatorFactory` implementation.
+///
+/// Unlike [`custom_backend()`] which takes a closure, this accepts any type
+/// implementing `SimulatorFactory` directly. Use this when the factory needs
+/// configuration state (e.g., `StabMpsBackend` with bond dimension settings).
+#[must_use]
+pub fn custom_backend_from_factory(
+    factory: impl SimulatorFactory + 'static,
+) -> CustomBackendBuilder {
+    CustomBackendBuilder {
+        factory: Box::new(factory),
+    }
+}
+
 /// Create a custom backend with rotation support from a factory closure.
 ///
 /// Like [`custom_backend()`], but enables rotation gates (T, RZ, etc.) for
@@ -646,7 +660,7 @@ impl Default for SimConfig {
 ///
 /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 /// let results = sim_neo(circuit)
-///     .orchestrator(importance_sampling()
+///     .sampling(importance_sampling()
 ///         .with_p1(0.001)
 ///         .with_p2(0.01)
 ///         .with_p_meas(0.001)
@@ -721,10 +735,10 @@ impl ImportanceSamplingBuilder {
         self
     }
 
-    /// Build the orchestrator.
+    /// Build the sampling.
     #[must_use]
-    pub fn build(self) -> Orchestrator {
-        Orchestrator::ImportanceSampling { config: self }
+    pub fn build(self) -> Sampling {
+        Sampling::ImportanceSampling { config: self }
     }
 
     /// Get the single-qubit error rate.
@@ -758,13 +772,13 @@ impl Default for ImportanceSamplingBuilder {
     }
 }
 
-impl From<ImportanceSamplingBuilder> for Orchestrator {
+impl From<ImportanceSamplingBuilder> for Sampling {
     fn from(builder: ImportanceSamplingBuilder) -> Self {
         builder.build()
     }
 }
 
-/// Create an importance sampling orchestrator builder.
+/// Create an importance sampling sampling builder.
 ///
 /// Importance sampling biases noise toward higher error rates to observe
 /// rare events more frequently, then reweights results for unbiased estimates.
@@ -777,7 +791,7 @@ impl From<ImportanceSamplingBuilder> for Orchestrator {
 ///
 /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 /// let results = sim_neo(circuit)
-///     .orchestrator(importance_sampling()
+///     .sampling(importance_sampling()
 ///         .with_p1(0.001)
 ///         .with_p2(0.01)
 ///         .with_boost(10.0))
@@ -809,7 +823,7 @@ pub fn importance_sampling() -> ImportanceSamplingBuilder {
 /// using the Tool/Schedule/Plugin system. Use `.workers(n)` or `.auto_workers()`
 /// for parallel execution.
 #[derive(Debug, Clone)]
-pub enum Orchestrator {
+pub enum Sampling {
     /// Monte Carlo execution (sequential with 1 worker, parallel with >1).
     ///
     /// Each worker runs a batch of shots independently with deterministic seeding.
@@ -832,20 +846,20 @@ pub enum Orchestrator {
     },
 }
 
-impl Default for Orchestrator {
+impl Default for Sampling {
     fn default() -> Self {
         Self::MonteCarlo { workers: 1 }
     }
 }
 
-impl Orchestrator {
-    /// Create a Monte Carlo orchestrator with specified workers.
+impl Sampling {
+    /// Create a Monte Carlo sampling with specified workers.
     #[must_use]
     pub fn monte_carlo(workers: usize) -> Self {
         Self::MonteCarlo { workers }
     }
 
-    /// Create a Monte Carlo orchestrator with auto-detected worker count.
+    /// Create a Monte Carlo sampling with auto-detected worker count.
     #[must_use]
     pub fn monte_carlo_auto() -> Self {
         let workers = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
@@ -1285,7 +1299,7 @@ pub struct SimNeoBuilder {
     /// Simulation configuration (data).
     config: SimConfig,
     /// Orchestration strategy (data).
-    orchestrator: Orchestrator,
+    sampling: Sampling,
     /// Quantum backend configuration (data).
     quantum_backend: QuantumBackend,
     /// Explicit qubit count override (data).
@@ -1309,7 +1323,7 @@ impl SimNeoBuilder {
             noise: None,
             definitions: None,
             config: SimConfig::default(),
-            orchestrator: Orchestrator::default(),
+            sampling: Sampling::default(),
             quantum_backend: QuantumBackend::default(),
             explicit_num_qubits: None,
             max_decomp_depth: None,
@@ -1330,7 +1344,7 @@ impl SimNeoBuilder {
             noise: None,
             definitions: None,
             config: SimConfig::default(),
-            orchestrator: Orchestrator::default(),
+            sampling: Sampling::default(),
             quantum_backend: QuantumBackend::default(),
             explicit_num_qubits: None,
             max_decomp_depth: None,
@@ -1352,7 +1366,7 @@ impl SimNeoBuilder {
             noise: None,
             definitions: None,
             config: SimConfig::default(),
-            orchestrator: Orchestrator::default(),
+            sampling: Sampling::default(),
             quantum_backend: QuantumBackend::default(),
             explicit_num_qubits: None,
             max_decomp_depth: None,
@@ -1379,7 +1393,7 @@ impl SimNeoBuilder {
             noise: None,
             definitions: None,
             config: SimConfig::default(),
-            orchestrator: Orchestrator::default(),
+            sampling: Sampling::default(),
             quantum_backend: QuantumBackend::default(),
             explicit_num_qubits: None,
             max_decomp_depth: None,
@@ -1616,9 +1630,9 @@ impl SimNeoBuilder {
         // Classical engines are stateful and cannot be parallelized across workers.
         // Static circuits can run in parallel since each worker gets its own simulator.
         if is_classical {
-            self.orchestrator = Orchestrator::MonteCarlo { workers: 1 };
+            self.sampling = Sampling::MonteCarlo { workers: 1 };
         } else {
-            self.orchestrator = Orchestrator::monte_carlo_auto();
+            self.sampling = Sampling::monte_carlo_auto();
         }
         self
     }
@@ -1652,28 +1666,28 @@ impl SimNeoBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::{sim_neo, Orchestrator};
+    /// use pecos_neo::tool::{sim_neo, Sampling};
     /// use pecos_neo::prelude::*;
     ///
     /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
     ///
     /// // Parallel Monte Carlo with 4 workers
     /// let results = sim_neo(circuit.clone())
-    ///     .orchestrator(Orchestrator::monte_carlo(4))
+    ///     .sampling(Sampling::monte_carlo(4))
     ///     .shots(1000)
     ///     .build()
     ///     .run();
     ///
     /// // Auto-detect worker count
     /// let results = sim_neo(circuit)
-    ///     .orchestrator(Orchestrator::monte_carlo_auto())
+    ///     .sampling(Sampling::monte_carlo_auto())
     ///     .shots(1000)
     ///     .build()
     ///     .run();
     /// ```
     #[must_use]
-    pub fn orchestrator(mut self, orchestrator: impl Into<Orchestrator>) -> Self {
-        self.orchestrator = orchestrator.into();
+    pub fn sampling(mut self, sampling: impl Into<Sampling>) -> Self {
+        self.sampling = sampling.into();
         self
     }
 
@@ -1691,7 +1705,7 @@ impl SimNeoBuilder {
     /// backends are not supported.
     #[must_use]
     pub fn workers(mut self, workers: usize) -> Self {
-        self.orchestrator = Orchestrator::monte_carlo(workers);
+        self.sampling = Sampling::monte_carlo(workers);
         self
     }
 
@@ -1700,7 +1714,7 @@ impl SimNeoBuilder {
     /// See [`workers()`](Self::workers) for requirements and panics.
     #[must_use]
     pub fn auto_workers(mut self) -> Self {
-        self.orchestrator = Orchestrator::monte_carlo_auto();
+        self.sampling = Sampling::monte_carlo_auto();
         self
     }
 
@@ -2035,14 +2049,14 @@ impl SimNeoBuilder {
             .insert_resource(self.config)
             .insert_resource(QuantumBackendResource(self.quantum_backend));
 
-        match &self.orchestrator {
-            Orchestrator::ImportanceSampling { config: is_config } => {
+        match &self.sampling {
+            Sampling::ImportanceSampling { config: is_config } => {
                 tool = tool.add_plugin(&ImportanceSamplingSimPlugin {
                     is_config: is_config.clone(),
                     explicit_num_qubits: self.explicit_num_qubits,
                 });
             }
-            Orchestrator::MonteCarlo { .. } => {
+            Sampling::MonteCarlo { .. } => {
                 tool = tool.add_plugin(&UnifiedSimulationPlugin {
                     explicit_num_qubits: self.explicit_num_qubits,
                 });
@@ -2076,7 +2090,7 @@ impl SimNeoBuilder {
 
         Simulation {
             tool,
-            orchestrator: self.orchestrator,
+            sampling: self.sampling,
             parallel_data,
         }
     }
@@ -2385,7 +2399,7 @@ fn unified_simulation_post_shot(resources: &mut Resources) {
 
 /// Plugin for importance-sampling simulation.
 ///
-/// Replaces [`UnifiedSimulationPlugin`] when the IS orchestrator is selected.
+/// Replaces [`UnifiedSimulationPlugin`] when the IS sampling is selected.
 /// Uses [`ImportanceSamplingRunner`] for biased noise with weight tracking.
 struct ImportanceSamplingSimPlugin {
     is_config: ImportanceSamplingBuilder,
@@ -2556,7 +2570,7 @@ fn is_sim_post_shot(resources: &mut Resources) {
 pub struct Simulation {
     tool: Tool,
     /// Orchestration strategy (stored as data).
-    orchestrator: Orchestrator,
+    sampling: Sampling,
     /// Data for parallel execution (if applicable).
     /// Stored separately from Tool to allow cloning for workers.
     parallel_data: Option<ParallelExecutionData>,
@@ -2610,7 +2624,7 @@ impl Simulation {
     /// Returns the simulation results. The simulation can be run again
     /// after reconfiguring with [`shots()`](Self::shots) or [`seed()`](Self::seed).
     ///
-    /// Execution strategy depends on the orchestrator:
+    /// Execution strategy depends on the sampling:
     /// - `MonteCarlo { workers: 1 }`: Runs shots via the Tool (default)
     /// - `MonteCarlo { workers: n }`: Parallelizes shots across n workers
     /// - `ImportanceSampling`: Runs via the Tool with `ImportanceSamplingSimPlugin`
@@ -2621,8 +2635,8 @@ impl Simulation {
         let config = self.tool.resource::<SimConfig>().clone();
 
         // Dispatch based on orchestration strategy
-        match &self.orchestrator {
-            Orchestrator::MonteCarlo { workers } if *workers > 1 => {
+        match &self.sampling {
+            Sampling::MonteCarlo { workers } if *workers > 1 => {
                 let data = self.parallel_data.as_ref().unwrap_or_else(|| {
                     panic!(
                         "Parallel Monte Carlo requires a static circuit \
@@ -3316,14 +3330,14 @@ mod tests {
 
     #[test]
     fn test_sim_neo_orchestrator_explicit() {
-        // Test explicit orchestrator configuration
-        use super::Orchestrator;
+        // Test explicit sampling configuration
+        use super::Sampling;
 
         let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
 
-        // Use explicit Orchestrator enum
+        // Use explicit Sampling enum
         let results = sim_neo(circuit)
-            .orchestrator(Orchestrator::monte_carlo(2))
+            .sampling(Sampling::monte_carlo(2))
             .shots(20)
             .seed(42)
             .run();
@@ -3351,7 +3365,7 @@ mod tests {
         // Run with default (1 worker)
         let single_results = sim_neo(circuit.clone()).shots(50).seed(42).run();
 
-        // Run with parallel Monte Carlo orchestrator (4 workers)
+        // Run with parallel Monte Carlo sampling (4 workers)
         let parallel_results = sim_neo(circuit).workers(4).shots(50).seed(42).run();
 
         // Results should be identical
@@ -3396,7 +3410,7 @@ mod tests {
             .seed(42)
             .run();
 
-        // Run with parallel Monte Carlo orchestrator
+        // Run with parallel Monte Carlo sampling
         let parallel_results = sim_neo(circuit)
             .noise(noise_par)
             .workers(4)
@@ -3585,7 +3599,7 @@ mod tests {
         }
     }
 
-    // --- Importance Sampling Orchestrator Tests ---
+    // --- Importance Sampling Sampling Tests ---
 
     #[test]
     fn test_sim_neo_importance_sampling_basic() {
@@ -3599,7 +3613,7 @@ mod tests {
             .build();
 
         let results = sim_neo(circuit)
-            .orchestrator(
+            .sampling(
                 importance_sampling()
                     .with_p1(0.01)
                     .with_p2(0.02)
@@ -3628,7 +3642,7 @@ mod tests {
         let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 
         let results = sim_neo(circuit)
-            .orchestrator(
+            .sampling(
                 importance_sampling()
                     .with_uniform_error(0.01)
                     .with_boost(10.0),
@@ -3655,7 +3669,7 @@ mod tests {
 
         // Run with importance sampling (boosting noise that doesn't affect this test)
         let results = sim_neo(circuit)
-            .orchestrator(
+            .sampling(
                 importance_sampling()
                     .with_uniform_error(0.001)
                     .with_boost(100.0),
@@ -3694,13 +3708,13 @@ mod tests {
             .with_boost(10.0);
 
         let results1 = sim_neo(circuit.clone())
-            .orchestrator(is_builder.clone())
+            .sampling(is_builder.clone())
             .shots(20)
             .seed(42)
             .run();
 
         let results2 = sim_neo(circuit)
-            .orchestrator(is_builder)
+            .sampling(is_builder)
             .shots(20)
             .seed(42)
             .run();
@@ -3745,7 +3759,7 @@ mod tests {
             .build();
 
         let results = sim_neo(circuit)
-            .orchestrator(
+            .sampling(
                 importance_sampling()
                     .with_p1(0.001)
                     .with_p2(0.01)
@@ -3768,7 +3782,7 @@ mod tests {
         let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 
         let results = sim_neo(circuit)
-            .orchestrator(
+            .sampling(
                 importance_sampling()
                     .with_uniform_error(0.01)
                     .with_boost(10.0),

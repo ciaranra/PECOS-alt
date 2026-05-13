@@ -2,6 +2,7 @@
 
 use pecos_build::{Manifest, Result, check_cxx20_toolchain, ensure_dep_ready, report_cache_config};
 use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 // Use the shared modules from the parent
@@ -52,18 +53,19 @@ pub fn build() -> Result<()> {
     println!("cargo:rustc-link-search=native={}", out_dir.display());
     println!("cargo:rustc-link-lib=static=tesseract-bridge");
 
-    // Get Tesseract and Stim sources (downloads to ~/.pecos/cache/, extracts to ~/.pecos/deps/)
+    // Get Tesseract, Stim, and Boost sources (downloads to ~/.pecos/cache/, extracts to ~/.pecos/deps/)
     let manifest = Manifest::find_and_load_validated()?;
     let tesseract_dir = ensure_dep_ready("tesseract", &manifest)?;
     let stim_dir = ensure_dep_ready("stim", &manifest)?;
+    let boost_dir = ensure_dep_ready("boost", &manifest)?;
 
     // Build using cxx
-    build_cxx_bridge(&tesseract_dir, &stim_dir);
+    build_cxx_bridge(&tesseract_dir, &stim_dir, &boost_dir);
 
     Ok(())
 }
 
-fn build_cxx_bridge(tesseract_dir: &Path, stim_dir: &Path) {
+fn build_cxx_bridge(tesseract_dir: &Path, stim_dir: &Path, boost_dir: &Path) {
     let tesseract_src_dir = tesseract_dir.join("src");
     let stim_src_dir = stim_dir.join("src");
 
@@ -89,11 +91,27 @@ fn build_cxx_bridge(tesseract_dir: &Path, stim_dir: &Path) {
         .file(tesseract_src_dir.join("utils.cc"))
         .file(tesseract_src_dir.join("tesseract.cc"));
 
+    // visualization.cc uses std::min(3ul, vec.size()). On MSVC Win64,
+    // unsigned long is 32-bit and size_t is 64-bit, so std::min template
+    // deduction fails. Patch the source to use size_t{3} instead.
+    let vis_src = tesseract_src_dir.join("visualization.cc");
+    let vis_content = fs::read_to_string(&vis_src).expect("read visualization.cc");
+    if vis_content.contains("std::min(3ul,") {
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let patched = out_dir.join("visualization_patched.cc");
+        let fixed = vis_content.replace("std::min(3ul,", "std::min(size_t{3},");
+        fs::write(&patched, fixed).expect("write patched visualization.cc");
+        build.file(patched);
+    } else {
+        build.file(vis_src);
+    }
+
     // Configure build
     build
         .std("c++20")
         .include(&tesseract_src_dir)
         .include(&stim_src_dir)
+        .include(boost_dir)
         .include("include")
         .include("src")
         .define("TESSERACT_BRIDGE_EXPORTS", None);
@@ -146,10 +164,11 @@ fn build_cxx_bridge(tesseract_dir: &Path, stim_dir: &Path) {
             .flag_if_supported("/permissive-")
             .flag_if_supported("/Zc:__cplusplus");
 
-        // Force include standard headers that external libraries assume are available
-        // MSVC is stricter than GCC/Clang about transitive includes
-        build.flag("/FI").flag("array"); // For std::array
-        build.flag("/FI").flag("numeric"); // For std::iota
+        // Force include standard headers that vendored code assumes are
+        // transitively available. MSVC is stricter than GCC/Clang.
+        build.flag("/FI").flag("array");
+        build.flag("/FI").flag("numeric");
+        build.flag("/FI").flag("algorithm");
     }
 
     build.compile("tesseract-bridge");

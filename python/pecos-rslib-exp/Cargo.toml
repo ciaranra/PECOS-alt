@@ -18,10 +18,19 @@ doctest = false
 
 [dependencies]
 pecos-core.workspace = true
+pecos-eeg.workspace = true
+pecos-neo.workspace = true
+pecos-qec.workspace = true
+pecos-quantum.workspace = true
+pecos-random.workspace = true
 pecos-simulators.workspace = true
-pecos-stab-tn = { path = "../../exp/pecos-stab-tn" }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+rayon.workspace = true
+pecos-stab-tn.workspace = true
 pyo3 = { workspace = true, features = ["extension-module", "abi3-py310", "generate-import-lib", "num-complex"] }
 num-complex.workspace = true
+smallvec.workspace = true
 
 [lints]
 workspace = true

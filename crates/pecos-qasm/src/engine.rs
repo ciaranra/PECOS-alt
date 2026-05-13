@@ -623,7 +623,8 @@ impl QASMEngine {
             | GateType::MeasCrosstalkLocalPayload
             | GateType::MeasCrosstalkGlobalPayload
             | GateType::QFree
-            | GateType::Custom => Ok(()), // No-op gates (QFree is just a marker, Custom is a placeholder)
+            | GateType::Custom
+            | GateType::TrackedPauliMeta => Ok(()), // No-op gates
             GateType::X
             | GateType::Z
             | GateType::Y
@@ -650,7 +651,7 @@ impl QASMEngine {
             | GateType::SYY
             | GateType::SYYdg => self.process_two_qubit_gate(gate.gate_type, &qubits),
             // Gates not yet supported in QASM engine
-            GateType::SWAP | GateType::CCX | GateType::CRZ | GateType::CH => {
+            GateType::SWAP | GateType::CCX | GateType::CRZ | GateType::CH | GateType::Channel => {
                 Err(PecosError::Processing(format!(
                     "Gate type {:?} is not yet supported in the QASM engine",
                     gate.gate_type

@@ -15,7 +15,7 @@ This guide covers PECOS's quantum operator type system: from single-qubit Paulis
 PECOS organizes quantum operators into a strict hierarchy where each level is a subset of the next:
 
 ```text
-Pauli  ⊂  Clifford  ⊂  Unitary  ⊂  Channel
+Pauli  ⊂  Clifford  ⊂  Unitary  ⊂  Gate  ⊂  Channel
 ```
 
 Each level has its own representation optimized for what it can express:
@@ -25,9 +25,10 @@ Each level has its own representation optimized for what it can express:
 | Pauli | `PauliString` | Tensor products of I, X, Y, Z with phase | Exact commutation, symplectic algebra |
 | Clifford | `CliffordRep` | Gates that map Paulis to Paulis | Fast conjugation via Heisenberg picture |
 | Unitary | `UnitaryRep` | Any unitary (including non-Clifford) | Lazy expression tree with algebraic ops |
-| Channel | `ChannelExpr` | Non-unitary operations (measurement, noise) | Compose and tensor arbitrary operations |
+| Gate | `GateExpr` | Ideal circuit operations (unitary, preparation, measurement, reset) | Compose and tensor circuit operations |
+| Channel | `ChannelExpr` | General CPTP maps and noise/decoherence operations | Compose and tensor arbitrary physical maps |
 
-The unified `Op` type wraps all four and automatically promotes when you combine operators from different levels.
+The unified `Op` type wraps all five and automatically promotes when you combine operators from different levels.
 
 ---
 
@@ -38,7 +39,7 @@ The unified `Op` type wraps all four and automatically promotes when you combine
 The primary Pauli type. Stores a sparse list of non-identity single-qubit Paulis with a global phase from `{+1, -1, +i, -i}`.
 
 ```rust
-use pecos_core::pauli::constructors::*;
+use pecos_core::pauli::*;
 use pecos_core::PauliOperator;
 
 // Single-qubit constructors
@@ -64,7 +65,7 @@ let neg = -X(0);              // -X
 
 ```rust
 use pecos_core::pauli::algebra::i;
-use pecos_core::pauli::constructors::*;
+use pecos_core::pauli::*;
 
 let imag = i * X(0);          // iX
 let neg_imag = -i * Y(1);     // -iY
@@ -73,7 +74,7 @@ let neg_imag = -i * Y(1);     // -iY
 ### Key Operations
 
 ```rust
-use pecos_core::pauli::constructors::*;
+use pecos_core::pauli::*;
 use pecos_core::PauliOperator;
 
 let a = X(0) & Z(1);
@@ -108,12 +109,23 @@ All three implement the `PauliOperator` trait, which provides `multiply()`, `wei
 
 ### Parsing from Strings
 
+Use constructors for ordinary code. Use sparse strings when explicit qubit
+indices make text input clearer, and dense strings when positional notation is
+useful for compact tables.
+
 ```rust
 use pecos_core::PauliString;
 
-let p: PauliString = "XZI".parse().unwrap();    // X(0) & Z(1)
-let q: PauliString = "+XZZXI".parse().unwrap(); // with explicit phase
-let r: PauliString = "-iYX".parse().unwrap();   // -i * Y(0) * X(1)
+let sparse: PauliString = "X0 Z3".parse().unwrap();
+let dense: PauliString = "XIIZ".parse().unwrap();
+let explicit_sparse = PauliString::from_sparse_str("X0 Z3").unwrap();
+let explicit_dense = PauliString::from_dense_str("XIIZ").unwrap();
+
+assert_eq!(sparse, dense);
+assert_eq!(sparse, explicit_sparse);
+assert_eq!(dense, explicit_dense);
+assert_eq!(sparse.to_sparse_str(), "+X0 Z3");
+assert_eq!(sparse.to_dense_str(None), "+XIIZ");
 ```
 
 ---
@@ -126,7 +138,7 @@ Represents a Clifford gate via the Heisenberg picture: how it transforms each Pa
 
 ```rust
 use pecos_core::clifford_rep::CliffordRep;
-use pecos_core::pauli::constructors::*;
+use pecos_core::pauli::*;
 
 // Hadamard on qubit 0: X -> Z, Z -> X
 let h = CliffordRep::h(0);
@@ -155,7 +167,7 @@ The 24 single-qubit Clifford gates and 14 two-qubit entangling gates are also av
 A lazy expression tree that can represent any quantum unitary, including non-Clifford gates (T, arbitrary rotations). Supports composition, tensor products, and adjoint algebraically.
 
 ```rust
-use pecos_core::unitary_rep::*;
+use pecos_core::unitary::*;
 use pecos_core::Angle64;
 
 // Named gates
@@ -183,19 +195,33 @@ let h_all = Hs([0, 1, 2]);            // H on three qubits
 
 ---
 
-## Level 4: Channels (Non-Unitary Operations)
+## Level 4: Gates (Ideal Circuit Operations)
 
-### ChannelExpr
+### GateExpr
 
-Represents non-unitary quantum operations: measurements, preparations, noise channels.
+Represents ideal circuit operations: unitaries, measurements, preparations, resets, and their compositions.
 
 ```rust
 use pecos_core::op::*;
 
-// Measurement and preparation
+// Measurement, preparation, and reset
 let mz = MZ(0);           // Z-basis measurement on qubit 0
 let mx = MX(1);           // X-basis measurement on qubit 1
 let pz = PZ(0);           // Prepare |0> on qubit 0
+let reset = Reset(0);     // Reset to |0>
+assert!(mz.is_gate());
+```
+
+---
+
+## Level 5: Channels (Physical Maps)
+
+### ChannelExpr
+
+Represents general CPTP maps, which PECOS usually uses for noise and decoherence.
+
+```rust
+use pecos_core::op::*;
 
 // Noise channels
 let depol = Depolarizing(0.01, 0);            // 1% depolarizing on qubit 0
@@ -203,18 +229,18 @@ let deph = Dephasing(0.02, 1);                // 2% dephasing on qubit 1
 let amp_damp = AmplitudeDamping(0.05, 0);     // T1 decay
 let phase_damp = PhaseDamping(0.03, 0);       // T2 dephasing
 let erasure = Erasure(0.01, 0);               // Erasure channel
-let reset = Reset(0);                         // Reset to |0>
 let leak = Leakage(0.001, 0);                 // Leakage to non-computational state
 
 // Custom Pauli channel
 let pauli_ch = PauliChannel(0.01, 0.01, 0.01, 0);  // px, py, pz
+assert!(depol.is_channel());
 ```
 
 ---
 
 ## The Unified `Op` Type
 
-`Op` wraps all four levels and automatically promotes when you combine operators:
+`Op` wraps all five levels and automatically promotes when you combine operators:
 
 ```rust
 use pecos_core::op::*;
@@ -231,8 +257,12 @@ assert!(c.is_clifford());
 let u = X(0) & H(3) & T(5);
 assert!(u.is_unitary());
 
-// Adding a measurement promotes to Channel
-let ch = H(0) & MZ(1);
+// Adding a measurement promotes to Gate
+let g = H(0) & MZ(1);
+assert!(g.is_gate());
+
+// Adding noise promotes to Channel
+let ch = g & Depolarizing(0.01, 2);
 assert!(ch.is_channel());
 ```
 
@@ -273,8 +303,8 @@ assert!(m.try_dg().is_none());
 use pecos_core::op::*;
 
 let circuit = CX(0, 3) & H(5);
-assert_eq!(circuit.num_qubits(), 6);     // spans qubits 0..5
-assert_eq!(circuit.qubits(), vec![0, 1, 2, 3, 4, 5]);  // full range
+assert_eq!(circuit.num_qubits(), 6);     // matrix span is qubits 0..5
+assert_eq!(circuit.qubits(), vec![0, 3, 5]);  // actual support
 ```
 
 ---
@@ -299,7 +329,7 @@ An ordered list of Pauli strings with GF(2) symplectic analysis. No commutativit
 
 ```rust
 use pecos_quantum::PauliSequence;
-use pecos_core::pauli::constructors::*;
+use pecos_core::pauli::*;
 
 let seq = PauliSequence::new(vec![
     Zs([0, 1]),
@@ -328,7 +358,7 @@ A set of distinct Pauli strings. Two strings are equal only if they have the sam
 
 ```rust
 use pecos_quantum::PauliSet;
-use pecos_core::pauli::constructors::*;
+use pecos_core::pauli::*;
 
 let mut set = PauliSet::new();
 set.insert(&X(0));
@@ -350,7 +380,7 @@ A commuting subgroup of the Pauli group. Generators may carry any `QuarterPhase`
 
 ```rust
 use pecos_quantum::PauliGroup;
-use pecos_core::pauli::constructors::*;
+use pecos_core::pauli::*;
 use pecos_core::pauli::algebra::i;
 
 // Generators with imaginary phase
@@ -373,7 +403,7 @@ The standard stabilizer group for QEC. All generators must commute and have phas
 
 ```rust
 use pecos_quantum::PauliStabilizerGroup;
-use pecos_core::pauli::constructors::*;
+use pecos_core::pauli::*;
 
 // Repetition code stabilizers
 let stab = PauliStabilizerGroup::new(vec![
@@ -401,7 +431,7 @@ let transformed = stab.apply_clifford(&h);
 
 ```rust
 use pecos_quantum::{PauliSequence, PauliGroup, PauliStabilizerGroup, PauliSet};
-use pecos_core::pauli::constructors::*;
+use pecos_core::pauli::*;
 
 // Upward (widening) -- always succeeds
 let stab = PauliStabilizerGroup::new(vec![Zs([0, 1])]).unwrap();
@@ -429,7 +459,7 @@ The collection types feed into the QEC types in `pecos-qec`:
 ```rust
 use pecos_quantum::PauliStabilizerGroup;
 use pecos_qec::StabilizerCode;
-use pecos_core::pauli::constructors::*;
+use pecos_core::pauli::*;
 
 // Build a stabilizer group
 let group = PauliStabilizerGroup::new(vec![

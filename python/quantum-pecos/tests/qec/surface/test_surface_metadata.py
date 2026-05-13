@@ -54,8 +54,8 @@ def test_surface_schedule_helpers_expose_region_and_touch_labels() -> None:
     assert get_stabilizer_touch_label(x_bulk, patch, 4) == "BL"
     assert get_stabilizer_touch_label(x_bulk, patch, 5) == "BR"
 
-    assert get_stab_schedule("X", x_top.data_qubits, x_top.is_boundary, patch.distance) == [(2, 1), (3, 0)]
-    assert get_stab_schedule("Z", z_left.data_qubits, z_left.is_boundary, patch.distance) == [(0, 3), (1, 6)]
+    assert get_stab_schedule("X", x_top.data_qubits, x_top.is_boundary, patch.dx, patch.dz) == [(2, 1), (3, 0)]
+    assert get_stab_schedule("Z", z_left.data_qubits, z_left.is_boundary, patch.dx, patch.dz) == [(0, 3), (1, 6)]
 
     assert get_stabilizer_schedule_entries(x_top, patch) == [
         {"round_0based": 2, "data_qubit": 1, "touch_label": "right"},
@@ -210,7 +210,7 @@ def test_tick_circuit_exposes_measurement_order() -> None:
         tick = tc.get_tick(tick_index)
         if tick is None:
             continue
-        for gate in tick.gates():
+        for gate in tick.gate_batches():
             if "MZ" not in str(gate.gate_type):
                 continue
             for qubit in gate.qubits:

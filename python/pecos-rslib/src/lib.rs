@@ -1,4 +1,16 @@
-#![allow(clippy::needless_pass_by_value)] // PyO3 requires owned values from Python
+// PyO3 binding signatures are constrained by the Python ABI and generated
+// method wrappers. Python docstrings also contain Python snippets that Clippy's
+// Rust-doc Markdown lint misclassifies. Keep this list limited to binding/docs
+// shape lints.
+#![allow(
+    clippy::doc_markdown,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::needless_pass_by_value,
+    clippy::too_many_arguments,
+    clippy::unnecessary_wraps,
+    clippy::unused_self
+)]
 #![doc(html_root_url = "https://docs.rs/pecos-rslib")]
 // Disable doctests since they don't work with our workspace setup
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -49,6 +61,7 @@ mod phir_json_bridge;
 mod programs_module;
 mod py_foreign_decoder;
 mod py_foreign_simulator;
+mod quantum_info_bindings;
 mod shot_results_bindings;
 mod sim;
 mod simulator_utils;
@@ -302,6 +315,9 @@ fn pecos_rslib(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register quantum circuit types (DagCircuit, Gate, GateType, QubitId)
     dag_circuit_bindings::register_quantum_circuit_types(m)?;
+
+    // Register quantum-information channel and measure types
+    quantum_info_bindings::register_quantum_info_module(m)?;
 
     // Register gate registry types (GateRegistry, GateDefBuilder, AngleSource)
     gate_registry_bindings::register_gate_registry_types(m)?;

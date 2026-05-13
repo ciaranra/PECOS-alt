@@ -59,7 +59,7 @@ class TestNoiseModel:
         assert noise.p1 == 0.0
         assert noise.p2 == 0.0
         assert noise.p_meas == 0.0
-        assert noise.p_init == 0.0
+        assert noise.p_prep == 0.0
 
     def test_is_noiseless(self) -> None:
         """Test is_noiseless property."""
@@ -67,11 +67,11 @@ class TestNoiseModel:
         assert not NoiseModel(p1=0.01).is_noiseless
         assert not NoiseModel(p2=0.01).is_noiseless
         assert not NoiseModel(p_meas=0.01).is_noiseless
-        assert not NoiseModel(p_init=0.01).is_noiseless
+        assert not NoiseModel(p_prep=0.01).is_noiseless
 
     def test_physical_error_rate(self) -> None:
         """Test physical_error_rate property."""
-        noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.005, p_init=0.002)
+        noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.005, p_prep=0.002)
         assert noise.physical_error_rate == 0.01  # max of all rates
 
 
@@ -212,7 +212,7 @@ class TestSurfaceDecoder:
         import pecos.qec.surface.decode as decode_module
 
         patch = SurfacePatch.create(distance=3)
-        noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_init=0.001)
+        noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_prep=0.001)
         decoder = SurfaceDecoder(
             patch,
             num_rounds=3,
@@ -304,7 +304,7 @@ class TestDemGeneration:
         from pecos.qec.surface.decode import generate_dem_from_patch
 
         patch = SurfacePatch.create(distance=3)
-        noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_init=0.001)
+        noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_prep=0.001)
 
         full_dem = generate_dem_from_patch(patch, num_rounds=4, noise=noise, basis="X", decompose_errors=False)
         decomposed_dem = generate_dem_from_patch(patch, num_rounds=4, noise=noise, basis="X", decompose_errors=True)
@@ -316,7 +316,7 @@ class TestDemGeneration:
         """Native TickCircuit DEM helper should preserve both public output forms."""
         patch = SurfacePatch.create(distance=3)
         tc = generate_tick_circuit_from_patch(patch, num_rounds=4, basis="X")
-        params = {"p1": 0.001, "p2": 0.01, "p_meas": 0.01, "p_init": 0.001}
+        params = {"p1": 0.001, "p2": 0.01, "p_meas": 0.01, "p_prep": 0.001}
 
         raw_dem = generate_dem_from_tick_circuit(tc, **params, decompose_errors=False)
         decomposed_dem = generate_dem_from_tick_circuit(tc, **params, decompose_errors=True)
@@ -330,8 +330,8 @@ class TestDemGeneration:
         from pecos.qec.surface.decode import generate_circuit_level_dem_from_builder
 
         patch = SurfacePatch.create(distance=3)
-        noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_init=0.001)
-        params = {"p1": noise.p1, "p2": noise.p2, "p_meas": noise.p_meas, "p_init": noise.p_init}
+        noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_prep=0.001)
+        params = {"p1": noise.p1, "p2": noise.p2, "p_meas": noise.p_meas, "p_prep": noise.p_prep}
 
         full_tc = generate_tick_circuit_from_patch(patch, num_rounds=2, basis="X")
         batched_tc = generate_tick_circuit_from_patch(
@@ -369,8 +369,8 @@ class TestDemGeneration:
         from pecos.qec.surface.decode import generate_circuit_level_dem_from_builder
 
         patch = SurfacePatch.create(dx=3, dz=5)
-        noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_init=0.001)
-        params = {"p1": noise.p1, "p2": noise.p2, "p_meas": noise.p_meas, "p_init": noise.p_init}
+        noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_prep=0.001)
+        params = {"p1": noise.p1, "p2": noise.p2, "p_meas": noise.p_meas, "p_prep": noise.p_prep}
 
         tc = generate_tick_circuit_from_patch(patch, num_rounds=2, basis="X")
         expected_dem = generate_dem_from_tick_circuit(tc, **params, decompose_errors=False)
@@ -383,6 +383,49 @@ class TestDemGeneration:
 
         assert cached_dem == expected_dem
 
+    def test_native_circuit_level_dem_cache_inserts_idle_gates_only_for_idle_noise(self) -> None:
+        """Shared native DEM caching should make idle locations an explicit noise choice."""
+        from pecos.qec.surface.circuit_builder import generate_dem_from_tick_circuit, generate_tick_circuit_from_patch
+        from pecos.qec.surface.decode import generate_circuit_level_dem_from_builder
+
+        patch = SurfacePatch.create(distance=3)
+        base_noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_prep=0.001)
+        base_params = {
+            "p1": base_noise.p1,
+            "p2": base_noise.p2,
+            "p_meas": base_noise.p_meas,
+            "p_prep": base_noise.p_prep,
+            "decompose_errors": False,
+        }
+
+        tc = generate_tick_circuit_from_patch(patch, num_rounds=2, basis="X")
+        expected_base_dem = generate_dem_from_tick_circuit(tc, **base_params)
+        cached_base_dem = generate_circuit_level_dem_from_builder(
+            patch,
+            num_rounds=2,
+            noise=base_noise,
+            basis="X",
+        )
+
+        idle_noise = NoiseModel(p1=0.001, p2=0.01, p_meas=0.01, p_prep=0.001, p_idle=0.002)
+        idle_tc = generate_tick_circuit_from_patch(patch, num_rounds=2, basis="X")
+        idle_tc.fill_idle_gates()
+        expected_idle_dem = generate_dem_from_tick_circuit(
+            idle_tc,
+            **base_params,
+            p_idle=idle_noise.p_idle,
+        )
+        cached_idle_dem = generate_circuit_level_dem_from_builder(
+            patch,
+            num_rounds=2,
+            noise=idle_noise,
+            basis="X",
+        )
+
+        assert cached_base_dem == expected_base_dem
+        assert cached_idle_dem == expected_idle_dem
+        assert cached_idle_dem != cached_base_dem
+
     def test_traced_qis_native_dem_and_sampler_build(self) -> None:
         """The traced-QIS circuit source should build DEMs and samplers end-to-end."""
         from pecos.qec.surface import build_native_sampler
@@ -391,7 +434,7 @@ class TestDemGeneration:
         _require_selene_runtime()
 
         patch = SurfacePatch.create(distance=3)
-        noise = NoiseModel(p1=0.001, p2=0.001, p_meas=0.001, p_init=0.001)
+        noise = NoiseModel(p1=0.001, p2=0.001, p_meas=0.001, p_prep=0.001)
 
         dem = generate_circuit_level_dem_from_builder(
             patch,
@@ -426,7 +469,7 @@ class TestDemGeneration:
         mnm_det_events, mnm_obs_flips = mnm_sampler.sample(4, seed=7)
         assert mnm_det_events.shape == (4, mnm_sampler.num_detectors)
         assert mnm_obs_flips.shape == (4, mnm_sampler.num_observables)
-        assert mnm_sampler.sampling_model == "mnm"
+        assert mnm_sampler.sampling_model == "influence_dem"  # "mnm" remapped to unified sampler
 
         influence_sampler = build_native_sampler(
             patch,
@@ -476,7 +519,7 @@ class TestDemGeneration:
             return errors
 
         patch = SurfacePatch.create(distance=3)
-        noise = NoiseModel(p1=0.003, p2=0.003, p_meas=0.003, p_init=0.003)
+        noise = NoiseModel(p1=0.003, p2=0.003, p_meas=0.003, p_prep=0.003)
 
         for basis in ("X", "Z"):
             tc = _build_surface_tick_circuit_for_native_model(
@@ -490,7 +533,7 @@ class TestDemGeneration:
                 p1=noise.p1,
                 p2=noise.p2,
                 p_meas=noise.p_meas,
-                p_init=noise.p_init,
+                p_prep=noise.p_prep,
                 decompose_errors=False,
             )
             stim_dem = str(
@@ -500,7 +543,7 @@ class TestDemGeneration:
                         p1=noise.p1,
                         p2=noise.p2,
                         p_meas=noise.p_meas,
-                        p_init=noise.p_init,
+                        p_prep=noise.p_prep,
                     ),
                 ).detector_error_model(decompose_errors=False),
             )
@@ -531,8 +574,8 @@ class TestDemGeneration:
         _require_selene_runtime()
 
         patch = SurfacePatch.create(distance=3)
-        noise_a = NoiseModel(p1=0.001, p2=0.001, p_meas=0.001, p_init=0.001)
-        noise_b = NoiseModel(p1=0.002, p2=0.002, p_meas=0.002, p_init=0.002)
+        noise_a = NoiseModel(p1=0.001, p2=0.001, p_meas=0.001, p_prep=0.001)
+        noise_b = NoiseModel(p1=0.002, p2=0.002, p_meas=0.002, p_prep=0.002)
 
         _cached_surface_native_topology.cache_clear()
         _cached_surface_native_dem_string.cache_clear()
@@ -582,7 +625,7 @@ class TestDemGeneration:
         """Maximal decomposition should no longer be a no-op."""
         patch = SurfacePatch.create(distance=3)
         tc = generate_tick_circuit_from_patch(patch, num_rounds=20, basis="X")
-        params = {"p1": 0.0, "p2": 0.00235, "p_meas": 0.01972626855445279, "p_init": 0.0010045162906914633}
+        params = {"p1": 0.0, "p2": 0.00235, "p_meas": 0.01972626855445279, "p_prep": 0.0010045162906914633}
 
         decomposed_dem = generate_dem_from_tick_circuit(tc, **params, decompose_errors=True)
         maximal_dem = generate_dem_from_tick_circuit(

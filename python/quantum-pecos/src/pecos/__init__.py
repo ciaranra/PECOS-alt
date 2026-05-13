@@ -47,6 +47,9 @@ from pecos_rslib import (
     ShotVec,  # Simulation result: vector of shots
     TimeUnits,  # Abstract time duration in arbitrary units
     WasmForeignObject,  # WASM foreign object for classical coprocessor
+    X,  # Single-qubit Pauli X constructor: X(qubit) -> PauliString
+    Y,  # Single-qubit Pauli Y constructor: Y(qubit) -> PauliString
+    Z,  # Single-qubit Pauli Z constructor: Z(qubit) -> PauliString
     abs,  # Absolute value
     acos,  # Inverse cosine
     acosh,  # Inverse hyperbolic cosine
@@ -281,8 +284,8 @@ depolarizing_noise = pecos_rslib.depolarizing_noise
 biased_depolarizing_noise = pecos_rslib.biased_depolarizing_noise
 general_noise = pecos_rslib.general_noise
 state_vector = pecos_rslib.state_vector
-sparse_stab = pecos_rslib.sparse_stab
 stabilizer = pecos_rslib.stabilizer
+sparse_stab = pecos_rslib.sparse_stab
 stab_vec = pecos_rslib.stab_vec
 density_matrix = pecos_rslib.density_matrix
 hugr_engine = pecos_rslib.hugr_engine
@@ -338,6 +341,9 @@ __all__ = [
     "WasmError",
     "WasmForeignObject",
     "Wat",
+    "X",
+    "Y",
+    "Z",
     "__version__",
     "abs",
     "acos",

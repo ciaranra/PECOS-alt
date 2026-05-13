@@ -109,6 +109,18 @@ fn apply_named_gate(
         GateType::H => {
             prop.h(qubits);
         }
+        GateType::F => {
+            match direction {
+                Direction::Forward => prop.f(qubits),
+                Direction::Backward => prop.fdg(qubits),
+            };
+        }
+        GateType::Fdg => {
+            match direction {
+                Direction::Forward => prop.fdg(qubits),
+                Direction::Backward => prop.f(qubits),
+            };
+        }
 
         // Non-self-adjoint single-qubit gates - swap with adjoint for backward
         GateType::SX => {
@@ -150,24 +162,36 @@ fn apply_named_gate(
 
         // Self-adjoint two-qubit gates - same in both directions
         GateType::CX => {
-            if qubits.len() >= 2 {
-                prop.cx(&[(qubits[0], qubits[1])]);
-            }
+            let pairs: Vec<_> = qubits
+                .chunks(2)
+                .filter(|c| c.len() == 2)
+                .map(|c| (c[0], c[1]))
+                .collect();
+            prop.cx(&pairs);
         }
         GateType::CY => {
-            if qubits.len() >= 2 {
-                prop.cy(&[(qubits[0], qubits[1])]);
-            }
+            let pairs: Vec<_> = qubits
+                .chunks(2)
+                .filter(|c| c.len() == 2)
+                .map(|c| (c[0], c[1]))
+                .collect();
+            prop.cy(&pairs);
         }
         GateType::CZ => {
-            if qubits.len() >= 2 {
-                prop.cz(&[(qubits[0], qubits[1])]);
-            }
+            let pairs: Vec<_> = qubits
+                .chunks(2)
+                .filter(|c| c.len() == 2)
+                .map(|c| (c[0], c[1]))
+                .collect();
+            prop.cz(&pairs);
         }
         GateType::SWAP => {
-            if qubits.len() >= 2 {
-                prop.swap(&[(qubits[0], qubits[1])]);
-            }
+            let pairs: Vec<_> = qubits
+                .chunks(2)
+                .filter(|c| c.len() == 2)
+                .map(|c| (c[0], c[1]))
+                .collect();
+            prop.swap(&pairs);
         }
 
         // Non-self-adjoint two-qubit Clifford gates - swap with adjoint for backward
@@ -240,15 +264,15 @@ pub fn propagate_through_circuit(
     match direction {
         Direction::Forward => {
             for tick in circuit.ticks() {
-                for gate in tick.gates() {
-                    apply_gate(prop, gate, direction);
+                for gate in tick.iter_gate_batches() {
+                    apply_gate(prop, gate.as_gate(), direction);
                 }
             }
         }
         Direction::Backward => {
             for tick in circuit.ticks().iter().rev() {
-                for gate in tick.gates() {
-                    apply_gate(prop, gate, direction);
+                for gate in tick.iter_gate_batches() {
+                    apply_gate(prop, gate.as_gate(), direction);
                 }
             }
         }
@@ -281,16 +305,16 @@ pub fn propagate_tick_range(
         Direction::Forward => {
             for tick_idx in start..=end {
                 let tick = &circuit.ticks()[tick_idx];
-                for gate in tick.gates() {
-                    apply_gate(prop, gate, direction);
+                for gate in tick.iter_gate_batches() {
+                    apply_gate(prop, gate.as_gate(), direction);
                 }
             }
         }
         Direction::Backward => {
             for tick_idx in (start..=end).rev() {
                 let tick = &circuit.ticks()[tick_idx];
-                for gate in tick.gates() {
-                    apply_gate(prop, gate, direction);
+                for gate in tick.iter_gate_batches() {
+                    apply_gate(prop, gate.as_gate(), direction);
                 }
             }
         }

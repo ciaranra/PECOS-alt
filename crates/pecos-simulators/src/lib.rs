@@ -12,9 +12,13 @@
 
 pub mod arbitrary_rotation_gateable;
 pub mod batched_ops;
+#[doc(hidden)]
+pub mod bitmask_pauli_prop;
 pub mod circuit_executor;
 pub mod clifford_frame;
 pub mod clifford_gateable;
+#[cfg(test)]
+mod clifford_matrix_oracle;
 pub mod clifford_rotation;
 pub mod clifford_test_utils;
 pub mod coin_toss;
@@ -42,6 +46,7 @@ pub mod sparse_stab_y;
 pub mod stabilizer;
 pub mod stabilizer_tableau;
 pub mod stabilizer_test_utils;
+pub mod state_access;
 pub mod state_vec;
 pub mod state_vec_aos;
 pub mod state_vec_soa;
@@ -55,7 +60,9 @@ pub mod symbolic_sparse_stab_bitset;
 
 pub use arbitrary_rotation_gateable::ArbitraryRotationGateable;
 pub use batched_ops::{BatchedOps, CommandBuffer, RawOps};
-pub use circuit_executor::{CircuitExecutor, GateSystem, GateSystemRegistry, execute_batched};
+#[doc(hidden)]
+pub use bitmask_pauli_prop::BitmaskPauliProp;
+pub use circuit_executor::{CircuitExecutor, GateSystem, GateSystemRegistry};
 pub use clifford_gateable::{CliffordGateable, MeasurementResult};
 pub use coin_toss::CoinToss;
 /// Sparse index representation of stabilizer/destabilizer generators.
@@ -100,9 +107,12 @@ pub use sparse_stab_y::{
 };
 pub use stabilizer::Stabilizer;
 pub use stabilizer_tableau::StabilizerTableauSimulator;
+pub use state_access::{
+    DensityMatrixAccess, PauliExpectationAccess, StabilizerStateVectorConversion, StateAccessError,
+    StateInfo, StateSampling, StateVectorAccess, random_statevector,
+};
 // StateVec uses the sparse SoA implementation optimized for QEC workloads.
 // The dense implementation is available as DenseStateVec / StateVecSoA.
-pub use state_vec::StateVec as StateVecOld;
 pub use state_vec_aos::StateVecAoS;
 pub use state_vec_soa::StateVecSoA as DenseStateVec;
 pub use state_vec_soa::StateVecSoA;
