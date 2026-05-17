@@ -13,8 +13,36 @@ pub fn run(command: &super::PythonCommands) -> Result<()> {
             profile,
             rustflags,
             cuda,
-        } => run_build(profile, rustflags.as_deref(), *cuda),
+            no_cuda,
+        } => {
+            let cuda_resolved = resolve_cuda_choice(*cuda, *no_cuda);
+            run_build(profile.as_str(), rustflags.as_deref(), cuda_resolved)
+        }
     }
+}
+
+/// Decide whether to install CUDA Python packages for this build.
+///
+/// Resolution order:
+/// - `--cuda`     -> always on (caller knows what they want)
+/// - `--no-cuda`  -> always off (caller opts out)
+/// - neither      -> auto-detect: include CUDA Python packages when both the
+///   toolkit and an NVIDIA GPU are present, otherwise skip
+fn resolve_cuda_choice(cuda: bool, no_cuda: bool) -> bool {
+    if cuda {
+        return true;
+    }
+    if no_cuda {
+        return false;
+    }
+    let detected = super::cuda_cmd::should_install_cuda_python();
+    if detected {
+        println!(
+            "CUDA toolkit + NVIDIA GPU detected -- including CUDA Python packages \
+             (cupy, cuquantum, pytket-cutensornet). Pass --no-cuda to skip."
+        );
+    }
+    detected
 }
 
 /// Get the repository root
@@ -68,10 +96,28 @@ fn run_build(profile: &str, rustflags: Option<&str>, cuda: bool) -> Result<()> {
 
     let repo_root = get_repo_root()?;
 
-    // Determine maturin release flag
-    let maturin_release = matches!(profile, "release" | "native");
+    // Map our profile name to maturin's cargo-profile flag. `dev`/`debug` use
+    // cargo's default dev profile (no flag), `release` uses --release, `native`
+    // uses --profile native so artifacts land in target/native/. Routing native
+    // through --profile native (rather than --release with target-cpu RUSTFLAGS)
+    // also lets the C++ build.rs files in pecos-pymatching/-chromobius/-tesseract
+    // detect "native" via OUT_DIR and add -march=native to their C++ compilation.
+    let cargo_profile_flag: &[&str] = match profile {
+        "release" => &["--release"],
+        "native" => &["--profile", "native"],
+        "dev" | "debug" => &[],
+        other => {
+            return Err(Error::Config(format!(
+                "Unknown profile: {other} (expected dev, debug, release, or native)"
+            )));
+        }
+    };
 
-    // Set RUSTFLAGS if provided or for native profile
+    // Build up RUSTFLAGS. For native we inject -C target-cpu=native because
+    // profile.native.rustflags in Cargo.toml is still gated on nightly; other
+    // callers (Justfile go-build/julia-build/build-selene/bench) inject the
+    // same flag so the resulting artifacts are consistent regardless of entry
+    // point.
     let mut flags = std::env::var("RUSTFLAGS").unwrap_or_default();
     if profile == "native" {
         if !flags.is_empty() {
@@ -145,11 +191,15 @@ fn run_build(profile: &str, rustflags: Option<&str>, cuda: bool) -> Result<()> {
         let maturin = venv_bin.join("maturin");
         let mut cmd = Command::new(&maturin);
         cmd.args(["develop", "--uv"]);
-        if maturin_release {
-            cmd.arg("--release");
-        }
+        cmd.args(cargo_profile_flag);
+        // Maturin's CLI --features REPLACES (not merges with) the features list
+        // in pyproject.toml's [tool.maturin], so any time we pass extra features
+        // we must also pass `extension-module` -- otherwise the cdylib loses
+        // pyo3's extension-module + abi3 settings and the resulting wheel either
+        // links libpython directly (wrong) or fails entirely on machines without
+        // a linkable libpython. The same applies to CI's MATURIN_PEP517_ARGS.
         if mwpf_enabled && crate_name == "pecos-rslib" {
-            cmd.args(["--features", "mwpf"]);
+            cmd.args(["--features", "extension-module,mwpf"]);
         }
         cmd.current_dir(&crate_dir);
         // On macOS, add rpath for system libc++ and clean Homebrew paths
@@ -231,10 +281,10 @@ fn run_build(profile: &str, rustflags: Option<&str>, cuda: bool) -> Result<()> {
 }
 
 fn cargo_profile_dir(profile: &str) -> &'static str {
-    if matches!(profile, "release" | "native") {
-        "release"
-    } else {
-        "debug"
+    match profile {
+        "release" => "release",
+        "native" => "native",
+        _ => "debug",
     }
 }
 
@@ -317,10 +367,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cargo_profile_dir_maps_native_to_release() {
+    fn cargo_profile_dir_matches_cargos_target_subdir() {
+        assert_eq!(cargo_profile_dir("dev"), "debug");
         assert_eq!(cargo_profile_dir("debug"), "debug");
         assert_eq!(cargo_profile_dir("release"), "release");
-        assert_eq!(cargo_profile_dir("native"), "release");
+        assert_eq!(cargo_profile_dir("native"), "native");
     }
 
     #[test]
