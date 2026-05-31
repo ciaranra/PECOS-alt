@@ -44,10 +44,8 @@ deeper *semantic* proof for the load-bearing CReg shapes):
      bitcode via the bundled `selene_helios_qis_plugin` (+ Helios
      QIR runtime) -- `selene_sim.build(BitcodeString(...)) ->
      run_shots(Stim)`. So the direct `qir_to_qis -> Selene`
-     differential long claimed "blocked" (an
-     alleged LLVM 14<->21 / opaque-vs-typed bridge) is in fact
-     available with zero PECOS LLVM work: PECOS-Rust stays LLVM-14;
-     the LLVM-21 capability lives entirely in the qir-qis +
+     differential long claimed "blocked" by LLVM version or pointer
+     representation differences is available through the qir-qis +
      selene_sim *Python* deps. Layer D
      (`test_tier2_executable_differential`) lands the
      **representative** executable differential (deterministic

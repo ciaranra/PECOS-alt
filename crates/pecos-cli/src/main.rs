@@ -24,7 +24,7 @@ use pecos_build::cuda::find_cuda;
 #[cfg(feature = "runtime")]
 use pecos_build::cuquantum::{find_cuquantum, get_cuquantum_version};
 #[cfg(feature = "runtime")]
-use pecos_build::llvm::get_llvm_version;
+use pecos_build::llvm::{LLVM_SYS_PREFIX_ENV, get_llvm_version};
 #[cfg(feature = "runtime")]
 use std::io::Write;
 
@@ -97,7 +97,7 @@ enum Commands {
         #[command(subcommand)]
         command: GpuCommands,
     },
-    /// LLVM 14 inspection, validation, and configuration
+    /// LLVM 21.1 inspection, validation, and configuration
     Llvm {
         #[command(subcommand)]
         command: LlvmCommands,
@@ -189,6 +189,10 @@ enum Commands {
         /// Skip automatic configuration after installation (applies to llvm)
         #[arg(long)]
         no_configure: bool,
+
+        /// Accept installation prompts
+        #[arg(short, long)]
+        yes: bool,
     },
     /// Uninstall optional dependencies (cuda, llvm, cuquantum)
     ///
@@ -728,7 +732,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             force,
             all,
             no_configure,
-        } => cli::install_cmd::run(targets, *force, *all, *no_configure)?,
+            yes,
+        } => cli::install_cmd::run(targets, *force, *all, *no_configure, *yes)?,
         Commands::Uninstall { targets, all, yes } => {
             cli::uninstall_cmd::run(targets, *all, *yes)?;
         }
@@ -903,8 +908,8 @@ fn run_doctor() {
     let mut problems: Vec<String> = Vec::new();
     let mut hints: Vec<String> = Vec::new();
 
-    // --- LLVM 14 ---
-    println!("LLVM 14:");
+    // --- LLVM 21.1 ---
+    println!("LLVM 21.1:");
     let llvm_config = pecos_build::llvm::config::validate_llvm_config();
     if let Some(ref path) = llvm_config.detected_path {
         let version = get_llvm_version(path).unwrap_or_else(|_| "unknown".into());
@@ -915,11 +920,15 @@ fn run_doctor() {
         );
     } else {
         print_check("installed", false, "not found");
-        problems.push("LLVM 14 not installed. Run: pecos install llvm".into());
+        if let Some(reason) = pecos_build::llvm::installer::managed_install_unavailable_reason() {
+            problems.push(format!("LLVM 21.1 not installed. {reason}"));
+        } else {
+            problems.push("LLVM 21.1 not installed. Run: pecos install llvm".into());
+        }
     }
 
     if let Some(ref path) = llvm_config.configured_path {
-        if llvm_config.path_is_valid_llvm14 {
+        if llvm_config.path_is_valid_llvm {
             print_check(".cargo/config.toml", true, &format!("{}", path.display()));
         } else if !llvm_config.path_exists {
             print_check(
@@ -932,32 +941,36 @@ fn run_doctor() {
             print_check(
                 ".cargo/config.toml",
                 false,
-                &format!("path exists but is not valid LLVM 14: {}", path.display()),
+                &format!("path exists but is not valid LLVM 21.1: {}", path.display()),
             );
             problems.push(
-                "LLVM path in .cargo/config.toml is not valid LLVM 14. Run: pecos llvm configure"
+                "LLVM path in .cargo/config.toml is not valid LLVM 21.1. Run: pecos llvm configure"
                     .into(),
             );
         }
     } else {
-        print_check(".cargo/config.toml", false, "LLVM_SYS_140_PREFIX not set");
+        print_check(
+            ".cargo/config.toml",
+            false,
+            &format!("{LLVM_SYS_PREFIX_ENV} not set"),
+        );
         if llvm_config.detected_path.is_some() {
             problems.push("LLVM installed but not configured. Run: pecos llvm configure".into());
         }
     }
 
-    if let Ok(env_val) = std::env::var("LLVM_SYS_140_PREFIX") {
+    if let Ok(env_val) = std::env::var(LLVM_SYS_PREFIX_ENV) {
         let env_path = std::path::Path::new(&env_val);
         if env_path.exists() {
-            print_check("LLVM_SYS_140_PREFIX env", true, &env_val);
+            print_check(&format!("{LLVM_SYS_PREFIX_ENV} env"), true, &env_val);
         } else {
             print_check(
-                "LLVM_SYS_140_PREFIX env",
+                &format!("{LLVM_SYS_PREFIX_ENV} env"),
                 false,
                 &format!("set but path missing: {env_val}"),
             );
             problems.push(format!(
-                "LLVM_SYS_140_PREFIX={env_val} but path does not exist"
+                "{LLVM_SYS_PREFIX_ENV}={env_val} but path does not exist"
             ));
         }
     }

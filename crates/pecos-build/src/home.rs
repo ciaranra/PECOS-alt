@@ -6,7 +6,7 @@
 //! ~/.pecos/
 //! ├── cache/          # Downloaded archives (tar.gz, 7z, etc.)
 //! ├── deps/           # All dependencies, versioned by name
-//! │   ├── llvm-14/
+//! │   ├── llvm-21.1/
 //! │   ├── cuda-12.6.3/
 //! │   ├── quest-v4.2.0/
 //! │   ├── stim-bd60b73525fd/
@@ -159,8 +159,8 @@ pub fn resolve_dep_path(name: &str, version: &str) -> Result<PathBuf> {
     Ok(versioned)
 }
 
-/// LLVM major version used by PECOS
-pub const LLVM_VERSION: &str = "14";
+/// LLVM version used by PECOS
+pub const LLVM_VERSION: &str = crate::llvm::REQUIRED_VERSION;
 
 /// Get the vendored cmake installation directory path (without creating it)
 ///
@@ -339,7 +339,7 @@ pub fn print_legacy_warning(name: &str, old_path: &Path) {
 
 /// Description of a single legacy dep that can be migrated.
 pub struct LegacyDep {
-    /// Human-readable name (e.g. "LLVM 14")
+    /// Human-readable name (e.g. "LLVM 21.1")
     pub name: &'static str,
     /// Old path
     pub old: PathBuf,

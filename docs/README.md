@@ -101,7 +101,7 @@ For OpenQASM, PHIR, or other formats, see the [User Guide](user-guide/getting-st
 - **Fast Simulation**: Leverages a fast stabilizer simulation algorithm.
 - **Multi-language extensions**: Core functionalities implemented via Rust for performance and safety. Additional
   add-ons and extension support in C/C++ via Cython.
-- **QIR Support**: Execute Quantum Intermediate Representation programs (requires LLVM version 14).
+- **QIR Support**: Execute Quantum Intermediate Representation programs (requires LLVM version 21.1).
 
 ## Available Implementations
 

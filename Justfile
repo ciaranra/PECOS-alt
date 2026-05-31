@@ -70,17 +70,18 @@ doctor: _msvc-bootstrap
     ok()   { echo "  [OK] $1: $2"; }
     fail() { echo "  [!!] $1: $2"; PROBLEMS=$((PROBLEMS + 1)); }
 
-    echo "LLVM 14:"
+    echo "LLVM 21.1:"
     if LLVM_DIR=$({{pecos}} llvm find 2>/dev/null); then
         VERSION=$("$LLVM_DIR/bin/llvm-config" --version 2>/dev/null || {{pecos}} llvm version 2>/dev/null | head -1 || echo "unknown")
-        ok "installed" "$VERSION at $LLVM_DIR"
+        LINK_MODE=$("$LLVM_DIR/bin/llvm-config" --shared-mode 2>/dev/null || echo "unknown")
+        ok "installed" "$VERSION ($LINK_MODE LLVM) at $LLVM_DIR"
     else
         fail "installed" "not found (run: just setup)"
     fi
-    if [ -f .cargo/config.toml ] && grep -q "LLVM_SYS_140_PREFIX" .cargo/config.toml 2>/dev/null; then
-        ok ".cargo/config.toml" "LLVM_SYS_140_PREFIX configured"
+    if [ -f .cargo/config.toml ] && grep -q "LLVM_SYS_211_PREFIX" .cargo/config.toml 2>/dev/null; then
+        ok ".cargo/config.toml" "LLVM_SYS_211_PREFIX configured"
     else
-        fail ".cargo/config.toml" "LLVM_SYS_140_PREFIX not set (run: pecos llvm configure)"
+        fail ".cargo/config.toml" "LLVM_SYS_211_PREFIX not set (run: pecos llvm configure)"
     fi
     echo ""
 
@@ -458,7 +459,7 @@ docs-test:
 # Deps Management (prefer `just setup` or `pecos install <target>`)
 # =============================================================================
 
-# Install LLVM 14
+# Install PECOS-managed LLVM 21.1 where supported
 [group('deps')]
 install-llvm: _msvc-bootstrap
     {{pecos}} install llvm
@@ -473,7 +474,7 @@ install-cuda: _msvc-bootstrap
 configure-llvm: _msvc-bootstrap
     {{pecos}} llvm configure
 
-# Check LLVM 14 installation status
+# Check LLVM 21.1 installation status
 [group('deps')]
 check-llvm: _msvc-bootstrap
     -{{pecos}} llvm check

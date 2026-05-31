@@ -5,7 +5,7 @@
 //! - **`core`**: Core types and error handling
 //! - **`sim`**: Quantum simulation (includes core + num)
 //! - **`runtime`**: Full simulation with QASM + PHIR support
-//! - **`qis`**: QIS/LLVM IR execution (requires LLVM 14)
+//! - **`qis`**: QIS/LLVM IR execution (requires LLVM 21.1)
 //! - **`hugr`**: HUGR program support
 //! - **`quest`/`qulacs`/`cppsparsestab`**: Simulator backends
 //! - **`num`**: Numerical computing (scipy-like)

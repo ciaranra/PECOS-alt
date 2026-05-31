@@ -53,6 +53,7 @@ use tket::hugr::llvm::{
 use tket::hugr::ops::DataflowParent;
 use tket::hugr::{Hugr, HugrView, Node};
 use tket::llvm::rotation::RotationCodegenExtension;
+use tket::passes::ComposablePass;
 use tket_qsystem::QSystemPass;
 use tket_qsystem::llvm::array_utils::ArrayLowering;
 use tket_qsystem::llvm::futures::FuturesCodegenExtension;
@@ -494,7 +495,9 @@ pub fn compile_hugr_bytes_to_bitcode_with_options(
     let module = compile(args, &context, &mut hugr)
         .map_err(|e| PecosError::Generic(format!("Compilation failed: {e}")))?;
 
-    // Write to memory buffer and get bitcode
+    // Write to memory buffer and get bitcode. `as_slice()` includes LLVM's
+    // trailing C-string NUL, which is not part of the bitcode stream.
     let buffer = module.write_bitcode_to_memory();
-    Ok(buffer.as_slice().to_vec())
+    let bitcode = buffer.as_slice();
+    Ok(bitcode[..bitcode.len().saturating_sub(1)].to_vec())
 }
