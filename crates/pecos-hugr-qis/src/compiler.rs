@@ -54,19 +54,22 @@ use tket::hugr::ops::DataflowParent;
 use tket::hugr::{Hugr, HugrView, Node};
 use tket::llvm::rotation::RotationCodegenExtension;
 use tket::passes::ComposablePass;
-use tket_qsystem::QSystemPass;
 use tket_qsystem::llvm::array_utils::ArrayLowering;
 use tket_qsystem::llvm::futures::FuturesCodegenExtension;
 use tket_qsystem::llvm::{
     debug::DebugCodegenExtension, prelude::QISPreludeCodegen, qsystem::QSystemCodegenExtension,
     random::RandomCodegenExtension, result::ResultsCodegenExtension, utils::UtilsCodegenExtension,
 };
+use tket_qsystem::{QSystemPass, QSystemPlatform};
 
 // Import read_hugr_envelope from utils module
 use crate::utils::read_hugr_envelope;
 
 const LLVM_MAIN: &str = "qmain";
 const METADATA: &[(&str, &[&str])] = &[("name", &["mainlib"])];
+// PECOS targets the Selene Helios QIS runtime; keep the qsystem lowering
+// platform explicit so new tket-qsystem platforms do not silently change codegen.
+const QSYSTEM_PLATFORM: QSystemPlatform = QSystemPlatform::Helios;
 
 // Extension registry is defined in the parent module
 
@@ -102,7 +105,7 @@ impl Default for CompileArgs {
 /// Note: `QSystemPass` internally calls `inline_constant_functions` when the
 /// `llvm` feature is enabled, so we don't need to call it separately.
 fn process_hugr(hugr: &mut Hugr) -> Result<()> {
-    QSystemPass::default().run(hugr)?;
+    QSystemPass::defaults(QSYSTEM_PLATFORM).run(hugr)?;
     Ok(())
 }
 
@@ -121,7 +124,7 @@ fn codegen_extensions() -> CodegenExtsMap<'static, Hugr> {
         .add_default_static_array_extensions()
         .add_default_borrow_array_extensions(pcg.clone())
         .add_extension(FuturesCodegenExtension)
-        .add_extension(QSystemCodegenExtension::from(pcg.clone()))
+        .add_extension(QSystemCodegenExtension::new(QSYSTEM_PLATFORM, pcg.clone()))
         .add_extension(RandomCodegenExtension)
         .add_extension(ResultsCodegenExtension::new(
             SeleneHeapArrayCodegen::LOWERING,
