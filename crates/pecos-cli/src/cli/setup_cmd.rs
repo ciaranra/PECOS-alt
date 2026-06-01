@@ -254,13 +254,55 @@ fn find_repo_root() -> Option<PathBuf> {
 // ── Migration ──────────────────────────────────────────────────────────────
 
 fn check_legacy_deps(mode: PromptMode) -> Result<()> {
-    let legacy = pecos_build::home::find_legacy_deps()?;
-    if legacy.is_empty() {
+    let legacy = pecos_build::home::find_legacy_dep_status()?;
+    if legacy.migratable.is_empty() && legacy.incompatible.is_empty() {
+        return Ok(());
+    }
+
+    if !legacy.incompatible.is_empty() {
+        println!("Found legacy dependencies that need manual action:");
+        for dep in &legacy.incompatible {
+            println!("  {} at {}", dep.name, dep.old.display());
+            println!("    {}", dep.reason);
+            if dep.name == "LLVM" {
+                println!("    This will not be migrated into ~/.pecos/deps/llvm-21.1/.");
+                println!("    Remove it before installing/configuring LLVM 21.1.");
+                println!("    Then install LLVM 21.1 with `pecos install llvm`, or configure");
+                println!(
+                    "    an existing LLVM 21.1 install with `pecos llvm configure /path/to/llvm`."
+                );
+            }
+        }
+        println!();
+
+        for dep in &legacy.incompatible {
+            if dep.name != "LLVM" {
+                continue;
+            }
+            if confirm(
+                &format!("Remove incompatible legacy LLVM at {}?", dep.old.display()),
+                true,
+                mode,
+            ) {
+                print!("  Removing old LLVM...");
+                pecos_build::home::remove_incompatible_legacy_dep(dep)?;
+                println!(" done");
+            } else {
+                println!(
+                    "  Keeping old LLVM at {}. It will not be used as LLVM 21.1.",
+                    dep.old.display()
+                );
+            }
+        }
+        println!();
+    }
+
+    if legacy.migratable.is_empty() {
         return Ok(());
     }
 
     println!("Found dependencies at legacy paths:");
-    for dep in &legacy {
+    for dep in &legacy.migratable {
         println!("  {} -> {}", dep.old.display(), dep.new.display());
     }
 
@@ -269,7 +311,7 @@ fn check_legacy_deps(mode: PromptMode) -> Result<()> {
         true,
         mode,
     ) {
-        for dep in &legacy {
+        for dep in &legacy.migratable {
             print!("  Moving {}...", dep.name);
             pecos_build::home::migrate_legacy_dep(dep)?;
             println!(" done");

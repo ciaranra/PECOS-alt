@@ -114,7 +114,13 @@ fn ensure_managed_llvm(no_configure: bool) -> Result<std::path::PathBuf> {
 
 fn run_configure(path: Option<String>) -> Result<()> {
     let llvm_path = if let Some(path) = path {
-        let llvm_path = std::path::PathBuf::from(path);
+        let input_path = std::path::PathBuf::from(&path);
+        let llvm_path = input_path.canonicalize().map_err(|e| {
+            pecos_build::errors::Error::Llvm(format!(
+                "Could not resolve LLVM path {}: {e}",
+                input_path.display()
+            ))
+        })?;
         if !is_valid_llvm(&llvm_path) {
             return Err(pecos_build::errors::Error::Llvm(format!(
                 "{} is not a valid LLVM {REQUIRED_VERSION} installation",

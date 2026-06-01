@@ -1487,7 +1487,9 @@ impl PyLLValue {
         };
 
         // Get the pointer type from PyPointerType
-        let LLType::Pointer(target_ptr_type) = ptr_type.ll_type else {
+        let (LLType::Pointer(target_ptr_type) | LLType::TypedPointer(target_ptr_type, _)) =
+            ptr_type.ll_type
+        else {
             return Err(PyRuntimeError::new_err("Target must be a pointer type"));
         };
 
@@ -1513,11 +1515,20 @@ impl PyLLValue {
                 ll_type: LLType::Float(v.get_type()),
                 context_ptr: self.context_ptr,
             }),
-            LLValue::Pointer(v) => PyAnyType::Pointer(PyPointerType {
-                ll_type: LLType::Pointer(v.value().get_type()),
-                pointee_type: v.pointee_type(),
-                context_ptr: self.context_ptr,
-            }),
+            LLValue::Pointer(v) => {
+                let pointee_type = v.pointee_type();
+                let ll_type = pointee_type
+                    .and_then(|pointee_type| {
+                        LLType::typed_pointer(v.value().get_type(), pointee_type)
+                    })
+                    .unwrap_or_else(|| LLType::Pointer(v.value().get_type()));
+
+                PyAnyType::Pointer(PyPointerType {
+                    ll_type,
+                    pointee_type,
+                    context_ptr: self.context_ptr,
+                })
+            }
             LLValue::Array(v) => PyAnyType::Array(PyArrayType {
                 ll_type: LLType::Array(v.get_type()),
                 context_ptr: self.context_ptr,

@@ -123,7 +123,8 @@ fn install_target(target: &str, force: bool, no_configure: bool, yes: bool) -> R
 
 fn confirm_managed_llvm_install(yes: bool) -> Result<()> {
     let version = pecos_build::llvm::installer::release_version();
-    let install_dir = pecos_build::home::get_llvm_dir_path()?;
+    let install_dir =
+        pecos_build::home::get_versioned_dep_path("llvm", pecos_build::home::LLVM_VERSION)?;
 
     if let Some(reason) = pecos_build::llvm::installer::managed_install_unavailable_reason() {
         return Err(Error::Config(reason.into()));

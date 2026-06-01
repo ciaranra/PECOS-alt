@@ -37,6 +37,20 @@ def test_pointer_types(qir_module) -> None:
     _ = qubit_ptr, result_ptr
 
 
+def test_inttoptr_accepts_typed_pointer_targets(qir_module) -> None:
+    from pecos_rslib_llvm import ir
+
+    module, ctx = qir_module
+
+    i64 = ctx.int_type(64)
+    qubit_ty = module.context.get_identified_type("Qubit")
+    qubit_ptr = qubit_ty.as_pointer()
+
+    ptr = ir.Constant(i64, 0).inttoptr(qubit_ptr)
+
+    assert ptr.type == qubit_ptr
+
+
 def test_array_types(qir_module) -> None:
     _, ctx = qir_module
 

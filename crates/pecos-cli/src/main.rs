@@ -168,8 +168,18 @@ enum Commands {
     /// Migrate legacy deps from ~/.pecos/ to ~/.pecos/deps/
     ///
     /// Moves LLVM, CUDA, and cuQuantum installations from the old top-level
-    /// paths into the unified deps/ directory.
-    Migrate,
+    /// paths into the unified deps/ directory. Legacy LLVM installations that
+    /// are not valid LLVM 21.1 installs can be removed before installing the
+    /// current managed LLVM.
+    Migrate {
+        /// Accept all prompts without asking
+        #[arg(long, conflicts_with = "no")]
+        yes: bool,
+
+        /// Decline all prompts without asking
+        #[arg(long, conflicts_with = "yes")]
+        no: bool,
+    },
     /// Install optional dependencies (cuda, llvm, cuquantum)
     ///
     /// Example: pecos install cuda cuquantum
@@ -726,7 +736,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             cli::setup_cmd::run(mode, *skip_llvm, *skip_cuda, *skip_cmake, *quiet)?;
         }
-        Commands::Migrate => cli::migrate_cmd::run()?,
+        Commands::Migrate { yes, no } => {
+            let mode = if *yes {
+                pecos_build::prompt::PromptMode::AcceptAll
+            } else if *no {
+                pecos_build::prompt::PromptMode::DeclineAll
+            } else {
+                pecos_build::prompt::PromptMode::Interactive
+            };
+            cli::migrate_cmd::run(mode)?;
+        }
         Commands::Install {
             targets,
             force,

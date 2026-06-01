@@ -149,6 +149,9 @@ pecos llvm configure /path/to/llvm
 ```
 
 Updates `.cargo/config.toml` with the correct `LLVM_SYS_211_PREFIX` environment variable.
+Explicit paths are canonicalized, so configuring a symlink records the resolved
+LLVM directory. Re-run `pecos llvm configure /path/to/llvm` after repointing the
+symlink.
 
 ### Find LLVM Path
 

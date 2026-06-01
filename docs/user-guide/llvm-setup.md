@@ -166,6 +166,10 @@ cargo run -p pecos-cli -- llvm configure /path/to/llvm
 
 This updates `.cargo/config.toml` with the LLVM path.
 
+Explicit paths are canonicalized before being written. If `/path/to/llvm` is a
+symlink, PECOS writes the resolved LLVM directory into `.cargo/config.toml`; run
+`pecos llvm configure /path/to/llvm` again after repointing that symlink.
+
 ### `check`
 
 Verify LLVM 21.1 is available:
