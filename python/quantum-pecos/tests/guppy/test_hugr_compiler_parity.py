@@ -108,9 +108,7 @@ def compare_compilers(
     # LLVM 21 can peel runtime loops, duplicating static call sites while
     # preserving the dynamic behavior. In that case exact call-site
     # multiplicity is not a robust parity signal.
-    if selene_set == rust_set and (
-        "llvm.loop.peeled.count" in selene_ir or "llvm.loop.peeled.count" in rust_ir
-    ):
+    if selene_set == rust_set and ("llvm.loop.peeled.count" in selene_ir or "llvm.loop.peeled.count" in rust_ir):
         return True, "QIS call set matches; static call counts differ only after LLVM loop peeling"
 
     only_selene = selene_counts - rust_counts
