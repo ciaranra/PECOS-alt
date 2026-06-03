@@ -101,7 +101,7 @@ jobs:
             gcc_cc: "/opt/rh/gcc-toolset-13/root/usr/bin/gcc"
             gcc_cxx: "/opt/rh/gcc-toolset-13/root/usr/bin/g++"
           # Linux aarch64 - temporarily disabled while the LLVM 21.1
-          # manylinux_2_28 bootstrap is validated on the primary x86_64 lane.
+          # manylinux_2_34 bootstrap is validated on the primary x86_64 lane.
           # - os: ubuntu-24.04-arm
           #   architecture: aarch64
           #   runner: ubuntu-24.04-arm
@@ -207,8 +207,8 @@ jobs:
           CIBW_BUILD: "cp310-*"
           CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
           CIBW_ARCHS_LINUX: ${{ matrix.cibw_archs }}
-          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
-          CIBW_MANYLINUX_AARCH64_IMAGE: "manylinux_2_28"
+          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_34"
+          CIBW_MANYLINUX_AARCH64_IMAGE: "manylinux_2_34"
           # Linux configuration - GCC Toolset and CUDA paths are conditional via matrix variables
           CIBW_ENVIRONMENT_LINUX: >
             PATH=${{ matrix.gcc_path_prefix }}$HOME/.cargo/bin:$HOME/.pecos/deps/llvm-21.1/bin:$HOME/.pecos/deps/cmake-${{ env.PECOS_CMAKE_VERSION }}/bin:/usr/local/cuda-12.6/bin:$PATH
@@ -227,7 +227,9 @@ jobs:
               dnf install -y gcc-toolset-13
               source /opt/rh/gcc-toolset-13/enable
               echo "Installing CUDA Toolkit from NVIDIA repos..."
-              dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
+              . /etc/os-release
+              CUDA_RHEL_MAJOR="${VERSION_ID%%.*}"
+              dnf config-manager --add-repo "https://developer.download.nvidia.com/compute/cuda/repos/rhel${CUDA_RHEL_MAJOR}/x86_64/cuda-rhel${CUDA_RHEL_MAJOR}.repo"
               dnf install -y cuda-nvcc-12-6 cuda-cudart-devel-12-6 libcublas-devel-12-6
               export CUDA_PATH=/usr/local/cuda-12.6
               export PATH=$CUDA_PATH/bin:$PATH
@@ -309,8 +311,8 @@ jobs:
           CIBW_BUILD: "cp310-*"
           CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
           CIBW_ARCHS_LINUX: ${{ matrix.cibw_archs }}
-          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
-          CIBW_MANYLINUX_AARCH64_IMAGE: "manylinux_2_28"
+          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_34"
+          CIBW_MANYLINUX_AARCH64_IMAGE: "manylinux_2_34"
           CIBW_ENVIRONMENT_LINUX: >
             PATH=$HOME/.cargo/bin:$HOME/.pecos/deps/llvm-21.1/bin:$PATH
             LLVM_SYS_211_PREFIX=$HOME/.pecos/deps/llvm-21.1
