@@ -20,6 +20,24 @@ $Asset = "clang+llvm-$Version-x86_64-pc-windows-msvc.tar.xz"
 $Url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$Version/$Asset"
 $LlvmConfig = Join-Path $InstallDir "bin\llvm-config.exe"
 
+function Get-Sha256Hex {
+    param([string]$Path)
+
+    $Stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $Sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return -join ($Sha256.ComputeHash($Stream) | ForEach-Object { $_.ToString("x2") })
+        }
+        finally {
+            $Sha256.Dispose()
+        }
+    }
+    finally {
+        $Stream.Dispose()
+    }
+}
+
 if (Test-Path $LlvmConfig) {
     $FoundVersion = (& $LlvmConfig --version).Trim()
     if ($FoundVersion.StartsWith($RequiredVersion)) {
@@ -37,9 +55,15 @@ New-Item -ItemType Directory -Force -Path $ExtractDir | Out-Null
 
 try {
     Write-Host "Downloading official LLVM $Version Windows development archive: $Asset"
-    Invoke-WebRequest -Uri $Url -OutFile $Archive
+    $Curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($Curl) {
+        & $Curl.Source --fail --location --retry 5 --retry-delay 5 --output $Archive $Url
+    }
+    else {
+        Invoke-WebRequest -Uri $Url -OutFile $Archive
+    }
 
-    $ActualSha256 = (Get-FileHash -Algorithm SHA256 $Archive).Hash.ToLowerInvariant()
+    $ActualSha256 = Get-Sha256Hex $Archive
     if ($ActualSha256 -ne $ExpectedSha256) {
         throw "SHA256 mismatch for $Asset. Expected $ExpectedSha256, got $ActualSha256"
     }
