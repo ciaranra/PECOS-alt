@@ -212,7 +212,7 @@ jobs:
           # Linux configuration - GCC Toolset and CUDA paths are conditional via matrix variables
           CIBW_ENVIRONMENT_LINUX: >
             PATH=${{ matrix.gcc_path_prefix }}$HOME/.cargo/bin:$HOME/.pecos/deps/llvm-21.1/bin:$HOME/.pecos/deps/cmake-${{ env.PECOS_CMAKE_VERSION }}/bin:/usr/local/cuda-12.6/bin:$PATH
-            LD_LIBRARY_PATH=${{ matrix.gcc_ld_path }}$LD_LIBRARY_PATH
+            LD_LIBRARY_PATH=${{ matrix.gcc_ld_path }}$HOME/.pecos/deps/llvm-21.1/lib:$LD_LIBRARY_PATH
             LLVM_SYS_211_PREFIX=$HOME/.pecos/deps/llvm-21.1
             CMAKE=$HOME/.pecos/deps/cmake-${{ env.PECOS_CMAKE_VERSION }}/bin/cmake
             CUDA_PATH=/usr/local/cuda-12.6
@@ -220,7 +220,7 @@ jobs:
           CIBW_BEFORE_ALL_LINUX: |
             bash scripts/ci/ensure-rust.sh stable minimal
             export PATH=$HOME/.cargo/bin:$PATH
-            dnf install -y libffi-devel xz
+            dnf install -y bzip2 libffi-devel xz
             # Install CUDA Toolkit for GPU support on x86_64 (compile-time only, no GPU needed)
             if [ "${{ matrix.install_cuda }}" = "true" ]; then
               echo "Installing GCC 13 (required for CUDA 12.6 compatibility)..."
@@ -239,7 +239,7 @@ jobs:
             else
               echo "Skipping CUDA installation (GPU support not enabled for this build)"
             fi
-            cargo run --locked --release -p pecos-cli -- install llvm --force || bash scripts/ci/install-llvm-21-release.sh
+            bash scripts/ci/install-llvm-21-conda-linux.sh
             cargo run --locked --release -p pecos-cli -- llvm configure "$HOME/.pecos/deps/llvm-21.1"
             cargo run --locked --release -p pecos-cli -- install cmake --force
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
@@ -315,12 +315,13 @@ jobs:
           CIBW_MANYLINUX_AARCH64_IMAGE: "manylinux_2_34"
           CIBW_ENVIRONMENT_LINUX: >
             PATH=$HOME/.cargo/bin:$HOME/.pecos/deps/llvm-21.1/bin:$PATH
+            LD_LIBRARY_PATH=$HOME/.pecos/deps/llvm-21.1/lib:$LD_LIBRARY_PATH
             LLVM_SYS_211_PREFIX=$HOME/.pecos/deps/llvm-21.1
           CIBW_BEFORE_ALL_LINUX: |
             bash scripts/ci/ensure-rust.sh stable minimal
             export PATH=$HOME/.cargo/bin:$PATH
-            dnf install -y libffi-devel xz
-            cargo run --locked --release -p pecos-cli -- install llvm --force || bash scripts/ci/install-llvm-21-release.sh
+            dnf install -y bzip2 libffi-devel xz
+            bash scripts/ci/install-llvm-21-conda-linux.sh
             cargo run --locked --release -p pecos-cli -- llvm configure "$HOME/.pecos/deps/llvm-21.1"
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
             auditwheel repair -w {dest_dir} {wheel} &&

@@ -20,9 +20,21 @@ case "$(uname -m)" in
         ;;
 esac
 
-if [ -x "$INSTALL_DIR/bin/llvm-config" ] && "$INSTALL_DIR/bin/llvm-config" --version | grep -q '^21\.1'; then
-    echo "LLVM $("$INSTALL_DIR/bin/llvm-config" --version) already installed at $INSTALL_DIR"
+llvm_is_shared() {
+    local llvm_config="$1"
+
+    [ -x "$llvm_config" ] || return 1
+    "$llvm_config" --version | grep -q '^21\.1' || return 1
+    [ "$("$llvm_config" --shared-mode)" = "shared" ] || return 1
+    "$llvm_config" --libnames --link-shared | grep -q 'libLLVM-21\.so'
+}
+
+if llvm_is_shared "$INSTALL_DIR/bin/llvm-config"; then
+    echo "Shared LLVM $("$INSTALL_DIR/bin/llvm-config" --version) already installed at $INSTALL_DIR"
     exit 0
+elif [ -e "$INSTALL_DIR" ]; then
+    echo "Removing invalid or non-shared LLVM install at $INSTALL_DIR"
+    rm -rf "$INSTALL_DIR"
 fi
 
 URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${LLVM_RELEASE_VERSION}/${ASSET}"
@@ -57,4 +69,9 @@ mv "$EXTRACT_DIR" "$INSTALL_DIR"
 
 "$INSTALL_DIR/bin/llvm-config" --version
 "$INSTALL_DIR/bin/llvm-config" --shared-mode
+if ! llvm_is_shared "$INSTALL_DIR/bin/llvm-config"; then
+    echo "The official LLVM ${LLVM_RELEASE_VERSION} Linux archive does not provide libLLVM-21.so." >&2
+    echo "PECOS CI needs a shared LLVM build; use scripts/ci/install-llvm-21-conda-linux.sh instead." >&2
+    exit 1
+fi
 echo "Installed LLVM ${LLVM_RELEASE_VERSION} to $INSTALL_DIR"

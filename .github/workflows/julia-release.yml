@@ -134,7 +134,7 @@ jobs:
             LLVM_PREFIX="$(brew --prefix llvm@21)"
           else
             echo "Installing LLVM 21.1 using PECOS-managed packages..."
-            cargo run --locked -p pecos-cli --release -- llvm ensure --managed --no-configure || bash scripts/ci/install-llvm-21-release.sh
+            cargo run --locked -p pecos-cli --release -- llvm ensure --managed --no-configure || bash scripts/ci/install-llvm-21-conda-linux.sh
             LLVM_PREFIX="$HOME/.pecos/deps/llvm-21.1"
           fi
 

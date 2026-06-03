@@ -61,7 +61,7 @@ ci-env: _msvc-bootstrap
     LLVM_RELEASE_VERSION="${LLVM_RELEASE_VERSION:-21.1.8}"
     case "${RUNNER_OS:-$(uname -s)}" in
         Linux)
-            {{pecos}} llvm ensure --managed --no-configure || bash scripts/ci/install-llvm-21-release.sh
+            {{pecos}} llvm ensure --managed --no-configure || bash scripts/ci/install-llvm-21-conda-linux.sh
             {{pecos}} llvm configure
             ;;
         macOS|Darwin)
