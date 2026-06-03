@@ -72,9 +72,10 @@ ci-env: _msvc-bootstrap
             ;;
         Windows*|MINGW*|MSYS*|CYGWIN*)
             if ! {{pecos}} llvm find >/dev/null 2>&1; then
-                powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "choco install llvm --version=$LLVM_RELEASE_VERSION -y --no-progress"
+                LLVM_PREFIX="${USERPROFILE:-$HOME}\\.pecos\\deps\\llvm-21.1"
+                powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/ci/install-llvm-21-windows.ps1 -InstallDir "$LLVM_PREFIX" -Version "$LLVM_RELEASE_VERSION"
             fi
-            {{pecos}} llvm configure "C:/Program Files/LLVM"
+            {{pecos}} llvm configure
             ;;
         *)
             {{pecos}} llvm ensure --managed --no-configure

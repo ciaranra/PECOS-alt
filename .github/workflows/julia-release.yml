@@ -153,11 +153,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Write-Host "Installing LLVM 21.1 with Chocolatey..."
-          choco install llvm --version=${{ env.LLVM_RELEASE_VERSION }} -y --no-progress
+          $llvmPrefix = Join-Path $env:USERPROFILE ".pecos\deps\llvm-21.1"
+          Write-Host "Installing LLVM 21.1 development archive..."
+          ./scripts/ci/install-llvm-21-windows.ps1 -InstallDir $llvmPrefix -Version ${{ env.LLVM_RELEASE_VERSION }}
 
           Write-Host "Setting LLVM environment variables..."
-          $env:PECOS_LLVM = "C:\Program Files\LLVM"
+          $env:PECOS_LLVM = $llvmPrefix
           $env:LLVM_SYS_211_PREFIX = $env:PECOS_LLVM
           cargo run --locked -p pecos-cli --release -- llvm configure "$env:PECOS_LLVM"
 
