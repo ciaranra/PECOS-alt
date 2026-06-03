@@ -58,7 +58,29 @@ setup-ci: _msvc-bootstrap
 ci-env: _msvc-bootstrap
     #!/usr/bin/env bash
     set -euo pipefail
-    {{pecos}} llvm ensure --managed --no-configure
+    LLVM_RELEASE_VERSION="${LLVM_RELEASE_VERSION:-21.1.8}"
+    case "${RUNNER_OS:-$(uname -s)}" in
+        Linux)
+            {{pecos}} llvm ensure --managed --no-configure || bash scripts/ci/install-llvm-21-release.sh
+            {{pecos}} llvm configure
+            ;;
+        macOS|Darwin)
+            if ! {{pecos}} llvm find >/dev/null 2>&1; then
+                HOMEBREW_NO_AUTO_UPDATE=1 brew install llvm@21
+            fi
+            {{pecos}} llvm configure "$(brew --prefix llvm@21)"
+            ;;
+        Windows*|MINGW*|MSYS*|CYGWIN*)
+            if ! {{pecos}} llvm find >/dev/null 2>&1; then
+                powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "choco install llvm --version=$LLVM_RELEASE_VERSION -y --no-progress"
+            fi
+            {{pecos}} llvm configure "C:/Program Files/LLVM"
+            ;;
+        *)
+            {{pecos}} llvm ensure --managed --no-configure
+            {{pecos}} llvm configure
+            ;;
+    esac
     {{pecos}} env --github-actions
 
 # Check development environment for common problems
