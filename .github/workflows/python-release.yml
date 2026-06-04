@@ -91,10 +91,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux x86_64 with CUDA support. Use the manylinux 2.34 image's
-          # default GCC 11 toolchain: CUDA 12.6 supports GCC 6.x-13.2, while
-          # GCC 13 emits libstdc++ symbols newer than auditwheel's
-          # manylinux_2_35 policy allows.
+          # Linux x86_64 with CUDA support. The manylinux 2.34 image's default
+          # compiler is GCC 14, which emits libstdc++ symbols newer than
+          # auditwheel's manylinux_2_35 policy allows. Install and pin the
+          # AlmaLinux system GCC 11 toolchain in the Linux build environment.
           - os: ubuntu-latest
             architecture: x86_64
             cibw_archs: x86_64
@@ -215,11 +215,21 @@ jobs:
             LIBCLANG_PATH=$HOME/.pecos/deps/llvm-21.1/lib
             CMAKE=$HOME/.pecos/deps/cmake-${{ env.PECOS_CMAKE_VERSION }}/bin/cmake
             CUDA_PATH=/usr/local/cuda-12.6
+            CC=/usr/bin/gcc
+            CXX=/usr/bin/g++
+            CUDAHOSTCXX=/usr/bin/g++
+            CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/gcc
+            CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/gcc
             MATURIN_PEP517_ARGS="--locked --features=extension-module,mwpf"
           CIBW_BEFORE_ALL_LINUX: |
             bash scripts/ci/ensure-rust.sh stable minimal
             export PATH=$HOME/.cargo/bin:$PATH
-            dnf install -y bzip2 libffi-devel xz
+            dnf install -y bzip2 gcc gcc-c++ libffi-devel xz
+            export CC=/usr/bin/gcc
+            export CXX=/usr/bin/g++
+            export CUDAHOSTCXX=/usr/bin/g++
+            export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/gcc
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/gcc
             # Install CUDA Toolkit for GPU support on x86_64 (compile-time only, no GPU needed)
             if [ "${{ matrix.install_cuda }}" = "true" ]; then
               echo "Installing CUDA Toolkit from NVIDIA repos..."
@@ -231,10 +241,11 @@ jobs:
               export PATH=$CUDA_PATH/bin:$PATH
               echo "CUDA installed at $CUDA_PATH"
               nvcc --version
-              gcc --version
             else
               echo "Skipping CUDA installation (GPU support not enabled for this build)"
             fi
+            "$CC" --version
+            "$CXX" --version
             bash scripts/ci/install-llvm-21-conda-linux.sh
             cargo run --locked --release -p pecos-cli -- llvm configure "$HOME/.pecos/deps/llvm-21.1"
             cargo run --locked --release -p pecos-cli -- install cmake --force
@@ -316,10 +327,20 @@ jobs:
             LD_LIBRARY_PATH=$HOME/.pecos/deps/llvm-21.1/lib:$LD_LIBRARY_PATH
             LLVM_SYS_211_PREFIX=$HOME/.pecos/deps/llvm-21.1
             LIBCLANG_PATH=$HOME/.pecos/deps/llvm-21.1/lib
+            CC=/usr/bin/gcc
+            CXX=/usr/bin/g++
+            CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/gcc
+            CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/gcc
           CIBW_BEFORE_ALL_LINUX: |
             bash scripts/ci/ensure-rust.sh stable minimal
             export PATH=$HOME/.cargo/bin:$PATH
-            dnf install -y bzip2 libffi-devel xz
+            dnf install -y bzip2 gcc gcc-c++ libffi-devel xz
+            export CC=/usr/bin/gcc
+            export CXX=/usr/bin/g++
+            export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/gcc
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/gcc
+            "$CC" --version
+            "$CXX" --version
             bash scripts/ci/install-llvm-21-conda-linux.sh
             cargo run --locked --release -p pecos-cli -- llvm configure "$HOME/.pecos/deps/llvm-21.1"
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
