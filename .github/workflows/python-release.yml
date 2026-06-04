@@ -250,6 +250,7 @@ jobs:
             cargo run --locked --release -p pecos-cli -- llvm configure "$HOME/.pecos/deps/llvm-21.1"
             cargo run --locked --release -p pecos-cli -- install cmake --force
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
+            LD_LIBRARY_PATH=$HOME/.pecos/deps/llvm-21.1/lib:$LD_LIBRARY_PATH
             auditwheel repair --plat manylinux_2_35_${{ matrix.cibw_archs }} -w {dest_dir} {wheel} &&
             pipx run abi3audit --strict --report {wheel}
           # macOS configuration
@@ -344,6 +345,7 @@ jobs:
             bash scripts/ci/install-llvm-21-conda-linux.sh
             cargo run --locked --release -p pecos-cli -- llvm configure "$HOME/.pecos/deps/llvm-21.1"
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >
+            LD_LIBRARY_PATH=$HOME/.pecos/deps/llvm-21.1/lib:$LD_LIBRARY_PATH
             auditwheel repair --plat manylinux_2_35_${{ matrix.cibw_archs }} -w {dest_dir} {wheel} &&
             pipx run abi3audit --strict --report {wheel}
           CIBW_ENVIRONMENT_MACOS: >
