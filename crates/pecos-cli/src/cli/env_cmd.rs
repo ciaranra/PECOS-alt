@@ -195,7 +195,10 @@ fn is_libclang_filename(name: &str) -> bool {
 
     if cfg!(target_os = "macos") {
         return name == "libclang.dylib"
-            || (name.starts_with("libclang.") && name.ends_with(".dylib"));
+            || (name.starts_with("libclang.")
+                && Path::new(name)
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("dylib")));
     }
 
     name == "libclang.so"
