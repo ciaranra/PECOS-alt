@@ -91,7 +91,7 @@ jobs:
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.pecos/deps/llvm-21.1
-          key: llvm-${{ env.LLVM_RELEASE_VERSION }}-${{ runner.os }}-${{ runner.arch }}-v2
+          key: llvm-${{ env.LLVM_RELEASE_VERSION }}-${{ runner.os }}-${{ runner.arch }}-v3
 
       - name: Ensure LLVM ${{ env.LLVM_VERSION }}
         run: just ci-env
@@ -232,7 +232,7 @@ jobs:
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.pecos/deps/llvm-21.1
-          key: llvm-${{ env.LLVM_RELEASE_VERSION }}-${{ runner.os }}-${{ runner.arch }}-v2
+          key: llvm-${{ env.LLVM_RELEASE_VERSION }}-${{ runner.os }}-${{ runner.arch }}-v3
 
       - name: Bootstrap MSVC for the Cargo build path (Windows)
         if: runner.os == 'Windows'

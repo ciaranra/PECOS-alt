@@ -22,11 +22,17 @@ esac
 
 llvm_is_valid() {
     local llvm_config="$1"
+    local llvm_dir
+
+    llvm_dir="$(dirname "$(dirname "$llvm_config")")"
 
     [ -x "$llvm_config" ] || return 1
     "$llvm_config" --version | grep -q '^21\.1' || return 1
     [ "$("$llvm_config" --shared-mode)" = "shared" ] || return 1
     "$llvm_config" --libnames --link-shared | grep -q 'libLLVM-21\.so'
+    find "$llvm_dir/lib" -maxdepth 1 \
+        \( -name 'libclang.so' -o -name 'libclang-*.so' -o -name 'libclang.so.*' -o -name 'libclang-*.so.*' \) \
+        | grep -q .
 }
 
 LLVM_CONFIG="$INSTALL_DIR/bin/llvm-config"
@@ -61,17 +67,22 @@ MAMBA_ROOT_PREFIX="$MAMBA_ROOT_PREFIX" "$MAMBA_BIN" create \
     -p "$INSTALL_DIR" \
     --override-channels \
     -c conda-forge \
-    "llvmdev=${LLVM_RELEASE_VERSION}"
+    "llvmdev=${LLVM_RELEASE_VERSION}" \
+    "libclang=${LLVM_RELEASE_VERSION}"
 
 if ! llvm_is_valid "$LLVM_CONFIG"; then
-    echo "conda-forge LLVM install did not provide shared LLVM ${LLVM_RELEASE_VERSION}" >&2
+    echo "conda-forge LLVM install did not provide shared LLVM and libclang ${LLVM_RELEASE_VERSION}" >&2
     "$LLVM_CONFIG" --version >&2 || true
     "$LLVM_CONFIG" --shared-mode >&2 || true
     "$LLVM_CONFIG" --libnames --link-shared >&2 || true
+    find "$INSTALL_DIR/lib" -maxdepth 1 -name 'libclang*' -print >&2 || true
     exit 1
 fi
 
 "$LLVM_CONFIG" --version
 "$LLVM_CONFIG" --shared-mode
 "$LLVM_CONFIG" --libnames --link-shared
-echo "Installed shared LLVM ${LLVM_RELEASE_VERSION} to $INSTALL_DIR"
+find "$INSTALL_DIR/lib" -maxdepth 1 \
+    \( -name 'libclang.so' -o -name 'libclang-*.so' -o -name 'libclang.so.*' -o -name 'libclang-*.so.*' \) \
+    -print
+echo "Installed shared LLVM and libclang ${LLVM_RELEASE_VERSION} to $INSTALL_DIR"

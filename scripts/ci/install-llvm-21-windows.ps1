@@ -68,7 +68,16 @@ try {
         throw "SHA256 mismatch for $Asset. Expected $ExpectedSha256, got $ActualSha256"
     }
 
-    tar -xf $Archive -C $ExtractDir --strip-components=1
+    $Tar = Join-Path $env:SystemRoot "System32\tar.exe"
+    if (-not (Test-Path $Tar)) {
+        $Tar = "tar.exe"
+    }
+
+    Write-Host "Extracting LLVM archive with $Tar"
+    & $Tar -xf $Archive -C $ExtractDir --strip-components=1
+    if ($LASTEXITCODE -ne 0) {
+        throw "tar failed with exit code $LASTEXITCODE"
+    }
 
     if (Test-Path $InstallDir) {
         Remove-Item -Recurse -Force $InstallDir

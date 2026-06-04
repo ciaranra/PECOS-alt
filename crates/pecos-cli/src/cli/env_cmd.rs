@@ -26,9 +26,10 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fmt::Write;
+use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write as IoWrite;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use pecos_build::Result;
 use pecos_build::errors::Error;
@@ -59,11 +60,16 @@ pub fn collect_env() -> BTreeMap<String, String> {
             }
         }
 
-        if pecos_build::llvm::get_llvm_shared_mode(&llvm_path)
-            .is_ok_and(|mode| mode.trim().eq_ignore_ascii_case("shared"))
-            && let Ok(libdir) = pecos_build::llvm::get_llvm_libdir(&llvm_path)
-        {
-            add_llvm_runtime_library_path(&mut env, &libdir);
+        if let Ok(libdir) = pecos_build::llvm::get_llvm_libdir(&llvm_path) {
+            if pecos_build::llvm::get_llvm_shared_mode(&llvm_path)
+                .is_ok_and(|mode| mode.trim().eq_ignore_ascii_case("shared"))
+            {
+                add_llvm_runtime_library_path(&mut env, &libdir);
+            }
+
+            if let Some(libclang_dir) = find_libclang_dir(&llvm_path, &libdir) {
+                env.insert("LIBCLANG_PATH".into(), libclang_dir.display().to_string());
+            }
         }
     }
 
@@ -159,6 +165,42 @@ fn prepend_path_env(env: &mut BTreeMap<String, String>, key: &str, first: &Path)
     if let Ok(joined) = std::env::join_paths(entries) {
         env.insert(key.to_string(), joined.to_string_lossy().into_owned());
     }
+}
+
+fn find_libclang_dir(llvm_path: &Path, libdir: &Path) -> Option<PathBuf> {
+    let mut candidates = vec![libdir.to_path_buf()];
+    if cfg!(windows) {
+        candidates.insert(0, llvm_path.join("bin"));
+    }
+
+    candidates
+        .into_iter()
+        .find(|candidate| contains_libclang(candidate))
+}
+
+fn contains_libclang(dir: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+
+    entries
+        .filter_map(std::result::Result::ok)
+        .any(|entry| entry.file_name().to_str().is_some_and(is_libclang_filename))
+}
+
+fn is_libclang_filename(name: &str) -> bool {
+    if cfg!(windows) {
+        return name.eq_ignore_ascii_case("libclang.dll");
+    }
+
+    if cfg!(target_os = "macos") {
+        return name == "libclang.dylib"
+            || (name.starts_with("libclang.") && name.ends_with(".dylib"));
+    }
+
+    name == "libclang.so"
+        || name.starts_with("libclang.so.")
+        || name.starts_with("libclang-") && name.contains(".so")
 }
 
 /// Print environment in shell-eval format: `export KEY="VALUE"`
