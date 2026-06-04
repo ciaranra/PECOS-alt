@@ -7,6 +7,7 @@ env:
   TRIGGER_ON_PR_PUSH: true  # Set to true to enable triggers on PR pushes
   LLVM_VERSION: "21.1"
   LLVM_RELEASE_VERSION: "21.1.8"
+  MACOS_WHEEL_DEPLOYMENT_TARGET: "15.0"
   # Must match pecos_build::cmake::CMAKE_VERSION. The MWPF decoder feature
   # uses highs-sys, which needs cmake; the wheel build installs this version
   # via `pecos install cmake` and points highs-sys's cmake-rs at it via $CMAKE.
@@ -246,7 +247,7 @@ jobs:
             LLVM_SYS_211_PREFIX=$HOME/.pecos/deps/llvm-21.1
             LIBCLANG_PATH=$HOME/.pecos/deps/llvm-21.1/lib
             CMAKE=$HOME/.pecos/deps/cmake-${{ env.PECOS_CMAKE_VERSION }}/CMake.app/Contents/bin/cmake
-            MACOSX_DEPLOYMENT_TARGET=13.2
+            MACOSX_DEPLOYMENT_TARGET=${{ env.MACOS_WHEEL_DEPLOYMENT_TARGET }}
             SDKROOT=$(xcrun --show-sdk-path)
             MATURIN_PEP517_ARGS="--locked --features=extension-module,mwpf"
           CIBW_BEFORE_ALL_MACOS: |
@@ -328,7 +329,7 @@ jobs:
             PATH=$HOME/.cargo/bin:$HOME/.pecos/deps/llvm-21.1/bin:$PATH
             LLVM_SYS_211_PREFIX=$HOME/.pecos/deps/llvm-21.1
             LIBCLANG_PATH=$HOME/.pecos/deps/llvm-21.1/lib
-            MACOSX_DEPLOYMENT_TARGET=13.2
+            MACOSX_DEPLOYMENT_TARGET=${{ env.MACOS_WHEEL_DEPLOYMENT_TARGET }}
             SDKROOT=$(xcrun --show-sdk-path)
           CIBW_BEFORE_ALL_MACOS: |
             if ! command -v cargo >/dev/null 2>&1; then
