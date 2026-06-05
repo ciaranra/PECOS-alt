@@ -20,6 +20,34 @@ $Asset = "clang+llvm-$Version-x86_64-pc-windows-msvc.tar.xz"
 $Url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$Version/$Asset"
 $LlvmConfig = Join-Path $InstallDir "bin\llvm-config.exe"
 
+function Find-SevenZip {
+    foreach ($Name in @("7z.exe", "7zz.exe", "7za.exe")) {
+        $Command = Get-Command $Name -ErrorAction SilentlyContinue
+        if ($Command) {
+            return $Command.Source
+        }
+    }
+
+    $Candidates = @()
+    if ($env:ProgramFiles) {
+        $Candidates += Join-Path $env:ProgramFiles "7-Zip\7z.exe"
+    }
+    if (${env:ProgramFiles(x86)}) {
+        $Candidates += Join-Path ${env:ProgramFiles(x86)} "7-Zip\7z.exe"
+    }
+    if ($env:ChocolateyInstall) {
+        $Candidates += Join-Path $env:ChocolateyInstall "bin\7z.exe"
+    }
+
+    foreach ($Candidate in $Candidates) {
+        if ($Candidate -and (Test-Path $Candidate)) {
+            return $Candidate
+        }
+    }
+
+    return $null
+}
+
 function Get-Sha256Hex {
     param([string]$Path)
 
@@ -48,9 +76,11 @@ if (Test-Path $LlvmConfig) {
 
 $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) "pecos-llvm-$([System.Guid]::NewGuid())"
 $Archive = Join-Path $TempDir $Asset
+$TarDir = Join-Path $TempDir "tar"
 $ExtractDir = Join-Path $TempDir "extract"
 
 New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
+New-Item -ItemType Directory -Force -Path $TarDir | Out-Null
 New-Item -ItemType Directory -Force -Path $ExtractDir | Out-Null
 
 try {
@@ -68,22 +98,39 @@ try {
         throw "SHA256 mismatch for $Asset. Expected $ExpectedSha256, got $ActualSha256"
     }
 
-    $Tar = Join-Path $env:SystemRoot "System32\tar.exe"
-    if (-not (Test-Path $Tar)) {
-        $Tar = "tar.exe"
+    $SevenZip = Find-SevenZip
+    if (-not $SevenZip) {
+        throw "7-Zip is required to extract $Asset on Windows. Windows tar.exe can hang for hours on this archive in CI; install 7-Zip or provide an existing LLVM 21.1 install."
     }
 
-    Write-Host "Extracting LLVM archive with $Tar"
-    & $Tar -xf $Archive -C $ExtractDir --strip-components=1
+    Write-Host "Extracting compressed LLVM archive with $SevenZip"
+    & $SevenZip x -y -bb0 "-o$TarDir" $Archive
     if ($LASTEXITCODE -ne 0) {
-        throw "tar failed with exit code $LASTEXITCODE"
+        throw "7-Zip failed to decompress $Asset with exit code $LASTEXITCODE"
     }
+
+    $TarArchive = Get-ChildItem -Path $TarDir -File -Filter "*.tar" | Select-Object -First 1
+    if (-not $TarArchive) {
+        throw "7-Zip did not produce a .tar payload from $Asset"
+    }
+
+    Write-Host "Extracting LLVM payload with $SevenZip"
+    & $SevenZip x -y -bb0 "-o$ExtractDir" $TarArchive.FullName
+    if ($LASTEXITCODE -ne 0) {
+        throw "7-Zip failed to extract $($TarArchive.Name) with exit code $LASTEXITCODE"
+    }
+
+    $PayloadRoots = @(Get-ChildItem -Path $ExtractDir -Directory)
+    if ($PayloadRoots.Count -ne 1) {
+        throw "Expected one LLVM payload directory in $ExtractDir, found $($PayloadRoots.Count)"
+    }
+    $PayloadDir = $PayloadRoots[0].FullName
 
     if (Test-Path $InstallDir) {
         Remove-Item -Recurse -Force $InstallDir
     }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InstallDir) | Out-Null
-    Move-Item $ExtractDir $InstallDir
+    Move-Item -Path $PayloadDir -Destination $InstallDir
 
     & $LlvmConfig --version
     & $LlvmConfig --shared-mode
