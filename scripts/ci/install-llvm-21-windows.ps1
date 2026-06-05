@@ -19,6 +19,7 @@ $RequiredVersion = "21.1"
 $Asset = "clang+llvm-$Version-x86_64-pc-windows-msvc.tar.xz"
 $Url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$Version/$Asset"
 $LlvmConfig = Join-Path $InstallDir "bin\llvm-config.exe"
+$LlvmConfigReal = Join-Path $InstallDir "bin\llvm-config.real.exe"
 
 function Find-SevenZip {
     foreach ($Name in @("7z.exe", "7zz.exe", "7za.exe")) {
@@ -66,9 +67,44 @@ function Get-Sha256Hex {
     }
 }
 
+function Install-LlvmConfigWrapper {
+    $WrapperSource = Join-Path $PSScriptRoot "llvm-config-wrapper.rs"
+    if (-not (Test-Path $WrapperSource)) {
+        throw "LLVM config wrapper source not found: $WrapperSource"
+    }
+
+    if (-not (Test-Path $LlvmConfigReal)) {
+        if (-not (Test-Path $LlvmConfig)) {
+            throw "llvm-config.exe not found at $LlvmConfig"
+        }
+        Move-Item -Force -Path $LlvmConfig -Destination $LlvmConfigReal
+    }
+    elseif (Test-Path $LlvmConfig) {
+        Remove-Item -Force $LlvmConfig
+    }
+
+    $Rustc = Get-Command rustc.exe -ErrorAction SilentlyContinue
+    if (-not $Rustc) {
+        throw "rustc.exe is required to repair the LLVM Windows llvm-config system library output"
+    }
+
+    Write-Host "Installing PECOS llvm-config wrapper"
+    & $Rustc.Source --edition=2021 -O -o $LlvmConfig $WrapperSource
+    if ($LASTEXITCODE -ne 0) {
+        throw "rustc failed to build llvm-config wrapper with exit code $LASTEXITCODE"
+    }
+
+    $SystemLibs = (& $LlvmConfig --system-libs --link-static).Trim()
+    $Libxml2Static = Join-Path $InstallDir "lib\libxml2s.lib"
+    if ((-not (Test-Path $Libxml2Static)) -and $SystemLibs -match "(^|\s)libxml2s\.lib($|\s)") {
+        throw "LLVM config wrapper did not filter missing libxml2s.lib from --system-libs"
+    }
+}
+
 if (Test-Path $LlvmConfig) {
     $FoundVersion = (& $LlvmConfig --version).Trim()
     if ($FoundVersion.StartsWith($RequiredVersion)) {
+        Install-LlvmConfigWrapper
         Write-Host "LLVM $FoundVersion already installed at $InstallDir"
         exit 0
     }
@@ -134,6 +170,7 @@ try {
 
     & $LlvmConfig --version
     & $LlvmConfig --shared-mode
+    Install-LlvmConfigWrapper
     Write-Host "Installed LLVM $Version to $InstallDir"
 }
 finally {
