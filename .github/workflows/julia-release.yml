@@ -153,17 +153,20 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $llvmPrefix = Join-Path $env:USERPROFILE ".pecos\deps\llvm-21.1"
-          Write-Host "Installing LLVM 21.1 development archive..."
-          ./scripts/ci/install-llvm-21-windows.ps1 -InstallDir $llvmPrefix -Version ${{ env.LLVM_RELEASE_VERSION }}
+          $llvmRoot = Join-Path $env:USERPROFILE ".pecos\deps\llvm-21.1"
+          $llvmPrefix = Join-Path $llvmRoot "Library"
+          Write-Host "Installing conda-forge LLVM 21.1..."
+          ./scripts/ci/install-llvm-21-windows.ps1 -InstallDir $llvmRoot -Version ${{ env.LLVM_RELEASE_VERSION }}
 
           Write-Host "Setting LLVM environment variables..."
           $env:PECOS_LLVM = $llvmPrefix
           $env:LLVM_SYS_211_PREFIX = $env:PECOS_LLVM
+          $env:LIBCLANG_PATH = Join-Path $llvmPrefix "bin"
           cargo run --locked -p pecos-cli --release -- llvm configure "$env:PECOS_LLVM"
 
           "PECOS_LLVM=$env:PECOS_LLVM" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "LLVM_SYS_211_PREFIX=$env:LLVM_SYS_211_PREFIX" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "LIBCLANG_PATH=$env:LIBCLANG_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
           Write-Host "Verifying LLVM installation..."
           cargo run --locked -p pecos-cli --release -- llvm check

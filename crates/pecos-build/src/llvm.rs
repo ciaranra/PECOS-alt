@@ -62,9 +62,9 @@ pub fn is_required_llvm_version(version: &str) -> bool {
 pub fn find_llvm(repo_root: Option<PathBuf>) -> Option<PathBuf> {
     // 1. Check versioned deps path: ~/.pecos/deps/llvm-{version}/
     if let Ok(deps_llvm) = crate::home::get_llvm_dir_path()
-        && is_valid_llvm(&deps_llvm)
+        && let Some(llvm_prefix) = valid_llvm_prefix(&deps_llvm)
     {
-        return Some(deps_llvm);
+        return Some(llvm_prefix);
     }
 
     // 2. Check legacy top-level path: ~/.pecos/llvm/
@@ -74,29 +74,45 @@ pub fn find_llvm(repo_root: Option<PathBuf>) -> Option<PathBuf> {
         #[cfg(target_os = "windows")]
         {
             let user_llvm_new = pecos_dir.join(format!("LLVM-{REQUIRED_VERSION}"));
-            if is_valid_llvm(&user_llvm_new) {
-                crate::home::print_legacy_warning("LLVM", &user_llvm_new);
-                return Some(user_llvm_new);
+            if let Some(llvm_prefix) = valid_llvm_prefix(&user_llvm_new) {
+                crate::home::print_legacy_warning("LLVM", &llvm_prefix);
+                return Some(llvm_prefix);
             }
         }
 
         let user_llvm_legacy = pecos_dir.join("llvm");
-        if is_valid_llvm(&user_llvm_legacy) {
-            crate::home::print_legacy_warning("LLVM", &user_llvm_legacy);
-            return Some(user_llvm_legacy);
+        if let Some(llvm_prefix) = valid_llvm_prefix(&user_llvm_legacy) {
+            crate::home::print_legacy_warning("LLVM", &llvm_prefix);
+            return Some(llvm_prefix);
         }
     }
 
     // 3. Check for project-local LLVM
     if let Some(root) = repo_root {
         let local_llvm = root.join("llvm");
-        if is_valid_llvm(&local_llvm) {
-            return Some(local_llvm);
+        if let Some(llvm_prefix) = valid_llvm_prefix(&local_llvm) {
+            return Some(llvm_prefix);
         }
     }
 
     // 4. Check system installations
     find_system_llvm()
+}
+
+fn valid_llvm_prefix(path: &Path) -> Option<PathBuf> {
+    if is_valid_llvm(path) {
+        return Some(path.to_path_buf());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let conda_library_prefix = path.join("Library");
+        if is_valid_llvm(&conda_library_prefix) {
+            return Some(conda_library_prefix);
+        }
+    }
+
+    None
 }
 
 /// Find the LLVM installation Cargo should use for this project.
@@ -405,11 +421,11 @@ pub fn print_llvm_not_found_error() {
 
     #[cfg(target_os = "windows")]
     {
-        eprintln!("Windows MSVC LLVM builds do not provide shared libLLVM.");
-        eprintln!("Use WSL2/Linux for the full HUGR test lane, or configure a full");
-        eprintln!("LLVM 21 package for targeted static LLVM builds:");
+        eprintln!("The official Windows LLVM installer is not sufficient for PECOS.");
+        eprintln!("Use scripts\\ci\\install-llvm-21-windows.ps1 for the conda-forge");
+        eprintln!("LLVM 21.1 toolchain, then configure its Library prefix:");
         eprintln!();
-        eprintln!("    {cmd} llvm configure C:\\path\\to\\llvm");
+        eprintln!("    {cmd} llvm configure %USERPROFILE%\\.pecos\\deps\\llvm-21.1\\Library");
         eprintln!();
     }
 

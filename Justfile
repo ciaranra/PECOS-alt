@@ -71,8 +71,9 @@ ci-env: _msvc-bootstrap
             {{pecos}} llvm configure "$(brew --prefix llvm@21)"
             ;;
         Windows*|MINGW*|MSYS*|CYGWIN*)
-            LLVM_PREFIX="${USERPROFILE:-$HOME}\\.pecos\\deps\\llvm-21.1"
-            powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/ci/install-llvm-21-windows.ps1 -InstallDir "$LLVM_PREFIX" -Version "$LLVM_RELEASE_VERSION"
+            LLVM_ENV_ROOT="${USERPROFILE:-$HOME}\\.pecos\\deps\\llvm-21.1"
+            LLVM_PREFIX="${LLVM_ENV_ROOT}\\Library"
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/ci/install-llvm-21-windows.ps1 -InstallDir "$LLVM_ENV_ROOT" -Version "$LLVM_RELEASE_VERSION"
             {{pecos}} llvm configure "$LLVM_PREFIX"
             ;;
         *)

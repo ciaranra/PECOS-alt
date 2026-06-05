@@ -42,10 +42,10 @@ The `install` command automatically:
 This is the **recommended approach** where PECOS can provide a verified shared
 LLVM package. On Debian/Ubuntu-compatible Linux distributions, PECOS downloads
 the apt.llvm.org LLVM 21 packages into `~/.pecos/deps/llvm-21.1/` without using
-`sudo`. On macOS, use Homebrew for LLVM 21. On Windows MSVC, LLVM does not
-provide the shared `libLLVM` target PECOS requires for the full workspace HUGR
-test lane; use WSL2/Linux for that lane, or configure a full LLVM package for
-targeted static LLVM builds.
+`sudo`. On macOS, use Homebrew for LLVM 21. On Windows MSVC, use the
+conda-forge helper in the Windows section below; it installs a full LLVM
+development environment under `~/.pecos/deps/llvm-21.1/` and configures
+`~/.pecos/deps/llvm-21.1/Library` as the LLVM prefix.
 
 This is a developer toolchain install: the CLI prints the install size/behavior
 and asks for confirmation before downloading. Use `--yes` to accept the prompt
@@ -92,11 +92,17 @@ Install LLVM 21.1 using your system's package manager, then configure PECOS:
 
 === "Windows"
     !!! warning "Windows LLVM Requirement"
-        The official LLVM Windows installer (`LLVM-*.exe`) is **toolchain-only** and lacks required development files (`llvm-config.exe` and headers). LLVM's MSVC builds also do not provide shared `libLLVM`, so `pecos rust test` / `just dev` with the full HUGR test lane is not supported on native Windows.
+        The official LLVM Windows installer (`LLVM-*.exe`) is **toolchain-only** and lacks required development files (`llvm-config.exe`, headers, and `libclang.dll`). Use a full LLVM development package built for the MSVC dynamic runtime.
 
-    **Recommended for full development tests:** Use WSL2/Linux and Option 1 above.
+    **Recommended for full development tests:** Use the PECOS conda-forge helper:
 
-    **Alternative for targeted static LLVM builds:** Download a full development package from:
+    ```powershell
+    .\scripts\ci\install-llvm-21-windows.ps1 -InstallDir "$env:USERPROFILE\.pecos\deps\llvm-21.1"
+    cargo run -p pecos-cli -- llvm configure "$env:USERPROFILE\.pecos\deps\llvm-21.1\Library"
+    cargo build --features llvm
+    ```
+
+    **Alternative:** Configure another full LLVM 21.1 development package that includes `llvm-config.exe`, headers, static MSVC libraries built against the dynamic runtime, and `libclang.dll`.
 
     - [bitgate/llvm-windows-full-builds](https://github.com/bitgate/llvm-windows-full-builds) (recommended)
     - [vovkos/llvm-package-windows](https://github.com/vovkos/llvm-package-windows)
@@ -297,13 +303,15 @@ this order:
 
 **Windows:**
 
-- Native Windows LLVM is static-only for PECOS's purposes
-- Use WSL2/Linux for the full HUGR test lane
-- For targeted static LLVM builds, configure a full development package with `pecos llvm configure C:\path\to\llvm`
+- The official LLVM installer is not sufficient for PECOS development builds
+- Use `scripts\ci\install-llvm-21-windows.ps1` for the conda-forge LLVM 21.1 toolchain
+- Configure `~\.pecos\deps\llvm-21.1\Library`, not the conda environment root
 
 ### Security
 
-All downloaded LLVM packages are verified with SHA256 checksums to ensure integrity.
+Linux managed packages are checked against apt metadata hashes. Windows helper
+packages are installed by micromamba from conda-forge, using conda package
+metadata and checksums.
 
 ## Troubleshooting
 

@@ -297,23 +297,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Windows CI uses the official LLVM development archive, which is
-          # static-only for MSVC. Keep this lane targeted so it still exercises
-          # LLVM without fanning out many static HUGR linker jobs at once.
-          cargo test --locked --workspace --release \
-            --exclude pecos-rslib \
-            --exclude pecos-rslib-cuda \
-            --exclude pecos-julia-ffi \
-            --exclude pecos-go-ffi \
-            --exclude pecos-rslib-exp \
-            --exclude pecos-rslib-llvm \
-            --exclude pecos-cuquantum \
-            --exclude pecos-cli \
-            --exclude pecos-decoders \
-            --exclude pecos-gpu-sims \
-            --exclude pecos-hugr-qis \
-            --exclude pecos-llvm
-          cargo test --locked -p pecos-cli --features=runtime --release
-          cargo test --locked -p pecos-llvm --release
-          cargo test --locked -p pecos-qis --no-default-features --features=llvm --release
-          cargo test --locked -p pecos-hugr-qis --release
+          cargo run --locked -p pecos-cli --release -- rust test

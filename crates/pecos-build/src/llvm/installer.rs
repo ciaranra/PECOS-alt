@@ -37,11 +37,12 @@ pub fn managed_install_unavailable_reason() -> Option<&'static str> {
     #[cfg(target_os = "windows")]
     {
         Some(
-            "PECOS-managed shared LLVM is not available on Windows MSVC because \
-             LLVM does not provide the libLLVM shared-library target there. Use \
-             WSL2/Linux for the full HUGR test lane, or configure a full LLVM 21 \
-             package for targeted static LLVM builds with `pecos llvm configure \
-             C:\\path\\to\\llvm`.",
+            "PECOS-managed LLVM is not implemented in the CLI on Windows yet. \
+             Use `scripts\\ci\\install-llvm-21-windows.ps1` to install the \
+             conda-forge LLVM 21.1 toolchain under `%USERPROFILE%\\.pecos\\deps`, \
+             then run `pecos llvm configure \
+             %USERPROFILE%\\.pecos\\deps\\llvm-21.1\\Library`, or configure \
+             your own full LLVM 21.1 install.",
         )
     }
 

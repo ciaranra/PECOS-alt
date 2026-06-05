@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
 
 if (-not $Version) {
     if ($env:LLVM_RELEASE_VERSION) {
@@ -14,12 +15,17 @@ if (-not $Version) {
     }
 }
 
-$ExpectedSha256 = "749d22f565fcd5718dbed06512572d0e5353b502c03fe1f7f17ee8b8aca21a47"
 $RequiredVersion = "21.1"
-$Asset = "clang+llvm-$Version-x86_64-pc-windows-msvc.tar.xz"
-$Url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$Version/$Asset"
-$LlvmConfig = Join-Path $InstallDir "bin\llvm-config.exe"
-$LlvmConfigReal = Join-Path $InstallDir "bin\llvm-config.real.exe"
+$MambaVersion = if ($env:MAMBA_VERSION) { $env:MAMBA_VERSION } else { "latest" }
+$MambaRoot = if ($env:MAMBA_ROOT_PREFIX) {
+    $env:MAMBA_ROOT_PREFIX
+}
+else {
+    Join-Path $env:USERPROFILE ".cache\pecos-micromamba"
+}
+$LlvmPrefix = Join-Path $InstallDir "Library"
+$LlvmConfig = Join-Path $LlvmPrefix "bin\llvm-config.exe"
+$Libclang = Join-Path $LlvmPrefix "bin\libclang.dll"
 
 function Find-SevenZip {
     foreach ($Name in @("7z.exe", "7zz.exe", "7za.exe")) {
@@ -49,129 +55,198 @@ function Find-SevenZip {
     return $null
 }
 
-function Get-Sha256Hex {
-    param([string]$Path)
+function Invoke-DownloadFile {
+    param(
+        [string]$Url,
+        [string]$Output
+    )
 
-    $Stream = [System.IO.File]::OpenRead($Path)
-    try {
-        $Sha256 = [System.Security.Cryptography.SHA256]::Create()
-        try {
-            return -join ($Sha256.ComputeHash($Stream) | ForEach-Object { $_.ToString("x2") })
+    $Curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($Curl) {
+        & $Curl.Source --fail --location --retry 5 --retry-delay 5 --output $Output $Url
+        if ($LASTEXITCODE -ne 0) {
+            throw "curl failed to download $Url with exit code $LASTEXITCODE"
         }
-        finally {
-            $Sha256.Dispose()
+    }
+    else {
+        Invoke-WebRequest -Uri $Url -OutFile $Output
+    }
+}
+
+function Expand-TarBz2 {
+    param(
+        [string]$Archive,
+        [string]$Destination
+    )
+
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+
+    $SevenZip = Find-SevenZip
+    if ($SevenZip) {
+        $Stage = Join-Path $Destination "_stage"
+        New-Item -ItemType Directory -Force -Path $Stage | Out-Null
+
+        & $SevenZip x -y -bb0 "-o$Stage" $Archive
+        if ($LASTEXITCODE -ne 0) {
+            throw "7-Zip failed to decompress $Archive with exit code $LASTEXITCODE"
+        }
+
+        $TarArchive = Get-ChildItem -Path $Stage -File -Filter "*.tar" | Select-Object -First 1
+        if (-not $TarArchive) {
+            throw "7-Zip did not produce a .tar payload from $Archive"
+        }
+
+        & $SevenZip x -y -bb0 "-o$Destination" $TarArchive.FullName
+        if ($LASTEXITCODE -ne 0) {
+            throw "7-Zip failed to extract $($TarArchive.Name) with exit code $LASTEXITCODE"
+        }
+
+        Remove-Item -Recurse -Force $Stage
+        return
+    }
+
+    $Tar = Get-Command tar.exe -ErrorAction SilentlyContinue
+    if (-not $Tar) {
+        throw "7-Zip or tar.exe is required to extract micromamba on Windows"
+    }
+
+    & $Tar.Source -xjf $Archive -C $Destination
+    if ($LASTEXITCODE -ne 0) {
+        throw "tar.exe failed to extract $Archive with exit code $LASTEXITCODE"
+    }
+}
+
+function Get-Micromamba {
+    param([string]$TempDir)
+
+    foreach ($Name in @("micromamba.exe", "micromamba")) {
+        $Command = Get-Command $Name -ErrorAction SilentlyContinue
+        if ($Command) {
+            return $Command.Source
+        }
+    }
+
+    $Url = "https://micro.mamba.pm/api/micromamba/win-64/$MambaVersion"
+    $Archive = Join-Path $TempDir "micromamba.tar.bz2"
+    $ExtractDir = Join-Path $TempDir "micromamba"
+
+    Write-Host "Downloading micromamba for win-64"
+    Invoke-DownloadFile -Url $Url -Output $Archive
+    Expand-TarBz2 -Archive $Archive -Destination $ExtractDir
+
+    $MambaBin = Join-Path $ExtractDir "Library\bin\micromamba.exe"
+    if (-not (Test-Path $MambaBin)) {
+        throw "micromamba.exe not found at $MambaBin after extraction"
+    }
+
+    return $MambaBin
+}
+
+function Test-LlvmInstall {
+    if (-not (Test-Path $LlvmConfig)) {
+        return $false
+    }
+
+    if (-not (Test-Path $Libclang)) {
+        return $false
+    }
+
+    try {
+        $FoundVersion = (& $LlvmConfig --version).Trim()
+        if (-not $FoundVersion.StartsWith($RequiredVersion)) {
+            return $false
+        }
+
+        $LibDir = (& $LlvmConfig --libdir).Trim()
+        if (-not (Test-Path $LibDir)) {
+            return $false
+        }
+
+        $StaticLibs = (& $LlvmConfig --libnames --link-static).Trim()
+        if ([string]::IsNullOrWhiteSpace($StaticLibs)) {
+            return $false
+        }
+    }
+    catch {
+        return $false
+    }
+
+    return $true
+}
+
+function Write-LlvmDiagnostics {
+    Write-Host "LLVM prefix: $LlvmPrefix"
+    if (Test-Path $LlvmConfig) {
+        & $LlvmConfig --version
+        & $LlvmConfig --shared-mode
+        & $LlvmConfig --libdir
+        & $LlvmConfig --libnames --link-static core
+        & $LlvmConfig --system-libs --link-static
+    }
+    else {
+        Write-Host "llvm-config.exe not found at $LlvmConfig"
+    }
+
+    if (Test-Path $Libclang) {
+        Write-Host "Found libclang: $Libclang"
+    }
+    else {
+        Write-Host "libclang.dll not found at $Libclang"
+    }
+}
+
+if (Test-LlvmInstall) {
+    $FoundVersion = (& $LlvmConfig --version).Trim()
+    Write-Host "conda-forge LLVM $FoundVersion already installed at $LlvmPrefix"
+    exit 0
+}
+
+if (Test-Path $InstallDir) {
+    Write-Host "Removing invalid or incompatible LLVM environment at $InstallDir"
+    Remove-Item -Recurse -Force $InstallDir
+}
+
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InstallDir) | Out-Null
+New-Item -ItemType Directory -Force -Path $MambaRoot | Out-Null
+
+$TempDir = Join-Path ([System.IO.Path]::GetTempPath()) "pecos-micromamba-$([System.Guid]::NewGuid())"
+New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
+
+try {
+    $MambaBin = Get-Micromamba -TempDir $TempDir
+
+    Write-Host "Installing conda-forge LLVM $Version, clang $Version, and libclang $Version to $InstallDir"
+    $OldMambaRoot = $env:MAMBA_ROOT_PREFIX
+    $env:MAMBA_ROOT_PREFIX = $MambaRoot
+    try {
+        & $MambaBin create `
+            -y `
+            -p $InstallDir `
+            --override-channels `
+            -c conda-forge `
+            "llvmdev=$Version" `
+            "clang=$Version" `
+            "libclang=$Version"
+        if ($LASTEXITCODE -ne 0) {
+            throw "micromamba failed to create LLVM environment with exit code $LASTEXITCODE"
         }
     }
     finally {
-        $Stream.Dispose()
-    }
-}
-
-function Install-LlvmConfigWrapper {
-    $WrapperSource = Join-Path $PSScriptRoot "llvm-config-wrapper.rs"
-    if (-not (Test-Path $WrapperSource)) {
-        throw "LLVM config wrapper source not found: $WrapperSource"
-    }
-
-    if (-not (Test-Path $LlvmConfigReal)) {
-        if (-not (Test-Path $LlvmConfig)) {
-            throw "llvm-config.exe not found at $LlvmConfig"
+        if ($null -eq $OldMambaRoot) {
+            Remove-Item Env:MAMBA_ROOT_PREFIX -ErrorAction SilentlyContinue
         }
-        Move-Item -Force -Path $LlvmConfig -Destination $LlvmConfigReal
-    }
-    elseif (Test-Path $LlvmConfig) {
-        Remove-Item -Force $LlvmConfig
-    }
-
-    $Rustc = Get-Command rustc.exe -ErrorAction SilentlyContinue
-    if (-not $Rustc) {
-        throw "rustc.exe is required to repair the LLVM Windows llvm-config system library output"
+        else {
+            $env:MAMBA_ROOT_PREFIX = $OldMambaRoot
+        }
     }
 
-    Write-Host "Installing PECOS llvm-config wrapper"
-    & $Rustc.Source --edition=2021 -O -o $LlvmConfig $WrapperSource
-    if ($LASTEXITCODE -ne 0) {
-        throw "rustc failed to build llvm-config wrapper with exit code $LASTEXITCODE"
+    if (-not (Test-LlvmInstall)) {
+        Write-LlvmDiagnostics
+        throw "conda-forge LLVM install did not provide usable LLVM $RequiredVersion static libraries and libclang"
     }
 
-    $SystemLibs = (& $LlvmConfig --system-libs --link-static).Trim()
-    $Libxml2Static = Join-Path $InstallDir "lib\libxml2s.lib"
-    if ((-not (Test-Path $Libxml2Static)) -and $SystemLibs -match "(^|\s)libxml2s\.lib($|\s)") {
-        throw "LLVM config wrapper did not filter missing libxml2s.lib from --system-libs"
-    }
-}
-
-if (Test-Path $LlvmConfig) {
-    $FoundVersion = (& $LlvmConfig --version).Trim()
-    if ($FoundVersion.StartsWith($RequiredVersion)) {
-        Install-LlvmConfigWrapper
-        Write-Host "LLVM $FoundVersion already installed at $InstallDir"
-        exit 0
-    }
-}
-
-$TempDir = Join-Path ([System.IO.Path]::GetTempPath()) "pecos-llvm-$([System.Guid]::NewGuid())"
-$Archive = Join-Path $TempDir $Asset
-$TarDir = Join-Path $TempDir "tar"
-$ExtractDir = Join-Path $TempDir "extract"
-
-New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
-New-Item -ItemType Directory -Force -Path $TarDir | Out-Null
-New-Item -ItemType Directory -Force -Path $ExtractDir | Out-Null
-
-try {
-    Write-Host "Downloading official LLVM $Version Windows development archive: $Asset"
-    $Curl = Get-Command curl.exe -ErrorAction SilentlyContinue
-    if ($Curl) {
-        & $Curl.Source --fail --location --retry 5 --retry-delay 5 --output $Archive $Url
-    }
-    else {
-        Invoke-WebRequest -Uri $Url -OutFile $Archive
-    }
-
-    $ActualSha256 = Get-Sha256Hex $Archive
-    if ($ActualSha256 -ne $ExpectedSha256) {
-        throw "SHA256 mismatch for $Asset. Expected $ExpectedSha256, got $ActualSha256"
-    }
-
-    $SevenZip = Find-SevenZip
-    if (-not $SevenZip) {
-        throw "7-Zip is required to extract $Asset on Windows. Windows tar.exe can hang for hours on this archive in CI; install 7-Zip or provide an existing LLVM 21.1 install."
-    }
-
-    Write-Host "Extracting compressed LLVM archive with $SevenZip"
-    & $SevenZip x -y -bb0 "-o$TarDir" $Archive
-    if ($LASTEXITCODE -ne 0) {
-        throw "7-Zip failed to decompress $Asset with exit code $LASTEXITCODE"
-    }
-
-    $TarArchive = Get-ChildItem -Path $TarDir -File -Filter "*.tar" | Select-Object -First 1
-    if (-not $TarArchive) {
-        throw "7-Zip did not produce a .tar payload from $Asset"
-    }
-
-    Write-Host "Extracting LLVM payload with $SevenZip"
-    & $SevenZip x -y -bb0 "-o$ExtractDir" $TarArchive.FullName
-    if ($LASTEXITCODE -ne 0) {
-        throw "7-Zip failed to extract $($TarArchive.Name) with exit code $LASTEXITCODE"
-    }
-
-    $PayloadRoots = @(Get-ChildItem -Path $ExtractDir -Directory)
-    if ($PayloadRoots.Count -ne 1) {
-        throw "Expected one LLVM payload directory in $ExtractDir, found $($PayloadRoots.Count)"
-    }
-    $PayloadDir = $PayloadRoots[0].FullName
-
-    if (Test-Path $InstallDir) {
-        Remove-Item -Recurse -Force $InstallDir
-    }
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InstallDir) | Out-Null
-    Move-Item -Path $PayloadDir -Destination $InstallDir
-
-    & $LlvmConfig --version
-    & $LlvmConfig --shared-mode
-    Install-LlvmConfigWrapper
-    Write-Host "Installed LLVM $Version to $InstallDir"
+    Write-LlvmDiagnostics
+    Write-Host "Installed conda-forge LLVM $Version to $LlvmPrefix"
 }
 finally {
     if (Test-Path $TempDir) {

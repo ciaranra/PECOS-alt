@@ -121,9 +121,9 @@ large toolchain install. `pecos install llvm` prints what it is about to install
 and asks for confirmation before downloading.
 
 On macOS, install Homebrew LLVM 21 (`brew install llvm@21`) and run
-`pecos llvm configure`. On native Windows MSVC, LLVM does not provide shared
-`libLLVM`; use WSL2/Linux for the full HUGR test lane, or configure a full LLVM
-development package for targeted static builds.
+`pecos llvm configure`. On native Windows MSVC, use
+`scripts\ci\install-llvm-21-windows.ps1` to install the conda-forge LLVM 21.1
+toolchain, then configure `~\.pecos\deps\llvm-21.1\Library`.
 
 `pecos rust test` requires shared LLVM for the workspace HUGR test lane. LLVM
 21.1 static test links can use multiple GB of RAM each, so PECOS fails early
@@ -231,8 +231,8 @@ cargo build -p pecos --features llvm
 ```
 
 On macOS use `brew install llvm@21 && pecos llvm configure`. On native Windows
-MSVC, use WSL2/Linux for the full HUGR test lane or configure a full LLVM 21
-package for targeted static builds.
+MSVC, use `scripts\ci\install-llvm-21-windows.ps1` and configure
+`~\.pecos\deps\llvm-21.1\Library`.
 
 Or using Justfile:
 ```bash
