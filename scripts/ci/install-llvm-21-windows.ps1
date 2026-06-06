@@ -26,6 +26,7 @@ else {
 $LlvmPrefix = Join-Path $InstallDir "Library"
 $LlvmConfig = Join-Path $LlvmPrefix "bin\llvm-config.exe"
 $LlvmBin = Join-Path $LlvmPrefix "bin"
+$LlvmLib = Join-Path $LlvmPrefix "lib"
 $Libclang = Join-Path $LlvmPrefix "bin\libclang.dll"
 
 function Find-SevenZip {
@@ -169,6 +170,13 @@ function Test-LlvmInstall {
         if ([string]::IsNullOrWhiteSpace($StaticLibs)) {
             return $false
         }
+
+        if ($StaticLibs -match "(^|\s)z\.lib($|\s)") {
+            $ZlibImportLib = Join-Path $LlvmLib "z.lib"
+            if (-not (Test-Path $ZlibImportLib)) {
+                return $false
+            }
+        }
     }
     catch {
         return $false
@@ -243,7 +251,7 @@ New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
 try {
     $MambaBin = Get-Micromamba -TempDir $TempDir
 
-    Write-Host "Installing conda-forge LLVM $Version, clang $Version, and libclang $Version to $InstallDir"
+    Write-Host "Installing conda-forge LLVM $Version, clang $Version, libclang $Version, and zlib to $InstallDir"
     $OldMambaRoot = $env:MAMBA_ROOT_PREFIX
     $env:MAMBA_ROOT_PREFIX = $MambaRoot
     try {
@@ -254,7 +262,8 @@ try {
             -c conda-forge `
             "llvmdev=$Version" `
             "clang=$Version" `
-            "libclang=$Version"
+            "libclang=$Version" `
+            "zlib"
         if ($LASTEXITCODE -ne 0) {
             throw "micromamba failed to create LLVM environment with exit code $LASTEXITCODE"
         }
