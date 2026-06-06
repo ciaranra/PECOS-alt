@@ -25,6 +25,7 @@ else {
 }
 $LlvmPrefix = Join-Path $InstallDir "Library"
 $LlvmConfig = Join-Path $LlvmPrefix "bin\llvm-config.exe"
+$LlvmBin = Join-Path $LlvmPrefix "bin"
 $Libclang = Join-Path $LlvmPrefix "bin\libclang.dll"
 
 function Find-SevenZip {
@@ -143,6 +144,8 @@ function Get-Micromamba {
 }
 
 function Test-LlvmInstall {
+    Repair-LibclangForBindgen
+
     if (-not (Test-Path $LlvmConfig)) {
         return $false
     }
@@ -174,6 +177,27 @@ function Test-LlvmInstall {
     return $true
 }
 
+function Repair-LibclangForBindgen {
+    if (Test-Path $Libclang) {
+        return
+    }
+
+    if (-not (Test-Path $LlvmBin)) {
+        return
+    }
+
+    $PackagedLibclang = Get-ChildItem -Path $LlvmBin -File -Filter "libclang-*.dll" |
+        Sort-Object Name |
+        Select-Object -First 1
+
+    if (-not $PackagedLibclang) {
+        return
+    }
+
+    Write-Host "Creating bindgen-compatible libclang.dll from $($PackagedLibclang.Name)"
+    Copy-Item -Force -Path $PackagedLibclang.FullName -Destination $Libclang
+}
+
 function Write-LlvmDiagnostics {
     Write-Host "LLVM prefix: $LlvmPrefix"
     if (Test-Path $LlvmConfig) {
@@ -192,6 +216,10 @@ function Write-LlvmDiagnostics {
     }
     else {
         Write-Host "libclang.dll not found at $Libclang"
+        if (Test-Path $LlvmBin) {
+            Get-ChildItem -Path $LlvmBin -File -Filter "*clang*.dll" |
+                ForEach-Object { Write-Host "  candidate: $($_.FullName)" }
+        }
     }
 }
 

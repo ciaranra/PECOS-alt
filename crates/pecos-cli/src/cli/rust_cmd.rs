@@ -98,6 +98,13 @@ fn reject_static_llvm_workspace_test() -> Result<()> {
         return Ok(());
     }
 
+    if cfg!(target_os = "windows") && matches!(link_mode, LlvmLinkMode::Static) {
+        println!(
+            "Windows MSVC uses static LLVM libraries because llvm-sys does not support dynamic LLVM linking on this target."
+        );
+        return Ok(());
+    }
+
     let mode = if matches!(link_mode, LlvmLinkMode::Static) {
         "static"
     } else {
