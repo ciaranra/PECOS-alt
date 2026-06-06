@@ -86,7 +86,7 @@ function Expand-TarBz2 {
         $Stage = Join-Path $Destination "_stage"
         New-Item -ItemType Directory -Force -Path $Stage | Out-Null
 
-        & $SevenZip x -y -bb0 "-o$Stage" $Archive
+        & $SevenZip x -y -bb0 "-o$Stage" $Archive | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw "7-Zip failed to decompress $Archive with exit code $LASTEXITCODE"
         }
@@ -96,7 +96,7 @@ function Expand-TarBz2 {
             throw "7-Zip did not produce a .tar payload from $Archive"
         }
 
-        & $SevenZip x -y -bb0 "-o$Destination" $TarArchive.FullName
+        & $SevenZip x -y -bb0 "-o$Destination" $TarArchive.FullName | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw "7-Zip failed to extract $($TarArchive.Name) with exit code $LASTEXITCODE"
         }
@@ -110,7 +110,7 @@ function Expand-TarBz2 {
         throw "7-Zip or tar.exe is required to extract micromamba on Windows"
     }
 
-    & $Tar.Source -xjf $Archive -C $Destination
+    & $Tar.Source -xjf $Archive -C $Destination | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "tar.exe failed to extract $Archive with exit code $LASTEXITCODE"
     }
