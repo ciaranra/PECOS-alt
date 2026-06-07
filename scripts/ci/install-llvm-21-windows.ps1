@@ -166,15 +166,20 @@ function Test-LlvmInstall {
             return $false
         }
 
+        Repair-LlvmSystemLibsForMsvc
+
         $StaticLibs = (& $LlvmConfig --libnames --link-static).Trim()
         if ([string]::IsNullOrWhiteSpace($StaticLibs)) {
             return $false
         }
 
-        if ($StaticLibs -match "(^|\s)z\.lib($|\s)") {
-            $ZlibImportLib = Join-Path $LlvmLib "z.lib"
-            if (-not (Test-Path $ZlibImportLib)) {
-                return $false
+        $SystemLibs = (& $LlvmConfig --system-libs --link-static).Trim()
+        foreach ($LibName in @("z.lib", "zstd.dll.lib", "xml2.lib")) {
+            if ($SystemLibs -match "(^|\s)$([regex]::Escape($LibName))($|\s)") {
+                $ImportLib = Join-Path $LlvmLib $LibName
+                if (-not (Test-Path $ImportLib)) {
+                    return $false
+                }
             }
         }
     }
@@ -183,6 +188,24 @@ function Test-LlvmInstall {
     }
 
     return $true
+}
+
+function Repair-LlvmSystemLibsForMsvc {
+    if (-not (Test-Path $LlvmLib)) {
+        return
+    }
+
+    $ZstdDllImportLib = Join-Path $LlvmLib "zstd.dll.lib"
+    if (-not (Test-Path $ZstdDllImportLib)) {
+        foreach ($CandidateName in @("zstd.lib", "libzstd.lib")) {
+            $Candidate = Join-Path $LlvmLib $CandidateName
+            if (Test-Path $Candidate) {
+                Write-Host "Creating LLVM-compatible zstd.dll.lib from $CandidateName"
+                Copy-Item -Force -Path $Candidate -Destination $ZstdDllImportLib
+                break
+            }
+        }
+    }
 }
 
 function Repair-LibclangForBindgen {
@@ -251,7 +274,7 @@ New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
 try {
     $MambaBin = Get-Micromamba -TempDir $TempDir
 
-    Write-Host "Installing conda-forge LLVM $Version, clang $Version, libclang $Version, and zlib to $InstallDir"
+    Write-Host "Installing conda-forge LLVM $Version, clang $Version, libclang $Version, zlib, and libxml2-devel to $InstallDir"
     $OldMambaRoot = $env:MAMBA_ROOT_PREFIX
     $env:MAMBA_ROOT_PREFIX = $MambaRoot
     try {
@@ -263,7 +286,8 @@ try {
             "llvmdev=$Version" `
             "clang=$Version" `
             "libclang=$Version" `
-            "zlib"
+            "zlib" `
+            "libxml2-devel"
         if ($LASTEXITCODE -ne 0) {
             throw "micromamba failed to create LLVM environment with exit code $LASTEXITCODE"
         }
