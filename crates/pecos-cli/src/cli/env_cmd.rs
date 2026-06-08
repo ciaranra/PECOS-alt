@@ -24,12 +24,14 @@
 //!   pecos env --github-actions  # write GitHub Actions env/path files
 
 use std::collections::BTreeMap;
-use std::ffi::OsString;
 use std::fmt::Write;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write as IoWrite;
 use std::path::{Path, PathBuf};
+
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
+use std::ffi::OsString;
 
 use pecos_build::Result;
 use pecos_build::errors::Error;
@@ -155,6 +157,7 @@ fn add_llvm_runtime_library_path(_env: &mut BTreeMap<String, String>, _libdir: &
     // Windows LLVM DLLs are expected in bin/, which is already prepended to PATH.
 }
 
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 fn prepend_path_env(env: &mut BTreeMap<String, String>, key: &str, first: &Path) {
     let current = env
         .get(key)
