@@ -319,7 +319,7 @@ mod tests {
 
         let llvm_prefix = Path::new("/opt/pecos/llvm-21.1");
         let llvm_prefix_str = llvm_prefix.display().to_string();
-        let llvm_bin_str = llvm_prefix.join("bin").display().to_string();
+        let llvm_bin_str = pecos_build::llvm::path_to_env_string(&llvm_prefix.join("bin"));
 
         let mut env = BTreeMap::new();
         env.insert(LLVM_SYS_PREFIX_ENV.to_string(), llvm_prefix_str.clone());
