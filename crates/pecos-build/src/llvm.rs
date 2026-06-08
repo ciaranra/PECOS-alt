@@ -36,6 +36,41 @@ pub const REQUIRED_VERSION: &str = "21.1";
 /// Cargo/llvm-sys environment variable for the required LLVM version.
 pub const LLVM_SYS_PREFIX_ENV: &str = "LLVM_SYS_211_PREFIX";
 
+/// Convert a path into a stable string for build environment variables and
+/// Cargo config values.
+///
+/// Windows `canonicalize()` returns verbatim paths such as `\\?\C:\...`.
+/// Most Rust and Windows APIs accept those, but bindgen's libclang loader does
+/// not treat them as valid DLL search directories. Cargo config also does not
+/// need the verbatim prefix, so strip it while keeping the path absolute.
+#[must_use]
+pub fn path_to_env_string(path: &Path) -> String {
+    normalize_path_string(&path.to_string_lossy())
+}
+
+/// Normalize a stored path string before turning it back into a [`PathBuf`].
+#[must_use]
+pub fn normalize_path_string(path: &str) -> String {
+    let path = path.replace('\\', "/");
+
+    if let Some(rest) = path.strip_prefix("//?/UNC/") {
+        return format!("//{rest}");
+    }
+
+    if let Some(rest) = path.strip_prefix("//?/")
+        && is_windows_drive_path(rest)
+    {
+        return rest.to_string();
+    }
+
+    path
+}
+
+fn is_windows_drive_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/'
+}
+
 /// Return whether an `llvm-config --version` string is compatible with PECOS.
 #[must_use]
 pub fn is_required_llvm_version(version: &str) -> bool {
@@ -546,5 +581,37 @@ mod tests {
         assert!(!is_required_llvm_version("21.0.9"));
         assert!(!is_required_llvm_version("21.10.0"));
         assert!(!is_required_llvm_version("22.0.0"));
+    }
+
+    #[test]
+    fn normalize_path_string_strips_windows_verbatim_drive_prefix() {
+        assert_eq!(
+            normalize_path_string(r"\\?\C:\Users\runneradmin\.pecos\deps\llvm-21.1\Library"),
+            "C:/Users/runneradmin/.pecos/deps/llvm-21.1/Library"
+        );
+        assert_eq!(
+            normalize_path_string("//?/C:/Users/runneradmin/.pecos/deps/llvm-21.1/Library"),
+            "C:/Users/runneradmin/.pecos/deps/llvm-21.1/Library"
+        );
+    }
+
+    #[test]
+    fn normalize_path_string_strips_windows_verbatim_unc_prefix() {
+        assert_eq!(
+            normalize_path_string(r"\\?\UNC\server\share\llvm-21.1"),
+            "//server/share/llvm-21.1"
+        );
+    }
+
+    #[test]
+    fn normalize_path_string_leaves_non_verbatim_paths_alone() {
+        assert_eq!(
+            normalize_path_string("/home/ciaranra/.pecos/deps/llvm-21.1"),
+            "/home/ciaranra/.pecos/deps/llvm-21.1"
+        );
+        assert_eq!(
+            normalize_path_string("//server/share/llvm-21.1"),
+            "//server/share/llvm-21.1"
+        );
     }
 }

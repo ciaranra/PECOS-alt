@@ -45,7 +45,7 @@ pub fn collect_env() -> BTreeMap<String, String> {
 
     // LLVM
     if let Some(llvm_path) = pecos_build::llvm::find_configured_or_detected_llvm(None) {
-        let llvm_str = llvm_path.display().to_string();
+        let llvm_str = pecos_build::llvm::path_to_env_string(&llvm_path);
         env.insert("PECOS_LLVM".into(), llvm_str.clone());
         env.insert(LLVM_SYS_PREFIX_ENV.into(), llvm_str);
 
@@ -68,7 +68,10 @@ pub fn collect_env() -> BTreeMap<String, String> {
             }
 
             if let Some(libclang_dir) = find_libclang_dir(&llvm_path, &libdir) {
-                env.insert("LIBCLANG_PATH".into(), libclang_dir.display().to_string());
+                env.insert(
+                    "LIBCLANG_PATH".into(),
+                    pecos_build::llvm::path_to_env_string(&libclang_dir),
+                );
             }
         }
     }
@@ -276,7 +279,11 @@ fn write_github_actions_files(
         .create(true)
         .open(github_path)?;
     if let Some(llvm_path) = env.get(LLVM_SYS_PREFIX_ENV) {
-        writeln!(path_file, "{}", Path::new(llvm_path).join("bin").display())?;
+        writeln!(
+            path_file,
+            "{}",
+            pecos_build::llvm::path_to_env_string(&Path::new(llvm_path).join("bin"))
+        )?;
     }
 
     Ok(())

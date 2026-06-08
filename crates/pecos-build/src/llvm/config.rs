@@ -3,7 +3,7 @@
 use crate::errors::{Error, Result};
 use crate::llvm::{
     LLVM_SYS_PREFIX_ENV, REQUIRED_VERSION, find_cargo_project_root, find_llvm, get_pecos_command,
-    get_repo_root_from_manifest, is_valid_llvm,
+    get_repo_root_from_manifest, is_valid_llvm, normalize_path_string, path_to_env_string,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -108,14 +108,14 @@ pub fn read_configured_llvm_path() -> Option<PathBuf> {
 
     // Simple string: LLVM_SYS_211_PREFIX = "/path"
     if let Some(s) = entry.as_str() {
-        return Some(PathBuf::from(s));
+        return Some(PathBuf::from(normalize_path_string(s)));
     }
 
     // Inline table: LLVM_SYS_211_PREFIX = { value = "/path", force = true }
     if let Some(t) = entry.as_table()
         && let Some(v) = t.get("value").and_then(|v| v.as_str())
     {
-        return Some(PathBuf::from(v));
+        return Some(PathBuf::from(normalize_path_string(v)));
     }
 
     None
@@ -237,7 +237,7 @@ pub fn auto_configure_llvm(project_root: Option<PathBuf>) -> Result<PathBuf> {
 /// cannot be written.
 pub fn write_cargo_config(project_root: &Path, llvm_path: &Path, force: bool) -> Result<()> {
     // Forward slashes keep the value backslash-escape-free in TOML.
-    let llvm_path_str = llvm_path.to_string_lossy().replace('\\', "/");
+    let llvm_path_str = path_to_env_string(llvm_path);
     let mut cfg = crate::cargo_config::CargoConfig::open(project_root)?;
     cfg.set_env(LLVM_SYS_PREFIX_ENV, &llvm_path_str, force)?;
     cfg.save()?;
