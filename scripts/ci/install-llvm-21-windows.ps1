@@ -65,13 +65,29 @@ function Invoke-DownloadFile {
 
     $Curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     if ($Curl) {
-        & $Curl.Source --fail --location --retry 5 --retry-delay 5 --output $Output $Url
+        & $Curl.Source --fail --location --retry 8 --retry-all-errors --retry-delay 5 --retry-max-time 300 --connect-timeout 30 --output $Output $Url
         if ($LASTEXITCODE -ne 0) {
             throw "curl failed to download $Url with exit code $LASTEXITCODE"
         }
     }
     else {
-        Invoke-WebRequest -Uri $Url -OutFile $Output
+        $LastError = $null
+        for ($Attempt = 1; $Attempt -le 8; $Attempt++) {
+            try {
+                Invoke-WebRequest -Uri $Url -OutFile $Output -TimeoutSec 300
+                return
+            }
+            catch {
+                $LastError = $_
+                if ($Attempt -eq 8) {
+                    break
+                }
+
+                Start-Sleep -Seconds 5
+            }
+        }
+
+        throw "Invoke-WebRequest failed to download $Url after 8 attempts: $LastError"
     }
 }
 
