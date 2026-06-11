@@ -591,6 +591,9 @@ impl<S> GateOverrides<S> {
 pub enum ExecutionError {
     /// No decomposition found for a gate.
     NoDecomposition { gate_id: GateId },
+    /// A rotation gate with a non-Clifford angle reached a Clifford-only
+    /// backend with no rotation support and no registered decomposition.
+    NonCliffordAngle { gate_id: GateId },
     /// Maximum decomposition depth exceeded (possible infinite recursion).
     MaxDecompositionDepthExceeded,
 }
@@ -601,6 +604,15 @@ impl std::fmt::Display for ExecutionError {
             Self::NoDecomposition { gate_id } => {
                 write!(f, "No decomposition found for gate ID {}", gate_id.0)
             }
+            Self::NonCliffordAngle { gate_id } => {
+                write!(
+                    f,
+                    "Rotation gate ID {} has a non-Clifford angle, which this Clifford-only \
+                     backend cannot execute; use a rotation-capable backend such as \
+                     state_vector()",
+                    gate_id.0
+                )
+            }
             Self::MaxDecompositionDepthExceeded => {
                 write!(f, "Maximum decomposition depth exceeded")
             }
@@ -609,6 +621,32 @@ impl std::fmt::Display for ExecutionError {
 }
 
 impl std::error::Error for ExecutionError {}
+
+/// Outcome of the Clifford-rotation execution attempt.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CliffordRotationAttempt {
+    /// The gate executed via Clifford-angle decomposition.
+    Executed,
+    /// The gate is a rotation but the angle is not Clifford.
+    NonCliffordAngle,
+    /// The gate is not a rotation this path handles.
+    NotARotation,
+}
+
+/// Upgrade a missing-decomposition error to the more specific
+/// non-Clifford-angle error when that is the actual cause.
+fn upgrade_rotation_error(
+    error: ExecutionError,
+    rotation_attempt: CliffordRotationAttempt,
+) -> ExecutionError {
+    match (error, rotation_attempt) {
+        (
+            ExecutionError::NoDecomposition { gate_id },
+            CliffordRotationAttempt::NonCliffordAngle,
+        ) => ExecutionError::NonCliffordAngle { gate_id },
+        (error, _) => error,
+    }
+}
 
 /// Stateless quantum simulation runner.
 ///
@@ -1202,18 +1240,22 @@ impl<S: CliffordGateable> CircuitRunner<S> {
                 }
 
                 // Execute through unified precedence chain
+                let mut rotation_attempt = CliffordRotationAttempt::NotARotation;
                 let executed =
                     self.try_execute_override(sim, gate_id, qubits, command.angles.as_slice())
                         || Self::try_execute_clifford(sim, gate_id, qubits)
                         || self.rotation_executor.is_some_and(|executor| {
                             executor(sim, gate_id, command.angles.as_slice(), qubits)
                         })
-                        || Self::try_execute_clifford_rotation(
-                            sim,
-                            gate_id,
-                            qubits,
-                            command.angles.as_slice(),
-                        );
+                        || {
+                            rotation_attempt = Self::try_execute_clifford_rotation(
+                                sim,
+                                gate_id,
+                                qubits,
+                                command.angles.as_slice(),
+                            );
+                            rotation_attempt == CliffordRotationAttempt::Executed
+                        };
 
                 if !executed {
                     self.execute_via_decomposition(
@@ -1222,7 +1264,8 @@ impl<S: CliffordGateable> CircuitRunner<S> {
                         qubits,
                         command.angles.as_slice(),
                         0,
-                    )?;
+                    )
+                    .map_err(|e| upgrade_rotation_error(e, rotation_attempt))?;
                 }
 
                 self.dispatch_after_gate_for_id(
@@ -1395,15 +1438,21 @@ impl<S: CliffordGateable> CircuitRunner<S> {
         }
 
         // Try execution in order of precedence
+        let mut rotation_attempt = CliffordRotationAttempt::NotARotation;
         let executed = self.try_execute_override(sim, gate_id, qubits, angles)
             || Self::try_execute_clifford(sim, gate_id, qubits)
             || self
                 .rotation_executor
                 .is_some_and(|executor| executor(sim, gate_id, angles, qubits))
-            || Self::try_execute_clifford_rotation(sim, gate_id, qubits, angles);
+            || {
+                rotation_attempt =
+                    Self::try_execute_clifford_rotation(sim, gate_id, qubits, angles);
+                rotation_attempt == CliffordRotationAttempt::Executed
+            };
 
         if !executed {
-            self.execute_via_decomposition(sim, gate_id, qubits, angles, depth)?;
+            self.execute_via_decomposition(sim, gate_id, qubits, angles, depth)
+                .map_err(|e| upgrade_rotation_error(e, rotation_attempt))?;
         }
 
         // Emit after-gate noise event
@@ -1540,28 +1589,34 @@ impl<S: CliffordGateable> CircuitRunner<S> {
     /// `CliffordRotation` decomposition (the same path the pecos-engines
     /// stack uses), so Clifford backends run e.g. QASM's `s`/`u1(pi/2)`
     /// compiled to `rz(k*pi/2)` without a rotation-capable simulator.
-    /// Non-Clifford angles fall through to the decomposition registry.
+    /// Non-Clifford angles fall through to the decomposition registry;
+    /// the attempt outcome distinguishes them so the final error can point
+    /// at a rotation-capable backend instead of a missing decomposition.
     fn try_execute_clifford_rotation(
         sim: &mut S,
         gate_id: GateId,
         qubits: &[QubitId],
         angles: &[Angle64],
-    ) -> bool {
+    ) -> CliffordRotationAttempt {
         use pecos_simulators::clifford_rotation::CliffordRotation;
         let Some(gate_type) = gate_id.try_to_gate_type() else {
-            return false;
+            return CliffordRotationAttempt::NotARotation;
         };
         let [angle] = angles else {
-            return false;
+            return CliffordRotationAttempt::NotARotation;
         };
-        match gate_type {
-            GateType::RZ => sim.try_rz(*angle, qubits).is_ok(),
-            GateType::RX => sim.try_rx(*angle, qubits).is_ok(),
-            GateType::RY => sim.try_ry(*angle, qubits).is_ok(),
-            GateType::RZZ => sim.try_rzz(*angle, &flat_to_pairs(qubits)).is_ok(),
-            GateType::RXX => sim.try_rxx(*angle, &flat_to_pairs(qubits)).is_ok(),
-            GateType::RYY => sim.try_ryy(*angle, &flat_to_pairs(qubits)).is_ok(),
-            _ => false,
+        let result = match gate_type {
+            GateType::RZ => sim.try_rz(*angle, qubits).map(|_| ()),
+            GateType::RX => sim.try_rx(*angle, qubits).map(|_| ()),
+            GateType::RY => sim.try_ry(*angle, qubits).map(|_| ()),
+            GateType::RZZ => sim.try_rzz(*angle, &flat_to_pairs(qubits)).map(|_| ()),
+            GateType::RXX => sim.try_rxx(*angle, &flat_to_pairs(qubits)).map(|_| ()),
+            GateType::RYY => sim.try_ryy(*angle, &flat_to_pairs(qubits)).map(|_| ()),
+            _ => return CliffordRotationAttempt::NotARotation,
+        };
+        match result {
+            Ok(()) => CliffordRotationAttempt::Executed,
+            Err(_) => CliffordRotationAttempt::NonCliffordAngle,
         }
     }
 
@@ -3056,6 +3111,27 @@ mod tests {
             result.unwrap_err(),
             ExecutionError::NoDecomposition { .. }
         ));
+    }
+
+    #[test]
+    fn test_non_clifford_angle_gets_specific_error() {
+        // rz with an arbitrary angle on a Clifford-only backend must point
+        // the user at a rotation-capable backend, not at a missing
+        // decomposition.
+        let circuit = crate::command::CommandBuilder::new()
+            .pz(&[0])
+            .rz(&[0], Angle64::from_radians(0.123))
+            .mz(&[0])
+            .build();
+
+        let mut state = SparseStab::new(1);
+        let mut runner = CircuitRunner::<SparseStab>::new();
+
+        let err = runner
+            .apply_circuit(&mut state, &circuit)
+            .expect_err("non-Clifford angle must error");
+        assert!(matches!(err, ExecutionError::NonCliffordAngle { .. }));
+        assert!(err.to_string().contains("state_vector()"));
     }
 
     // --- apply_gate (interpreter mode) tests ---

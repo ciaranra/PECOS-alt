@@ -1035,15 +1035,26 @@ impl PySimNeoBuilder {
 
         // Bridge Python callables into Fn closures. Errors cannot propagate
         // through the closure signature, so capture the first one and check
-        // after the run.
+        // after the run. After an error, the closures stop calling Python
+        // and report every sample as a failure, which trips the algorithm's
+        // all-samples-failed termination at the end of the current level —
+        // bounding the wasted work without changing the library API.
         let captured_err: Arc<Mutex<Option<PyErr>>> = Arc::new(Mutex::new(None));
         let bits_of = |outcomes: &MeasurementOutcomes| -> Vec<u8> {
             outcomes.iter().map(|o| u8::from(o.outcome)).collect()
+        };
+        let has_err = |slot: &Arc<Mutex<Option<PyErr>>>| {
+            slot.lock()
+                .expect("subset callable error slot poisoned")
+                .is_some()
         };
 
         let score_fn = score.clone_ref(py);
         let score_err = Arc::clone(&captured_err);
         let score_closure = move |outcomes: &MeasurementOutcomes| -> f64 {
+            if has_err(&score_err) {
+                return 0.0;
+            }
             Python::attach(|py| {
                 match score_fn
                     .call1(py, (bits_of(outcomes),))
@@ -1064,6 +1075,10 @@ impl PySimNeoBuilder {
         let failure_fn = failure.clone_ref(py);
         let failure_err = Arc::clone(&captured_err);
         let failure_closure = move |outcomes: &MeasurementOutcomes| -> bool {
+            if has_err(&failure_err) {
+                // Steer the run to its all-failed termination condition.
+                return true;
+            }
             Python::attach(|py| {
                 match failure_fn
                     .call1(py, (bits_of(outcomes),))
@@ -1075,7 +1090,7 @@ impl PySimNeoBuilder {
                             .lock()
                             .expect("subset callable error slot poisoned")
                             .get_or_insert(e);
-                        false
+                        true
                     }
                 }
             })
