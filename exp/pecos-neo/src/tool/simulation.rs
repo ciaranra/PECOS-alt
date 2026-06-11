@@ -119,6 +119,7 @@ use crate::outcome::{MeasurementOutcomes, RegisterMap};
 use crate::program::{CommandSource, DynProgramRunner, ProgramRunner, StaticProgram};
 use crate::runner::{EventHandlers, GateOverrides};
 use crate::sampling::importance_runner::ImportanceSamplingRunner;
+use crate::sampling::path::{PathEnumerator, PathExplorer};
 use crate::sampling::subset::{SubsetConfig, SubsetResult, SubsetSimulation};
 use pecos_core::rng::RngManageable;
 use pecos_core::rng::rng_manageable::derive_seed;
@@ -802,6 +803,8 @@ impl Default for SimConfig {
 pub struct ImportanceSamplingBuilder {
     /// Number of (boosted) trials to run.
     shots: usize,
+    /// Number of parallel workers (1 = sequential).
+    workers: usize,
     /// Single-qubit gate error rate (true distribution).
     p1: f64,
     /// Two-qubit gate error rate (true distribution).
@@ -820,11 +823,29 @@ impl ImportanceSamplingBuilder {
     pub fn new(shots: usize) -> Self {
         Self {
             shots,
+            workers: 1,
             p1: 0.001,
             p2: 0.01,
             p_meas: 0.001,
             boost: 10.0,
         }
+    }
+
+    /// Set the number of parallel workers (1 = sequential).
+    ///
+    /// Trials are seeded per global shot index, so results are identical
+    /// for any worker count.
+    #[must_use]
+    pub fn workers(mut self, workers: usize) -> Self {
+        self.workers = workers;
+        self
+    }
+
+    /// Set the worker count from available parallelism.
+    #[must_use]
+    pub fn auto_workers(mut self) -> Self {
+        self.workers = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        self
     }
 
     /// Set the single-qubit gate error rate.
@@ -1020,6 +1041,73 @@ pub fn monte_carlo(shots: usize) -> MonteCarloBuilder {
     MonteCarloBuilder { shots, workers: 1 }
 }
 
+/// Builder for the path enumeration sampling strategy.
+///
+/// Created by [`path_enumeration()`].
+#[derive(Debug, Clone)]
+pub struct PathEnumerationBuilder {
+    max_measurements: usize,
+}
+
+impl From<PathEnumerationBuilder> for Sampling {
+    fn from(builder: PathEnumerationBuilder) -> Self {
+        Sampling::PathEnumeration { config: builder }
+    }
+}
+
+/// Create a path enumeration strategy covering up to `max_measurements`
+/// random measurement branches.
+///
+/// Instead of sampling, this systematically enumerates the measurement
+/// branches of a (noiseless) Clifford circuit: every random measurement
+/// splits the execution into two equal-probability paths. Each distinct
+/// realized path becomes one entry in `SimulationResults::outcomes`, with
+/// its exact probability in `SimulationResults::weights`
+/// (`2^-{number of random measurements}` along that path; deterministic
+/// measurements do not branch).
+///
+/// If `max_measurements` covers every random measurement in the circuit,
+/// the enumeration is complete and the weights sum to 1. If the circuit
+/// has more random measurements than `max_measurements`, uncovered
+/// branches default to outcome 0 and the weights sum to less than 1.
+///
+/// Requires a static circuit on the `sparse_stab()` backend with no
+/// `.noise()` (noise makes branching stochastic beyond measurements);
+/// checked at `.build()`. The rerun override `Simulation::shots()` has no
+/// effect on enumeration size.
+///
+/// # Example
+///
+/// ```no_run
+/// use pecos_neo::tool::{path_enumeration, sim_neo, sparse_stab};
+/// use pecos_neo::prelude::*;
+///
+/// let circuit = CommandBuilder::new()
+///     .pz(&[0, 1])
+///     .h(&[0])
+///     .cx(&[(0, 1)])
+///     .mz(&[0, 1])
+///     .build();
+///
+/// let results = sim_neo(circuit)
+///     .quantum(sparse_stab())
+///     .sampling(path_enumeration(1))
+///     .run();
+///
+/// // Two paths (00 and 11), each with probability 0.5.
+/// for (outcome, weight) in results
+///     .outcomes
+///     .iter()
+///     .zip(results.weights.as_ref().unwrap())
+/// {
+///     println!("p = {:.3}: {:?}", weight.weight(), outcome);
+/// }
+/// ```
+#[must_use]
+pub fn path_enumeration(max_measurements: usize) -> PathEnumerationBuilder {
+    PathEnumerationBuilder { max_measurements }
+}
+
 /// Score function for subset simulation: how "close" an outcome is to the
 /// failure event (higher = closer).
 pub type SubsetScoreFn = Arc<dyn Fn(&MeasurementOutcomes) -> f64 + Send + Sync>;
@@ -1212,6 +1300,17 @@ pub enum Sampling {
         /// Configuration for subset simulation.
         config: SubsetSimulationBuilder,
     },
+
+    /// Exhaustive enumeration of measurement branches (noiseless circuits).
+    ///
+    /// Each distinct realized path becomes one outcome entry with its exact
+    /// probability as the weight.
+    ///
+    /// Use the [`path_enumeration()`] builder function to create this variant.
+    PathEnumeration {
+        /// Configuration for path enumeration.
+        config: PathEnumerationBuilder,
+    },
 }
 
 impl std::fmt::Debug for Sampling {
@@ -1230,6 +1329,10 @@ impl std::fmt::Debug for Sampling {
                 .debug_struct("SubsetSimulation")
                 .field("config", config)
                 .finish(),
+            Self::PathEnumeration { config } => f
+                .debug_struct("PathEnumeration")
+                .field("config", config)
+                .finish(),
         }
     }
 }
@@ -1238,13 +1341,16 @@ impl Sampling {
     /// Number of shots/trials this strategy will run.
     ///
     /// For subset simulation this is the samples per level; the total
-    /// sample count depends on how many levels the run needs.
+    /// sample count depends on how many levels the run needs. For path
+    /// enumeration this is the number of enumerated forced paths
+    /// (`2^max_measurements`); distinct realized paths may be fewer.
     #[must_use]
     pub fn shots(&self) -> usize {
         match self {
             Self::MonteCarlo { shots, .. } => *shots,
             Self::ImportanceSampling { config } => config.shots(),
             Self::SubsetSimulation { config } => config.samples_per_level,
+            Self::PathEnumeration { config } => 1usize << config.max_measurements,
         }
     }
 }
@@ -2421,6 +2527,39 @@ impl SimNeoBuilder {
             QuantumBackend::SparseStab
         });
 
+        // Configuration/backend mismatches are knowable now; fail at build
+        // instead of at startup. The startup-time checks remain as defensive
+        // duplicates for direct Tool users.
+        if let Some(overrides) = &self.overrides {
+            validate_overrides_backend(overrides, &quantum_backend);
+        }
+        match &quantum_backend {
+            QuantumBackend::AdaptedQuantumEngine(_) => {
+                reject_dynamic_runner_config(
+                    "QuantumEngineBuilder backend",
+                    self.definitions.as_ref(),
+                    self.max_decomp_depth.as_ref(),
+                    self.overrides.as_ref(),
+                    self.event_handlers.as_ref(),
+                );
+                assert!(
+                    self.noise.is_none(),
+                    "QuantumEngineBuilder backends do not support sim_neo noise modeling. \
+                     Use a noise-modeling runner/backend instead."
+                );
+            }
+            QuantumBackend::Custom(factory) => {
+                reject_dynamic_runner_config(
+                    factory.diagnostic_label(),
+                    self.definitions.as_ref(),
+                    self.max_decomp_depth.as_ref(),
+                    self.overrides.as_ref(),
+                    self.event_handlers.as_ref(),
+                );
+            }
+            _ => {}
+        }
+
         let parallel_plan = match &sampling {
             Sampling::MonteCarlo { workers, .. } if *workers > 1 => {
                 let plan = build_parallel_execution_plan(
@@ -2442,6 +2581,72 @@ impl SimNeoBuilder {
                      execution."
                 );
                 plan
+            }
+            _ => None,
+        };
+
+        // Importance sampling requires a static circuit; this is knowable
+        // now, so fail at build time. Parallel IS runs outside the Tool
+        // schedule and needs the circuit captured.
+        let is_parallel_spec = match &sampling {
+            Sampling::ImportanceSampling { config: is_config } => {
+                let ProgramSource::Static(circuit) = &source else {
+                    panic!(
+                        "Importance sampling requires a static circuit. \
+                         Classical engines are not supported."
+                    )
+                };
+                if is_config.workers > 1 {
+                    let circuit = circuit.clone();
+                    let num_qubits = self
+                        .explicit_num_qubits
+                        .unwrap_or_else(|| infer_num_qubits_from_circuit(&circuit));
+                    Some(StaticCircuitSpec {
+                        circuit,
+                        num_qubits,
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        // Path enumeration runs outside the Tool schedule; validate its
+        // requirements here and capture what the run needs.
+        let path_spec = match &sampling {
+            Sampling::PathEnumeration { config: pe_config } => {
+                assert!(
+                    pe_config.max_measurements <= 24,
+                    "Path enumeration covers 2^max_measurements paths; \
+                     max_measurements = {} would enumerate more than 16M paths. \
+                     Use subset_simulation or importance_sampling for larger spaces.",
+                    pe_config.max_measurements
+                );
+                let circuit = match &source {
+                    ProgramSource::Static(circuit) => circuit.clone(),
+                    _ => panic!(
+                        "Path enumeration requires a static circuit. Classical engines \
+                         and dynamic command sources are not supported."
+                    ),
+                };
+                assert!(
+                    matches!(quantum_backend, QuantumBackend::SparseStab),
+                    "Path enumeration currently supports only the sparse_stab() backend \
+                     (or .auto())."
+                );
+                assert!(
+                    self.noise.is_none(),
+                    "Path enumeration enumerates measurement branches of the noiseless \
+                     circuit; remove .noise()."
+                );
+                let num_qubits = self
+                    .explicit_num_qubits
+                    .unwrap_or_else(|| infer_num_qubits_from_circuit(&circuit));
+                Some(StaticCircuitSpec {
+                    circuit,
+                    num_qubits,
+                })
             }
             _ => None,
         };
@@ -2497,8 +2702,9 @@ impl SimNeoBuilder {
                     explicit_num_qubits: self.explicit_num_qubits,
                 });
             }
-            // Subset simulation does not use the Tool schedule; no plugin.
-            Sampling::SubsetSimulation { .. } => {}
+            // Subset simulation and path enumeration do not use the Tool
+            // schedule; no plugin.
+            Sampling::SubsetSimulation { .. } | Sampling::PathEnumeration { .. } => {}
         }
 
         // Add noise if configured
@@ -2531,6 +2737,8 @@ impl SimNeoBuilder {
             sampling,
             parallel_plan,
             subset_spec,
+            is_parallel_spec,
+            path_spec,
         }
     }
 
@@ -2641,12 +2849,36 @@ pub struct UnifiedShotState {
     pub shot_index: usize,
 }
 
+/// Validate that stored gate overrides match the resolved backend.
+///
+/// The mismatch is knowable at build time; messages mirror the startup-time
+/// checks for each backend.
+fn validate_overrides_backend(overrides: &StoredOverrides, backend: &QuantumBackend) {
+    let override_kind = match overrides {
+        StoredOverrides::SparseStab(_) => "SparseStab",
+        StoredOverrides::Stabilizer(_) => "Stabilizer",
+        StoredOverrides::StateVec(_) => "StateVec",
+    };
+    let backend_kind = match backend {
+        QuantumBackend::SparseStab => "SparseStab",
+        QuantumBackend::Stabilizer => "Stabilizer",
+        QuantumBackend::StateVec => "StateVec",
+        // Adapted/custom backends reject overrides wholesale elsewhere.
+        QuantumBackend::AdaptedQuantumEngine(_) | QuantumBackend::Custom(_) => return,
+    };
+    assert!(
+        override_kind == backend_kind,
+        "{override_kind} gate overrides used with {backend_kind} backend. \
+         Use GateOverrides::<{backend_kind}> instead."
+    );
+}
+
 fn reject_dynamic_runner_config(
     backend_name: &str,
-    definitions: Option<&GateDefinitionsResource>,
-    max_depth: Option<&MaxDecompDepthResource>,
-    overrides: Option<&GateOverridesResource>,
-    event_handlers: Option<&EventHandlersResource>,
+    definitions: Option<&GateDefinitions>,
+    max_depth: Option<&usize>,
+    overrides: Option<&StoredOverrides>,
+    event_handlers: Option<&EventHandlers>,
 ) {
     assert!(
         definitions.is_none(),
@@ -2941,10 +3173,10 @@ fn unified_simulation_startup(resources: &mut Resources) {
         QuantumBackend::AdaptedQuantumEngine(factory) => {
             reject_dynamic_runner_config(
                 "QuantumEngineBuilder backend",
-                definitions.as_ref(),
-                max_depth.as_ref(),
-                overrides.as_ref(),
-                event_handlers.as_ref(),
+                definitions.as_ref().map(|d| &d.0),
+                max_depth.as_ref().map(|d| &d.0),
+                overrides.as_ref().map(|o| &o.0),
+                event_handlers.as_ref().map(|h| &h.0),
             );
             assert!(
                 noise.is_none(),
@@ -2957,10 +3189,10 @@ fn unified_simulation_startup(resources: &mut Resources) {
         QuantumBackend::Custom(factory) => {
             reject_dynamic_runner_config(
                 factory.diagnostic_label(),
-                definitions.as_ref(),
-                max_depth.as_ref(),
-                overrides.as_ref(),
-                event_handlers.as_ref(),
+                definitions.as_ref().map(|d| &d.0),
+                max_depth.as_ref().map(|d| &d.0),
+                overrides.as_ref().map(|o| &o.0),
+                event_handlers.as_ref().map(|h| &h.0),
             );
             // Custom backends create their own runner; gate definitions
             // should be captured in the factory closure if needed.
@@ -3065,6 +3297,33 @@ struct ISCurrentResult {
     weight: crate::sampling::weight::SampleWeight,
 }
 
+/// Build an importance sampling runner from builder config.
+fn build_importance_runner(
+    is_config: &ImportanceSamplingBuilder,
+    num_qubits: usize,
+) -> ImportanceSamplingRunner<SparseStab> {
+    ImportanceSamplingRunner::new(SparseStab::new(num_qubits))
+        .with_single_qubit_boost(is_config.p1(), is_config.boost())
+        .with_two_qubit_boost(is_config.p2(), is_config.boost())
+        .with_measurement_boost(is_config.p_meas(), is_config.boost())
+}
+
+/// Seed an importance sampling runner for a specific global shot index.
+///
+/// Seeds derive from (`base_seed`, `shot_index`) only, so results are
+/// identical whether shots run sequentially or partitioned across workers.
+fn seed_importance_runner(
+    runner: &mut ImportanceSamplingRunner<SparseStab>,
+    base_seed: u64,
+    shot_index: usize,
+) {
+    let shot_seed = derive_seed(base_seed, &format!("shot_{shot_index}"));
+    runner.rng = PecosRng::seed_from_u64(derive_seed(shot_seed, "noise"));
+    runner
+        .simulator
+        .set_seed(derive_seed(shot_seed, "simulator"));
+}
+
 /// Startup system for importance sampling simulation.
 fn is_sim_startup(resources: &mut Resources) {
     let explicit_qubits = resources.get::<ExplicitNumQubits>().0;
@@ -3110,11 +3369,7 @@ fn is_sim_startup(resources: &mut Resources) {
     // Also consume NoiseResource if present (IS uses its own boosted noise)
     let _ = resources.try_remove::<NoiseResource>();
 
-    let sim = SparseStab::new(num_qubits);
-    let runner = ImportanceSamplingRunner::new(sim)
-        .with_single_qubit_boost(is_config.p1(), is_config.boost())
-        .with_two_qubit_boost(is_config.p2(), is_config.boost())
-        .with_measurement_boost(is_config.p_meas(), is_config.boost());
+    let runner = build_importance_runner(&is_config, num_qubits);
 
     resources.insert(ISShotState {
         runner,
@@ -3134,12 +3389,8 @@ fn is_sim_pre_shot(resources: &mut Resources) {
     let state = resources.get_mut::<ISShotState>();
 
     let base_seed = config.seed.unwrap_or(0);
-    let shot_seed = derive_seed(base_seed, &format!("shot_{}", state.shot_index));
-    let sim_seed = derive_seed(shot_seed, "simulator");
-    let noise_seed = derive_seed(shot_seed, "noise");
-
-    state.runner.rng = PecosRng::seed_from_u64(noise_seed);
-    state.runner.simulator.set_seed(sim_seed);
+    let shot_index = state.shot_index;
+    seed_importance_runner(&mut state.runner, base_seed, shot_index);
 }
 
 /// Execute system for importance sampling: run one shot with biased noise.
@@ -3196,6 +3447,10 @@ pub struct Simulation {
     parallel_plan: Option<ParallelExecutionPlan>,
     /// Captured inputs for subset simulation (if applicable).
     subset_spec: Option<SubsetRunSpec>,
+    /// Captured inputs for parallel importance sampling (if applicable).
+    is_parallel_spec: Option<StaticCircuitSpec>,
+    /// Captured inputs for path enumeration (if applicable).
+    path_spec: Option<StaticCircuitSpec>,
 }
 
 /// Inputs captured at build time for a subset simulation run.
@@ -3203,6 +3458,12 @@ struct SubsetRunSpec {
     circuit: CommandQueue,
     num_qubits: usize,
     noise: Option<ComposableNoiseModel>,
+}
+
+/// Inputs captured at build time for a parallel importance sampling run.
+struct StaticCircuitSpec {
+    circuit: CommandQueue,
+    num_qubits: usize,
 }
 
 /// Native backend used by the internal parallel runner factory.
@@ -3516,6 +3777,41 @@ impl Simulation {
                     .expect("parallel plan validated at build time for workers > 1");
                 self.run_parallel(&config, plan, *workers)
             }
+            Sampling::ImportanceSampling { config: is_config } if is_config.workers > 1 => {
+                let spec = self
+                    .is_parallel_spec
+                    .as_ref()
+                    .expect("parallel IS spec captured at build time");
+                Self::run_parallel_importance(&config, is_config, spec)
+            }
+            Sampling::PathEnumeration { config: pe_config } => {
+                let spec = self
+                    .path_spec
+                    .as_ref()
+                    .expect("path spec validated at build time");
+                let mut explorer = PathExplorer::new(SparseStab::new(spec.num_qubits));
+
+                let mut seen = std::collections::BTreeSet::new();
+                let mut outcomes = Vec::new();
+                let mut weights = Vec::new();
+                for forced_path in PathEnumerator::new(pe_config.max_measurements) {
+                    let result = explorer.run_with_path(&spec.circuit, &forced_path);
+                    // Different forced paths can realize the same actual path
+                    // (deterministic measurements ignore forced bits); keep
+                    // each distinct realized path once with its exact
+                    // probability.
+                    if seen.insert(result.path.signature().to_binary_string()) {
+                        weights.push(result.path.probability());
+                        outcomes.push(result.outcomes);
+                    }
+                }
+
+                SimulationResults {
+                    outcomes,
+                    weights: Some(weights),
+                    subset: None,
+                }
+            }
             Sampling::SubsetSimulation { config: ss_config } => {
                 let spec = self
                     .subset_spec
@@ -3565,6 +3861,67 @@ impl Simulation {
                 self.tool.insert_resource_mut(SimulationResults::new());
                 results
             }
+        }
+    }
+
+    /// Run importance sampling trials in parallel using rayon.
+    ///
+    /// Each worker builds its own boosted runner and processes a contiguous
+    /// range of global shot indices. Seeds derive from (base seed, global
+    /// shot index) alone — the same scheme as the sequential IS systems —
+    /// so outcomes and weights are identical for any worker count.
+    fn run_parallel_importance(
+        config: &SimConfig,
+        is_config: &ImportanceSamplingBuilder,
+        spec: &StaticCircuitSpec,
+    ) -> SimulationResults {
+        let shots = config.shots;
+        let num_workers = is_config.workers;
+        let base_seed = config.seed.unwrap_or(0);
+
+        let shots_per_worker = distribute_shots(shots, num_workers);
+        let mut start_indices = vec![0usize; num_workers];
+        for i in 1..num_workers {
+            start_indices[i] = start_indices[i - 1] + shots_per_worker[i - 1];
+        }
+
+        let per_worker: Vec<(
+            Vec<MeasurementOutcomes>,
+            Vec<crate::sampling::weight::SampleWeight>,
+        )> = (0..num_workers)
+            .into_par_iter()
+            .map(|worker_id| {
+                let worker_shots = shots_per_worker[worker_id];
+                let mut outcomes = Vec::with_capacity(worker_shots);
+                let mut weights = Vec::with_capacity(worker_shots);
+                if worker_shots == 0 {
+                    return (outcomes, weights);
+                }
+
+                let mut runner = build_importance_runner(is_config, spec.num_qubits);
+                let start = start_indices[worker_id];
+                for shot_index in start..start + worker_shots {
+                    seed_importance_runner(&mut runner, base_seed, shot_index);
+                    let result = runner.run_shot_fresh(&spec.circuit);
+                    outcomes.push(result.outcomes);
+                    weights.push(result.weight);
+                }
+                (outcomes, weights)
+            })
+            .collect();
+
+        // Flatten in worker order = global shot order.
+        let mut outcomes = Vec::with_capacity(shots);
+        let mut weights = Vec::with_capacity(shots);
+        for (o, w) in per_worker {
+            outcomes.extend(o);
+            weights.extend(w);
+        }
+
+        SimulationResults {
+            outcomes,
+            weights: Some(weights),
+            subset: None,
         }
     }
 
@@ -4452,6 +4809,184 @@ mod tests {
 
         assert_eq!(results.len(), 35);
         assert!(results.has_weights());
+    }
+
+    #[test]
+    fn test_sim_neo_importance_sampling_parallel_matches_sequential() {
+        // Per-shot seeding from global indices: any worker count gives
+        // identical outcomes AND weights.
+        let circuit = CommandBuilder::new()
+            .pz(&[0, 1])
+            .h(&[0])
+            .cx(&[(0, 1)])
+            .mz(&[0, 1])
+            .build();
+        let run = |workers: usize| {
+            sim_neo(circuit.clone())
+                .auto()
+                .sampling(
+                    importance_sampling(60)
+                        .with_uniform_error(0.01)
+                        .with_boost(10.0)
+                        .workers(workers),
+                )
+                .seed(42)
+                .run()
+        };
+
+        let sequential = run(1);
+        let parallel = run(4);
+
+        assert_eq!(sequential.outcomes.len(), 60);
+        assert_eq!(sequential.outcomes.len(), parallel.outcomes.len());
+        for (i, (s, p)) in sequential
+            .outcomes
+            .iter()
+            .zip(parallel.outcomes.iter())
+            .enumerate()
+        {
+            assert_eq!(
+                s.get_bit(QubitId(0)),
+                p.get_bit(QubitId(0)),
+                "Shot {i} qubit 0 should match"
+            );
+            assert_eq!(
+                s.get_bit(QubitId(1)),
+                p.get_bit(QubitId(1)),
+                "Shot {i} qubit 1 should match"
+            );
+        }
+
+        let sw = sequential.weights.as_ref().unwrap();
+        let pw = parallel.weights.as_ref().unwrap();
+        assert_eq!(sw.len(), pw.len());
+        for (i, (a, b)) in sw.iter().zip(pw.iter()).enumerate() {
+            assert!(
+                (a.weight() - b.weight()).abs() < 1e-12,
+                "Weight at shot {i} should match"
+            );
+        }
+    }
+
+    #[test]
+    fn test_sim_neo_importance_sampling_parallel_deterministic() {
+        let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
+        let run = || {
+            sim_neo(circuit.clone())
+                .auto()
+                .sampling(importance_sampling(30).with_uniform_error(0.01).workers(3))
+                .seed(5)
+                .run()
+        };
+        let r1 = run();
+        let r2 = run();
+        for (o1, o2) in r1.outcomes.iter().zip(r2.outcomes.iter()) {
+            assert_eq!(o1.get_bit(QubitId(0)), o2.get_bit(QubitId(0)));
+        }
+    }
+
+    // --- Path Enumeration Strategy Tests ---
+
+    #[test]
+    fn test_sim_neo_path_enumeration_bell_pair() {
+        // H + CX: first measurement is random (two branches), second is
+        // deterministic given the first. Exactly two paths, p = 0.5 each,
+        // with perfectly correlated outcomes.
+        let circuit = CommandBuilder::new()
+            .pz(&[0, 1])
+            .h(&[0])
+            .cx(&[(0, 1)])
+            .mz(&[0, 1])
+            .build();
+
+        let results = sim_neo(circuit)
+            .quantum(sparse_stab())
+            .sampling(path_enumeration(1))
+            .run();
+
+        assert_eq!(results.outcomes.len(), 2, "Two measurement branches");
+        let weights = results.weights.as_ref().unwrap();
+        let total: f64 = weights
+            .iter()
+            .map(crate::sampling::weight::SampleWeight::weight)
+            .sum();
+        assert!(
+            (total - 1.0).abs() < 1e-12,
+            "Complete enumeration sums to 1"
+        );
+        for (outcome, weight) in results.outcomes.iter().zip(weights) {
+            assert!((weight.weight() - 0.5).abs() < 1e-12);
+            assert_eq!(
+                outcome.get_bit(QubitId(0)),
+                outcome.get_bit(QubitId(1)),
+                "Bell pair outcomes must be correlated"
+            );
+        }
+    }
+
+    #[test]
+    fn test_sim_neo_path_enumeration_dedupes_deterministic_circuit() {
+        // X then measure: fully deterministic, one realized path with p = 1
+        // even though 2^2 forced paths are enumerated.
+        let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
+
+        let results = sim_neo(circuit).auto().sampling(path_enumeration(2)).run();
+
+        assert_eq!(results.outcomes.len(), 1, "One distinct path");
+        let weights = results.weights.as_ref().unwrap();
+        assert!((weights[0].weight() - 1.0).abs() < 1e-12);
+        assert_eq!(results.outcomes[0].get_bit(QubitId(0)), Some(true));
+    }
+
+    #[test]
+    fn test_sim_neo_path_enumeration_three_qubit_uniform() {
+        // Three independent H measurements: 8 paths, p = 1/8 each.
+        let results = sim_neo(three_qubit_h_circuit())
+            .auto()
+            .sampling(path_enumeration(3))
+            .run();
+
+        assert_eq!(results.outcomes.len(), 8);
+        let weights = results.weights.as_ref().unwrap();
+        let total: f64 = weights
+            .iter()
+            .map(crate::sampling::weight::SampleWeight::weight)
+            .sum();
+        assert!((total - 1.0).abs() < 1e-12);
+        for weight in weights {
+            assert!((weight.weight() - 0.125).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "remove .noise()")]
+    fn test_sim_neo_path_enumeration_rejects_noise() {
+        let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
+        let _ = sim_neo(circuit)
+            .auto()
+            .noise(SingleQubitChannel::depolarizing(0.1))
+            .sampling(path_enumeration(1))
+            .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "Path enumeration currently supports only the sparse_stab() backend")]
+    fn test_sim_neo_path_enumeration_rejects_state_vector_backend() {
+        let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
+        let _ = sim_neo(circuit)
+            .quantum(state_vector())
+            .sampling(path_enumeration(1))
+            .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "more than 16M paths")]
+    fn test_sim_neo_path_enumeration_rejects_huge_enumeration() {
+        let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
+        let _ = sim_neo(circuit)
+            .auto()
+            .sampling(path_enumeration(25))
+            .build();
     }
 
     // --- Subset Simulation Strategy Tests ---

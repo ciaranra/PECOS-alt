@@ -98,11 +98,12 @@ pub use plugin::{Plugin, PluginGroup};
 pub use resource::{Resource, Resources};
 pub use simulation::{
     Circuit, CustomBackendBuilder, ImportanceSamplingBuilder, MonteCarloBuilder, NoiseResource,
-    QuantumBackend, Sampling, SimConfig, SimNeoBuilder, SimNeoInput, Simulation, SimulationResults,
-    SimulatorFactory, SparseStabBuilder, StabilizerBuilder, StateVecBuilder, StoredOverrides,
-    SubsetFailureFn, SubsetScoreFn, SubsetSimulationBuilder, custom_backend,
-    custom_backend_from_factory, custom_backend_with_rotations, importance_sampling, monte_carlo,
-    sim_neo, sim_neo_builder, sparse_stab, stabilizer, state_vector, subset_simulation,
+    PathEnumerationBuilder, QuantumBackend, Sampling, SimConfig, SimNeoBuilder, SimNeoInput,
+    Simulation, SimulationResults, SimulatorFactory, SparseStabBuilder, StabilizerBuilder,
+    StateVecBuilder, StoredOverrides, SubsetFailureFn, SubsetScoreFn, SubsetSimulationBuilder,
+    custom_backend, custom_backend_from_factory, custom_backend_with_rotations,
+    importance_sampling, monte_carlo, path_enumeration, sim_neo, sim_neo_builder, sparse_stab,
+    stabilizer, state_vector, subset_simulation,
 };
 pub use simulation::{PendingEngineBuilder, TypedProgram};
 pub use system::{IntoSystem, Schedule, System};

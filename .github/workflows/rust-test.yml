@@ -16,9 +16,11 @@ on:
     paths:
       - 'crates/**'
       - 'examples/**'
+      - 'exp/**'
       - 'julia/pecos-julia-ffi/**'
       - 'python/pecos-rslib-cuda/**'
       - 'python/pecos-rslib/**'
+      - 'python/pecos-rslib-exp/**'
       - 'python/pecos-rslib-llvm/**'
       - 'Cargo.toml'
       - 'Justfile'
@@ -29,9 +31,11 @@ on:
     paths:
       - 'crates/**'
       - 'examples/**'
+      - 'exp/**'
       - 'julia/pecos-julia-ffi/**'
       - 'python/pecos-rslib-cuda/**'
       - 'python/pecos-rslib/**'
+      - 'python/pecos-rslib-exp/**'
       - 'python/pecos-rslib-llvm/**'
       - 'Cargo.toml'
       - 'Justfile'

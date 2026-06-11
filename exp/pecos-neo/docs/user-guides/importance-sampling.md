@@ -27,6 +27,18 @@ sim_neo(circuit).auto()
     .run();
 ```
 
+Trials parallelize across workers; seeding is per global shot index, so
+results are identical for any worker count:
+
+```rust
+sim_neo(circuit).auto()
+    .sampling(importance_sampling(10000)
+        .with_uniform_error(0.001)
+        .with_boost(10.0)
+        .workers(8))
+    .run();
+```
+
 ## Reading Results
 
 Results include importance weights. Use `weighted_mean()` to get unbiased estimates:

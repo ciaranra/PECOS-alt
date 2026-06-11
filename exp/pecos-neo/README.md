@@ -34,7 +34,7 @@ for outcome in &results.outcomes {
 - **Typed Commands**: `GateCommand` and `CommandQueue` with signal support for metadata alongside gates
 - **Plugin System**: ECS-inspired architecture for bundling simulation functionality
 - **Parallel Execution**: Monte Carlo across multiple workers with `.sampling(monte_carlo(shots).workers(n))`
-- **Advanced Sampling**: Importance sampling and subset simulation for rare event estimation
+- **Advanced Sampling**: Importance sampling (with parallel workers) and subset simulation for rare event estimation; exhaustive path enumeration for measurement branches
 - **Extensible Gates**: `GateId`-based system with runtime overrides and decomposition
 - **Program Support**: Classical control engines (QASM, HUGR) with mid-circuit measurement and feedback
 - **State Vector**: Non-Clifford gates (T, rotations) via `state_vector()` backend
