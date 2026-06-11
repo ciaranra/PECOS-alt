@@ -176,9 +176,10 @@ pub enum QuantumBackend {
     /// Allows any simulator implementing `CliffordGateable + RngManageable<Rng = PecosRng>`
     /// to be used through the `sim_neo().auto()` API. Use [`custom_backend()`] to create.
     ///
-    /// Custom backends only support sequential execution. Parallel Monte
-    /// Carlo (workers > 1) is rejected at `.build()` time.
-    Custom(Box<dyn SimulatorFactory>),
+    /// The factory is invoked once per worker, so parallel Monte Carlo
+    /// works like the built-in backends (per-shot seeding from global shot
+    /// indices keeps results identical for any worker count).
+    Custom(Arc<dyn SimulatorFactory>),
 }
 
 impl std::fmt::Debug for QuantumBackend {
@@ -445,7 +446,7 @@ where
 ///
 /// Created via [`custom_backend()`]. Converts into [`QuantumBackend::Custom`].
 pub struct CustomBackendBuilder {
-    factory: Box<dyn SimulatorFactory>,
+    factory: Arc<dyn SimulatorFactory>,
 }
 
 impl From<CustomBackendBuilder> for QuantumBackend {
@@ -460,9 +461,10 @@ impl From<CustomBackendBuilder> for QuantumBackend {
 /// to be used through `sim_neo().auto()`. The closure receives the number of qubits
 /// and should return a new simulator instance.
 ///
-/// **Note:** Custom backends only support sequential execution. Using `.workers()`,
-/// `.auto_workers()`, or importance sampling with a custom backend will panic
-/// at `.run()` time.
+/// The factory is invoked once per worker for parallel Monte Carlo, so
+/// `.workers(n)` works like the built-in backends. (Importance sampling
+/// always runs on its internal sparse stabilizer and ignores the backend
+/// choice.)
 ///
 /// # Example
 ///
@@ -488,7 +490,7 @@ where
     F: Fn(usize) -> S + Send + Sync + 'static,
 {
     CustomBackendBuilder {
-        factory: Box::new(factory),
+        factory: Arc::new(factory),
     }
 }
 
@@ -502,7 +504,7 @@ pub fn custom_backend_from_factory(
     factory: impl SimulatorFactory + 'static,
 ) -> CustomBackendBuilder {
     CustomBackendBuilder {
-        factory: Box::new(factory),
+        factory: Arc::new(factory),
     }
 }
 
@@ -540,7 +542,7 @@ where
     F: Fn(usize) -> S + Send + Sync + 'static,
 {
     CustomBackendBuilder {
-        factory: Box::new(RotationSimulatorFactory(factory)),
+        factory: Arc::new(RotationSimulatorFactory(factory)),
     }
 }
 
@@ -984,9 +986,9 @@ impl MonteCarloBuilder {
     /// count.
     ///
     /// Requires a per-worker construction path: a static circuit or a
-    /// classical engine builder source, on a built-in or adapted backend.
-    /// Pre-built dynamic command sources and custom backends cannot build
-    /// per-worker state; `.build()` rejects those combinations.
+    /// classical engine builder source, on any backend (built-in, adapted,
+    /// or custom factory). Pre-built dynamic command sources cannot build
+    /// per-worker state; `.build()` rejects that combination.
     #[must_use]
     pub fn workers(mut self, workers: usize) -> Self {
         self.workers = workers;
@@ -2478,7 +2480,7 @@ impl SimNeoBuilder {
     /// - Deprecated `.shots()`/`.workers()` are combined with `.sampling()`
     /// - Parallel Monte Carlo (`workers > 1`) is requested for a
     ///   configuration that cannot build per-worker state (pre-built dynamic
-    ///   command sources, custom backends)
+    ///   command sources)
     /// - Subset simulation is missing `.score()`/`.failure()`, or is used
     ///   with a non-static source or a backend other than `sparse_stab()`
     #[must_use]
@@ -2622,10 +2624,9 @@ impl SimNeoBuilder {
                 assert!(
                     plan.is_some(),
                     "Parallel Monte Carlo (workers > 1) requires per-worker construction: \
-                     a static circuit or classical engine builder source, on a built-in or \
-                     adapted backend. Pre-built dynamic command sources and custom backends \
-                     cannot build per-worker state; remove .workers(..) for sequential \
-                     execution."
+                     a static circuit or classical engine builder source. Pre-built dynamic \
+                     command sources cannot build per-worker state; remove .workers(..) for \
+                     sequential execution."
                 );
                 plan
             }
@@ -3677,6 +3678,26 @@ impl ParallelQuantumRunnerFactory for NativeQuantumRunnerFactory {
         }
     }
 }
+/// Per-worker runner factory for custom `SimulatorFactory` backends.
+///
+/// The user's factory is invoked once per worker with a clone of the noise
+/// model; per-shot seeding from global shot indices happens in the shared
+/// schedule, exactly as for built-in backends.
+struct CustomRunnerFactory {
+    factory: Arc<dyn SimulatorFactory>,
+    num_qubits: usize,
+    noise: Option<ComposableNoiseModel>,
+}
+
+impl ParallelQuantumRunnerFactory for CustomRunnerFactory {
+    fn create_runner(&self, seed: Option<u64>) -> QuantumRunner {
+        QuantumRunner::Custom(
+            self.factory
+                .create_runner(self.num_qubits, self.noise.clone(), seed),
+        )
+    }
+}
+
 struct AdaptedQuantumEngineRunnerFactory<B>
 where
     B: pecos_engines::QuantumEngineBuilder + Clone + 'static,
@@ -3784,7 +3805,11 @@ fn build_parallel_execution_plan(
             );
             factory.create_parallel_runner_factory(num_qubits)
         }
-        QuantumBackend::Custom(_) => return None,
+        QuantumBackend::Custom(factory) => Box::new(CustomRunnerFactory {
+            factory: Arc::clone(factory),
+            num_qubits,
+            noise,
+        }),
     };
 
     Some(ParallelExecutionPlan {
@@ -6245,6 +6270,68 @@ mod tests {
                 o1.get_bit(QubitId(0)),
                 o2.get_bit(QubitId(0)),
                 "Custom backend should be deterministic with same seed"
+            );
+        }
+    }
+
+    #[test]
+    fn test_custom_backend_parallel_matches_sequential() {
+        // The factory builds one runner per worker; per-shot seeding from
+        // global shot indices makes results identical for any worker count.
+        let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
+        let run = |workers: usize| {
+            sim_neo(circuit.clone())
+                .quantum(custom_backend(SparseStab::new))
+                .sampling(monte_carlo(50).workers(workers))
+                .seed(42)
+                .run()
+        };
+
+        let sequential = run(1);
+        let parallel = run(4);
+
+        assert_eq!(sequential.outcomes.len(), 50);
+        assert_eq!(sequential.outcomes.len(), parallel.outcomes.len());
+        for (i, (s, p)) in sequential
+            .outcomes
+            .iter()
+            .zip(parallel.outcomes.iter())
+            .enumerate()
+        {
+            assert_eq!(
+                s.get_bit(QubitId(0)),
+                p.get_bit(QubitId(0)),
+                "Shot {i} should match across worker counts"
+            );
+        }
+    }
+
+    #[test]
+    fn test_custom_backend_parallel_with_noise() {
+        // Noise is cloned per worker; results stay worker-count invariant.
+        let circuit = CommandBuilder::new().pz(&[0]).z(&[0]).mz(&[0]).build();
+        let run = |workers: usize| {
+            sim_neo(circuit.clone())
+                .quantum(custom_backend(SparseStab::new))
+                .noise(SingleQubitChannel::depolarizing(0.3))
+                .sampling(monte_carlo(40).workers(workers))
+                .seed(7)
+                .run()
+        };
+
+        let sequential = run(1);
+        let parallel = run(3);
+
+        for (i, (s, p)) in sequential
+            .outcomes
+            .iter()
+            .zip(parallel.outcomes.iter())
+            .enumerate()
+        {
+            assert_eq!(
+                s.get_bit(QubitId(0)),
+                p.get_bit(QubitId(0)),
+                "Noisy shot {i} should match across worker counts"
             );
         }
     }
