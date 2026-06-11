@@ -74,6 +74,9 @@ fn pecos_rslib_exp(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sim_neo_bindings::monte_carlo, m)?)?;
     m.add_class::<sim_neo_bindings::PyPathEnumerationBuilder>()?;
     m.add_function(wrap_pyfunction!(sim_neo_bindings::path_enumeration, m)?)?;
+    m.add_class::<sim_neo_bindings::PySubsetSimulationBuilder>()?;
+    m.add_class::<sim_neo_bindings::PySubsetResult>()?;
+    m.add_function(wrap_pyfunction!(sim_neo_bindings::subset_simulation, m)?)?;
     m.add_function(wrap_pyfunction!(sim_neo_bindings::stab_mps, m)?)?;
     m.add_function(wrap_pyfunction!(sim_neo_bindings::depolarizing, m)?)?;
     m.add_class::<sim_neo_bindings::PyStateVecBuilder>()?;

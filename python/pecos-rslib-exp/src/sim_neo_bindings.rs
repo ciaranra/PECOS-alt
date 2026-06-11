@@ -64,6 +64,9 @@ pub struct PyRawMeasurementResult {
     /// importance weights for importance sampling). None for plain
     /// Monte Carlo runs.
     weights: Option<Vec<f64>>,
+    /// Rare-event estimate (subset simulation only; rows are empty for
+    /// subset runs). Mirrors Rust `SimulationResults::subset`.
+    subset: Option<Py<PySubsetResult>>,
 }
 
 enum RawMeasurementStorage {
@@ -140,6 +143,7 @@ impl PyRawMeasurementResult {
         Self {
             storage: RawMeasurementStorage::Columnar(result),
             weights: None,
+            subset: None,
         }
     }
 
@@ -152,6 +156,7 @@ impl PyRawMeasurementResult {
                 num_measurements,
             },
             weights: None,
+            subset: None,
         }
     }
 
@@ -159,6 +164,13 @@ impl PyRawMeasurementResult {
     pub fn from_rows_weighted(rows: Vec<Vec<u8>>, weights: Vec<f64>) -> Self {
         let mut result = Self::from_rows(rows);
         result.weights = Some(weights);
+        result
+    }
+
+    /// Construct a subset-simulation result (no rows; estimate only).
+    pub fn from_subset(subset: Py<PySubsetResult>) -> Self {
+        let mut result = Self::from_rows(Vec::new());
+        result.subset = Some(subset);
         result
     }
 }
@@ -184,6 +196,12 @@ impl PyRawMeasurementResult {
     #[getter]
     fn weights(&self) -> Option<Vec<f64>> {
         self.weights.clone()
+    }
+
+    /// Rare-event estimate, or None unless run with subset simulation.
+    #[getter]
+    fn subset(&self, py: Python<'_>) -> Option<Py<PySubsetResult>> {
+        self.subset.as_ref().map(|s| s.clone_ref(py))
     }
 
     /// Get a single measurement bit (0 or 1).
@@ -541,11 +559,168 @@ pub fn path_enumeration(max_measurements: usize) -> PyPathEnumerationBuilder {
     PyPathEnumerationBuilder { max_measurements }
 }
 
+/// Subset simulation strategy builder. Mirrors Rust `subset_simulation(n)`.
+///
+/// Estimates rare event probabilities by decomposing them into conditional
+/// probabilities across adaptive levels. Requires a `.score(fn)` (how close
+/// is this outcome to failure?) and a `.failure(fn)` predicate; both receive
+/// the measurement bits of one sample as `list[int]` and are called once per
+/// sample (Python-callable cost applies).
+///
+/// Example:
+///     result = (sim_neo(tc)
+///         .quantum(stabilizer())
+///         .sampling(subset_simulation(1000)
+///             .score(lambda bits: float(sum(bits)))
+///             .failure(lambda bits: all(bits)))
+///         .seed(42)
+///         .run())
+///     print(result.subset.probability)
+#[pyclass(
+    name = "SubsetSimulationBuilder",
+    skip_from_py_object,
+    module = "pecos_rslib_exp"
+)]
+pub struct PySubsetSimulationBuilder {
+    samples_per_level: usize,
+    threshold_fraction: f64,
+    max_levels: usize,
+    min_conditional_prob: f64,
+    score: Option<Py<PyAny>>,
+    failure: Option<Py<PyAny>>,
+}
+
+impl Clone for PySubsetSimulationBuilder {
+    fn clone(&self) -> Self {
+        Python::attach(|py| Self {
+            samples_per_level: self.samples_per_level,
+            threshold_fraction: self.threshold_fraction,
+            max_levels: self.max_levels,
+            min_conditional_prob: self.min_conditional_prob,
+            score: self.score.as_ref().map(|f| f.clone_ref(py)),
+            failure: self.failure.as_ref().map(|f| f.clone_ref(py)),
+        })
+    }
+}
+
+#[pymethods]
+impl PySubsetSimulationBuilder {
+    /// Set the score function: bits (`list[int]`) -> float.
+    ///
+    /// Higher scores advance to the next level; failing outcomes should
+    /// score at least as high as any non-failing outcome.
+    fn score(&self, f: Py<PyAny>) -> Self {
+        let mut c = self.clone();
+        c.score = Some(f);
+        c
+    }
+
+    /// Set the failure predicate: bits (`list[int]`) -> bool.
+    fn failure(&self, f: Py<PyAny>) -> Self {
+        let mut c = self.clone();
+        c.failure = Some(f);
+        c
+    }
+
+    /// Fraction of samples that advances past each threshold (default 0.1).
+    fn threshold_fraction(&self, fraction: f64) -> Self {
+        let mut c = self.clone();
+        c.threshold_fraction = fraction;
+        c
+    }
+
+    /// Maximum number of levels before giving up (default 20).
+    fn max_levels(&self, levels: usize) -> Self {
+        let mut c = self.clone();
+        c.max_levels = levels;
+        c
+    }
+
+    /// Minimum conditional probability before declaring the failure event
+    /// unreachable (default 1e-6).
+    fn min_conditional_prob(&self, p: f64) -> Self {
+        let mut c = self.clone();
+        c.min_conditional_prob = p;
+        c
+    }
+}
+
+/// Create a subset simulation strategy running `samples_per_level` samples
+/// at each level. `.score(..)` and `.failure(..)` are required.
+#[pyfunction]
+pub fn subset_simulation(samples_per_level: usize) -> PySubsetSimulationBuilder {
+    let defaults = pecos_neo::sampling::subset::SubsetConfig::default();
+    PySubsetSimulationBuilder {
+        samples_per_level,
+        threshold_fraction: defaults.threshold_fraction,
+        max_levels: defaults.max_levels,
+        min_conditional_prob: defaults.min_conditional_prob,
+        score: None,
+        failure: None,
+    }
+}
+
+/// Rare-event estimate from subset simulation. Mirrors Rust `SubsetResult`.
+#[pyclass(name = "SubsetResult", module = "pecos_rslib_exp")]
+pub struct PySubsetResult {
+    inner: pecos_neo::sampling::subset::SubsetResult,
+}
+
+#[pymethods]
+impl PySubsetResult {
+    /// Overall probability estimate.
+    #[getter]
+    fn probability(&self) -> f64 {
+        self.inner.probability()
+    }
+
+    /// Coefficient of variation (standard error / estimate).
+    #[getter]
+    fn coefficient_of_variation(&self) -> f64 {
+        self.inner.coefficient_of_variation
+    }
+
+    /// Total number of samples run across all levels.
+    #[getter]
+    fn total_samples(&self) -> usize {
+        self.inner.total_samples
+    }
+
+    /// Number of failures observed directly.
+    #[getter]
+    fn direct_failures(&self) -> usize {
+        self.inner.direct_failures
+    }
+
+    /// 95% confidence interval (assuming log-normal): (lower, upper).
+    fn confidence_interval_95(&self) -> (f64, f64) {
+        self.inner.confidence_interval_95()
+    }
+
+    /// Per-level statistics as a list of dicts.
+    fn levels<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyList>> {
+        use pyo3::types::{PyDict, PyList};
+        let list = PyList::empty(py);
+        for level in &self.inner.levels {
+            let d = PyDict::new(py);
+            d.set_item("level", level.level)?;
+            d.set_item("threshold", level.threshold)?;
+            d.set_item("num_samples", level.num_samples)?;
+            d.set_item("num_exceeded", level.num_exceeded)?;
+            d.set_item("conditional_prob", level.conditional_prob)?;
+            d.set_item("num_failures", level.num_failures)?;
+            list.append(d)?;
+        }
+        Ok(list)
+    }
+}
+
 /// Sampling strategy selected on the Python builder.
 #[derive(Clone)]
 enum PySampling {
     MonteCarlo { shots: usize, workers: usize },
     PathEnumeration { max_measurements: usize },
+    SubsetSimulation { config: PySubsetSimulationBuilder },
 }
 
 /// Builder for sim_neo simulations. Mirrors the Rust-side `SimNeoBuilder`.
@@ -658,9 +833,13 @@ impl PySimNeoBuilder {
             c.sampling = Some(PySampling::PathEnumeration {
                 max_measurements: s.max_measurements,
             });
+        } else if sampler.is_instance_of::<PySubsetSimulationBuilder>() {
+            let s: PyRef<'_, PySubsetSimulationBuilder> = sampler.extract()?;
+            c.sampling = Some(PySampling::SubsetSimulation { config: s.clone() });
         } else {
             return Err(pyo3::exceptions::PyTypeError::new_err(
-                "sampling() expects monte_carlo(shots) or path_enumeration(max_measurements)",
+                "sampling() expects monte_carlo(shots), path_enumeration(max_measurements), \
+                 or subset_simulation(samples_per_level)",
             ));
         }
         Ok(c)
@@ -692,7 +871,7 @@ impl PySimNeoBuilder {
     ///
     /// All backends return `RawMeasurementResult` which supports:
     /// `result[shot]`, `result.get(shot, meas)`, `len(result)`, iteration.
-    fn run(&self) -> PyResult<PyRawMeasurementResult> {
+    fn run(&self, py: Python<'_>) -> PyResult<PyRawMeasurementResult> {
         if self.tick_circuit.has_channel_operations() {
             return self.run_inline_channel_circuit();
         }
@@ -702,8 +881,14 @@ impl PySimNeoBuilder {
             return self.run_meas_sampling();
         }
 
-        if let PySampling::PathEnumeration { max_measurements } = self.resolved_sampling()? {
-            return self.run_path_enumeration(&backend, max_measurements);
+        match self.resolved_sampling()? {
+            PySampling::PathEnumeration { max_measurements } => {
+                return self.run_path_enumeration(&backend, max_measurements);
+            }
+            PySampling::SubsetSimulation { config } => {
+                return self.run_subset_simulation(py, &backend, &config);
+            }
+            PySampling::MonteCarlo { .. } => {}
         }
         let (shots, workers) = self.resolved_monte_carlo("this backend")?;
 
@@ -807,6 +992,125 @@ impl PySimNeoBuilder {
         Ok(PyRawMeasurementResult::from_rows_weighted(rows, weights))
     }
 
+    /// Subset simulation with Python score/failure callables.
+    ///
+    /// Each callable receives the sample's measurement bits as `list[int]`
+    /// and is invoked once per sample on the calling thread. The first
+    /// Python exception raised by a callable aborts the run and propagates.
+    fn run_subset_simulation(
+        &self,
+        py: Python<'_>,
+        backend: &str,
+        config: &PySubsetSimulationBuilder,
+    ) -> PyResult<PyRawMeasurementResult> {
+        use pecos_neo::outcome::MeasurementOutcomes;
+        use pecos_neo::sampling::subset::{SubsetConfig, SubsetSimulation};
+        use std::sync::{Arc, Mutex};
+
+        if backend != "stabilizer" {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "Subset simulation currently supports only the stabilizer() backend \
+                 (or .auto()).",
+            ));
+        }
+        let (Some(score), Some(failure)) = (&config.score, &config.failure) else {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "Subset simulation requires both .score(..) and .failure(..) on the \
+                 subset_simulation(..) builder; neither has a sensible default.",
+            ));
+        };
+
+        let noise = self
+            .noise_config
+            .as_ref()
+            .and_then(PyNoiseModelBuilder::build_noise);
+
+        let num_qubits = self
+            .commands
+            .iter()
+            .flat_map(|cmd| cmd.qubits.iter())
+            .map(|q| q.0)
+            .max()
+            .map_or(1, |max| max + 1);
+
+        // Bridge Python callables into Fn closures. Errors cannot propagate
+        // through the closure signature, so capture the first one and check
+        // after the run.
+        let captured_err: Arc<Mutex<Option<PyErr>>> = Arc::new(Mutex::new(None));
+        let bits_of = |outcomes: &MeasurementOutcomes| -> Vec<u8> {
+            outcomes.iter().map(|o| u8::from(o.outcome)).collect()
+        };
+
+        let score_fn = score.clone_ref(py);
+        let score_err = Arc::clone(&captured_err);
+        let score_closure = move |outcomes: &MeasurementOutcomes| -> f64 {
+            Python::attach(|py| {
+                match score_fn
+                    .call1(py, (bits_of(outcomes),))
+                    .and_then(|v| v.extract::<f64>(py))
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        score_err
+                            .lock()
+                            .expect("subset callable error slot poisoned")
+                            .get_or_insert(e);
+                        0.0
+                    }
+                }
+            })
+        };
+
+        let failure_fn = failure.clone_ref(py);
+        let failure_err = Arc::clone(&captured_err);
+        let failure_closure = move |outcomes: &MeasurementOutcomes| -> bool {
+            Python::attach(|py| {
+                match failure_fn
+                    .call1(py, (bits_of(outcomes),))
+                    .and_then(|v| v.extract::<bool>(py))
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        failure_err
+                            .lock()
+                            .expect("subset callable error slot poisoned")
+                            .get_or_insert(e);
+                        false
+                    }
+                }
+            })
+        };
+
+        let subset_config = SubsetConfig {
+            samples_per_level: config.samples_per_level,
+            threshold_fraction: config.threshold_fraction,
+            max_levels: config.max_levels,
+            min_conditional_prob: config.min_conditional_prob,
+            seed: self.seed,
+        };
+
+        let result = SubsetSimulation::new(
+            self.commands.clone(),
+            num_qubits,
+            score_closure,
+            failure_closure,
+        )
+        .with_noise_builder(move || noise.clone())
+        .with_config(subset_config)
+        .run();
+
+        if let Some(err) = captured_err
+            .lock()
+            .expect("subset callable error slot poisoned")
+            .take()
+        {
+            return Err(err);
+        }
+
+        let subset = Py::new(py, PySubsetResult { inner: result })?;
+        Ok(PyRawMeasurementResult::from_subset(subset))
+    }
+
     /// Resolve the sampling strategy, mirroring the Rust builder's rules
     /// and error messages.
     fn resolved_sampling(&self) -> PyResult<PySampling> {
@@ -832,6 +1136,12 @@ impl PySimNeoBuilder {
             PySampling::PathEnumeration { .. } => {
                 Err(pyo3::exceptions::PyValueError::new_err(format!(
                     "{path_name} does not support path enumeration; use \
+                     .sampling(monte_carlo(shots)) instead."
+                )))
+            }
+            PySampling::SubsetSimulation { .. } => {
+                Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "{path_name} does not support subset simulation; use \
                      .sampling(monte_carlo(shots)) instead."
                 )))
             }
