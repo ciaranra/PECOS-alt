@@ -34,9 +34,12 @@ pub enum SimStack {
     /// The data-oriented `pecos-neo` stack (experimental).
     ///
     /// Requires building pecos with the `neo` cargo feature. Currently
-    /// routes QASM and HUGR programs with the default quantum backend;
-    /// explicit `.classical()`, `.noise()`, and `.quantum()` configuration
-    /// is not yet translated and is rejected with an error at `run()`.
+    /// routes QASM and HUGR programs with the default quantum backend.
+    /// Depolarizing-family noise (`PassThroughNoise`, `DepolarizingNoise`,
+    /// `DepolarizingNoiseModel`) is translated with identical conventions;
+    /// other noise types, explicit `.classical()`, and explicit
+    /// `.quantum()` configuration are not yet translated and are rejected
+    /// with an error at `run()`.
     Neo,
 }
 
@@ -78,7 +81,10 @@ struct RoutedConfig {
     workers: Option<usize>,
     auto_workers: bool,
     qubits: Option<usize>,
-    noise_set: bool,
+    /// The noise config as passed, for translation to the neo stack.
+    /// Type-erased because `.noise()` is generic; the neo route downcasts
+    /// against the known engines noise types.
+    noise: Option<Box<dyn std::any::Any + Send>>,
     quantum_set: bool,
 }
 
@@ -201,13 +207,10 @@ impl ProgrammedSimBuilder {
                     .to_string(),
             ));
         }
-        if self.routed.noise_set {
-            return Err(PecosError::Input(
-                "Noise models are not yet routed to the neo stack (the engines-to-neo noise \
-                 mapping is pending); remove .noise() or use .stack(SimStack::Engines)."
-                    .to_string(),
-            ));
-        }
+        let neo_noise = match &self.routed.noise {
+            None => None,
+            Some(noise) => map_noise_to_neo(noise.as_ref())?,
+        };
         if self.routed.quantum_set {
             return Err(PecosError::Input(
                 "Explicit quantum backends are not yet routed to the neo stack (it uses the \
@@ -241,6 +244,9 @@ impl ProgrammedSimBuilder {
         if let Some(qubits) = self.routed.qubits {
             builder = builder.qubits(qubits);
         }
+        if let Some(noise) = neo_noise {
+            builder = builder.noise(noise);
+        }
 
         let results = builder.run();
         results.shots.ok_or_else(|| {
@@ -261,7 +267,64 @@ impl ProgrammedSimBuilder {
                 .to_string(),
         ))
     }
+}
 
+/// Translate an engines noise config into the neo stack's noise model.
+///
+/// The depolarizing family has identical sampling conventions on both
+/// stacks (uniform X/Y/Z at p1, uniform 15 two-qubit Paulis at p2, X
+/// before prep/measure for `p_prep`/`p_meas`), verified by
+/// `exp/pecos-neo/tests/noise_comparison_test.rs`, so probabilities map
+/// one-to-one. `GeneralNoiseModel` is NOT mapped: its full configuration
+/// (leakage, idle, crosstalk, emission models) is not readable from the
+/// built model and uses the "average" probability convention; configure
+/// `sim_neo()` directly with neo's `GeneralNoiseModelBuilder` for those.
+///
+/// Returns `Ok(None)` for pass-through (no noise).
+#[cfg(feature = "neo")]
+fn map_noise_to_neo(
+    noise: &(dyn std::any::Any + Send),
+) -> Result<Option<pecos_neo::noise::GeneralNoiseModelBuilder>, PecosError> {
+    use pecos_engines::noise::{DepolarizingNoiseModelBuilder, PassThroughNoiseModelBuilder};
+    use pecos_engines::{DepolarizingNoise, PassThroughNoise};
+    use pecos_neo::noise::GeneralNoiseModelBuilder;
+
+    let uniform = |p_prep: f64, p_meas: f64, p1: f64, p2: f64| {
+        GeneralNoiseModelBuilder::new()
+            .with_p_prep(p_prep)
+            .with_p_meas_symmetric(p_meas)
+            .with_p1(p1)
+            .with_p2(p2)
+    };
+
+    if noise.downcast_ref::<PassThroughNoise>().is_some()
+        || noise
+            .downcast_ref::<PassThroughNoiseModelBuilder>()
+            .is_some()
+    {
+        return Ok(None);
+    }
+    if let Some(depolarizing) = noise.downcast_ref::<DepolarizingNoise>() {
+        let p = depolarizing.p;
+        return Ok(Some(uniform(p, p, p, p)));
+    }
+    if let Some(builder) = noise.downcast_ref::<DepolarizingNoiseModelBuilder>() {
+        // Resolve the configured probabilities via the built model; this
+        // enforces the same all-probabilities-set requirement the engines
+        // path would.
+        let (p_prep, p_meas, p1, p2) = builder.clone().build().probabilities();
+        return Ok(Some(uniform(p_prep, p_meas, p1, p2)));
+    }
+
+    Err(PecosError::Input(
+        "This noise type is not yet mapped to the neo stack (mapped so far: PassThroughNoise, \
+         DepolarizingNoise, DepolarizingNoiseModelBuilder). Remove .noise(), use \
+         .stack(SimStack::Engines), or configure sim_neo() directly with a neo noise model."
+            .to_string(),
+    ))
+}
+
+impl ProgrammedSimBuilder {
     /// Override the classical engine selection
     ///
     /// This allows you to specify a different engine than the auto-selected one.
@@ -313,9 +376,9 @@ impl ProgrammedSimBuilder {
     #[must_use]
     pub fn noise<N>(mut self, noise_builder: N) -> Self
     where
-        N: pecos_engines::noise::IntoNoiseModel + Send + 'static,
+        N: pecos_engines::noise::IntoNoiseModel + Clone + Send + 'static,
     {
-        self.routed.noise_set = true;
+        self.routed.noise = Some(Box::new(noise_builder.clone()));
         self.base_builder = self.base_builder.noise(noise_builder);
         self
     }

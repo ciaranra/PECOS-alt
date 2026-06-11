@@ -78,15 +78,103 @@ fn neo_stack_parallel_matches_engines() {
     assert_eq!(engines, neo);
 }
 
+/// One-qubit program whose only error source is what the noise model adds.
+fn x_measure_qasm() -> Qasm {
+    Qasm::from_string(
+        r#"
+        OPENQASM 2.0;
+        include "qelib1.inc";
+        qreg q[1];
+        creg c[1];
+        x q[0];
+        measure q[0] -> c[0];
+        "#,
+    )
+}
+
+/// Fraction of shots where register `c` reads the given bitstring.
+#[allow(clippy::cast_precision_loss)] // shot counts are far below 2^52
+fn rate_of(results: &pecos_engines::shot_results::ShotVec, bits: &str) -> f64 {
+    let matching = results
+        .shots
+        .iter()
+        .filter(|shot| shot.data["c"].to_bitstring().as_deref() == Some(bits))
+        .count();
+    matching as f64 / results.shots.len() as f64
+}
+
 #[test]
-fn neo_stack_rejects_unrouted_noise() {
+fn neo_stack_measurement_noise_rate_matches_engines() {
+    // Measurement-only noise: P(c = 0) = p_meas exactly on both stacks.
+    let p_meas = 0.2;
+    let shots = 4000;
+    let noise = pecos_engines::noise::DepolarizingNoiseModel::builder()
+        .with_prep_probability(0.0)
+        .with_meas_probability(p_meas)
+        .with_p1_probability(0.0)
+        .with_p2_probability(0.0);
+
+    let engines = sim(x_measure_qasm())
+        .noise(noise.clone())
+        .seed(42)
+        .run(shots)
+        .expect("engines run");
+    let neo = sim(x_measure_qasm())
+        .stack(SimStack::Neo)
+        .noise(noise)
+        .seed(42)
+        .run(shots)
+        .expect("neo run");
+
+    let engines_rate = rate_of(&engines, "0");
+    let neo_rate = rate_of(&neo, "0");
+
+    // Bands: ~5 sigma for p=0.2 at 4000 shots is ~0.032.
+    assert!(
+        (engines_rate - p_meas).abs() < 0.035,
+        "engines rate {engines_rate} should be near {p_meas}"
+    );
+    assert!(
+        (neo_rate - p_meas).abs() < 0.035,
+        "neo rate {neo_rate} should be near {p_meas}"
+    );
+}
+
+#[test]
+fn neo_stack_uniform_depolarizing_rate_matches_engines() {
+    // Uniform depolarizing through the convenience struct: the compound
+    // error rate must agree across stacks (same conventions, different
+    // RNG streams).
+    let shots = 4000;
+    let run = |stack: SimStack| {
+        sim(x_measure_qasm())
+            .stack(stack)
+            .noise(pecos_engines::DepolarizingNoise { p: 0.1 })
+            .seed(7)
+            .run(shots)
+            .expect("run")
+    };
+
+    let engines_rate = rate_of(&run(SimStack::Engines), "0");
+    let neo_rate = rate_of(&run(SimStack::Neo), "0");
+
+    assert!(
+        (engines_rate - neo_rate).abs() < 0.035,
+        "compound error rates should agree: engines={engines_rate}, neo={neo_rate}"
+    );
+}
+
+#[test]
+fn neo_stack_rejects_unmapped_noise() {
+    let general =
+        pecos_engines::noise::GeneralNoiseModel::builder().with_average_p1_probability(0.01);
     let err = sim(deterministic_conditional_qasm())
         .stack(SimStack::Neo)
-        .noise(pecos_engines::DepolarizingNoise { p: 0.01 })
+        .noise(general)
         .run(5)
-        .expect_err("noise is not yet routed to the neo stack");
+        .expect_err("GeneralNoiseModelBuilder is not yet mapped to the neo stack");
     assert!(
-        err.to_string().contains("not yet routed to the neo stack"),
+        err.to_string().contains("not yet mapped to the neo stack"),
         "unexpected error: {err}"
     );
 }
