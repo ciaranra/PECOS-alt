@@ -4987,6 +4987,38 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_sim_neo_clifford_angle_rotation_on_stabilizer_backend() {
+        // QASM compiles s -> u1(pi/2) -> rz(pi/2); Clifford backends must
+        // execute Clifford-angle rotations via the CliffordRotation
+        // decomposition instead of failing with NoDecomposition.
+        // h . rz(pi/2) . rz(pi/2) . h = h z h = x, so the outcome is
+        // deterministically 1.
+        use pecos_core::Angle64;
+        let circuit = CommandBuilder::new()
+            .pz(&[0])
+            .h(&[0])
+            .rz(&[0], Angle64::QUARTER_TURN)
+            .rz(&[0], Angle64::QUARTER_TURN)
+            .h(&[0])
+            .mz(&[0])
+            .build();
+
+        let results = sim_neo(circuit)
+            .quantum(sparse_stab())
+            .sampling(monte_carlo(10))
+            .seed(1)
+            .run();
+
+        for outcome in &results.outcomes {
+            assert_eq!(
+                outcome.get_bit(QubitId(0)),
+                Some(true),
+                "h z h = x must deterministically flip"
+            );
+        }
+    }
+
     // --- Shot/ShotVec Production Tests ---
 
     #[test]

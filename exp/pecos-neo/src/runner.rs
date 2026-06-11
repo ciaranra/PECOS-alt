@@ -1207,7 +1207,13 @@ impl<S: CliffordGateable> CircuitRunner<S> {
                         || Self::try_execute_clifford(sim, gate_id, qubits)
                         || self.rotation_executor.is_some_and(|executor| {
                             executor(sim, gate_id, command.angles.as_slice(), qubits)
-                        });
+                        })
+                        || Self::try_execute_clifford_rotation(
+                            sim,
+                            gate_id,
+                            qubits,
+                            command.angles.as_slice(),
+                        );
 
                 if !executed {
                     self.execute_via_decomposition(
@@ -1393,7 +1399,8 @@ impl<S: CliffordGateable> CircuitRunner<S> {
             || Self::try_execute_clifford(sim, gate_id, qubits)
             || self
                 .rotation_executor
-                .is_some_and(|executor| executor(sim, gate_id, angles, qubits));
+                .is_some_and(|executor| executor(sim, gate_id, angles, qubits))
+            || Self::try_execute_clifford_rotation(sim, gate_id, qubits, angles);
 
         if !executed {
             self.execute_via_decomposition(sim, gate_id, qubits, angles, depth)?;
@@ -1525,6 +1532,35 @@ impl<S: CliffordGateable> CircuitRunner<S> {
                 sim.swap(&pairs);
                 true
             }
+            _ => false,
+        }
+    }
+
+    /// Try to execute a rotation gate with a Clifford angle via the generic
+    /// `CliffordRotation` decomposition (the same path the pecos-engines
+    /// stack uses), so Clifford backends run e.g. QASM's `s`/`u1(pi/2)`
+    /// compiled to `rz(k*pi/2)` without a rotation-capable simulator.
+    /// Non-Clifford angles fall through to the decomposition registry.
+    fn try_execute_clifford_rotation(
+        sim: &mut S,
+        gate_id: GateId,
+        qubits: &[QubitId],
+        angles: &[Angle64],
+    ) -> bool {
+        use pecos_simulators::clifford_rotation::CliffordRotation;
+        let Some(gate_type) = gate_id.try_to_gate_type() else {
+            return false;
+        };
+        let [angle] = angles else {
+            return false;
+        };
+        match gate_type {
+            GateType::RZ => sim.try_rz(*angle, qubits).is_ok(),
+            GateType::RX => sim.try_rx(*angle, qubits).is_ok(),
+            GateType::RY => sim.try_ry(*angle, qubits).is_ok(),
+            GateType::RZZ => sim.try_rzz(*angle, &flat_to_pairs(qubits)).is_ok(),
+            GateType::RXX => sim.try_rxx(*angle, &flat_to_pairs(qubits)).is_ok(),
+            GateType::RYY => sim.try_ryy(*angle, &flat_to_pairs(qubits)).is_ok(),
             _ => false,
         }
     }

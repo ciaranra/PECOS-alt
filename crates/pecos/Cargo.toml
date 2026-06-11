@@ -109,6 +109,7 @@ qec = ["quantum", "dep:pecos-qec"]
 full = ["runtime", "all-simulators", "all-decoders", "hugr", "wasm", "qec"]
 
 [dev-dependencies]
+criterion.workspace = true
 tempfile.workspace = true
 assert_cmd.workspace = true
 # Required for doctests
@@ -148,3 +149,8 @@ required-features = ["runtime"]
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "stack_comparison"
+harness = false
+required-features = ["neo"]
