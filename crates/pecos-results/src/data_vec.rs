@@ -26,7 +26,7 @@ use serde_json::Value as JsonValue;
 ///
 /// # Example
 /// ```
-/// use pecos_engines::{DataVec, Data};
+/// use pecos_results::{Data, DataVec};
 ///
 /// // Create a DataVec from a vector of Data values
 /// let data_values = vec![Data::U32(1), Data::U32(2), Data::U32(3)];
@@ -292,7 +292,7 @@ impl DataVec {
     ///
     /// # Example
     /// ```
-    /// use pecos_engines::{DataVec, DataVecType};
+    /// use pecos_results::{DataVec, DataVecType};
     ///
     /// let vec = DataVec::new_empty(DataVecType::U32);
     /// assert!(vec.is_empty());

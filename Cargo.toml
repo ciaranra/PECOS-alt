@@ -210,6 +210,7 @@ pecos-qis-ffi-types = { version = "0.2.0-dev.0", path = "crates/pecos-qis-ffi-ty
 pecos-quantum = { version = "0.2.0-dev.0", path = "crates/pecos-quantum" }
 pecos-random = { version = "0.2.0-dev.0", path = "crates/pecos-random" }
 pecos-relay-bp = { version = "0.2.0-dev.0", path = "crates/pecos-relay-bp" }
+pecos-results = { version = "0.2.0-dev.0", path = "crates/pecos-results" }
 pecos-rslib = { version = "0.2.0-dev.0", path = "python/pecos-rslib" }
 pecos-rslib-llvm = { version = "0.2.0-dev.0", path = "python/pecos-rslib-llvm" }
 pecos-simulators = { version = "0.2.0-dev.0", path = "crates/pecos-simulators" }

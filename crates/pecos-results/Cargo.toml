@@ -1,5 +1,5 @@
 [package]
-name = "pecos-engines"
+name = "pecos-results"
 version.workspace = true
 edition.workspace = true
 readme = "README.md"
@@ -9,27 +9,14 @@ repository.workspace = true
 license.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Simulation engine infrastructure for PECOS"
-
-[lib]
-crate-type = ["rlib"]
+description = "Result types (Shot, ShotVec, ShotMap, Data) for PECOS quantum program execution"
 
 [dependencies]
-rayon.workspace = true
-log.workspace = true
+pecos-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-rand.workspace = true
-bytemuck.workspace = true
-bitflags.workspace = true
-dyn-clone.workspace = true
 num-bigint.workspace = true
 bitvec.workspace = true
-
-pecos-core.workspace = true
-pecos-results.workspace = true
-pecos-simulators.workspace = true
-pecos-random.workspace = true
 
 [lints]
 workspace = true

@@ -16,7 +16,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::shot_results::{Data, Shot, ShotVec};
+    use crate::{Data, Shot, ShotVec};
 
     #[test]
     fn test_shot_results_display_64bit() {

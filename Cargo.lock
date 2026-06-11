@@ -3850,6 +3850,7 @@ dependencies = [
  "num-bigint",
  "pecos-core",
  "pecos-random",
+ "pecos-results",
  "pecos-simulators",
  "rand 0.10.1",
  "rayon",
@@ -4245,6 +4246,17 @@ dependencies = [
  "relay-bp",
  "sprs",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "pecos-results"
+version = "0.2.0-dev.0"
+dependencies = [
+ "bitvec",
+ "num-bigint",
+ "pecos-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
