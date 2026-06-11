@@ -60,6 +60,10 @@ fn measurement_record_index(record: i32, num_measurements: usize) -> Option<usiz
 #[pyclass(name = "RawMeasurementResult", module = "pecos_rslib_exp")]
 pub struct PyRawMeasurementResult {
     storage: RawMeasurementStorage,
+    /// Per-row weights (path probabilities for path enumeration,
+    /// importance weights for importance sampling). None for plain
+    /// Monte Carlo runs.
+    weights: Option<Vec<f64>>,
 }
 
 enum RawMeasurementStorage {
@@ -135,6 +139,7 @@ impl PyRawMeasurementResult {
     pub fn from_columnar(result: SampleResult) -> Self {
         Self {
             storage: RawMeasurementStorage::Columnar(result),
+            weights: None,
         }
     }
 
@@ -146,7 +151,15 @@ impl PyRawMeasurementResult {
                 rows,
                 num_measurements,
             },
+            weights: None,
         }
+    }
+
+    /// Construct from row-major data with per-row weights.
+    pub fn from_rows_weighted(rows: Vec<Vec<u8>>, weights: Vec<f64>) -> Self {
+        let mut result = Self::from_rows(rows);
+        result.weights = Some(weights);
+        result
     }
 }
 
@@ -162,6 +175,15 @@ impl PyRawMeasurementResult {
     #[getter]
     fn num_measurements(&self) -> usize {
         self.storage.num_measurements()
+    }
+
+    /// Per-row weights, or None for plain Monte Carlo runs.
+    ///
+    /// Path enumeration: exact path probabilities (sum to 1 for complete
+    /// enumeration).
+    #[getter]
+    fn weights(&self) -> Option<Vec<f64>> {
+        self.weights.clone()
     }
 
     /// Get a single measurement bit (0 or 1).
@@ -493,6 +515,39 @@ pub fn monte_carlo(shots: usize) -> PyMonteCarloBuilder {
     PyMonteCarloBuilder { shots, workers: 1 }
 }
 
+/// Path enumeration strategy builder. Mirrors Rust `path_enumeration(k)`.
+///
+/// Exhaustively enumerates the measurement branches of a noiseless Clifford
+/// circuit. Each distinct realized path becomes one result row; exact path
+/// probabilities are exposed via `result.weights`.
+///
+/// Example:
+///     result = sim_neo(tc).quantum(stabilizer()).sampling(path_enumeration(2)).run()
+///     for row, p in zip(result, result.weights): ...
+#[pyclass(
+    name = "PathEnumerationBuilder",
+    skip_from_py_object,
+    module = "pecos_rslib_exp"
+)]
+#[derive(Clone)]
+pub struct PyPathEnumerationBuilder {
+    pub(crate) max_measurements: usize,
+}
+
+/// Create a path enumeration strategy covering up to `max_measurements`
+/// random measurement branches.
+#[pyfunction]
+pub fn path_enumeration(max_measurements: usize) -> PyPathEnumerationBuilder {
+    PyPathEnumerationBuilder { max_measurements }
+}
+
+/// Sampling strategy selected on the Python builder.
+#[derive(Clone)]
+enum PySampling {
+    MonteCarlo { shots: usize, workers: usize },
+    PathEnumeration { max_measurements: usize },
+}
+
 /// Builder for sim_neo simulations. Mirrors the Rust-side `SimNeoBuilder`.
 #[pyclass(
     name = "SimNeoBuilder",
@@ -505,8 +560,8 @@ pub struct PySimNeoBuilder {
     /// Original Rust TickCircuit for meas_sampling (avoids reconstruction).
     /// Wrapped in Arc for Clone compatibility with pyo3.
     tick_circuit: std::sync::Arc<pecos_quantum::TickCircuit>,
-    /// Sampling strategy as (shots, workers). None until `.sampling()`.
-    sampling: Option<(usize, usize)>,
+    /// Sampling strategy. None until `.sampling()`.
+    sampling: Option<PySampling>,
     /// Shot count from the deprecated top-level `.shots()` forwarder.
     legacy_shots: Option<usize>,
     /// Random seed. None = nondeterministic, mirroring the Rust builder.
@@ -585,12 +640,30 @@ impl PySimNeoBuilder {
 
     /// Set the sampling strategy (shots and workers live on the sampler).
     ///
+    /// Accepts `monte_carlo(shots)` or `path_enumeration(max_measurements)`.
+    ///
     /// Example:
     ///     sim_neo(tc).sampling(monte_carlo(1000).workers(4)).run()
-    fn sampling(&self, sampler: &PyMonteCarloBuilder) -> Self {
+    ///     sim_neo(tc).sampling(path_enumeration(2)).run()
+    fn sampling(&self, sampler: &Bound<'_, PyAny>) -> PyResult<Self> {
         let mut c = self.clone();
-        c.sampling = Some((sampler.shots, sampler.workers));
-        c
+        if sampler.is_instance_of::<PyMonteCarloBuilder>() {
+            let s: PyRef<'_, PyMonteCarloBuilder> = sampler.extract()?;
+            c.sampling = Some(PySampling::MonteCarlo {
+                shots: s.shots,
+                workers: s.workers,
+            });
+        } else if sampler.is_instance_of::<PyPathEnumerationBuilder>() {
+            let s: PyRef<'_, PyPathEnumerationBuilder> = sampler.extract()?;
+            c.sampling = Some(PySampling::PathEnumeration {
+                max_measurements: s.max_measurements,
+            });
+        } else {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "sampling() expects monte_carlo(shots) or path_enumeration(max_measurements)",
+            ));
+        }
+        Ok(c)
     }
 
     /// Set number of shots.
@@ -628,7 +701,11 @@ impl PySimNeoBuilder {
         if backend == "meas_sampling" {
             return self.run_meas_sampling();
         }
-        let (shots, workers) = self.resolved_sampling()?;
+
+        if let PySampling::PathEnumeration { max_measurements } = self.resolved_sampling()? {
+            return self.run_path_enumeration(&backend, max_measurements);
+        }
+        let (shots, workers) = self.resolved_monte_carlo("this backend")?;
 
         let noise = self
             .noise_config
@@ -678,20 +755,86 @@ impl PySimNeoBuilder {
 }
 
 impl PySimNeoBuilder {
+    /// Path enumeration: exhaustively enumerate measurement branches.
+    ///
+    /// Pre-validates with ValueError mirroring the Rust builder's
+    /// build-time checks, then runs through the Rust sim_neo builder.
+    fn run_path_enumeration(
+        &self,
+        backend: &str,
+        max_measurements: usize,
+    ) -> PyResult<PyRawMeasurementResult> {
+        if backend != "stabilizer" {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "Path enumeration currently supports only the stabilizer() backend \
+                 (or .auto()).",
+            ));
+        }
+        if self.noise_config.is_some() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "Path enumeration enumerates measurement branches of the noiseless \
+                 circuit; remove .noise().",
+            ));
+        }
+        if max_measurements > 24 {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Path enumeration covers 2^max_measurements paths; \
+                 max_measurements = {max_measurements} would enumerate more than 16M paths."
+            )));
+        }
+
+        let results = sim_neo(self.commands.clone())
+            .quantum(pecos_neo::tool::sparse_stab())
+            .sampling(pecos_neo::tool::path_enumeration(max_measurements))
+            .build()
+            .run();
+
+        let rows: Vec<Vec<u8>> = results
+            .outcomes
+            .iter()
+            .map(|shot| shot.iter().map(|o| u8::from(o.outcome)).collect())
+            .collect();
+        let weights: Vec<f64> = results
+            .weights
+            .as_ref()
+            .map(|ws| {
+                ws.iter()
+                    .map(pecos_neo::sampling::weight::SampleWeight::weight)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(PyRawMeasurementResult::from_rows_weighted(rows, weights))
+    }
+
     /// Resolve the sampling strategy, mirroring the Rust builder's rules
     /// and error messages.
-    fn resolved_sampling(&self) -> PyResult<(usize, usize)> {
-        match (self.sampling, self.legacy_shots) {
-            (Some(sampling), None) => Ok(sampling),
+    fn resolved_sampling(&self) -> PyResult<PySampling> {
+        match (&self.sampling, self.legacy_shots) {
+            (Some(sampling), None) => Ok(sampling.clone()),
             (Some(_), Some(_)) => Err(pyo3::exceptions::PyValueError::new_err(
                 "Conflicting sampling configuration: deprecated .shots() cannot be combined \
                  with .sampling(). Set shots on the sampler builder, e.g. \
                  .sampling(monte_carlo(1000)).",
             )),
-            (None, Some(shots)) => Ok((shots, 1)),
+            (None, Some(shots)) => Ok(PySampling::MonteCarlo { shots, workers: 1 }),
             (None, None) => Err(pyo3::exceptions::PyValueError::new_err(
                 "No sampling strategy set. Use .sampling(monte_carlo(shots)).",
             )),
+        }
+    }
+
+    /// Resolve to (shots, workers) for execution paths that only support
+    /// Monte Carlo sampling.
+    fn resolved_monte_carlo(&self, path_name: &str) -> PyResult<(usize, usize)> {
+        match self.resolved_sampling()? {
+            PySampling::MonteCarlo { shots, workers } => Ok((shots, workers)),
+            PySampling::PathEnumeration { .. } => {
+                Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "{path_name} does not support path enumeration; use \
+                     .sampling(monte_carlo(shots)) instead."
+                )))
+            }
         }
     }
 
@@ -755,7 +898,7 @@ impl PySimNeoBuilder {
                 )));
             }
         }
-        let (shots, workers) = self.resolved_sampling()?;
+        let (shots, workers) = self.resolved_monte_carlo("inline-channel execution")?;
         if workers > 1 {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "inline-channel execution does not support parallel workers; use monte_carlo(shots) without .workers()",
@@ -799,7 +942,7 @@ impl PySimNeoBuilder {
 
     /// DEM sampling backend: dispatches to stochastic or coherent path based on method.
     fn run_meas_sampling(&self) -> PyResult<PyRawMeasurementResult> {
-        let (_, workers) = self.resolved_sampling()?;
+        let (_, workers) = self.resolved_monte_carlo("meas_sampling")?;
         if workers > 1 {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "meas_sampling does its own batch sampling and does not support parallel workers; use monte_carlo(shots) without .workers()",
@@ -864,7 +1007,7 @@ impl PySimNeoBuilder {
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
         let plan = RawMeasurementPlan::new(&history, mechanisms);
-        let (shots, _) = self.resolved_sampling()?;
+        let (shots, _) = self.resolved_monte_carlo("meas_sampling")?;
         let result = plan.sample(shots, self.resolved_seed_u64());
 
         Ok(PyRawMeasurementResult::from_columnar(result))
@@ -942,7 +1085,7 @@ impl PySimNeoBuilder {
         let gates = commands_to_gates(&self.commands);
         let generator = select_generator(method, noise_config.idle_rz_angle);
 
-        let (shots, _) = self.resolved_sampling()?;
+        let (shots, _) = self.resolved_monte_carlo("meas_sampling")?;
         let result = run_dem_simulation(
             &gates,
             &noise,
