@@ -366,16 +366,21 @@ where
                 num_failures,
             });
 
-            cumulative_prob *= conditional_prob;
-
-            // Check termination conditions
+            // Check termination conditions BEFORE committing this level's
+            // conditional probability: the final estimate is
+            // cumulative_prob x (failure fraction of the current population),
+            // so a level's conditional must only be multiplied in when the
+            // population is actually conditioned on its threshold (resampled
+            // from the survivors). Otherwise the threshold-crossing
+            // probability gets counted twice.
             if num_failures == samples.len() {
-                // All samples have failed - we're done
+                // All samples have failed - we're done (final fraction = 1).
                 break;
             }
 
             if conditional_prob < self.config.min_conditional_prob {
-                // Probability too small to continue reliably
+                // Probability too small to continue reliably; estimate from
+                // the current (unconditioned) population.
                 break;
             }
 
@@ -385,11 +390,19 @@ where
                 break;
             }
 
-            // Check if all survivors are failures
-            let survivors: Vec<_> = samples.iter().filter(|s| s.score >= threshold).collect();
+            // Commit this level: condition on score >= threshold.
+            cumulative_prob *= conditional_prob;
 
-            if survivors.iter().all(|s| s.is_failure) {
-                // All survivors are failures - we're done
+            // Check if all survivors are failures
+            if samples
+                .iter()
+                .filter(|s| s.score >= threshold)
+                .all(|s| s.is_failure)
+            {
+                // All survivors are failures - we're done. Keep only the
+                // conditioned population so the final failure fraction is
+                // measured on it (= 1.0 here).
+                samples.retain(|s| s.score >= threshold);
                 break;
             }
 
@@ -484,15 +497,18 @@ where
     /// Run one sample and return (`outcomes`, `score`, `is_failure`).
     fn run_one_sample(&self, rng: &mut PecosRng) -> (MeasurementOutcomes, f64, bool) {
         let mut sim = SparseStab::new(self.num_qubits);
-        let mut runner = CircuitRunner::<SparseStab>::new().with_rng(rng.clone());
+        let mut runner = CircuitRunner::<SparseStab>::new();
 
         // Get fresh noise model from builder
         if let Some(noise) = (self.noise_builder)() {
             runner = runner.with_noise(noise);
         }
 
-        // Advance the RNG so next call gets different randomness
-        rng.random::<u64>();
+        // Seed both the noise RNG and the simulator's internal measurement
+        // RNG from the master stream; seeding only the noise RNG leaves
+        // measurement randomness nondeterministic.
+        let sample_seed: u64 = rng.random();
+        runner.set_full_seed(&mut sim, sample_seed);
 
         let outcomes = runner
             .apply_circuit(&mut sim, &self.circuit)
@@ -1235,7 +1251,6 @@ impl ProperSubsetSimulation {
 
             // Conditional probability for this level
             let conditional_prob = num_above as f64 / n as f64;
-            cumulative_prob *= conditional_prob;
 
             // Record level statistics
             let num_failures = self.trajectories.iter().filter(|t| t.is_failure).count();
@@ -1248,15 +1263,26 @@ impl ProperSubsetSimulation {
                 num_failures,
             });
 
-            // If all trajectories have failed, we're done
+            // Terminal checks BEFORE committing this level's conditional:
+            // the final estimate is cumulative_prob x (failure fraction of
+            // the current population), so a level's conditional must only be
+            // multiplied in once the population is resampled (conditioned)
+            // on its threshold. Otherwise the threshold crossing is counted
+            // twice.
+
+            // If all trajectories have failed, we're done (fraction = 1).
             if num_failures == n {
                 break;
             }
 
-            // If threshold exceeds failure threshold, we're done
+            // If the threshold reaches the failure threshold, stop and let
+            // the final failure fraction condition directly on the failure
+            // event over the current population.
             if new_threshold >= self.failure_threshold {
                 break;
             }
+
+            cumulative_prob *= conditional_prob;
 
             current_threshold = new_threshold;
 
@@ -1477,10 +1503,6 @@ impl ProperSubsetSimulation {
             // Conditional probability for this level
             let conditional_prob = num_above as f64 / n as f64;
 
-            if conditional_prob > 0.0 {
-                cumulative_prob *= conditional_prob;
-            }
-
             // Record level statistics
             let num_failures = self.trajectories.iter().filter(|t| t.is_failure).count();
             self.levels.push(LevelStats {
@@ -1492,14 +1514,26 @@ impl ProperSubsetSimulation {
                 num_failures,
             });
 
-            // If all trajectories have failed, we're done
+            // Terminal checks BEFORE committing this level's conditional:
+            // the final estimate is cumulative_prob x (failure fraction of
+            // the current population), so a level's conditional must only be
+            // multiplied in once the population is resampled (conditioned)
+            // on its threshold. Otherwise the threshold crossing is counted
+            // twice.
+
+            // If all trajectories have failed, we're done (fraction = 1).
             if num_failures == n {
                 break;
             }
 
-            // If threshold reached failure level, we're done
+            // If the threshold reaches the failure level, stop and let the
+            // final failure fraction condition directly on the failure event.
             if actual_threshold >= self.failure_threshold {
                 break;
+            }
+
+            if conditional_prob > 0.0 {
+                cumulative_prob *= conditional_prob;
             }
 
             current_threshold = actual_threshold;
@@ -2044,7 +2078,6 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
 
             // Conditional probability for this level
             let conditional_prob = num_above as f64 / n as f64;
-            cumulative_prob *= conditional_prob;
 
             // Record level statistics
             let num_failures = histories.iter().filter(|h| h.is_failure).count();
@@ -2057,15 +2090,26 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
                 num_failures,
             });
 
-            // If all trajectories have failed, we're done
+            // Terminal checks BEFORE committing this level's conditional:
+            // the final estimate is cumulative_prob x (failure fraction of
+            // the current population), so a level's conditional must only be
+            // multiplied in once the population is resampled (conditioned)
+            // on its threshold. Otherwise the threshold crossing is counted
+            // twice.
+
+            // If all trajectories have failed, we're done (fraction = 1).
             if num_failures == n {
                 break;
             }
 
-            // If threshold exceeds failure threshold, we're done
+            // If the threshold reaches the failure threshold, stop and let
+            // the final failure fraction condition directly on the failure
+            // event over the current population.
             if new_threshold >= self.config.failure_threshold {
                 break;
             }
+
+            cumulative_prob *= conditional_prob;
 
             current_threshold = new_threshold;
 

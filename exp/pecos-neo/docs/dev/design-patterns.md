@@ -33,7 +33,8 @@ Need to run a quantum circuit simulation?
 │   │   └─► Use sim_neo() with importance_sampling(shots)
 │   │
 │   └─► P ~ 10^-6 or smaller?
-│       └─► Use SubsetSimulation or ProperSubsetSimulation
+│       └─► Use sim_neo() with subset_simulation(samples).score(..).failure(..)
+│           (or ProperSubsetSimulation directly for checkpoint continuation)
 │
 └─► Need population-based simulation (splitting, cloning)?
     └─► Use World<S> with ECS components

@@ -119,6 +119,7 @@ use crate::outcome::{MeasurementOutcomes, RegisterMap};
 use crate::program::{CommandSource, DynProgramRunner, ProgramRunner, StaticProgram};
 use crate::runner::{EventHandlers, GateOverrides};
 use crate::sampling::importance_runner::ImportanceSamplingRunner;
+use crate::sampling::subset::{SubsetConfig, SubsetResult, SubsetSimulation};
 use pecos_core::rng::RngManageable;
 use pecos_core::rng::rng_manageable::derive_seed;
 use pecos_random::PecosRng;
@@ -127,6 +128,7 @@ use pecos_simulators::{
 };
 use rayon::prelude::*;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use super::resource::Resources;
 use super::{Plugin, Stage, Tool};
@@ -1018,6 +1020,149 @@ pub fn monte_carlo(shots: usize) -> MonteCarloBuilder {
     MonteCarloBuilder { shots, workers: 1 }
 }
 
+/// Score function for subset simulation: how "close" an outcome is to the
+/// failure event (higher = closer).
+pub type SubsetScoreFn = Arc<dyn Fn(&MeasurementOutcomes) -> f64 + Send + Sync>;
+
+/// Failure predicate for subset simulation: did this outcome reach the
+/// rare event?
+pub type SubsetFailureFn = Arc<dyn Fn(&MeasurementOutcomes) -> bool + Send + Sync>;
+
+/// Builder for the subset simulation sampling strategy.
+///
+/// Created by [`subset_simulation()`]. `samples_per_level` is the defining
+/// argument; `.score()` and `.failure()` are required (there is no sensible
+/// default for either), checked at `.build()`.
+#[derive(Clone)]
+pub struct SubsetSimulationBuilder {
+    samples_per_level: usize,
+    threshold_fraction: f64,
+    max_levels: usize,
+    min_conditional_prob: f64,
+    score: Option<SubsetScoreFn>,
+    failure: Option<SubsetFailureFn>,
+}
+
+impl std::fmt::Debug for SubsetSimulationBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SubsetSimulationBuilder")
+            .field("samples_per_level", &self.samples_per_level)
+            .field("threshold_fraction", &self.threshold_fraction)
+            .field("max_levels", &self.max_levels)
+            .field("min_conditional_prob", &self.min_conditional_prob)
+            .field("score", &self.score.as_ref().map(|_| "Fn(..) -> f64"))
+            .field("failure", &self.failure.as_ref().map(|_| "Fn(..) -> bool"))
+            .finish()
+    }
+}
+
+impl SubsetSimulationBuilder {
+    /// Set the score function: how "close" is this outcome to failure?
+    ///
+    /// Higher scores advance to the next level. The score must be
+    /// consistent with `.failure()`: failing outcomes should score at
+    /// least as high as any non-failing outcome.
+    #[must_use]
+    pub fn score<F>(mut self, score: F) -> Self
+    where
+        F: Fn(&MeasurementOutcomes) -> f64 + Send + Sync + 'static,
+    {
+        self.score = Some(Arc::new(score));
+        self
+    }
+
+    /// Set the failure predicate: did this outcome reach the rare event?
+    #[must_use]
+    pub fn failure<F>(mut self, failure: F) -> Self
+    where
+        F: Fn(&MeasurementOutcomes) -> bool + Send + Sync + 'static,
+    {
+        self.failure = Some(Arc::new(failure));
+        self
+    }
+
+    /// Set the fraction of samples that advances past each threshold
+    /// (typically 0.1-0.2; default 0.1).
+    #[must_use]
+    pub fn threshold_fraction(mut self, fraction: f64) -> Self {
+        self.threshold_fraction = fraction;
+        self
+    }
+
+    /// Set the maximum number of levels before giving up (default 20).
+    #[must_use]
+    pub fn max_levels(mut self, levels: usize) -> Self {
+        self.max_levels = levels;
+        self
+    }
+
+    /// Set the minimum conditional probability before declaring the
+    /// failure event unreachable (default 1e-6).
+    #[must_use]
+    pub fn min_conditional_prob(mut self, p: f64) -> Self {
+        self.min_conditional_prob = p;
+        self
+    }
+}
+
+impl From<SubsetSimulationBuilder> for Sampling {
+    fn from(builder: SubsetSimulationBuilder) -> Self {
+        Sampling::SubsetSimulation { config: builder }
+    }
+}
+
+/// Create a subset simulation strategy builder running `samples_per_level`
+/// samples at each level.
+///
+/// Subset simulation estimates rare event probabilities (1e-6 and below)
+/// by decomposing them into a product of conditional probabilities across
+/// adaptive levels. It needs a `.score()` function (how close an outcome is
+/// to failure) and a `.failure()` predicate (did the rare event occur);
+/// both are required.
+///
+/// The result arrives in [`SimulationResults::subset`]; per-shot
+/// `outcomes` are empty for subset runs.
+///
+/// Currently supports static circuits on the `sparse_stab()` backend only.
+///
+/// # Example
+///
+/// ```no_run
+/// use pecos_neo::tool::{sim_neo, sparse_stab, subset_simulation};
+/// use pecos_neo::prelude::*;
+///
+/// let circuit = CommandBuilder::new()
+///     .pz(&[0, 1, 2])
+///     .h(&[0, 1, 2])
+///     .mz(&[0, 1, 2])
+///     .build();
+///
+/// let results = sim_neo(circuit)
+///     .quantum(sparse_stab())
+///     .sampling(
+///         subset_simulation(1000)
+///             .score(|o| o.iter().filter(|m| m.outcome).count() as f64)
+///             .failure(|o| o.iter().all(|m| m.outcome)),
+///     )
+///     .seed(42)
+///     .run();
+///
+/// let subset = results.subset.expect("subset strategy produces an estimate");
+/// println!("P(failure) = {:.2e}", subset.probability());
+/// ```
+#[must_use]
+pub fn subset_simulation(samples_per_level: usize) -> SubsetSimulationBuilder {
+    let defaults = SubsetConfig::default();
+    SubsetSimulationBuilder {
+        samples_per_level,
+        threshold_fraction: defaults.threshold_fraction,
+        max_levels: defaults.max_levels,
+        min_conditional_prob: defaults.min_conditional_prob,
+        score: None,
+        failure: None,
+    }
+}
+
 /// Sampling strategy for simulation execution.
 ///
 /// This enum defines how shots are executed. Different strategies offer
@@ -1029,7 +1174,7 @@ pub fn monte_carlo(shots: usize) -> MonteCarloBuilder {
 /// [`importance_sampling()`] and pass to
 /// [`SimNeoBuilder::sampling()`](SimNeoBuilder::sampling). There is no
 /// default: the shot count is part of the strategy and must be explicit.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Sampling {
     /// Monte Carlo execution (sequential with 1 worker, parallel with >1).
     ///
@@ -1048,22 +1193,58 @@ pub enum Sampling {
     /// Importance sampling for rare event estimation.
     ///
     /// Biases sampling toward rare events and reweights results.
-    /// Use when estimating probabilities of rare outcomes.
+    /// Use when estimating probabilities of rare outcomes (~1e-3 to 1e-6).
     ///
     /// Use the [`importance_sampling()`] builder function to create this variant.
     ImportanceSampling {
         /// Configuration for importance sampling.
         config: ImportanceSamplingBuilder,
     },
+
+    /// Subset simulation for very rare event estimation (~1e-6 and below).
+    ///
+    /// Decomposes the rare event probability into a product of conditional
+    /// probabilities across adaptive levels. Produces an estimate in
+    /// [`SimulationResults::subset`] instead of per-shot outcomes.
+    ///
+    /// Use the [`subset_simulation()`] builder function to create this variant.
+    SubsetSimulation {
+        /// Configuration for subset simulation.
+        config: SubsetSimulationBuilder,
+    },
+}
+
+impl std::fmt::Debug for Sampling {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MonteCarlo { shots, workers } => f
+                .debug_struct("MonteCarlo")
+                .field("shots", shots)
+                .field("workers", workers)
+                .finish(),
+            Self::ImportanceSampling { config } => f
+                .debug_struct("ImportanceSampling")
+                .field("config", config)
+                .finish(),
+            Self::SubsetSimulation { config } => f
+                .debug_struct("SubsetSimulation")
+                .field("config", config)
+                .finish(),
+        }
+    }
 }
 
 impl Sampling {
     /// Number of shots/trials this strategy will run.
+    ///
+    /// For subset simulation this is the samples per level; the total
+    /// sample count depends on how many levels the run needs.
     #[must_use]
     pub fn shots(&self) -> usize {
         match self {
             Self::MonteCarlo { shots, .. } => *shots,
             Self::ImportanceSampling { config } => config.shots(),
+            Self::SubsetSimulation { config } => config.samples_per_level,
         }
     }
 }
@@ -1075,6 +1256,9 @@ pub struct SimulationResults {
     pub outcomes: Vec<MeasurementOutcomes>,
     /// Per-shot importance weights (only for importance sampling).
     pub weights: Option<Vec<crate::sampling::weight::SampleWeight>>,
+    /// Rare-event estimate with per-level statistics (only for subset
+    /// simulation; `outcomes` is empty for subset runs).
+    pub subset: Option<SubsetResult>,
 }
 
 impl SimulationResults {
@@ -1102,6 +1286,7 @@ impl SimulationResults {
         if let Some(ref mut weights) = self.weights {
             weights.clear();
         }
+        self.subset = None;
     }
 
     /// Check if this result has importance weights.
@@ -2141,6 +2326,8 @@ impl SimNeoBuilder {
     /// - Parallel Monte Carlo (`workers > 1`) is requested for a
     ///   configuration that cannot build per-worker state (pre-built dynamic
     ///   command sources, custom backends)
+    /// - Subset simulation is missing `.score()`/`.failure()`, or is used
+    ///   with a non-static source or a backend other than `sparse_stab()`
     #[must_use]
     pub fn build(self) -> Simulation {
         // Resolve the program source - configure pending builder with source if needed
@@ -2259,6 +2446,40 @@ impl SimNeoBuilder {
             _ => None,
         };
 
+        // Subset simulation runs outside the Tool schedule, driving
+        // CircuitRunner directly; validate its requirements here and capture
+        // what the run needs.
+        let subset_spec = match &sampling {
+            Sampling::SubsetSimulation { config: ss_config } => {
+                assert!(
+                    ss_config.score.is_some() && ss_config.failure.is_some(),
+                    "Subset simulation requires both .score(..) and .failure(..) on the \
+                     subset_simulation(..) builder; neither has a sensible default."
+                );
+                let circuit = match &source {
+                    ProgramSource::Static(circuit) => circuit.clone(),
+                    _ => panic!(
+                        "Subset simulation requires a static circuit. Classical engines \
+                         and dynamic command sources are not supported."
+                    ),
+                };
+                assert!(
+                    matches!(quantum_backend, QuantumBackend::SparseStab),
+                    "Subset simulation currently supports only the sparse_stab() backend \
+                     (or .auto())."
+                );
+                let num_qubits = self
+                    .explicit_num_qubits
+                    .unwrap_or_else(|| infer_num_qubits_from_circuit(&circuit));
+                Some(SubsetRunSpec {
+                    circuit,
+                    num_qubits,
+                    noise: self.noise.clone(),
+                })
+            }
+            _ => None,
+        };
+
         let mut tool = Tool::new()
             .insert_resource(ProgramSourceResource(source))
             .insert_resource(config)
@@ -2276,6 +2497,8 @@ impl SimNeoBuilder {
                     explicit_num_qubits: self.explicit_num_qubits,
                 });
             }
+            // Subset simulation does not use the Tool schedule; no plugin.
+            Sampling::SubsetSimulation { .. } => {}
         }
 
         // Add noise if configured
@@ -2307,6 +2530,7 @@ impl SimNeoBuilder {
             tool,
             sampling,
             parallel_plan,
+            subset_spec,
         }
     }
 
@@ -2970,6 +3194,15 @@ pub struct Simulation {
     sampling: Sampling,
     /// Data-oriented plan for parallel execution (if applicable).
     parallel_plan: Option<ParallelExecutionPlan>,
+    /// Captured inputs for subset simulation (if applicable).
+    subset_spec: Option<SubsetRunSpec>,
+}
+
+/// Inputs captured at build time for a subset simulation run.
+struct SubsetRunSpec {
+    circuit: CommandQueue,
+    num_qubits: usize,
+    noise: Option<ComposableNoiseModel>,
 }
 
 /// Native backend used by the internal parallel runner factory.
@@ -3263,12 +3496,14 @@ impl Simulation {
     /// - `MonteCarlo { workers: 1, .. }`: Runs shots via the Tool
     /// - `MonteCarlo { workers: n, .. }`: Parallelizes shots across n workers
     /// - `ImportanceSampling`: Runs via the Tool with `ImportanceSamplingSimPlugin`
+    /// - `SubsetSimulation`: Runs the level-adaptive subset algorithm
+    ///   directly; the estimate lands in [`SimulationResults::subset`]
     ///
     /// # Panics
     ///
-    /// Panics if the parallel execution plan is missing for `workers > 1`;
-    /// `SimNeoBuilder::build()` validates this, so it cannot happen for
-    /// simulations constructed through the builder.
+    /// Panics if the parallel execution plan or subset spec is missing for
+    /// the corresponding strategy; `SimNeoBuilder::build()` validates both,
+    /// so it cannot happen for simulations constructed through the builder.
     pub fn run(&mut self) -> SimulationResults {
         let config = self.tool.resource::<SimConfig>().clone();
 
@@ -3280,6 +3515,44 @@ impl Simulation {
                     .as_ref()
                     .expect("parallel plan validated at build time for workers > 1");
                 self.run_parallel(&config, plan, *workers)
+            }
+            Sampling::SubsetSimulation { config: ss_config } => {
+                let spec = self
+                    .subset_spec
+                    .as_ref()
+                    .expect("subset spec validated at build time");
+                let score = ss_config
+                    .score
+                    .clone()
+                    .expect("score fn validated at build time");
+                let failure = ss_config
+                    .failure
+                    .clone()
+                    .expect("failure fn validated at build time");
+                // config.shots carries samples_per_level, so the rerun
+                // override Simulation::shots() applies to it naturally.
+                let subset_config = SubsetConfig {
+                    samples_per_level: config.shots,
+                    threshold_fraction: ss_config.threshold_fraction,
+                    max_levels: ss_config.max_levels,
+                    min_conditional_prob: ss_config.min_conditional_prob,
+                    seed: config.seed,
+                };
+                let noise = spec.noise.clone();
+                let result = SubsetSimulation::new(
+                    spec.circuit.clone(),
+                    spec.num_qubits,
+                    move |o: &MeasurementOutcomes| score(o),
+                    move |o: &MeasurementOutcomes| failure(o),
+                )
+                .with_noise_builder(move || noise.clone())
+                .with_config(subset_config)
+                .run();
+                SimulationResults {
+                    outcomes: Vec::new(),
+                    weights: None,
+                    subset: Some(result),
+                }
             }
             _ => {
                 // Both MonteCarlo{workers:1} and ImportanceSampling run via the Tool.
@@ -3368,6 +3641,7 @@ impl Simulation {
         SimulationResults {
             outcomes,
             weights: None,
+            subset: None,
         }
     }
 
@@ -4178,6 +4452,123 @@ mod tests {
 
         assert_eq!(results.len(), 35);
         assert!(results.has_weights());
+    }
+
+    // --- Subset Simulation Strategy Tests ---
+
+    fn three_qubit_h_circuit() -> CommandQueue {
+        CommandBuilder::new()
+            .pz(&[0, 1, 2])
+            .h(&[0, 1, 2])
+            .mz(&[0, 1, 2])
+            .build()
+    }
+
+    fn count_ones(outcomes: &MeasurementOutcomes) -> f64 {
+        outcomes.iter().filter(|m| m.outcome).count() as f64
+    }
+
+    fn all_ones(outcomes: &MeasurementOutcomes) -> bool {
+        outcomes.iter().count() > 0 && outcomes.iter().all(|m| m.outcome)
+    }
+
+    #[test]
+    fn test_sim_neo_subset_simulation_estimates_known_probability() {
+        // Three H gates: P(all three measure 1) = 1/8.
+        let results = sim_neo(three_qubit_h_circuit())
+            .quantum(sparse_stab())
+            .sampling(subset_simulation(2000).score(count_ones).failure(all_ones))
+            .seed(42)
+            .run();
+
+        assert!(results.outcomes.is_empty());
+        let subset = results.subset.expect("subset strategy returns an estimate");
+        let p = subset.probability();
+        assert!(
+            (0.08..=0.20).contains(&p),
+            "Expected estimate near 1/8, got {p:.4}"
+        );
+        assert!(subset.total_samples >= 2000);
+    }
+
+    #[test]
+    fn test_sim_neo_subset_simulation_certain_event() {
+        // X gate makes the failure event certain.
+        let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
+        let results = sim_neo(circuit)
+            .auto()
+            .sampling(subset_simulation(200).score(count_ones).failure(all_ones))
+            .seed(7)
+            .run();
+
+        let subset = results.subset.expect("subset estimate");
+        assert!(
+            (subset.probability() - 1.0).abs() < 1e-9,
+            "Certain event should estimate ~1.0, got {}",
+            subset.probability()
+        );
+    }
+
+    #[test]
+    fn test_sim_neo_subset_simulation_with_noise() {
+        // Depolarizing(0.3) after Z: P(flip) = 2/3 * 0.3 = 0.2.
+        let circuit = CommandBuilder::new().pz(&[0]).z(&[0]).mz(&[0]).build();
+        let noise = ComposableNoiseModel::new().add_channel(SingleQubitChannel::depolarizing(0.3));
+
+        let results = sim_neo(circuit)
+            .quantum(sparse_stab())
+            .noise(noise)
+            .sampling(subset_simulation(2000).score(count_ones).failure(all_ones))
+            .seed(11)
+            .run();
+
+        let p = results.subset.expect("subset estimate").probability();
+        assert!(
+            (0.12..=0.28).contains(&p),
+            "Expected estimate near 0.2, got {p:.4}"
+        );
+    }
+
+    #[test]
+    fn test_sim_neo_subset_simulation_deterministic() {
+        let run = || {
+            sim_neo(three_qubit_h_circuit())
+                .auto()
+                .sampling(subset_simulation(500).score(count_ones).failure(all_ones))
+                .seed(99)
+                .run()
+                .subset
+                .expect("subset estimate")
+                .probability()
+        };
+        assert!((run() - run()).abs() < 1e-15, "Same seed, same estimate");
+    }
+
+    #[test]
+    #[should_panic(expected = "requires both .score(..) and .failure(..)")]
+    fn test_sim_neo_subset_simulation_missing_fns_is_build_error() {
+        let _ = sim_neo(three_qubit_h_circuit())
+            .auto()
+            .sampling(subset_simulation(100))
+            .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "Subset simulation requires a static circuit")]
+    fn test_sim_neo_subset_simulation_rejects_dynamic_source() {
+        let _ = sim_neo(deterministic_conditional_program())
+            .auto()
+            .sampling(subset_simulation(100).score(count_ones).failure(all_ones))
+            .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "supports only the sparse_stab() backend")]
+    fn test_sim_neo_subset_simulation_rejects_state_vector_backend() {
+        let _ = sim_neo(three_qubit_h_circuit())
+            .quantum(state_vector())
+            .sampling(subset_simulation(100).score(count_ones).failure(all_ones))
+            .build();
     }
 
     #[test]
