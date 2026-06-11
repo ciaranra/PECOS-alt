@@ -3670,6 +3670,7 @@ dependencies = [
  "pecos-hugr",
  "pecos-hugr-qis",
  "pecos-llvm",
+ "pecos-neo",
  "pecos-num",
  "pecos-phir",
  "pecos-phir-json",

@@ -25,6 +25,21 @@ fn build_qis_engine<P: IntoQisInterface + 'static>(
         .map_err(|e| PecosError::Generic(format!("Failed to load program: {e}")))
 }
 
+/// Which simulation stack executes the program.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SimStack {
+    /// The engine/`EngineSystem` stack in `pecos-engines` (current default).
+    #[default]
+    Engines,
+    /// The data-oriented `pecos-neo` stack (experimental).
+    ///
+    /// Requires building pecos with the `neo` cargo feature. Currently
+    /// routes QASM and HUGR programs with the default quantum backend;
+    /// explicit `.classical()`, `.noise()`, and `.quantum()` configuration
+    /// is not yet translated and is rejected with an error at `run()`.
+    Neo,
+}
+
 /// Extension trait for `SimBuilder` to add program-based methods
 pub trait SimBuilderExt {
     /// Set the program and automatically select an appropriate engine
@@ -46,8 +61,25 @@ impl SimBuilderExt for SimBuilder {
             base_builder: self,
             program: program.into(),
             override_classical: false,
+            stack: SimStack::default(),
+            routed: RoutedConfig::default(),
         }
     }
+}
+
+/// Config recorded at the facade for routing to the neo stack.
+///
+/// The engines `SimBuilder` keeps its own copy via the delegating setters;
+/// this records what the neo translation needs (values it can map, flags
+/// for config it cannot yet map and must reject).
+#[derive(Default)]
+struct RoutedConfig {
+    seed: Option<u64>,
+    workers: Option<usize>,
+    auto_workers: bool,
+    qubits: Option<usize>,
+    noise_set: bool,
+    quantum_set: bool,
 }
 
 /// A simulation builder that has a program set and can auto-select engines
@@ -55,6 +87,8 @@ pub struct ProgrammedSimBuilder {
     base_builder: SimBuilder,
     program: Program,
     override_classical: bool,
+    stack: SimStack,
+    routed: RoutedConfig,
 }
 
 impl ProgrammedSimBuilder {
@@ -109,6 +143,18 @@ impl ProgrammedSimBuilder {
         }
     }
 
+    /// Select which simulation stack executes the program.
+    ///
+    /// Defaults to [`SimStack::Engines`]. [`SimStack::Neo`] is experimental
+    /// and requires the `neo` cargo feature; see [`SimStack`] for the
+    /// configuration it can route so far. The result type and contract are
+    /// identical on both stacks.
+    #[must_use]
+    pub fn stack(mut self, stack: SimStack) -> Self {
+        self.stack = stack;
+        self
+    }
+
     /// Build the simulation with automatic engine selection
     ///
     /// # Errors
@@ -116,7 +162,15 @@ impl ProgrammedSimBuilder {
     /// Returns an error if:
     /// - The program type is not yet supported (WASM, WAT, PHIR JSON, `SeleneInterface`)
     /// - Engine building fails
+    /// - The neo stack is selected (it has no `MonteCarloEngine`; use
+    ///   [`run()`](Self::run) directly)
     pub fn build(self) -> Result<MonteCarloEngine, PecosError> {
+        if self.stack == SimStack::Neo {
+            return Err(PecosError::Input(
+                "The neo stack does not expose a MonteCarloEngine; call .run(shots) directly."
+                    .to_string(),
+            ));
+        }
         self.configure_engine()?.build()
     }
 
@@ -127,8 +181,85 @@ impl ProgrammedSimBuilder {
     /// Returns an error if:
     /// - The program type is not yet supported (WASM, WAT, PHIR JSON, `SeleneInterface`)
     /// - Engine building or running fails
+    /// - The neo stack is selected with configuration it cannot route yet
     pub fn run(self, shots: usize) -> Result<pecos_engines::shot_results::ShotVec, PecosError> {
-        self.configure_engine()?.run(shots)
+        match self.stack {
+            SimStack::Engines => self.configure_engine()?.run(shots),
+            SimStack::Neo => self.run_neo(shots),
+        }
+    }
+
+    /// Run the program on the pecos-neo stack.
+    #[cfg(feature = "neo")]
+    fn run_neo(self, shots: usize) -> Result<pecos_engines::shot_results::ShotVec, PecosError> {
+        use pecos_neo::tool::{monte_carlo, sim_neo};
+
+        if self.override_classical {
+            return Err(PecosError::Input(
+                "Explicit .classical() engine builders are not yet routed to the neo stack; \
+                 remove .classical() or use .stack(SimStack::Engines)."
+                    .to_string(),
+            ));
+        }
+        if self.routed.noise_set {
+            return Err(PecosError::Input(
+                "Noise models are not yet routed to the neo stack (the engines-to-neo noise \
+                 mapping is pending); remove .noise() or use .stack(SimStack::Engines)."
+                    .to_string(),
+            ));
+        }
+        if self.routed.quantum_set {
+            return Err(PecosError::Input(
+                "Explicit quantum backends are not yet routed to the neo stack (it uses the \
+                 default sparse stabilizer); remove .quantum() or use .stack(SimStack::Engines)."
+                    .to_string(),
+            ));
+        }
+        match &self.program {
+            Program::Qasm(_) | Program::Hugr(_) => {}
+            _ => {
+                return Err(PecosError::Input(
+                    "Only QASM and HUGR programs are routed to the neo stack so far; \
+                     use .stack(SimStack::Engines) for other program types."
+                        .to_string(),
+                ));
+            }
+        }
+
+        let mut sampler = monte_carlo(shots);
+        if let Some(workers) = self.routed.workers {
+            sampler = sampler.workers(workers);
+        }
+        if self.routed.auto_workers {
+            sampler = sampler.auto_workers();
+        }
+
+        let mut builder = sim_neo(self.program).auto().sampling(sampler);
+        if let Some(seed) = self.routed.seed {
+            builder = builder.seed(seed);
+        }
+        if let Some(qubits) = self.routed.qubits {
+            builder = builder.qubits(qubits);
+        }
+
+        let results = builder.run();
+        results.shots.ok_or_else(|| {
+            PecosError::Generic(
+                "The neo stack produced no register results for a classical-engine program; \
+                 this is a bug in the neo routing."
+                    .to_string(),
+            )
+        })
+    }
+
+    /// Stub when pecos is built without the `neo` feature.
+    #[cfg(not(feature = "neo"))]
+    fn run_neo(self, _shots: usize) -> Result<pecos_engines::shot_results::ShotVec, PecosError> {
+        Err(PecosError::Input(
+            "pecos was built without the 'neo' cargo feature; rebuild with features = [\"neo\"] \
+             to route sim() to the neo stack."
+                .to_string(),
+        ))
     }
 
     /// Override the classical engine selection
@@ -150,6 +281,7 @@ impl ProgrammedSimBuilder {
     /// Set the random seed (delegates to base builder)
     #[must_use]
     pub fn seed(mut self, seed: u64) -> Self {
+        self.routed.seed = Some(seed);
         self.base_builder = self.base_builder.seed(seed);
         self
     }
@@ -157,6 +289,7 @@ impl ProgrammedSimBuilder {
     /// Set the number of worker threads (delegates to base builder)
     #[must_use]
     pub fn workers(mut self, workers: usize) -> Self {
+        self.routed.workers = Some(workers);
         self.base_builder = self.base_builder.workers(workers);
         self
     }
@@ -164,6 +297,7 @@ impl ProgrammedSimBuilder {
     /// Use automatic worker count (delegates to base builder)
     #[must_use]
     pub fn auto_workers(mut self) -> Self {
+        self.routed.auto_workers = true;
         self.base_builder = self.base_builder.auto_workers();
         self
     }
@@ -181,6 +315,7 @@ impl ProgrammedSimBuilder {
     where
         N: pecos_engines::noise::IntoNoiseModel + Send + 'static,
     {
+        self.routed.noise_set = true;
         self.base_builder = self.base_builder.noise(noise_builder);
         self
     }
@@ -192,6 +327,7 @@ impl ProgrammedSimBuilder {
         Q: pecos_engines::quantum_engine_builder::IntoQuantumEngineBuilder + 'static,
         Q::Builder: Send + 'static,
     {
+        self.routed.quantum_set = true;
         self.base_builder = self.base_builder.quantum(quantum_builder);
         self
     }
@@ -199,6 +335,7 @@ impl ProgrammedSimBuilder {
     /// Set the number of qubits (delegates to base builder)
     #[must_use]
     pub fn qubits(mut self, num_qubits: usize) -> Self {
+        self.routed.qubits = Some(num_qubits);
         self.base_builder = self.base_builder.qubits(num_qubits);
         self
     }
@@ -237,5 +374,7 @@ pub fn sim<P: Into<Program>>(program: P) -> ProgrammedSimBuilder {
         base_builder: sim_builder(),
         program: program.into(),
         override_classical: false,
+        stack: SimStack::default(),
+        routed: RoutedConfig::default(),
     }
 }

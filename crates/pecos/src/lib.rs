@@ -225,4 +225,4 @@ pub use pecos_qis::{QisEngineBuilder, qis_engine, setup_qis_engine_with_runtime}
 #[cfg(feature = "wasm")]
 pub use pecos_wasm::{ForeignObject, WasmForeignObject};
 #[cfg(feature = "runtime")]
-pub use unified_sim::{ProgrammedSimBuilder, SimBuilderExt, sim};
+pub use unified_sim::{ProgrammedSimBuilder, SimBuilderExt, SimStack, sim};

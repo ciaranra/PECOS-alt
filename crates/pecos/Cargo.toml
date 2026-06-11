@@ -28,6 +28,7 @@ pecos-qis = { workspace = true, optional = true }
 pecos-llvm = { workspace = true, optional = true }
 pecos-hugr-qis = { workspace = true, optional = true }
 pecos-hugr = { workspace = true, optional = true }
+pecos-neo = { workspace = true, optional = true }
 pecos-phir = { workspace = true, optional = true, features = ["hugr"] }
 pecos-random = { workspace = true, optional = true }
 pecos-num = { workspace = true, optional = true }
@@ -69,6 +70,9 @@ sim = [
 
 # Runtime: enables full simulation library with QASM and PHIR support
 runtime = ["sim", "qasm", "phir"]
+
+# Experimental: route sim() to the pecos-neo stack via .stack(SimStack::Neo)
+neo = ["runtime", "dep:pecos-neo", "pecos-neo/qasm", "pecos-neo/hugr"]
 
 # Program formats (require sim)
 qasm = ["sim", "dep:pecos-qasm"]
