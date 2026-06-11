@@ -4039,6 +4039,7 @@ dependencies = [
  "pecos-qasm",
  "pecos-quantum",
  "pecos-random",
+ "pecos-results",
  "pecos-simulators",
  "proptest",
  "rand 0.10.1",

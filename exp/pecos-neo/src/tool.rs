@@ -94,6 +94,7 @@ pub use importance::{
     CurrentShotWeight, ImportanceSamplingConfig, ImportanceSamplingPlugin,
     ImportanceSamplingResults,
 };
+pub use pecos_results::{Data, Shot, ShotMap, ShotVec};
 pub use plugin::{Plugin, PluginGroup};
 pub use resource::{Resource, Resources};
 pub use simulation::{

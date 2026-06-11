@@ -1365,6 +1365,11 @@ pub struct SimulationResults {
     /// Rare-event estimate with per-level statistics (only for subset
     /// simulation; `outcomes` is empty for subset runs).
     pub subset: Option<SubsetResult>,
+    /// Per-shot named-register results, populated when the program source
+    /// produces them (classical engines: QASM cregs, PHIR variables).
+    /// None for sources without register data; see
+    /// [`to_shot_vec()`](Self::to_shot_vec) to synthesize from outcomes.
+    pub shots: Option<pecos_results::ShotVec>,
 }
 
 impl SimulationResults {
@@ -1393,6 +1398,48 @@ impl SimulationResults {
             weights.clear();
         }
         self.subset = None;
+        self.shots = None;
+    }
+
+    /// View the results as a [`pecos_results::ShotVec`].
+    ///
+    /// Program sources with named-register data (classical engines)
+    /// populate [`shots`](Self::shots) directly; that is returned as-is.
+    /// Otherwise one [`pecos_results::Shot`] per outcome is synthesized:
+    /// with a `register_map`, one `Data::BitVec` register per named
+    /// register (bits in the register's qubit order); without one, a
+    /// single register named `"meas"` with bits in ascending qubit order.
+    #[must_use]
+    pub fn to_shot_vec(&self, register_map: Option<&RegisterMap>) -> pecos_results::ShotVec {
+        if let Some(shots) = &self.shots {
+            return shots.clone();
+        }
+
+        let mut shot_vec = pecos_results::ShotVec::new();
+        for outcomes in &self.outcomes {
+            let mut shot = pecos_results::Shot::default();
+            if let Some(map) = register_map {
+                for name in map.register_names() {
+                    if let Some(bits) = outcomes.register_bitstring(map, name) {
+                        let bitstring: String =
+                            bits.iter().map(|&b| if b { '1' } else { '0' }).collect();
+                        if let Some(data) = pecos_results::Data::from_bitstring(&bitstring) {
+                            shot.data.insert(name.to_string(), data);
+                        }
+                    }
+                }
+            } else {
+                let bitstring: String = outcomes
+                    .iter()
+                    .map(|o| if o.outcome { '1' } else { '0' })
+                    .collect();
+                if let Some(data) = pecos_results::Data::from_bitstring(&bitstring) {
+                    shot.data.insert("meas".to_string(), data);
+                }
+            }
+            shot_vec.shots.push(shot);
+        }
+        shot_vec
     }
 
     /// Check if this result has importance weights.
@@ -3244,6 +3291,21 @@ fn unified_simulation_post_shot(resources: &mut Resources) {
         .outcomes
         .push(outcomes.0);
 
+    // Collect rich register results when the source produces them
+    // (classical engines: QASM cregs, PHIR variables).
+    let shot = resources
+        .get::<UnifiedShotState>()
+        .command_source
+        .shot_results();
+    if let Some(shot) = shot {
+        resources
+            .get_mut::<SimulationResults>()
+            .shots
+            .get_or_insert_with(pecos_results::ShotVec::new)
+            .shots
+            .push(shot);
+    }
+
     // Increment shot counter
     resources.get_mut::<UnifiedShotState>().shot_index += 1;
 }
@@ -3810,6 +3872,7 @@ impl Simulation {
                     outcomes,
                     weights: Some(weights),
                     subset: None,
+                    shots: None,
                 }
             }
             Sampling::SubsetSimulation { config: ss_config } => {
@@ -3848,6 +3911,7 @@ impl Simulation {
                     outcomes: Vec::new(),
                     weights: None,
                     subset: Some(result),
+                    shots: None,
                 }
             }
             _ => {
@@ -3922,6 +3986,7 @@ impl Simulation {
             outcomes,
             weights: Some(weights),
             subset: None,
+            shots: None,
         }
     }
 
@@ -3992,13 +4057,25 @@ impl Simulation {
             })
             .collect();
 
-        // Flatten in deterministic order
-        let outcomes = all_results.into_iter().flat_map(|r| r.outcomes).collect();
+        // Flatten in deterministic order, merging per-worker register shots
+        // when the source produced them.
+        let mut outcomes = Vec::new();
+        let mut shots: Option<pecos_results::ShotVec> = None;
+        for worker_results in all_results {
+            outcomes.extend(worker_results.outcomes);
+            if let Some(worker_shots) = worker_results.shots {
+                shots
+                    .get_or_insert_with(pecos_results::ShotVec::new)
+                    .shots
+                    .extend(worker_shots.shots);
+            }
+        }
 
         SimulationResults {
             outcomes,
             weights: None,
             subset: None,
+            shots,
         }
     }
 
@@ -4882,6 +4959,90 @@ mod tests {
         let r2 = run();
         for (o1, o2) in r1.outcomes.iter().zip(r2.outcomes.iter()) {
             assert_eq!(o1.get_bit(QubitId(0)), o2.get_bit(QubitId(0)));
+        }
+    }
+
+    // --- Shot/ShotVec Production Tests ---
+
+    #[test]
+    fn test_sim_neo_static_circuit_shot_vec_synthesis() {
+        let circuit = CommandBuilder::new()
+            .pz(&[0, 1])
+            .x(&[0])
+            .mz(&[0, 1])
+            .build();
+        let results = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(3))
+            .seed(1)
+            .run();
+
+        assert!(
+            results.shots.is_none(),
+            "Static circuits have no register data"
+        );
+
+        // Without a map: single "meas" register, bits in ascending qubit order.
+        let synthesized = results.to_shot_vec(None);
+        assert_eq!(synthesized.shots.len(), 3);
+        for shot in &synthesized.shots {
+            assert_eq!(shot.data["meas"].to_bitstring().unwrap(), "10");
+        }
+
+        // With a map: one BitVec register per name.
+        let mut map = RegisterMap::new();
+        map.add_register("a", &[QubitId(0)]);
+        map.add_register("b", &[QubitId(1)]);
+        let named = results.to_shot_vec(Some(&map));
+        for shot in &named.shots {
+            assert_eq!(shot.data["a"].to_bitstring().unwrap(), "1");
+            assert_eq!(shot.data["b"].to_bitstring().unwrap(), "0");
+        }
+    }
+
+    #[cfg(feature = "qasm")]
+    #[test]
+    fn test_sim_neo_qasm_produces_register_shots() {
+        // The classical engine's named cregs flow through the adapter into
+        // SimulationResults::shots — including the feedback-conditioned bit.
+        let program = pecos_programs::Qasm::from_string(deterministic_conditional_qasm());
+        let results = sim_neo(program)
+            .auto()
+            .quantum(sparse_stab())
+            .sampling(monte_carlo(5))
+            .seed(42)
+            .run();
+
+        let shots = results
+            .shots
+            .as_ref()
+            .expect("classical engines produce register shots");
+        assert_eq!(shots.shots.len(), 5);
+        for shot in &shots.shots {
+            assert_eq!(shot.data["c"].to_bitstring().unwrap(), "11");
+        }
+        // to_shot_vec returns the engine-produced registers as-is.
+        assert_eq!(results.to_shot_vec(None).shots.len(), 5);
+    }
+
+    #[cfg(feature = "qasm")]
+    #[test]
+    fn test_sim_neo_qasm_parallel_register_shots() {
+        let program = pecos_programs::Qasm::from_string(deterministic_conditional_qasm());
+        let results = sim_neo(program)
+            .auto()
+            .quantum(sparse_stab())
+            .sampling(monte_carlo(6).workers(2))
+            .seed(42)
+            .run();
+
+        let shots = results
+            .shots
+            .as_ref()
+            .expect("parallel adapter runs merge register shots");
+        assert_eq!(shots.shots.len(), 6);
+        for shot in &shots.shots {
+            assert_eq!(shot.data["c"].to_bitstring().unwrap(), "11");
         }
     }
 
