@@ -165,16 +165,67 @@ fn neo_stack_uniform_depolarizing_rate_matches_engines() {
 }
 
 #[test]
+fn neo_stack_general_noise_average_convention_matches() {
+    // The critical convention test: engines' with_average_p1_probability
+    // stores p1 = 1.5 x average internally (standard depolarizing
+    // convention), which the mapping carries one-to-one to neo. With
+    // average_p1 = 0.2 the effective depolarizing p1 is 0.3, so the
+    // outcome flip rate on a single 1q gate is 2/3 x 0.3 = 0.2 on BOTH
+    // stacks. A convention mismatch (double- or un-scaled) would shift
+    // one stack's rate to ~0.13 or ~0.3 and fail loudly.
+    let shots = 4000;
+    let expected_flip = 0.2;
+    let run = |stack: SimStack| {
+        // GeneralNoiseModel defaults are realistic (nonzero emission, prep
+        // leak, idle, and base probabilities); zero everything except the
+        // 1q Pauli channel so the physics is plain depolarizing.
+        let noise = pecos_engines::noise::GeneralNoiseModel::builder()
+            .with_average_p1_probability(0.2)
+            .with_p1_emission_ratio(0.0)
+            .with_p2_emission_ratio(0.0)
+            .with_prep_leak_ratio(0.0)
+            .with_p_idle_linear_rate(0.0)
+            .with_prep_probability(0.0)
+            .with_meas_0_probability(0.0)
+            .with_meas_1_probability(0.0)
+            .with_average_p2_probability(0.0);
+        sim(x_measure_qasm())
+            .stack(stack)
+            .noise(noise)
+            .seed(11)
+            .run(shots)
+            .expect("run")
+    };
+
+    let engines_rate = rate_of(&run(SimStack::Engines), "0");
+    let neo_rate = rate_of(&run(SimStack::Neo), "0");
+
+    assert!(
+        (engines_rate - expected_flip).abs() < 0.035,
+        "engines flip rate {engines_rate} should be near {expected_flip}"
+    );
+    assert!(
+        (neo_rate - expected_flip).abs() < 0.035,
+        "neo flip rate {neo_rate} should be near {expected_flip}"
+    );
+}
+
+#[test]
 fn neo_stack_rejects_unmapped_noise() {
+    // A bare GeneralNoiseModel keeps its realistic defaults (emission
+    // ratio 0.5, prep leak 0.5, idle 0.001) — physics beyond the simple
+    // Pauli subset, so the mapping must refuse rather than silently
+    // change the model.
     let general =
         pecos_engines::noise::GeneralNoiseModel::builder().with_average_p1_probability(0.01);
     let err = sim(deterministic_conditional_qasm())
         .stack(SimStack::Neo)
         .noise(general)
         .run(5)
-        .expect_err("GeneralNoiseModelBuilder is not yet mapped to the neo stack");
+        .expect_err("beyond-subset GeneralNoiseModel configs are not mapped");
     assert!(
-        err.to_string().contains("not yet mapped to the neo stack"),
+        err.to_string()
+            .contains("beyond the simple probability subset"),
         "unexpected error: {err}"
     );
 }

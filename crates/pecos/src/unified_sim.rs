@@ -315,11 +315,34 @@ fn map_noise_to_neo(
         let (p_prep, p_meas, p1, p2) = builder.clone().build().probabilities();
         return Ok(Some(uniform(p_prep, p_meas, p1, p2)));
     }
+    if let Some(builder) = noise.downcast_ref::<pecos_engines::noise::GeneralNoiseModelBuilder>() {
+        // The stored p1/p2 are already in standard depolarizing convention
+        // (the with_average_* setters convert on the way in), so they map
+        // one-to-one onto neo's builder.
+        let Some((p_prep, p_meas_0, p_meas_1, p1, p2)) = builder.simple_probabilities() else {
+            return Err(PecosError::Input(
+                "This GeneralNoiseModel configuration uses features beyond the simple \
+                 probability subset (leakage, emission, seepage, idle, crosstalk, \
+                 angle-dependent noise, scales, or noiseless gates), which are not yet \
+                 mapped to the neo stack. Use .stack(SimStack::Engines) or configure \
+                 sim_neo() directly with a neo noise model."
+                    .to_string(),
+            ));
+        };
+        return Ok(Some(
+            GeneralNoiseModelBuilder::new()
+                .with_p_prep(p_prep)
+                .with_p_meas(p_meas_0, p_meas_1)
+                .with_p1(p1)
+                .with_p2(p2),
+        ));
+    }
 
     Err(PecosError::Input(
         "This noise type is not yet mapped to the neo stack (mapped so far: PassThroughNoise, \
-         DepolarizingNoise, DepolarizingNoiseModelBuilder). Remove .noise(), use \
-         .stack(SimStack::Engines), or configure sim_neo() directly with a neo noise model."
+         DepolarizingNoise, DepolarizingNoiseModelBuilder, GeneralNoiseModelBuilder's simple \
+         probability subset). Remove .noise(), use .stack(SimStack::Engines), or configure \
+         sim_neo() directly with a neo noise model."
             .to_string(),
     ))
 }

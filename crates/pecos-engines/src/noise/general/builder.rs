@@ -735,6 +735,93 @@ impl GeneralNoiseModelBuilder {
     }
 
     // ========================================================================================== //
+    /// The simple Pauli-probability subset of this configuration, if the
+    /// physics reduces to it.
+    ///
+    /// Returns `(p_prep, p_meas_0, p_meas_1, p1, p2)`. `p1`/`p2` are in the
+    /// standard depolarizing convention the builder stores internally (the
+    /// `with_average_*` setters convert on the way in). Unset probabilities
+    /// take their `GeneralNoiseModel::default()` values — this model's
+    /// philosophy is realistic defaults, NOT unset-means-off.
+    ///
+    /// Returns `Some` only when the noise shape is plain Pauli noise:
+    ///
+    /// - Knobs whose model defaults are non-neutral must be EXPLICITLY
+    ///   zeroed: emission ratios (default 0.5 — half the errors replace the
+    ///   gate instead of following it), prep leak ratio (default 0.5), and
+    ///   the linear idle rate (default 0.001).
+    /// - Knobs with neutral defaults (crosstalk, quadratic idle, scales,
+    ///   noiseless gates) may be unset or set to their neutral value.
+    /// - Custom Pauli/emission/crosstalk models and angle-dependent
+    ///   two-qubit noise must be unset.
+    ///
+    /// A configured seed is ignored (it selects a random stream, not
+    /// physics). This exists so other simulation stacks can translate the
+    /// common configuration without re-deriving probability conventions.
+    #[must_use]
+    pub fn simple_probabilities(&self) -> Option<(f64, f64, f64, f64, f64)> {
+        let explicitly_zero = |v: Option<f64>| v == Some(0.0);
+        let zero_or_unset = |v: Option<f64>| v.is_none() || v == Some(0.0);
+        let one_or_unset = |v: Option<f64>| v.is_none() || v == Some(1.0);
+
+        // Non-neutral model defaults: unset means the default applies, so
+        // these must be explicitly zeroed for the physics to be plain Pauli.
+        let defaulted_features_off = explicitly_zero(self.p1_emission_ratio)
+            && explicitly_zero(self.p2_emission_ratio)
+            && explicitly_zero(self.p_prep_leak_ratio)
+            && explicitly_zero(self.p_idle_linear_rate);
+
+        // Neutral model defaults: unset is fine.
+        let optional_features_off = zero_or_unset(self.p_idle_quadratic_rate)
+            && zero_or_unset(self.p_prep_crosstalk)
+            && zero_or_unset(self.p2_idle)
+            && zero_or_unset(self.p_meas_crosstalk_global)
+            && zero_or_unset(self.p_meas_crosstalk_local);
+
+        // Custom samplers/models could change the Pauli distribution; the
+        // model defaults are uniform, so unset is standard.
+        let models_off = self.p_idle_linear_model.is_none()
+            && self.p1_emission_model.is_none()
+            && self.p1_pauli_model.is_none()
+            && self.p2_emission_model.is_none()
+            && self.p2_pauli_model.is_none()
+            && self.p_meas_crosstalk_model.is_none()
+            && self.p2_angle_params.is_none()
+            && self.p2_angle_power.is_none();
+
+        let scales_neutral = one_or_unset(self.scale)
+            && one_or_unset(self.idle_scale)
+            && one_or_unset(self.prep_scale)
+            && one_or_unset(self.meas_scale)
+            && one_or_unset(self.p1_scale)
+            && one_or_unset(self.p2_scale)
+            && one_or_unset(self.p_prep_crosstalk_scale)
+            && one_or_unset(self.p_meas_crosstalk_scale);
+
+        let gates_default = self.noiseless_gates.as_ref().is_none_or(BTreeSet::is_empty);
+
+        if defaulted_features_off
+            && optional_features_off
+            && models_off
+            && scales_neutral
+            && gates_default
+        {
+            // Unset probabilities take the model defaults; read them from
+            // GeneralNoiseModel::default() so they cannot drift.
+            let (d_prep, d_meas_0, d_meas_1, d_p1, d_p2, _) =
+                GeneralNoiseModel::default().probabilities();
+            Some((
+                self.p_prep.unwrap_or(d_prep),
+                self.p_meas_0.unwrap_or(d_meas_0),
+                self.p_meas_1.unwrap_or(d_meas_1),
+                self.p1.unwrap_or(d_p1),
+                self.p2.unwrap_or(d_p2),
+            ))
+        } else {
+            None
+        }
+    }
+
     // scaling
     // ========================================================================================== //
 
@@ -813,5 +900,67 @@ impl GeneralNoiseModelBuilder {
 impl crate::noise::IntoNoiseModel for GeneralNoiseModelBuilder {
     fn into_noise_model(self) -> Box<dyn crate::noise::NoiseModel> {
         Box::new(self.build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_probabilities_requires_explicit_zeros_for_defaulted_features() {
+        // Bare builder: model defaults include emission 0.5, prep leak 0.5,
+        // idle 0.001 — physics beyond the simple Pauli subset.
+        assert!(
+            GeneralNoiseModelBuilder::new()
+                .simple_probabilities()
+                .is_none()
+        );
+        // Setting only a probability does not neutralize the defaults.
+        assert!(
+            GeneralNoiseModelBuilder::new()
+                .with_average_p1_probability(0.2)
+                .simple_probabilities()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn simple_probabilities_returns_stored_convention_values() {
+        let simple = GeneralNoiseModelBuilder::new()
+            .with_average_p1_probability(0.2)
+            .with_average_p2_probability(0.4)
+            .with_prep_probability(0.01)
+            .with_meas_0_probability(0.02)
+            .with_meas_1_probability(0.03)
+            .with_p1_emission_ratio(0.0)
+            .with_p2_emission_ratio(0.0)
+            .with_prep_leak_ratio(0.0)
+            .with_p_idle_linear_rate(0.0)
+            .simple_probabilities()
+            .expect("fully zeroed config is simple");
+
+        let (p_prep, p_meas_0, p_meas_1, p1, p2) = simple;
+        assert!((p_prep - 0.01).abs() < 1e-12);
+        assert!((p_meas_0 - 0.02).abs() < 1e-12);
+        assert!((p_meas_1 - 0.03).abs() < 1e-12);
+        // Stored in standard depolarizing convention: average x 1.5 / x 1.25.
+        assert!((p1 - 0.3).abs() < 1e-12);
+        assert!((p2 - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn simple_probabilities_unset_probabilities_take_model_defaults() {
+        let simple = GeneralNoiseModelBuilder::new()
+            .with_p1_emission_ratio(0.0)
+            .with_p2_emission_ratio(0.0)
+            .with_prep_leak_ratio(0.0)
+            .with_p_idle_linear_rate(0.0)
+            .simple_probabilities()
+            .expect("zeroed features with default probabilities is simple");
+
+        let (d_prep, d_meas_0, d_meas_1, d_p1, d_p2, _) =
+            GeneralNoiseModel::default().probabilities();
+        assert_eq!(simple, (d_prep, d_meas_0, d_meas_1, d_p1, d_p2));
     }
 }
