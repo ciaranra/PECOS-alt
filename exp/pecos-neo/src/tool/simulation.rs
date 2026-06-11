@@ -28,16 +28,16 @@
 //! For circuits without mid-circuit classical control:
 //!
 //! ```no_run
-//! use pecos_neo::tool::sim_neo;
+//! use pecos_neo::tool::{monte_carlo, sim_neo};
 //! use pecos_neo::prelude::*;
 //!
 //! let circuit = CommandBuilder::new()
 //!     .pz(&[0]).h(&[0]).mz(&[0])
 //!     .build();
 //!
-//! let results = sim_neo(circuit)
+//! let results = sim_neo(circuit).auto()
 //!     .depolarizing(0.01)
-//!     .shots(1000)
+//!     .sampling(monte_carlo(1000))
 //!     .seed(42)
 //!     .build()
 //!     .run();
@@ -48,7 +48,7 @@
 //! For QASM programs with classical control flow:
 //!
 //! ```no_run
-//! use pecos_neo::tool::sim_neo;
+//! use pecos_neo::tool::{monte_carlo, sim_neo};
 //! use pecos_qasm::qasm_engine;
 //!
 //! let qasm = r#"
@@ -63,10 +63,10 @@
 //! "#;
 //!
 //! // Pass QASM source, then set the engine
-//! let results = sim_neo(qasm)
+//! let results = sim_neo(qasm).auto()
 //!     .classical(qasm_engine())
 //!     .depolarizing(0.01)
-//!     .shots(1000)
+//!     .sampling(monte_carlo(1000))
 //!     .seed(42)
 //!     .build()
 //!     .run();
@@ -77,19 +77,19 @@
 //! Any `ClassicalControlEngineBuilder` works with `sim_neo()`:
 //!
 //! ```text
-//! use pecos_neo::tool::sim_neo;
+//! use pecos_neo::tool::{monte_carlo, sim_neo};
 //! use pecos_hugr::hugr_engine;
 //! use pecos_qis::qis_engine;
 //!
 //! // HUGR programs
-//! let results = sim_neo(hugr_engine().hugr(&hugr_module))
-//!     .shots(1000)
+//! let results = sim_neo(hugr_engine().hugr(&hugr_module)).auto()
+//!     .sampling(monte_carlo(1000))
 //!     .build()
 //!     .run();
 //!
 //! // QIS programs
-//! let results = sim_neo(qis_engine().qis(&qis_program))
-//!     .shots(1000)
+//! let results = sim_neo(qis_engine().qis(&qis_program)).auto()
+//!     .sampling(monte_carlo(1000))
 //!     .build()
 //!     .run();
 //! ```
@@ -99,12 +99,12 @@
 //! Build once, run multiple times:
 //!
 //! ```no_run
-//! use pecos_neo::tool::sim_neo;
+//! use pecos_neo::tool::{monte_carlo, sim_neo};
 //! use pecos_neo::prelude::*;
 //!
 //! let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
-//! let mut sim = sim_neo(circuit)
-//!     .shots(1000)
+//! let mut sim = sim_neo(circuit).auto()
+//!     .sampling(monte_carlo(1000))
 //!     .build();
 //!
 //! let results1 = sim.run();
@@ -137,13 +137,17 @@ use super::{Plugin, Stage, Tool};
 ///
 /// This enum represents the choice of quantum simulator. The actual simulator
 /// is constructed at build time, following the builder-of-builders pattern.
-#[derive(Default)]
+///
+/// There is no default: select a backend explicitly via
+/// [`SimNeoBuilder::quantum()`](SimNeoBuilder::quantum), or call
+/// [`SimNeoBuilder::auto()`](SimNeoBuilder::auto) to opt into automatic
+/// selection (currently `SparseStab`).
 pub enum QuantumBackend {
-    /// Sparse stabilizer simulator (default).
+    /// Sparse stabilizer simulator.
     ///
     /// Efficient for Clifford circuits and QEC simulations.
     /// Only supports Clifford gates (H, S, CNOT, CZ, etc.).
-    #[default]
+    /// This is what `.auto()` selects.
     SparseStab,
 
     /// Public stabilizer simulator.
@@ -167,10 +171,10 @@ pub enum QuantumBackend {
     /// Custom simulator backend via factory function.
     ///
     /// Allows any simulator implementing `CliffordGateable + RngManageable<Rng = PecosRng>`
-    /// to be used through the `sim_neo()` API. Use [`custom_backend()`] to create.
+    /// to be used through the `sim_neo().auto()` API. Use [`custom_backend()`] to create.
     ///
-    /// Custom backends only support sequential execution. Using `.workers()`,
-    /// `.auto_workers()`, or importance sampling will panic at `.run()` time.
+    /// Custom backends only support sequential execution. Parallel Monte
+    /// Carlo (workers > 1) is rejected at `.build()` time.
     Custom(Box<dyn SimulatorFactory>),
 }
 
@@ -250,19 +254,19 @@ impl From<StateVecBuilder> for QuantumBackend {
 
 /// Create a sparse stabilizer backend builder.
 ///
-/// The sparse stabilizer is the default backend, efficient for Clifford circuits
+/// The sparse stabilizer is the backend `.auto()` selects, efficient for Clifford circuits
 /// and quantum error correction simulations.
 ///
 /// # Example
 ///
 /// ```no_run
-/// use pecos_neo::tool::{sim_neo, sparse_stab};
+/// use pecos_neo::tool::{monte_carlo, sim_neo, sparse_stab};
 /// use pecos_neo::prelude::*;
 ///
 /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 /// let results = sim_neo(circuit)
 ///     .quantum(sparse_stab())
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .build()
 ///     .run();
 /// ```
@@ -280,13 +284,13 @@ pub fn sparse_stab() -> SparseStabBuilder {
 /// # Example
 ///
 /// ```no_run
-/// use pecos_neo::tool::{sim_neo, stabilizer};
+/// use pecos_neo::tool::{monte_carlo, sim_neo, stabilizer};
 /// use pecos_neo::prelude::*;
 ///
 /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 /// let results = sim_neo(circuit)
 ///     .quantum(stabilizer())
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .build()
 ///     .run();
 /// ```
@@ -303,13 +307,13 @@ pub fn stabilizer() -> StabilizerBuilder {
 /// # Example
 ///
 /// ```no_run
-/// use pecos_neo::tool::{sim_neo, state_vector};
+/// use pecos_neo::tool::{monte_carlo, sim_neo, state_vector};
 /// use pecos_neo::prelude::*;
 ///
 /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 /// let results = sim_neo(circuit)
 ///     .quantum(state_vector())
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .build()
 ///     .run();
 /// ```
@@ -450,7 +454,7 @@ impl From<CustomBackendBuilder> for QuantumBackend {
 /// Create a custom backend from a factory closure.
 ///
 /// This allows any simulator implementing `CliffordGateable + RngManageable<Rng = PecosRng>`
-/// to be used through `sim_neo()`. The closure receives the number of qubits
+/// to be used through `sim_neo().auto()`. The closure receives the number of qubits
 /// and should return a new simulator instance.
 ///
 /// **Note:** Custom backends only support sequential execution. Using `.workers()`,
@@ -460,7 +464,7 @@ impl From<CustomBackendBuilder> for QuantumBackend {
 /// # Example
 ///
 /// ```no_run
-/// use pecos_neo::tool::{sim_neo, custom_backend};
+/// use pecos_neo::tool::{monte_carlo, sim_neo, custom_backend};
 /// use pecos_neo::prelude::*;
 /// use pecos_simulators::SparseStab;
 ///
@@ -469,7 +473,7 @@ impl From<CustomBackendBuilder> for QuantumBackend {
 /// // Use a custom simulator backend
 /// let results = sim_neo(circuit)
 ///     .quantum(custom_backend(|n| SparseStab::new(n)))
-///     .shots(100)
+///     .sampling(monte_carlo(100))
 ///     .seed(42)
 ///     .build()
 ///     .run();
@@ -508,7 +512,7 @@ pub fn custom_backend_from_factory(
 /// # Example
 ///
 /// ```no_run
-/// use pecos_neo::tool::{sim_neo, custom_backend_with_rotations};
+/// use pecos_neo::tool::{monte_carlo, sim_neo, custom_backend_with_rotations};
 /// use pecos_neo::prelude::*;
 /// use pecos_simulators::StateVec;
 ///
@@ -516,7 +520,7 @@ pub fn custom_backend_from_factory(
 ///
 /// let results = sim_neo(circuit)
 ///     .quantum(custom_backend_with_rotations(|n| StateVec::new(n)))
-///     .shots(100)
+///     .sampling(monte_carlo(100))
 ///     .seed(42)
 ///     .build()
 ///     .run();
@@ -644,13 +648,13 @@ impl SimNeoInput for &pecos_quantum::DagCircuit {
 /// When passing a string, use `.classical(engine)` to specify how to interpret it:
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo;
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
 /// use pecos_qasm::qasm_engine;
 ///
 /// let qasm_code = "OPENQASM 2.0; qreg q[1]; h q[0]; measure q[0];";
-/// sim_neo(qasm_code)
+/// sim_neo(qasm_code).auto()
 ///     .classical(qasm_engine())
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .build()
 ///     .run();
 /// ```
@@ -673,7 +677,7 @@ impl SimNeoInput for String {
 /// `.classical(engine)` for explicit control:
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo;
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
 /// use pecos_programs::Qasm;
 /// use pecos_qasm::qasm_engine;
 ///
@@ -682,14 +686,14 @@ impl SimNeoInput for String {
 /// // Auto mode - uses qasm_engine() automatically
 /// sim_neo(Qasm::from_string(qasm_code.clone()))
 ///     .auto()
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .build()
 ///     .run();
 ///
 /// // Explicit mode
-/// sim_neo(Qasm::from_string(qasm_code))
+/// sim_neo(Qasm::from_string(qasm_code)).auto()
 ///     .classical(qasm_engine())
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .build()
 ///     .run();
 /// ```
@@ -704,13 +708,13 @@ impl SimNeoInput for pecos_programs::Qasm {
 /// Use `.auto()` to automatically select the HUGR interpreter engine:
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo;
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
 /// use pecos_programs::Hugr;
 ///
 /// let hugr = Hugr::from_file("program.hugr").unwrap();
 /// sim_neo(hugr)
 ///     .auto()
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .build()
 ///     .run();
 /// ```
@@ -726,13 +730,13 @@ impl SimNeoInput for pecos_programs::Hugr {
 /// the program type:
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo;
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
 /// use pecos_programs::{Program, Qasm};
 ///
 /// let qasm = Qasm::from_string("OPENQASM 2.0; qreg q[1]; h q[0]; measure q[0];".to_string());
 /// sim_neo(Program::Qasm(qasm))
 ///     .auto()
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .build()
 ///     .run();
 /// ```
@@ -773,8 +777,8 @@ impl Default for SimConfig {
 
 /// Builder for importance sampling configuration.
 ///
-/// Specifies the true error rates and boost factor for biased sampling.
-/// Use the [`importance_sampling()`] function to create an instance.
+/// Specifies the shot count, true error rates, and boost factor for biased
+/// sampling. Use the [`importance_sampling()`] function to create an instance.
 ///
 /// # Example
 ///
@@ -783,18 +787,19 @@ impl Default for SimConfig {
 /// use pecos_neo::prelude::*;
 ///
 /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
-/// let results = sim_neo(circuit)
-///     .sampling(importance_sampling()
+/// let results = sim_neo(circuit).auto()
+///     .sampling(importance_sampling(10000)
 ///         .with_p1(0.001)
 ///         .with_p2(0.01)
 ///         .with_p_meas(0.001)
 ///         .with_boost(10.0))
-///     .shots(10000)
 ///     .build()
 ///     .run();
 /// ```
 #[derive(Debug, Clone)]
 pub struct ImportanceSamplingBuilder {
+    /// Number of (boosted) trials to run.
+    shots: usize,
     /// Single-qubit gate error rate (true distribution).
     p1: f64,
     /// Two-qubit gate error rate (true distribution).
@@ -806,12 +811,13 @@ pub struct ImportanceSamplingBuilder {
 }
 
 impl ImportanceSamplingBuilder {
-    /// Create a new importance sampling builder with default values.
+    /// Create a new importance sampling builder running `shots` trials.
     ///
-    /// Default: p1=0.001, p2=0.01, `p_meas=0.001`, boost=10.0
+    /// Default rates: p1=0.001, p2=0.01, `p_meas=0.001`, boost=10.0
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(shots: usize) -> Self {
         Self {
+            shots,
             p1: 0.001,
             p2: 0.01,
             p_meas: 0.001,
@@ -888,11 +894,11 @@ impl ImportanceSamplingBuilder {
     pub fn boost(&self) -> f64 {
         self.boost
     }
-}
 
-impl Default for ImportanceSamplingBuilder {
-    fn default() -> Self {
-        Self::new()
+    /// Get the number of (boosted) trials to run.
+    #[must_use]
+    pub fn shots(&self) -> usize {
+        self.shots
     }
 }
 
@@ -902,7 +908,7 @@ impl From<ImportanceSamplingBuilder> for Sampling {
     }
 }
 
-/// Create an importance sampling strategy builder.
+/// Create an importance sampling strategy builder running `shots` trials.
 ///
 /// Importance sampling biases noise toward higher error rates to observe
 /// rare events more frequently, then reweights results for unbiased estimates.
@@ -914,12 +920,11 @@ impl From<ImportanceSamplingBuilder> for Sampling {
 /// use pecos_neo::prelude::*;
 ///
 /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
-/// let results = sim_neo(circuit)
-///     .sampling(importance_sampling()
+/// let results = sim_neo(circuit).auto()
+///     .sampling(importance_sampling(10000)
 ///         .with_p1(0.001)
 ///         .with_p2(0.01)
 ///         .with_boost(10.0))
-///     .shots(10000)
 ///     .build()
 ///     .run();
 ///
@@ -932,8 +937,85 @@ impl From<ImportanceSamplingBuilder> for Sampling {
 /// }
 /// ```
 #[must_use]
-pub fn importance_sampling() -> ImportanceSamplingBuilder {
-    ImportanceSamplingBuilder::new()
+pub fn importance_sampling(shots: usize) -> ImportanceSamplingBuilder {
+    ImportanceSamplingBuilder::new(shots)
+}
+
+/// Builder for the Monte Carlo sampling strategy.
+///
+/// Created by [`monte_carlo()`]. Shots is the defining argument; workers
+/// defaults to 1 (sequential).
+#[derive(Debug, Clone)]
+pub struct MonteCarloBuilder {
+    shots: usize,
+    workers: usize,
+}
+
+impl MonteCarloBuilder {
+    /// Set the number of parallel workers.
+    ///
+    /// Parallel execution distributes shots across workers using rayon,
+    /// with each worker getting its own simulator, command source, and
+    /// noise model built from the shared configuration. Per-shot seeding
+    /// uses global shot indices, so results are identical for any worker
+    /// count.
+    ///
+    /// Requires a per-worker construction path: a static circuit or a
+    /// classical engine builder source, on a built-in or adapted backend.
+    /// Pre-built dynamic command sources and custom backends cannot build
+    /// per-worker state; `.build()` rejects those combinations.
+    #[must_use]
+    pub fn workers(mut self, workers: usize) -> Self {
+        self.workers = workers;
+        self
+    }
+
+    /// Set the worker count from available parallelism.
+    ///
+    /// See [`workers()`](Self::workers) for requirements.
+    #[must_use]
+    pub fn auto_workers(mut self) -> Self {
+        self.workers = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        self
+    }
+}
+
+impl From<MonteCarloBuilder> for Sampling {
+    fn from(builder: MonteCarloBuilder) -> Self {
+        Sampling::MonteCarlo {
+            shots: builder.shots,
+            workers: builder.workers,
+        }
+    }
+}
+
+/// Create a Monte Carlo sampling strategy builder running `shots` shots.
+///
+/// This is the standard execution strategy: each shot runs the program
+/// once and records its outcomes. Sequential by default; add
+/// `.workers(n)` or `.auto_workers()` for parallel execution.
+///
+/// # Example
+///
+/// ```no_run
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
+/// use pecos_neo::prelude::*;
+///
+/// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
+///
+/// // Sequential
+/// let results = sim_neo(circuit.clone()).auto()
+///     .sampling(monte_carlo(1000))
+///     .run();
+///
+/// // Parallel with 8 workers
+/// let results = sim_neo(circuit).auto()
+///     .sampling(monte_carlo(1000).workers(8))
+///     .run();
+/// ```
+#[must_use]
+pub fn monte_carlo(shots: usize) -> MonteCarloBuilder {
+    MonteCarloBuilder { shots, workers: 1 }
 }
 
 /// Sampling strategy for simulation execution.
@@ -943,9 +1025,10 @@ pub fn importance_sampling() -> ImportanceSamplingBuilder {
 ///
 /// Stored as data in the builder, the actual execution is set up at run time.
 ///
-/// The default is `MonteCarlo { workers: 1 }`, which runs shots sequentially
-/// using the Tool/Schedule/Plugin system. Use `.workers(n)` or `.auto_workers()`
-/// for parallel execution.
+/// Construct via the builder functions [`monte_carlo()`] and
+/// [`importance_sampling()`] and pass to
+/// [`SimNeoBuilder::sampling()`](SimNeoBuilder::sampling). There is no
+/// default: the shot count is part of the strategy and must be explicit.
 #[derive(Debug, Clone)]
 pub enum Sampling {
     /// Monte Carlo execution (sequential with 1 worker, parallel with >1).
@@ -953,8 +1036,12 @@ pub enum Sampling {
     /// Each worker runs a batch of shots independently with deterministic seeding.
     /// Supports both noiseless and noisy circuits (noise model is cloned per worker).
     /// With 1 worker, runs via the Tool's schedule directly.
+    ///
+    /// Use the [`monte_carlo()`] builder function to create this variant.
     MonteCarlo {
-        /// Number of parallel workers (default: 1).
+        /// Number of shots to run.
+        shots: usize,
+        /// Number of parallel workers (1 = sequential).
         workers: usize,
     },
 
@@ -970,24 +1057,14 @@ pub enum Sampling {
     },
 }
 
-impl Default for Sampling {
-    fn default() -> Self {
-        Self::MonteCarlo { workers: 1 }
-    }
-}
-
 impl Sampling {
-    /// Create a Monte Carlo sampling strategy with specified workers.
+    /// Number of shots/trials this strategy will run.
     #[must_use]
-    pub fn monte_carlo(workers: usize) -> Self {
-        Self::MonteCarlo { workers }
-    }
-
-    /// Create a Monte Carlo sampling strategy with auto-detected worker count.
-    #[must_use]
-    pub fn monte_carlo_auto() -> Self {
-        let workers = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
-        Self::MonteCarlo { workers }
+    pub fn shots(&self) -> usize {
+        match self {
+            Self::MonteCarlo { shots, .. } => *shots,
+            Self::ImportanceSampling { config } => config.shots(),
+        }
     }
 }
 
@@ -1085,7 +1162,7 @@ impl SimulationResults {
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_neo::outcome::RegisterMap;
     /// use pecos_neo::prelude::*;
     ///
@@ -1096,7 +1173,7 @@ impl SimulationResults {
     /// let mut reg = RegisterMap::new();
     /// reg.add_register("c", &[QubitId(0), QubitId(1)]);
     ///
-    /// let results = sim_neo(circuit).shots(100).seed(42).run();
+    /// let results = sim_neo(circuit).auto().sampling(monte_carlo(100)).seed(42).run();
     /// let columns = results.as_register_columns(&reg);
     /// assert_eq!(columns["c"].len(), 100);
     /// ```
@@ -1133,7 +1210,7 @@ impl SimulationResults {
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_neo::outcome::RegisterMap;
     /// use pecos_neo::prelude::*;
     ///
@@ -1144,7 +1221,7 @@ impl SimulationResults {
     /// let mut reg = RegisterMap::new();
     /// reg.add_register("c", &[QubitId(0)]);
     ///
-    /// let results = sim_neo(circuit).shots(1000).seed(42).run();
+    /// let results = sim_neo(circuit).auto().sampling(monte_carlo(1000)).seed(42).run();
     /// let counts = results.register_counts(&reg, "c");
     /// // Should have entries for [false] and [true]
     /// ```
@@ -1388,13 +1465,13 @@ fn infer_num_qubits_from_circuit(circuit: &CommandQueue) -> usize {
 /// ## Static Circuit
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo;
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
 /// use pecos_neo::prelude::*;
 ///
 /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
-/// let results = sim_neo(circuit)
+/// let results = sim_neo(circuit).auto()
 ///     .depolarizing(0.01)
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .seed(42)
 ///     .build()
 ///     .run();
@@ -1403,14 +1480,14 @@ fn infer_num_qubits_from_circuit(circuit: &CommandQueue) -> usize {
 /// ## QASM Program (builder-of-builders pattern)
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo;
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
 /// use pecos_qasm::qasm_engine;
 ///
 /// let qasm_code = "OPENQASM 2.0; qreg q[1]; h q[0]; measure q[0];";
 /// // Pass program source first, then engine factory
-/// let results = sim_neo(qasm_code)
+/// let results = sim_neo(qasm_code).auto()
 ///     .classical(qasm_engine())  // Engine configured with source at build time
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .seed(42)
 ///     .build()
 ///     .run();
@@ -1419,14 +1496,14 @@ fn infer_num_qubits_from_circuit(circuit: &CommandQueue) -> usize {
 /// ## Pre-configured Engine Builder
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo_builder;
+/// use pecos_neo::tool::{monte_carlo, sim_neo_builder};
 /// use pecos_qasm::qasm_engine;
 ///
 /// let qasm_code = "OPENQASM 2.0; qreg q[1]; h q[0]; measure q[0];";
 /// // Or pass already-configured engine builder
 /// let results = sim_neo_builder()
 ///     .with_engine(qasm_engine().qasm(qasm_code))
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .build()
 ///     .run();
 /// ```
@@ -1441,10 +1518,20 @@ pub struct SimNeoBuilder {
     definitions: Option<GateDefinitions>,
     /// Simulation configuration (data).
     config: SimConfig,
-    /// Sampling strategy (data).
-    sampling: Sampling,
-    /// Quantum backend configuration (data).
-    quantum_backend: QuantumBackend,
+    /// Sampling strategy (data). None until `.sampling()` is called.
+    sampling: Option<Sampling>,
+    /// Shot count from the deprecated top-level `.shots()` forwarder.
+    legacy_shots: Option<usize>,
+    /// Worker count from the deprecated top-level `.workers()` forwarder.
+    legacy_workers: Option<usize>,
+    /// Auto worker-count request from `.auto()`/deprecated `.auto_workers()`,
+    /// honored only on the legacy `.shots()` path.
+    auto_workers_hint: bool,
+    /// Backend auto-selection opt-in from `.auto()`.
+    auto_backend: bool,
+    /// Quantum backend configuration (data). None until `.quantum()` is
+    /// called; `.auto()` opts into automatic selection at build time.
+    quantum_backend: Option<QuantumBackend>,
     /// Explicit qubit count override (data).
     explicit_num_qubits: Option<usize>,
     /// Maximum decomposition depth for gate resolution.
@@ -1456,17 +1543,20 @@ pub struct SimNeoBuilder {
 }
 
 impl SimNeoBuilder {
-    /// Create a new simulation builder for a circuit.
-    #[must_use]
-    pub fn with_circuit(circuit: CommandQueue) -> Self {
+    /// Create a builder with the given source and all other fields unset.
+    fn from_source(source: Option<ProgramSource>) -> Self {
         Self {
-            source: Some(ProgramSource::Static(circuit)),
+            source,
             pending_builder: None,
             noise: None,
             definitions: None,
             config: SimConfig::default(),
-            sampling: Sampling::default(),
-            quantum_backend: QuantumBackend::default(),
+            sampling: None,
+            legacy_shots: None,
+            legacy_workers: None,
+            auto_workers_hint: false,
+            auto_backend: false,
+            quantum_backend: None,
             explicit_num_qubits: None,
             max_decomp_depth: None,
             overrides: None,
@@ -1474,22 +1564,16 @@ impl SimNeoBuilder {
         }
     }
 
+    /// Create a new simulation builder for a circuit.
+    #[must_use]
+    pub fn with_circuit(circuit: CommandQueue) -> Self {
+        Self::from_source(Some(ProgramSource::Static(circuit)))
+    }
+
     /// Create a simulation builder for a dynamic command source.
     #[must_use]
     pub fn with_command_source(source: Box<dyn CommandSource + Send + Sync>) -> Self {
-        Self {
-            source: Some(ProgramSource::Dynamic(source)),
-            pending_builder: None,
-            noise: None,
-            definitions: None,
-            config: SimConfig::default(),
-            sampling: Sampling::default(),
-            quantum_backend: QuantumBackend::default(),
-            explicit_num_qubits: None,
-            max_decomp_depth: None,
-            overrides: None,
-            event_handlers: None,
-        }
+        Self::from_source(Some(ProgramSource::Dynamic(source)))
     }
 
     /// Create a simulation builder with raw program source.
@@ -1497,19 +1581,7 @@ impl SimNeoBuilder {
     /// Use `.classical(builder)` to specify how to interpret the source.
     #[must_use]
     pub fn with_program_source(source: String) -> Self {
-        Self {
-            source: Some(ProgramSource::RawSource(source)),
-            pending_builder: None,
-            noise: None,
-            definitions: None,
-            config: SimConfig::default(),
-            sampling: Sampling::default(),
-            quantum_backend: QuantumBackend::default(),
-            explicit_num_qubits: None,
-            max_decomp_depth: None,
-            overrides: None,
-            event_handlers: None,
-        }
+        Self::from_source(Some(ProgramSource::RawSource(source)))
     }
 
     /// Create a simulation builder with a typed program.
@@ -1518,19 +1590,7 @@ impl SimNeoBuilder {
     /// `.classical(builder)` for explicit control.
     #[must_use]
     pub fn with_typed_program(program: TypedProgram) -> Self {
-        Self {
-            source: Some(ProgramSource::Typed(program)),
-            pending_builder: None,
-            noise: None,
-            definitions: None,
-            config: SimConfig::default(),
-            sampling: Sampling::default(),
-            quantum_backend: QuantumBackend::default(),
-            explicit_num_qubits: None,
-            max_decomp_depth: None,
-            overrides: None,
-            event_handlers: None,
-        }
+        Self::from_source(Some(ProgramSource::Typed(program)))
     }
 
     /// Create a new simulation builder for a circuit (legacy alias).
@@ -1544,19 +1604,7 @@ impl SimNeoBuilder {
     /// Use this when you want to set the program source via `.classical()`.
     #[must_use]
     pub fn empty() -> Self {
-        Self {
-            source: None,
-            pending_builder: None,
-            noise: None,
-            definitions: None,
-            config: SimConfig::default(),
-            sampling: Sampling::default(),
-            quantum_backend: QuantumBackend::default(),
-            explicit_num_qubits: None,
-            max_decomp_depth: None,
-            overrides: None,
-            event_handlers: None,
-        }
+        Self::from_source(None)
     }
 
     /// Set the classical control engine builder (builder-of-builders pattern).
@@ -1566,14 +1614,14 @@ impl SimNeoBuilder {
     /// it all together when building the Tool.
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_qasm::qasm_engine;
     ///
     /// let qasm_code = "OPENQASM 2.0; qreg q[1]; h q[0]; measure q[0];";
     /// // Builder is stored as data, source injected at build time
-    /// let results = sim_neo(qasm_code)
+    /// let results = sim_neo(qasm_code).auto()
     ///     .classical(qasm_engine())  // stores builder as data
-    ///     .shots(1000)
+    ///     .sampling(monte_carlo(1000))
     ///     .build()  // configures builder, builds engine, creates Tool
     ///     .run();
     /// ```
@@ -1581,13 +1629,13 @@ impl SimNeoBuilder {
     /// For pre-configured engine builders, use `.with_engine()` instead:
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo_builder;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo_builder};
     /// use pecos_qasm::qasm_engine;
     ///
     /// let qasm_code = "OPENQASM 2.0; qreg q[1]; h q[0]; measure q[0];";
     /// let results = sim_neo_builder()
     ///     .with_engine(qasm_engine().qasm(qasm_code))
-    ///     .shots(1000)
+    ///     .sampling(monte_carlo(1000))
     ///     .build()
     ///     .run();
     /// ```
@@ -1660,13 +1708,13 @@ impl SimNeoBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo_builder;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo_builder};
     /// use pecos_qasm::qasm_engine;
     ///
     /// let qasm_code = "OPENQASM 2.0; qreg q[1]; h q[0]; measure q[0];";
     /// let results = sim_neo_builder()
     ///     .with_engine(qasm_engine().qasm(qasm_code))
-    ///     .shots(1000)
+    ///     .sampling(monte_carlo(1000))
     ///     .build()
     ///     .run();
     /// ```
@@ -1682,49 +1730,53 @@ impl SimNeoBuilder {
         self
     }
 
-    /// Automatically select the appropriate engine based on program type.
+    /// Opt into automatic selection of unset components.
     ///
-    /// This is a convenience method that selects good defaults:
-    /// - `Qasm` programs use `qasm_engine()`
-    /// - Future: `Hugr`, `PhirJson`, `Qis` will use their respective engines
+    /// `.auto()` is explicit-about-being-implicit: it lets the builder fill
+    /// in components you did not set, instead of failing at build time.
+    /// Currently it selects:
+    /// - The classical engine for typed programs (`Qasm` uses `qasm_engine()`,
+    ///   `Hugr` uses `hugr_engine()`); other sources are left unchanged.
+    /// - The quantum backend, if `.quantum()` was not called
+    ///   (currently `SparseStab`).
+    ///
+    /// The sampling strategy is never auto-selected: a shot count cannot be
+    /// guessed, so `.sampling(monte_carlo(shots))` is always required. (On
+    /// the deprecated top-level `.shots()` path, `.auto()` additionally
+    /// requests an auto-detected worker count to preserve legacy behavior.)
     ///
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_programs::Qasm;
     ///
     /// let qasm_code = "OPENQASM 2.0; qreg q[1]; h q[0]; measure q[0];".to_string();
-    /// // Auto-select engine based on program type
+    /// // Auto-select engine and backend
     /// let results = sim_neo(Qasm::from_string(qasm_code))
     ///     .auto()
-    ///     .shots(1000)
+    ///     .sampling(monte_carlo(1000))
     ///     .build()
     ///     .run();
     /// ```
     ///
     /// # Panics
     ///
-    /// Panics if:
-    /// - No typed program was provided (use `sim_neo(Qasm::from_string(...))`)
-    /// - The program type is not yet supported for auto-selection
-    ///
-    /// Note: `.auto()` also selects the default Monte Carlo sampling strategy. The
-    /// parallel execution plan decides whether the selected command source and
-    /// quantum backend can safely build independent worker state.
+    /// Panics if a typed program's type is not yet supported for
+    /// auto-selection, or its engine's cargo feature is disabled.
     #[must_use]
     pub fn auto(mut self) -> Self {
-        match self.source.take() {
+        self.auto_backend = true;
+        self.auto_workers_hint = true;
+        self.source = match self.source.take() {
             Some(ProgramSource::Typed(typed)) => match typed {
                 #[cfg(feature = "qasm")]
                 TypedProgram::Qasm(qasm) => {
                     // Auto-select qasm_engine() and configure with the program.
                     let builder = pecos_qasm::qasm_engine().qasm(qasm.source);
-                    self.source = Some(ProgramSource::Classical(Box::new(EngineBuilderWrapper {
+                    Some(ProgramSource::Classical(Box::new(EngineBuilderWrapper {
                         builder,
-                    })));
-                    self.sampling = Sampling::monte_carlo_auto();
-                    self
+                    })))
                 }
                 #[cfg(not(feature = "qasm"))]
                 TypedProgram::Qasm(_) => {
@@ -1737,11 +1789,9 @@ impl SimNeoBuilder {
                 TypedProgram::Hugr(hugr) => {
                     // Auto-select hugr_engine() and configure with the program.
                     let builder = pecos_hugr::hugr_engine().hugr_bytes(hugr.hugr);
-                    self.source = Some(ProgramSource::Classical(Box::new(EngineBuilderWrapper {
+                    Some(ProgramSource::Classical(Box::new(EngineBuilderWrapper {
                         builder,
-                    })));
-                    self.sampling = Sampling::monte_carlo_auto();
-                    self
+                    })))
                 }
                 #[cfg(not(feature = "hugr"))]
                 TypedProgram::Hugr(_) => {
@@ -1757,38 +1807,9 @@ impl SimNeoBuilder {
                     );
                 }
             },
-            Some(ProgramSource::RawSource(_)) => {
-                panic!(
-                    "Cannot use .auto() with raw string source. \
-                     Use sim_neo(Qasm::from_string(...)).auto() or \
-                     sim_neo(source).classical(engine) instead."
-                );
-            }
-            Some(ProgramSource::Static(_)) => {
-                panic!(
-                    "Cannot use .auto() with static circuits. \
-                     Static circuits don't need an engine - just call .build() directly."
-                );
-            }
-            Some(ProgramSource::Dynamic(_)) => {
-                panic!(
-                    "Cannot use .auto() with an existing dynamic command source. \
-                     Command sources are already executable."
-                );
-            }
-            Some(ProgramSource::Classical(_)) => {
-                panic!(
-                    "Engine already configured. \
-                     Don't use both .auto() and .classical()/.with_engine()."
-                );
-            }
-            None => {
-                panic!(
-                    "No program provided. \
-                     Use sim_neo(Qasm::from_string(...)).auto() or similar."
-                );
-            }
-        }
+            other => other,
+        };
+        self
     }
 
     /// Set the number of qubits explicitly.
@@ -1802,9 +1823,13 @@ impl SimNeoBuilder {
     }
 
     /// Set the number of shots.
+    #[deprecated(
+        since = "0.2.0",
+        note = "shots lives on the sampler builder: use .sampling(monte_carlo(shots))"
+    )]
     #[must_use]
     pub fn shots(mut self, shots: usize) -> Self {
-        self.config.shots = shots;
+        self.legacy_shots = Some(shots);
         self
     }
 
@@ -1817,58 +1842,54 @@ impl SimNeoBuilder {
 
     /// Set the sampling strategy for simulation execution.
     ///
+    /// The strategy carries its own shot count and execution knobs; build
+    /// it with [`monte_carlo()`] or [`importance_sampling()`].
+    ///
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::{sim_neo, Sampling};
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_neo::prelude::*;
     ///
     /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
     ///
     /// // Parallel Monte Carlo with 4 workers
-    /// let results = sim_neo(circuit.clone())
-    ///     .sampling(Sampling::monte_carlo(4))
-    ///     .shots(1000)
+    /// let results = sim_neo(circuit.clone()).auto()
+    ///     .sampling(monte_carlo(1000).workers(4))
     ///     .build()
     ///     .run();
     ///
     /// // Auto-detect worker count
-    /// let results = sim_neo(circuit)
-    ///     .sampling(Sampling::monte_carlo_auto())
-    ///     .shots(1000)
+    /// let results = sim_neo(circuit).auto()
+    ///     .sampling(monte_carlo(1000).auto_workers())
     ///     .build()
     ///     .run();
     /// ```
     #[must_use]
     pub fn sampling(mut self, sampling: impl Into<Sampling>) -> Self {
-        self.sampling = sampling.into();
+        self.sampling = Some(sampling.into());
         self
     }
 
     /// Convenience method for parallel Monte Carlo with specified workers.
-    ///
-    /// Parallel execution distributes shots across workers using rayon,
-    /// with each worker getting its own simulator and noise model clone.
-    /// Works with both noiseless and noisy circuits.
-    ///
-    /// # Panics
-    ///
-    /// Panics at `.run()` time if parallel execution is not possible.
-    /// Parallel execution requires a static circuit using a built-in
-    /// backend (`SparseStab` or `StateVec`). Classical engines and custom
-    /// backends are not supported.
+    #[deprecated(
+        since = "0.2.0",
+        note = "workers lives on the sampler builder: use .sampling(monte_carlo(shots).workers(n))"
+    )]
     #[must_use]
     pub fn workers(mut self, workers: usize) -> Self {
-        self.sampling = Sampling::monte_carlo(workers);
+        self.legacy_workers = Some(workers);
         self
     }
 
     /// Convenience method for parallel Monte Carlo with auto-detected workers.
-    ///
-    /// See [`workers()`](Self::workers) for requirements and panics.
+    #[deprecated(
+        since = "0.2.0",
+        note = "workers lives on the sampler builder: use .sampling(monte_carlo(shots).auto_workers())"
+    )]
     #[must_use]
     pub fn auto_workers(mut self) -> Self {
-        self.sampling = Sampling::monte_carlo_auto();
+        self.auto_workers_hint = true;
         self
     }
 
@@ -1877,34 +1898,38 @@ impl SimNeoBuilder {
     /// This selects which quantum simulator to use. Different backends have
     /// different capabilities and performance characteristics:
     ///
-    /// - `sparse_stab()` - Sparse stabilizer (default), efficient for Clifford circuits
+    /// - `sparse_stab()` - Sparse stabilizer, efficient for Clifford circuits
     /// - `state_vector()` - State vector, supports arbitrary gates including T and rotations
+    ///
+    /// A backend must be chosen: either call `.quantum()` explicitly or opt
+    /// into automatic selection with `.auto()`. A missing backend is a
+    /// build-time error.
     ///
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::{sim_neo, sparse_stab, state_vector};
+    /// use pecos_neo::tool::{monte_carlo, sim_neo, sparse_stab, state_vector};
     /// use pecos_neo::prelude::*;
     ///
     /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
     ///
-    /// // Use sparse stabilizer (default, Clifford-only)
+    /// // Use sparse stabilizer (Clifford-only)
     /// let results = sim_neo(circuit.clone())
     ///     .quantum(sparse_stab())
-    ///     .shots(1000)
+    ///     .sampling(monte_carlo(1000))
     ///     .build()
     ///     .run();
     ///
     /// // Use state vector (supports T gates, rotations)
     /// let results = sim_neo(circuit)
     ///     .quantum(state_vector())
-    ///     .shots(1000)
+    ///     .sampling(monte_carlo(1000))
     ///     .build()
     ///     .run();
     /// ```
     #[must_use]
     pub fn quantum<B: Into<QuantumBackend>>(mut self, backend: B) -> Self {
-        self.quantum_backend = backend.into();
+        self.quantum_backend = Some(backend.into());
         self
     }
 
@@ -1923,19 +1948,19 @@ impl SimNeoBuilder {
     /// # Examples
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_neo::prelude::*;
     /// use pecos_neo::noise::GeneralNoiseModelBuilder;
     ///
     /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
     ///
     /// // Using GeneralNoiseModelBuilder (no .build() needed)
-    /// sim_neo(circuit.clone())
+    /// sim_neo(circuit.clone()).auto()
     ///     .noise(GeneralNoiseModelBuilder::new().with_p1(0.01).with_p2(0.02))
     ///     .build();
     ///
     /// // Using a single channel directly
-    /// sim_neo(circuit.clone())
+    /// sim_neo(circuit.clone()).auto()
     ///     .noise(SingleQubitChannel::depolarizing(0.01))
     ///     .build();
     /// ```
@@ -1954,15 +1979,15 @@ impl SimNeoBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_neo::prelude::*;
     ///
     /// let defs = GateDefinitions::new(); // core gates included by default
     ///
     /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
-    /// let results = sim_neo(circuit)
+    /// let results = sim_neo(circuit).auto()
     ///     .gate_definitions(defs)
-    ///     .shots(100)
+    ///     .sampling(monte_carlo(100))
     ///     .seed(42)
     ///     .build()
     ///     .run();
@@ -1982,13 +2007,13 @@ impl SimNeoBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_neo::prelude::*;
     ///
     /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
-    /// let results = sim_neo(circuit)
+    /// let results = sim_neo(circuit).auto()
     ///     .max_decomp_depth(20)
-    ///     .shots(100)
+    ///     .sampling(monte_carlo(100))
     ///     .seed(42)
     ///     .run();
     /// ```
@@ -2016,7 +2041,7 @@ impl SimNeoBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_neo::prelude::*;
     /// use pecos_simulators::SparseStab;
     ///
@@ -2027,9 +2052,9 @@ impl SimNeoBuilder {
     ///     });
     ///
     /// let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
-    /// let results = sim_neo(circuit)
+    /// let results = sim_neo(circuit).auto()
     ///     .gate_overrides(overrides)
-    ///     .shots(100)
+    ///     .sampling(monte_carlo(100))
     ///     .seed(42)
     ///     .run();
     /// ```
@@ -2047,7 +2072,7 @@ impl SimNeoBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_neo::prelude::*;
     /// use std::sync::atomic::{AtomicUsize, Ordering};
     /// use std::sync::Arc;
@@ -2062,9 +2087,9 @@ impl SimNeoBuilder {
     ///     });
     ///
     /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
-    /// let results = sim_neo(circuit)
+    /// let results = sim_neo(circuit).auto()
     ///     .event_handlers(handlers)
-    ///     .shots(100)
+    ///     .sampling(monte_carlo(100))
     ///     .seed(42)
     ///     .run();
     /// ```
@@ -2102,12 +2127,20 @@ impl SimNeoBuilder {
     ///
     /// This is where all the collected builders and configuration come together:
     /// - Program source is wired with engine factory (if applicable)
+    /// - Sampling strategy is resolved and validated
     /// - Noise model is built
     /// - Tool is constructed with all plugins and systems
     ///
     /// # Panics
     ///
-    /// Panics if no program source is set (neither circuit nor classical engine).
+    /// Panics if:
+    /// - No program source is set (neither circuit nor classical engine)
+    /// - No sampling strategy is set (use `.sampling(monte_carlo(shots))`)
+    /// - No quantum backend is set (use `.quantum(..)` or `.auto()`)
+    /// - Deprecated `.shots()`/`.workers()` are combined with `.sampling()`
+    /// - Parallel Monte Carlo (`workers > 1`) is requested for a
+    ///   configuration that cannot build per-worker state (pre-built dynamic
+    ///   command sources, custom backends)
     #[must_use]
     pub fn build(self) -> Simulation {
         // Resolve the program source - configure pending builder with source if needed
@@ -2151,26 +2184,87 @@ impl SimNeoBuilder {
             }
         };
 
-        let parallel_plan = match self.sampling {
-            Sampling::MonteCarlo { workers } if workers > 1 => build_parallel_execution_plan(
-                &source,
-                &self.quantum_backend,
-                self.explicit_num_qubits,
-                self.noise.clone(),
-                self.definitions.clone(),
-                self.max_decomp_depth,
-                self.overrides.clone(),
-                self.event_handlers.clone(),
+        // Resolve the sampling strategy: the .sampling() path carries its own
+        // shot count; the deprecated top-level .shots()/.workers() forwarders
+        // map onto Monte Carlo. Mixing the two is ambiguous and rejected.
+        let sampling = match (self.sampling, self.legacy_shots) {
+            (Some(sampling), None) => {
+                assert!(
+                    self.legacy_workers.is_none(),
+                    "Conflicting sampling configuration: deprecated .workers() cannot be \
+                     combined with .sampling(). Set workers on the sampler builder, e.g. \
+                     .sampling(monte_carlo(1000).workers(8))."
+                );
+                sampling
+            }
+            (Some(_), Some(_)) => panic!(
+                "Conflicting sampling configuration: deprecated .shots() cannot be combined \
+                 with .sampling(). Set shots on the sampler builder, e.g. \
+                 .sampling(monte_carlo(1000))."
             ),
+            (None, Some(shots)) => {
+                let workers = self.legacy_workers.unwrap_or_else(|| {
+                    if self.auto_workers_hint {
+                        std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
+                    } else {
+                        1
+                    }
+                });
+                Sampling::MonteCarlo { shots, workers }
+            }
+            (None, None) => panic!(
+                "No sampling strategy set. Use .sampling(monte_carlo(shots)) for Monte Carlo \
+                 or .sampling(importance_sampling(shots)) for rare-event estimation."
+            ),
+        };
+
+        // The shot count drives the Tool's run loop via the SimConfig resource.
+        let mut config = self.config;
+        config.shots = sampling.shots();
+
+        // Resolve the quantum backend: explicit .quantum() wins; .auto() opts
+        // into automatic selection; otherwise fail fast.
+        let auto_backend = self.auto_backend;
+        let quantum_backend = self.quantum_backend.unwrap_or_else(|| {
+            assert!(
+                auto_backend,
+                "No quantum backend set. Use .quantum(sparse_stab()) or \
+                 .quantum(state_vector()), or call .auto() to let sim_neo choose."
+            );
+            QuantumBackend::SparseStab
+        });
+
+        let parallel_plan = match &sampling {
+            Sampling::MonteCarlo { workers, .. } if *workers > 1 => {
+                let plan = build_parallel_execution_plan(
+                    &source,
+                    &quantum_backend,
+                    self.explicit_num_qubits,
+                    self.noise.clone(),
+                    self.definitions.clone(),
+                    self.max_decomp_depth,
+                    self.overrides.clone(),
+                    self.event_handlers.clone(),
+                );
+                assert!(
+                    plan.is_some(),
+                    "Parallel Monte Carlo (workers > 1) requires per-worker construction: \
+                     a static circuit or classical engine builder source, on a built-in or \
+                     adapted backend. Pre-built dynamic command sources and custom backends \
+                     cannot build per-worker state; remove .workers(..) for sequential \
+                     execution."
+                );
+                plan
+            }
             _ => None,
         };
 
         let mut tool = Tool::new()
             .insert_resource(ProgramSourceResource(source))
-            .insert_resource(self.config)
-            .insert_resource(QuantumBackendResource(self.quantum_backend));
+            .insert_resource(config)
+            .insert_resource(QuantumBackendResource(quantum_backend));
 
-        match &self.sampling {
+        match &sampling {
             Sampling::ImportanceSampling { config: is_config } => {
                 tool = tool.add_plugin(&ImportanceSamplingSimPlugin {
                     is_config: is_config.clone(),
@@ -2211,7 +2305,7 @@ impl SimNeoBuilder {
 
         Simulation {
             tool,
-            sampling: self.sampling,
+            sampling,
             parallel_plan,
         }
     }
@@ -2224,13 +2318,13 @@ impl SimNeoBuilder {
     /// # Example
     ///
     /// ```no_run
-    /// use pecos_neo::tool::sim_neo;
+    /// use pecos_neo::tool::{monte_carlo, sim_neo};
     /// use pecos_qasm::qasm_engine;
     ///
     /// let qasm_code = "OPENQASM 2.0; qreg q[1]; h q[0]; measure q[0];";
-    /// let results = sim_neo(qasm_code)
+    /// let results = sim_neo(qasm_code).auto()
     ///     .classical(qasm_engine())
-    ///     .shots(1000)
+    ///     .sampling(monte_carlo(1000))
     ///     .run();  // builds and runs
     /// ```
     #[must_use]
@@ -2858,11 +2952,11 @@ fn is_sim_post_shot(resources: &mut Resources) {
 /// # Example
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo;
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
 /// use pecos_neo::prelude::*;
 ///
 /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
-/// let mut sim = sim_neo(circuit).shots(1000).build();
+/// let mut sim = sim_neo(circuit).auto().sampling(monte_carlo(1000)).build();
 ///
 /// let results1 = sim.run();
 ///
@@ -3144,7 +3238,11 @@ fn build_parallel_execution_plan(
 }
 
 impl Simulation {
-    /// Set the number of shots for the next run.
+    /// Override the number of shots for the next run.
+    ///
+    /// Rerun convenience: adjusts the shot count of the already-built
+    /// simulation without rebuilding. The sampling strategy (and its worker
+    /// count) is fixed at build time.
     pub fn shots(&mut self, shots: usize) -> &mut Self {
         self.tool.resource_mut::<SimConfig>().shots = shots;
         self
@@ -3162,27 +3260,25 @@ impl Simulation {
     /// after reconfiguring with [`shots()`](Self::shots) or [`seed()`](Self::seed).
     ///
     /// Execution strategy depends on the sampling strategy:
-    /// - `MonteCarlo { workers: 1 }`: Runs shots via the Tool (default)
-    /// - `MonteCarlo { workers: n }`: Parallelizes shots across n workers
+    /// - `MonteCarlo { workers: 1, .. }`: Runs shots via the Tool
+    /// - `MonteCarlo { workers: n, .. }`: Parallelizes shots across n workers
     /// - `ImportanceSampling`: Runs via the Tool with `ImportanceSamplingSimPlugin`
     ///
     /// # Panics
-    /// Panics if parallel Monte Carlo is used without per-worker runner construction support.
+    ///
+    /// Panics if the parallel execution plan is missing for `workers > 1`;
+    /// `SimNeoBuilder::build()` validates this, so it cannot happen for
+    /// simulations constructed through the builder.
     pub fn run(&mut self) -> SimulationResults {
         let config = self.tool.resource::<SimConfig>().clone();
 
         // Dispatch based on sampling strategy
         match &self.sampling {
-            Sampling::MonteCarlo { workers } if *workers > 1 => {
-                let plan = self.parallel_plan.as_ref().unwrap_or_else(|| {
-                    panic!(
-                        "Parallel Monte Carlo requires per-worker runner construction support. \
-                         Dynamic programs need a command-source factory, and custom backends \
-                         need a quantum-runner factory. Remove .workers() / .auto_workers() \
-                         for single-worker execution, or use a backend/source path with \
-                         explicit per-worker construction."
-                    )
-                });
+            Sampling::MonteCarlo { workers, .. } if *workers > 1 => {
+                let plan = self
+                    .parallel_plan
+                    .as_ref()
+                    .expect("parallel plan validated at build time for workers > 1");
                 self.run_parallel(&config, plan, *workers)
             }
             _ => {
@@ -3309,16 +3405,16 @@ impl Simulation {
 /// ## Static Circuit
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo;
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
 /// use pecos_neo::prelude::*;
 ///
 /// let circuit = CommandBuilder::new()
 ///     .pz(&[0]).h(&[0]).mz(&[0])
 ///     .build();
 ///
-/// let results = sim_neo(circuit)
+/// let results = sim_neo(circuit).auto()
 ///     .depolarizing(0.01)
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .seed(42)
 ///     .build()
 ///     .run();
@@ -3327,7 +3423,7 @@ impl Simulation {
 /// ## QASM Program
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo;
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
 /// use pecos_qasm::qasm_engine;
 ///
 /// let qasm = r#"
@@ -3341,10 +3437,10 @@ impl Simulation {
 ///     measure q[1] -> c[1];
 /// "#;
 ///
-/// let results = sim_neo(qasm)
+/// let results = sim_neo(qasm).auto()
 ///     .classical(qasm_engine())
 ///     .depolarizing(0.01)
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .seed(42)
 ///     .build()
 ///     .run();
@@ -3353,12 +3449,12 @@ impl Simulation {
 /// ## Reusable Simulation
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo;
+/// use pecos_neo::tool::{monte_carlo, sim_neo};
 /// use pecos_neo::prelude::*;
 ///
 /// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
-/// let mut sim = sim_neo(circuit)
-///     .shots(1000)
+/// let mut sim = sim_neo(circuit).auto()
+///     .sampling(monte_carlo(1000))
 ///     .build();
 ///
 /// let results1 = sim.run();
@@ -3377,7 +3473,7 @@ pub fn sim_neo<I: SimNeoInput>(input: I) -> SimNeoBuilder {
 /// # Example
 ///
 /// ```no_run
-/// use pecos_neo::tool::sim_neo_builder;
+/// use pecos_neo::tool::{monte_carlo, sim_neo_builder};
 /// use pecos_qasm::qasm_engine;
 ///
 /// let qasm = r#"
@@ -3394,7 +3490,7 @@ pub fn sim_neo<I: SimNeoInput>(input: I) -> SimNeoBuilder {
 /// let results = sim_neo_builder()
 ///     .with_engine(qasm_engine().qasm(qasm))
 ///     .depolarizing(0.01)
-///     .shots(1000)
+///     .sampling(monte_carlo(1000))
 ///     .seed(42)
 ///     .build()
 ///     .run();
@@ -3437,7 +3533,11 @@ mod tests {
             .mz(&[0])
             .build();
 
-        let mut sim = sim_neo(circuit).shots(10).seed(42).build();
+        let mut sim = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(10))
+            .seed(42)
+            .build();
 
         let results = sim.run();
 
@@ -3456,7 +3556,7 @@ mod tests {
     fn test_sim_neo_rerun() {
         let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
 
-        let mut sim = sim_neo(circuit).shots(5).build();
+        let mut sim = sim_neo(circuit).auto().sampling(monte_carlo(5)).build();
 
         let results1 = sim.run();
         assert_eq!(results1.len(), 5);
@@ -3476,9 +3576,19 @@ mod tests {
             .build();
 
         // Same seed should produce same results
-        let results1 = sim_neo(circuit.clone()).shots(20).seed(42).build().run();
+        let results1 = sim_neo(circuit.clone())
+            .auto()
+            .sampling(monte_carlo(20))
+            .seed(42)
+            .build()
+            .run();
 
-        let results2 = sim_neo(circuit).shots(20).seed(42).build().run();
+        let results2 = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(20))
+            .seed(42)
+            .build()
+            .run();
 
         assert_eq!(results1.outcomes.len(), results2.outcomes.len());
         for (o1, o2) in results1.outcomes.iter().zip(results2.outcomes.iter()) {
@@ -3505,8 +3615,9 @@ mod tests {
         let noise = ComposableNoiseModel::new().add_channel(SingleQubitChannel::depolarizing(0.5));
 
         let results = sim_neo(circuit)
+            .auto()
             .noise(noise)
-            .shots(100)
+            .sampling(monte_carlo(100))
             .seed(42)
             .build()
             .run();
@@ -3542,15 +3653,17 @@ mod tests {
         let noise2 = ComposableNoiseModel::new().add_channel(SingleQubitChannel::depolarizing(0.5));
 
         let results1 = sim_neo(circuit.clone())
+            .auto()
             .noise(noise1)
-            .shots(20)
+            .sampling(monte_carlo(20))
             .seed(42)
             .build()
             .run();
 
         let results2 = sim_neo(circuit)
+            .auto()
             .noise(noise2)
-            .shots(20)
+            .sampling(monte_carlo(20))
             .seed(42)
             .build()
             .run();
@@ -3571,8 +3684,9 @@ mod tests {
 
         // This uses the From<C: NoiseChannel> impl for ComposableNoiseModel
         let results = sim_neo(circuit)
+            .auto()
             .noise(SingleQubitChannel::depolarizing(0.5))
-            .shots(50)
+            .sampling(monte_carlo(50))
             .seed(42)
             .build()
             .run();
@@ -3598,8 +3712,9 @@ mod tests {
 
         // Pass builder directly - no .build() needed!
         let results = sim_neo(circuit)
+            .auto()
             .noise(GeneralNoiseModelBuilder::new().with_p1(0.3))
-            .shots(100)
+            .sampling(monte_carlo(100))
             .seed(42)
             .build()
             .run();
@@ -3632,8 +3747,9 @@ mod tests {
             .build();
 
         let results = sim_neo(circuit)
+            .auto()
             .depolarizing(0.2) // 20% on both 1Q and 2Q gates
-            .shots(100)
+            .sampling(monte_carlo(100))
             .seed(42)
             .build()
             .run();
@@ -3663,8 +3779,9 @@ mod tests {
         let circuit = CommandBuilder::new().pz(&[0]).mz(&[0]).build();
 
         let results = sim_neo(circuit)
+            .auto()
             .noise(GeneralNoiseModelBuilder::new().with_p_meas_symmetric(0.15))
-            .shots(200)
+            .sampling(monte_carlo(200))
             .seed(42)
             .build()
             .run();
@@ -3693,8 +3810,9 @@ mod tests {
         let circuit = CommandBuilder::new().pz(&[0]).mz(&[0]).build();
 
         let results = sim_neo(circuit)
+            .auto()
             .noise(GeneralNoiseModelBuilder::new().with_p_prep(0.20))
-            .shots(200)
+            .sampling(monte_carlo(200))
             .seed(42)
             .build()
             .run();
@@ -3732,7 +3850,11 @@ mod tests {
 
         // .auto() should automatically select qasm_engine()
         // Using .run() shortcut (equivalent to .build().run())
-        let results = sim_neo(qasm).auto().shots(10).seed(42).run();
+        let results = sim_neo(qasm)
+            .auto()
+            .sampling(monte_carlo(10))
+            .seed(42)
+            .run();
 
         assert_eq!(results.len(), 10);
 
@@ -3760,8 +3882,9 @@ mod tests {
 
         // Direct .run() without explicit .build()
         let results = sim_neo(qasm_source)
+            .auto()
             .classical(pecos_qasm::qasm_engine())
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .run();
 
@@ -3793,7 +3916,12 @@ mod tests {
         let program = pecos_programs::Program::Qasm(pecos_programs::Qasm::from_string(qasm_source));
 
         // .auto() should detect Qasm variant and use qasm_engine()
-        let results = sim_neo(program).auto().shots(50).seed(42).build().run();
+        let results = sim_neo(program)
+            .auto()
+            .sampling(monte_carlo(50))
+            .seed(42)
+            .build()
+            .run();
 
         assert_eq!(results.len(), 50);
 
@@ -3815,7 +3943,11 @@ mod tests {
             .build();
 
         // Use .workers() convenience method for Monte Carlo
-        let results = sim_neo(circuit).workers(4).shots(100).seed(42).run();
+        let results = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(100).workers(4))
+            .seed(42)
+            .run();
 
         assert_eq!(results.len(), 100);
 
@@ -3837,9 +3969,17 @@ mod tests {
             .mz(&[0])
             .build();
 
-        let results1 = sim_neo(circuit.clone()).workers(4).shots(50).seed(42).run();
+        let results1 = sim_neo(circuit.clone())
+            .auto()
+            .sampling(monte_carlo(50).workers(4))
+            .seed(42)
+            .run();
 
-        let results2 = sim_neo(circuit).workers(4).shots(50).seed(42).run();
+        let results2 = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(50).workers(4))
+            .seed(42)
+            .run();
 
         assert_eq!(results1.outcomes.len(), results2.outcomes.len());
         for (o1, o2) in results1.outcomes.iter().zip(results2.outcomes.iter()) {
@@ -3853,15 +3993,12 @@ mod tests {
 
     #[test]
     fn test_sim_neo_sampling_explicit() {
-        // Test explicit sampling configuration
-        use super::Sampling;
-
+        // Test explicit sampling configuration with workers on the builder
         let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
 
-        // Use explicit Sampling enum
         let results = sim_neo(circuit)
-            .sampling(Sampling::monte_carlo(2))
-            .shots(20)
+            .auto()
+            .sampling(monte_carlo(20).workers(2))
             .seed(42)
             .run();
 
@@ -3876,6 +4013,174 @@ mod tests {
     }
 
     #[test]
+    fn test_sim_neo_sampling_order_independent() {
+        // Regression for the old top-level .workers() footgun: builder calls
+        // must commute. .sampling() before or after other config gives the
+        // same results.
+        let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
+
+        let r1 = sim_neo(circuit.clone())
+            .auto()
+            .sampling(monte_carlo(30))
+            .seed(7)
+            .run();
+        let r2 = sim_neo(circuit)
+            .auto()
+            .seed(7)
+            .sampling(monte_carlo(30))
+            .run();
+
+        assert_eq!(r1.outcomes.len(), r2.outcomes.len());
+        for (o1, o2) in r1.outcomes.iter().zip(r2.outcomes.iter()) {
+            assert_eq!(o1.get_bit(QubitId(0)), o2.get_bit(QubitId(0)));
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "No sampling strategy set")]
+    fn test_sim_neo_missing_sampling_is_build_error() {
+        let circuit = CommandBuilder::new().pz(&[0]).mz(&[0]).build();
+        let _ = sim_neo(circuit).auto().build();
+    }
+
+    #[test]
+    #[should_panic(expected = "No quantum backend set")]
+    fn test_sim_neo_missing_quantum_backend_is_build_error() {
+        // Explicit-by-default: no silent SparseStab. Either .quantum(..) or
+        // .auto() must be called.
+        let circuit = CommandBuilder::new().pz(&[0]).mz(&[0]).build();
+        let _ = sim_neo(circuit).sampling(monte_carlo(10)).build();
+    }
+
+    #[test]
+    fn test_sim_neo_auto_selects_backend_for_static_circuit() {
+        // .auto() opts into automatic backend selection (SparseStab) for
+        // static circuits, which previously rejected .auto() entirely.
+        let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
+        let results = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(10))
+            .seed(1)
+            .run();
+        assert_eq!(results.len(), 10);
+        for outcome in &results.outcomes {
+            assert!(outcome.get_bit(QubitId(0)).unwrap());
+        }
+    }
+
+    #[test]
+    fn test_sim_neo_explicit_quantum_overrides_auto() {
+        // .auto() plus explicit .quantum() is allowed; the explicit choice
+        // wins regardless of call order.
+        let circuit = CommandBuilder::new()
+            .pz(&[0])
+            .x(&[0])
+            .t(&[0])
+            .mz(&[0])
+            .build();
+        // T gate requires the state-vector backend; if auto's SparseStab
+        // choice won, this would fail to execute.
+        let results = sim_neo(circuit)
+            .auto()
+            .quantum(state_vector())
+            .sampling(monte_carlo(5))
+            .seed(1)
+            .run();
+        assert_eq!(results.len(), 5);
+    }
+
+    #[test]
+    #[should_panic(expected = "deprecated .shots() cannot be combined")]
+    fn test_sim_neo_legacy_shots_conflicts_with_sampling() {
+        let circuit = CommandBuilder::new().pz(&[0]).mz(&[0]).build();
+        #[allow(deprecated)]
+        let _ = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(10))
+            .shots(20)
+            .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "deprecated .workers() cannot be combined")]
+    fn test_sim_neo_legacy_workers_conflicts_with_sampling() {
+        // The old footgun: .sampling(importance_sampling(..)).workers(n)
+        // silently discarded the importance-sampling config. Now it fails
+        // loudly at build time.
+        let circuit = CommandBuilder::new().pz(&[0]).mz(&[0]).build();
+        #[allow(deprecated)]
+        let _ = sim_neo(circuit)
+            .auto()
+            .sampling(importance_sampling(10))
+            .workers(4)
+            .build();
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Parallel Monte Carlo (workers > 1) requires per-worker construction"
+    )]
+    fn test_sim_neo_parallel_dynamic_source_fails_at_build_not_run() {
+        // The parallel-incapable combination must be rejected by .build(),
+        // before any shot executes.
+        let _ = sim_neo(deterministic_conditional_program())
+            .auto()
+            .sampling(monte_carlo(2).workers(2))
+            .build();
+    }
+
+    #[test]
+    fn test_sim_neo_legacy_shots_forwarder_matches_new_api() {
+        // Deprecated .shots(n) must behave exactly like
+        // .sampling(monte_carlo(n)) during the transition window.
+        let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
+
+        #[allow(deprecated)]
+        let legacy = sim_neo(circuit.clone()).auto().shots(40).seed(11).run();
+        let new = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(40))
+            .seed(11)
+            .run();
+
+        assert_eq!(legacy.outcomes.len(), 40);
+        assert_eq!(legacy.outcomes.len(), new.outcomes.len());
+        for (o1, o2) in legacy.outcomes.iter().zip(new.outcomes.iter()) {
+            assert_eq!(o1.get_bit(QubitId(0)), o2.get_bit(QubitId(0)));
+        }
+    }
+
+    #[test]
+    fn test_sim_neo_legacy_shots_workers_combo_still_parallel() {
+        // Old-style .workers(n).shots(m) (both deprecated) maps onto
+        // MonteCarlo { shots: m, workers: n } and still runs.
+        let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
+
+        #[allow(deprecated)]
+        let results = sim_neo(circuit).auto().workers(2).shots(30).seed(5).run();
+
+        assert_eq!(results.len(), 30);
+        for outcome in &results.outcomes {
+            assert!(outcome.get_bit(QubitId(0)).unwrap());
+        }
+    }
+
+    #[test]
+    fn test_sim_neo_importance_sampling_shot_count_on_builder() {
+        // importance_sampling(shots) drives the trial count directly.
+        let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
+
+        let results = sim_neo(circuit)
+            .auto()
+            .sampling(importance_sampling(35).with_uniform_error(0.01))
+            .seed(3)
+            .run();
+
+        assert_eq!(results.len(), 35);
+        assert!(results.has_weights());
+    }
+
+    #[test]
     fn test_sim_neo_single_worker_matches_parallel() {
         // Critical test: 1 worker and multiple workers should produce identical
         // results with the same seed (they use the same per-shot seeding scheme)
@@ -3886,10 +4191,18 @@ mod tests {
             .build();
 
         // Run with default (1 worker)
-        let single_results = sim_neo(circuit.clone()).shots(50).seed(42).run();
+        let single_results = sim_neo(circuit.clone())
+            .auto()
+            .sampling(monte_carlo(50))
+            .seed(42)
+            .run();
 
         // Run with parallel Monte Carlo sampling (4 workers)
-        let parallel_results = sim_neo(circuit).workers(4).shots(50).seed(42).run();
+        let parallel_results = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(50).workers(4))
+            .seed(42)
+            .run();
 
         // Results should be identical
         assert_eq!(
@@ -3928,16 +4241,17 @@ mod tests {
 
         // Run with single worker (default)
         let single_results = sim_neo(circuit.clone())
+            .auto()
             .noise(noise_single)
-            .shots(50)
+            .sampling(monte_carlo(50))
             .seed(42)
             .run();
 
         // Run with parallel Monte Carlo sampling
         let parallel_results = sim_neo(circuit)
+            .auto()
             .noise(noise_par)
-            .workers(4)
-            .shots(50)
+            .sampling(monte_carlo(50).workers(4))
             .seed(42)
             .run();
 
@@ -3975,16 +4289,16 @@ mod tests {
         let noise2 = ComposableNoiseModel::new().add_channel(SingleQubitChannel::depolarizing(0.3));
 
         let results1 = sim_neo(circuit.clone())
+            .auto()
             .noise(noise1)
-            .workers(4)
-            .shots(50)
+            .sampling(monte_carlo(50).workers(4))
             .seed(42)
             .run();
 
         let results2 = sim_neo(circuit)
+            .auto()
             .noise(noise2)
-            .workers(4)
-            .shots(50)
+            .sampling(monte_carlo(50).workers(4))
             .seed(42)
             .run();
 
@@ -4011,7 +4325,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(sparse_stab())
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .run();
 
@@ -4034,7 +4348,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(stabilizer())
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .run();
 
@@ -4060,7 +4374,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(pecos_engines::stabilizer())
-            .shots(12)
+            .sampling(monte_carlo(12))
             .seed(42)
             .run();
 
@@ -4087,7 +4401,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(pecos_engines::state_vector())
-            .shots(8)
+            .sampling(monte_carlo(8))
             .seed(123)
             .run();
 
@@ -4110,7 +4424,7 @@ mod tests {
         let _ = sim_neo(circuit)
             .quantum(pecos_engines::stabilizer())
             .noise(noise)
-            .shots(1)
+            .sampling(monte_carlo(1))
             .run();
     }
     #[test]
@@ -4124,8 +4438,7 @@ mod tests {
         let _ = sim_neo(circuit)
             .quantum(pecos_engines::stabilizer())
             .noise(noise)
-            .workers(2)
-            .shots(2)
+            .sampling(monte_carlo(2).workers(2))
             .run();
     }
     #[test]
@@ -4140,7 +4453,7 @@ mod tests {
         let _ = sim_neo(circuit)
             .quantum(pecos_engines::stabilizer())
             .gate_definitions(GateDefinitions::new())
-            .shots(1)
+            .sampling(monte_carlo(1))
             .run();
     }
     #[test]
@@ -4153,7 +4466,7 @@ mod tests {
         let _ = sim_neo(circuit)
             .quantum(pecos_engines::stabilizer())
             .max_decomp_depth(20)
-            .shots(1)
+            .sampling(monte_carlo(1))
             .run();
     }
     #[test]
@@ -4171,7 +4484,7 @@ mod tests {
         let _ = sim_neo(circuit)
             .quantum(pecos_engines::stabilizer())
             .gate_overrides(overrides)
-            .shots(1)
+            .sampling(monte_carlo(1))
             .run();
     }
     #[test]
@@ -4186,7 +4499,7 @@ mod tests {
         let _ = sim_neo(circuit)
             .quantum(pecos_engines::stabilizer())
             .event_handlers(handlers)
-            .shots(1)
+            .sampling(monte_carlo(1))
             .run();
     }
     #[test]
@@ -4195,8 +4508,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(pecos_engines::stabilizer())
-            .workers(2)
-            .shots(6)
+            .sampling(monte_carlo(6).workers(2))
             .seed(42)
             .run();
 
@@ -4217,8 +4529,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(pecos_engines::state_vector())
-            .workers(2)
-            .shots(6)
+            .sampling(monte_carlo(6).workers(2))
             .seed(42)
             .run();
 
@@ -4259,7 +4570,7 @@ mod tests {
     fn test_sim_neo_dynamic_command_source_native_stabilizer() {
         let results = sim_neo(deterministic_conditional_program())
             .quantum(stabilizer())
-            .shots(6)
+            .sampling(monte_carlo(6))
             .seed(42)
             .run();
 
@@ -4275,7 +4586,7 @@ mod tests {
     fn test_sim_neo_dynamic_command_source_rerun() {
         let mut sim = sim_neo(deterministic_conditional_program())
             .quantum(stabilizer())
-            .shots(2)
+            .sampling(monte_carlo(2))
             .seed(42)
             .build();
 
@@ -4301,7 +4612,7 @@ mod tests {
         let results = sim_neo(deterministic_conditional_qasm())
             .classical(pecos_qasm::qasm_engine())
             .quantum(stabilizer())
-            .shots(6)
+            .sampling(monte_carlo(6))
             .seed(42)
             .run();
 
@@ -4316,7 +4627,7 @@ mod tests {
     fn test_sim_neo_dynamic_command_source_quantum_engine_adapter() {
         let results = sim_neo(deterministic_conditional_program())
             .quantum(pecos_engines::stabilizer())
-            .shots(6)
+            .sampling(monte_carlo(6))
             .seed(42)
             .run();
 
@@ -4334,7 +4645,7 @@ mod tests {
         let results = sim_neo(deterministic_conditional_qasm())
             .classical(pecos_qasm::qasm_engine())
             .quantum(pecos_engines::stabilizer())
-            .shots(6)
+            .sampling(monte_carlo(6))
             .seed(42)
             .run();
 
@@ -4352,8 +4663,7 @@ mod tests {
         let results = sim_neo(deterministic_conditional_qasm())
             .classical(pecos_qasm::qasm_engine())
             .quantum(stabilizer())
-            .workers(2)
-            .shots(6)
+            .sampling(monte_carlo(6).workers(2))
             .seed(42)
             .run();
 
@@ -4371,8 +4681,7 @@ mod tests {
         let results = sim_neo(deterministic_conditional_qasm())
             .classical(pecos_qasm::qasm_engine())
             .quantum(pecos_engines::stabilizer())
-            .workers(2)
-            .shots(6)
+            .sampling(monte_carlo(6).workers(2))
             .seed(42)
             .run();
 
@@ -4390,9 +4699,8 @@ mod tests {
         let program = pecos_programs::Qasm::from_string(deterministic_conditional_qasm());
         let results = sim_neo(program)
             .auto()
-            .workers(2)
             .quantum(pecos_engines::stabilizer())
-            .shots(6)
+            .sampling(monte_carlo(6).workers(2))
             .seed(42)
             .run();
 
@@ -4405,13 +4713,12 @@ mod tests {
     }
     #[test]
     #[should_panic(
-        expected = "Parallel Monte Carlo requires per-worker runner construction support"
+        expected = "Parallel Monte Carlo (workers > 1) requires per-worker construction"
     )]
     fn test_sim_neo_dynamic_command_source_quantum_engine_adapter_rejects_parallel_workers() {
         let _ = sim_neo(deterministic_conditional_program())
             .quantum(pecos_engines::stabilizer())
-            .workers(2)
-            .shots(2)
+            .sampling(monte_carlo(2).workers(2))
             .run();
     }
 
@@ -4424,7 +4731,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(state_vector())
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .run();
 
@@ -4448,13 +4755,13 @@ mod tests {
         // Test sparse_stab determinism
         let sparse1 = sim_neo(circuit.clone())
             .quantum(sparse_stab())
-            .shots(20)
+            .sampling(monte_carlo(20))
             .seed(42)
             .run();
 
         let sparse2 = sim_neo(circuit.clone())
             .quantum(sparse_stab())
-            .shots(20)
+            .sampling(monte_carlo(20))
             .seed(42)
             .run();
 
@@ -4469,13 +4776,13 @@ mod tests {
         // Test state_vector determinism
         let sv1 = sim_neo(circuit.clone())
             .quantum(state_vector())
-            .shots(20)
+            .sampling(monte_carlo(20))
             .seed(42)
             .run();
 
         let sv2 = sim_neo(circuit)
             .quantum(state_vector())
-            .shots(20)
+            .sampling(monte_carlo(20))
             .seed(42)
             .run();
 
@@ -4497,8 +4804,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(state_vector())
-            .workers(4)
-            .shots(100)
+            .sampling(monte_carlo(100).workers(4))
             .seed(42)
             .run();
 
@@ -4520,8 +4826,8 @@ mod tests {
         use super::importance_sampling;
 
         let _ = sim_neo(deterministic_conditional_program())
-            .sampling(importance_sampling())
-            .shots(1)
+            .auto()
+            .sampling(importance_sampling(1))
             .run();
     }
 
@@ -4537,14 +4843,14 @@ mod tests {
             .build();
 
         let results = sim_neo(circuit)
+            .auto()
             .sampling(
-                importance_sampling()
+                importance_sampling(100)
                     .with_p1(0.01)
                     .with_p2(0.02)
                     .with_p_meas(0.01)
                     .with_boost(5.0),
             )
-            .shots(100)
             .seed(42)
             .run();
 
@@ -4566,12 +4872,12 @@ mod tests {
         let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 
         let results = sim_neo(circuit)
+            .auto()
             .sampling(
-                importance_sampling()
+                importance_sampling(50)
                     .with_uniform_error(0.01)
                     .with_boost(10.0),
             )
-            .shots(50)
             .seed(123)
             .run();
 
@@ -4593,12 +4899,12 @@ mod tests {
 
         // Run with importance sampling (boosting noise that doesn't affect this test)
         let results = sim_neo(circuit)
+            .auto()
             .sampling(
-                importance_sampling()
+                importance_sampling(2000)
                     .with_uniform_error(0.001)
-                    .with_boost(100.0),
-            ) // Very aggressive boost
-            .shots(2000)
+                    .with_boost(100.0), // Very aggressive boost
+            )
             .seed(42)
             .run();
 
@@ -4627,21 +4933,17 @@ mod tests {
 
         let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 
-        let is_builder = importance_sampling()
+        let is_builder = importance_sampling(20)
             .with_uniform_error(0.01)
             .with_boost(10.0);
 
         let results1 = sim_neo(circuit.clone())
+            .auto()
             .sampling(is_builder.clone())
-            .shots(20)
             .seed(42)
             .run();
 
-        let results2 = sim_neo(circuit)
-            .sampling(is_builder)
-            .shots(20)
-            .seed(42)
-            .run();
+        let results2 = sim_neo(circuit).auto().sampling(is_builder).seed(42).run();
 
         assert_eq!(results1.outcomes.len(), results2.outcomes.len());
         for (i, (o1, o2)) in results1
@@ -4683,14 +4985,14 @@ mod tests {
             .build();
 
         let results = sim_neo(circuit)
+            .auto()
             .sampling(
-                importance_sampling()
+                importance_sampling(100)
                     .with_p1(0.001)
                     .with_p2(0.01)
                     .with_p_meas(0.001)
                     .with_boost(10.0),
             )
-            .shots(100)
             .seed(42)
             .run();
 
@@ -4706,12 +5008,12 @@ mod tests {
         let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 
         let results = sim_neo(circuit)
+            .auto()
             .sampling(
-                importance_sampling()
+                importance_sampling(500)
                     .with_uniform_error(0.01)
                     .with_boost(10.0),
             )
-            .shots(500)
             .seed(42)
             .run();
 
@@ -4747,7 +5049,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(custom_backend(SparseStab::new))
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .build()
             .run();
@@ -4774,13 +5076,13 @@ mod tests {
 
         let builtin_results = sim_neo(circuit.clone())
             .quantum(sparse_stab())
-            .shots(50)
+            .sampling(monte_carlo(50))
             .seed(42)
             .run();
 
         let custom_results = sim_neo(circuit)
             .quantum(custom_backend(SparseStab::new))
-            .shots(50)
+            .sampling(monte_carlo(50))
             .seed(42)
             .run();
 
@@ -4815,7 +5117,7 @@ mod tests {
         let results = sim_neo(circuit)
             .quantum(custom_backend(SparseStab::new))
             .noise(noise)
-            .shots(100)
+            .sampling(monte_carlo(100))
             .seed(42)
             .build()
             .run();
@@ -4841,13 +5143,13 @@ mod tests {
 
         let results1 = sim_neo(circuit.clone())
             .quantum(custom_backend(SparseStab::new))
-            .shots(20)
+            .sampling(monte_carlo(20))
             .seed(42)
             .run();
 
         let results2 = sim_neo(circuit)
             .quantum(custom_backend(SparseStab::new))
-            .shots(20)
+            .sampling(monte_carlo(20))
             .seed(42)
             .run();
 
@@ -4867,7 +5169,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(custom_backend(StateVec::new))
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .run();
 
@@ -4891,7 +5193,11 @@ mod tests {
         let mut reg = RegisterMap::new();
         reg.add_register("c", &[QubitId(0)]);
 
-        let results = sim_neo(circuit).shots(200).seed(42).run();
+        let results = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(200))
+            .seed(42)
+            .run();
         let counts = results.register_counts(&reg, "c");
 
         // Should have entries for both [false] and [true]
@@ -4919,7 +5225,11 @@ mod tests {
         let mut reg = RegisterMap::new();
         reg.add_register("c", &[QubitId(0), QubitId(1)]);
 
-        let results = sim_neo(circuit).shots(100).seed(42).run();
+        let results = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(100))
+            .seed(42)
+            .run();
         let counts = results.register_counts(&reg, "c");
 
         // Bell state: only |00> and |11> should appear
@@ -4945,7 +5255,11 @@ mod tests {
         reg.add_register("a", &[QubitId(0)]);
         reg.add_register("b", &[QubitId(1)]);
 
-        let results = sim_neo(circuit).shots(5).seed(42).run();
+        let results = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(5))
+            .seed(42)
+            .run();
         let columns = results.as_register_columns(&reg);
 
         assert_eq!(columns.len(), 2);
@@ -4968,7 +5282,11 @@ mod tests {
         let mut reg = RegisterMap::new();
         reg.add_register("missing", &[QubitId(5)]); // never measured
 
-        let results = sim_neo(circuit).shots(10).seed(42).run();
+        let results = sim_neo(circuit)
+            .auto()
+            .sampling(monte_carlo(10))
+            .seed(42)
+            .run();
         let counts = results.register_counts(&reg, "missing");
 
         assert!(
@@ -4990,8 +5308,9 @@ mod tests {
         let defs = GateDefinitions::new();
 
         let results = sim_neo(circuit)
+            .auto()
             .gate_definitions(defs)
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .build()
             .run();
@@ -5018,7 +5337,7 @@ mod tests {
         let results = sim_neo(circuit)
             .quantum(state_vector())
             .gate_definitions(defs)
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .build()
             .run();
@@ -5046,7 +5365,7 @@ mod tests {
         // This would fail with ProgramRunner::new() (Clifford-only)
         let results = sim_neo(circuit)
             .quantum(state_vector())
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .build()
             .run();
@@ -5077,7 +5396,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(state_vector())
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .build()
             .run();
@@ -5104,8 +5423,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(state_vector())
-            .workers(2)
-            .shots(10)
+            .sampling(monte_carlo(10).workers(2))
             .seed(42)
             .build()
             .run();
@@ -5126,8 +5444,9 @@ mod tests {
         let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
 
         let results = sim_neo(circuit)
+            .auto()
             .max_decomp_depth(20)
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .build()
             .run();
@@ -5148,9 +5467,9 @@ mod tests {
         let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
 
         let results = sim_neo(circuit)
+            .auto()
             .max_decomp_depth(20)
-            .workers(2)
-            .shots(10)
+            .sampling(monte_carlo(10).workers(2))
             .seed(42)
             .build()
             .run();
@@ -5175,7 +5494,7 @@ mod tests {
 
         let results = sim_neo(circuit)
             .quantum(custom_backend_with_rotations(StateVec::new))
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .build()
             .run();
@@ -5206,8 +5525,9 @@ mod tests {
             .build();
 
         let results = sim_neo(circuit)
+            .auto()
             .gate_overrides(overrides)
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .build()
             .run();
@@ -5235,9 +5555,9 @@ mod tests {
         let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
 
         let results = sim_neo(circuit)
+            .auto()
             .gate_overrides(overrides)
-            .workers(2)
-            .shots(10)
+            .sampling(monte_carlo(10).workers(2))
             .seed(42)
             .build()
             .run();
@@ -5266,7 +5586,7 @@ mod tests {
         let results = sim_neo(circuit)
             .quantum(state_vector())
             .gate_overrides(overrides)
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .build()
             .run();
@@ -5290,10 +5610,11 @@ mod tests {
         let overrides =
             GateOverrides::<StateVec>::new().register(gates::X, |_sim, _angles, _qubits| true);
 
-        // SparseStab is the default backend -- StateVec overrides should panic
+        // .auto() selects SparseStab -- StateVec overrides should panic
         sim_neo(CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build())
+            .auto()
             .gate_overrides(overrides)
-            .shots(1)
+            .sampling(monte_carlo(1))
             .seed(42)
             .build()
             .run();
@@ -5311,7 +5632,7 @@ mod tests {
         sim_neo(CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build())
             .quantum(state_vector())
             .gate_overrides(overrides)
-            .shots(1)
+            .sampling(monte_carlo(1))
             .seed(42)
             .build()
             .run();
@@ -5334,8 +5655,9 @@ mod tests {
         let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
 
         let results = sim_neo(circuit)
+            .auto()
             .gate_overrides(overrides)
-            .shots(10)
+            .sampling(monte_carlo(10))
             .seed(42)
             .build()
             .run();
@@ -5358,9 +5680,9 @@ mod tests {
         let defs = GateDefinitions::new();
 
         let results = sim_neo(circuit)
+            .auto()
             .gate_definitions(defs)
-            .workers(2)
-            .shots(10)
+            .sampling(monte_carlo(10).workers(2))
             .seed(42)
             .build()
             .run();

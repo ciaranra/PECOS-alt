@@ -17,7 +17,7 @@
 //! results = (sim_neo(tc)
 //!     .quantum(stab_mps().lazy_measure().max_bond_dim(128))
 //!     .noise(depolarizing().p1(0.003).p2(0.003).p_meas(0.003).p_prep(0.003).idle_rz(0.05))
-//!     .shots(5000)
+//!     .sampling(monte_carlo(5000))
 //!     .seed(42)
 //!     .run())
 //! ```
@@ -308,7 +308,7 @@ pub fn depolarizing() -> PyNoiseModelBuilder {
 /// Pass to `.quantum()` to select the stabilizer simulator.
 ///
 /// Example:
-///     sim_neo(tc).quantum(stabilizer()).noise(depolarizing().p2(0.01)).shots(10000).run()
+///     sim_neo(tc).quantum(stabilizer()).noise(depolarizing().p2(0.01)).sampling(monte_carlo(10000)).run()
 #[pyclass(
     name = "StabilizerBuilder",
     skip_from_py_object,
@@ -331,7 +331,7 @@ impl PyStabilizerBuilder {
 /// Supports arbitrary gates including non-Clifford (T, RZ, etc.).
 ///
 /// Example:
-///     sim_neo(tc).quantum(statevec()).noise(depolarizing().idle_rz(0.05)).shots(10000).run()
+///     sim_neo(tc).quantum(statevec()).noise(depolarizing().idle_rz(0.05)).sampling(monte_carlo(10000)).run()
 #[pyclass(
     name = "StateVecBuilder",
     skip_from_py_object,
@@ -351,7 +351,7 @@ impl PyStateVecBuilder {
 /// Create a state vector backend builder.
 ///
 /// Example:
-///     sim_neo(tc).quantum(statevec()).noise(...).shots(10000).run()
+///     sim_neo(tc).quantum(statevec()).noise(...).sampling(monte_carlo(10000)).run()
 #[pyfunction]
 pub fn statevec() -> PyStateVecBuilder {
     PyStateVecBuilder
@@ -360,7 +360,7 @@ pub fn statevec() -> PyStateVecBuilder {
 /// Create a stabilizer (SparseStab) backend builder.
 ///
 /// Example:
-///     sim_neo(tc).quantum(stabilizer()).noise(...).shots(10000).run()
+///     sim_neo(tc).quantum(stabilizer()).noise(...).sampling(monte_carlo(10000)).run()
 #[pyfunction]
 pub fn stabilizer() -> PyStabilizerBuilder {
     PyStabilizerBuilder
@@ -460,6 +460,39 @@ pub fn meas_sampling(method: &str) -> PyMeasSamplingBuilder {
     PyMeasSamplingBuilder::new(method)
 }
 
+/// Monte Carlo sampling strategy builder. Mirrors Rust `monte_carlo(shots)`.
+///
+/// Example:
+///     sim_neo(tc).sampling(monte_carlo(1000).workers(4)).run()
+#[pyclass(
+    name = "MonteCarloBuilder",
+    skip_from_py_object,
+    module = "pecos_rslib_exp"
+)]
+#[derive(Clone)]
+pub struct PyMonteCarloBuilder {
+    pub(crate) shots: usize,
+    pub(crate) workers: usize,
+}
+
+#[pymethods]
+impl PyMonteCarloBuilder {
+    /// Set the number of parallel workers (1 = sequential).
+    fn workers(&self, n: usize) -> Self {
+        let mut c = self.clone();
+        c.workers = n;
+        c
+    }
+}
+
+/// Create a Monte Carlo sampling strategy running `shots` shots.
+///
+/// Sequential by default; chain `.workers(n)` for parallel execution.
+#[pyfunction]
+pub fn monte_carlo(shots: usize) -> PyMonteCarloBuilder {
+    PyMonteCarloBuilder { shots, workers: 1 }
+}
+
 /// Builder for sim_neo simulations. Mirrors the Rust-side `SimNeoBuilder`.
 #[pyclass(
     name = "SimNeoBuilder",
@@ -472,10 +505,18 @@ pub struct PySimNeoBuilder {
     /// Original Rust TickCircuit for meas_sampling (avoids reconstruction).
     /// Wrapped in Arc for Clone compatibility with pyo3.
     tick_circuit: std::sync::Arc<pecos_quantum::TickCircuit>,
-    shots: usize,
-    seed: u64,
+    /// Sampling strategy as (shots, workers). None until `.sampling()`.
+    sampling: Option<(usize, usize)>,
+    /// Shot count from the deprecated top-level `.shots()` forwarder.
+    legacy_shots: Option<usize>,
+    /// Random seed. None = nondeterministic, mirroring the Rust builder.
+    seed: Option<u64>,
+    /// Backend auto-selection opt-in from `.auto()`.
+    auto: bool,
     noise_config: Option<PyNoiseModelBuilder>,
-    backend: String,
+    /// Backend name. None until `.quantum()` is called; `.auto()` opts into
+    /// automatic selection at run time.
+    backend: Option<String>,
     stabmps_config: Option<crate::stabmps_builder::StabMpsBuilder>,
     meas_sampling_method: Option<String>,
 }
@@ -497,20 +538,20 @@ impl PySimNeoBuilder {
         let mut c = self.clone();
         if builder.is_instance_of::<PyMeasSamplingBuilder>() {
             let b: PyRef<'_, PyMeasSamplingBuilder> = builder.extract()?;
-            c.backend = "meas_sampling".to_string();
+            c.backend = Some("meas_sampling".to_string());
             c.meas_sampling_method = Some(b.method.clone());
             c.stabmps_config = None;
         } else if builder.is_instance_of::<PyStabMpsBuilder>() {
             let b: PyRef<'_, PyStabMpsBuilder> = builder.extract()?;
-            c.backend = "stabmps".to_string();
+            c.backend = Some("stabmps".to_string());
             c.stabmps_config = Some(b.inner.clone());
             c.meas_sampling_method = None;
         } else if builder.is_instance_of::<PyStabilizerBuilder>() {
-            c.backend = "stabilizer".to_string();
+            c.backend = Some("stabilizer".to_string());
             c.stabmps_config = None;
             c.meas_sampling_method = None;
         } else if builder.is_instance_of::<PyStateVecBuilder>() {
-            c.backend = "statevec".to_string();
+            c.backend = Some("statevec".to_string());
             c.stabmps_config = None;
             c.meas_sampling_method = None;
         } else {
@@ -521,6 +562,20 @@ impl PySimNeoBuilder {
         Ok(c)
     }
 
+    /// Opt into automatic selection of unset components.
+    ///
+    /// Mirrors the Rust builder's `.auto()`: explicit-about-being-implicit.
+    /// If `.quantum()` was not called, the backend is selected automatically
+    /// (the stabilizer backend; circuits with inline channel operations route
+    /// to the density-matrix path instead, since the stabilizer cannot
+    /// execute arbitrary channels). The sampling strategy is never
+    /// auto-selected: `.sampling(monte_carlo(shots))` is always required.
+    fn auto(&self) -> Self {
+        let mut c = self.clone();
+        c.auto = true;
+        c
+    }
+
     /// Set the noise model.
     fn noise(&self, noise_builder: &PyNoiseModelBuilder) -> Self {
         let mut c = self.clone();
@@ -528,17 +583,35 @@ impl PySimNeoBuilder {
         c
     }
 
-    /// Set number of shots.
-    fn shots(&self, n: usize) -> Self {
+    /// Set the sampling strategy (shots and workers live on the sampler).
+    ///
+    /// Example:
+    ///     sim_neo(tc).sampling(monte_carlo(1000).workers(4)).run()
+    fn sampling(&self, sampler: &PyMonteCarloBuilder) -> Self {
         let mut c = self.clone();
-        c.shots = n;
+        c.sampling = Some((sampler.shots, sampler.workers));
         c
+    }
+
+    /// Set number of shots.
+    ///
+    /// Deprecated: use `.sampling(monte_carlo(shots))` instead.
+    fn shots(&self, py: Python<'_>, n: usize) -> PyResult<Self> {
+        PyErr::warn(
+            py,
+            &py.get_type::<pyo3::exceptions::PyDeprecationWarning>(),
+            c"sim_neo(...).shots(n) is deprecated; use .sampling(monte_carlo(n))",
+            1,
+        )?;
+        let mut c = self.clone();
+        c.legacy_shots = Some(n);
+        Ok(c)
     }
 
     /// Set random seed.
     fn seed(&self, s: u64) -> Self {
         let mut c = self.clone();
-        c.seed = s;
+        c.seed = Some(s);
         c
     }
 
@@ -551,9 +624,11 @@ impl PySimNeoBuilder {
             return self.run_inline_channel_circuit();
         }
 
-        if self.backend == "meas_sampling" {
+        let backend = self.resolved_backend()?;
+        if backend == "meas_sampling" {
             return self.run_meas_sampling();
         }
+        let (shots, workers) = self.resolved_sampling()?;
 
         let noise = self
             .noise_config
@@ -561,14 +636,17 @@ impl PySimNeoBuilder {
             .and_then(PyNoiseModelBuilder::build_noise);
 
         let mut builder = sim_neo(self.commands.clone())
-            .shots(self.shots)
-            .seed(self.seed);
+            .sampling(pecos_neo::tool::monte_carlo(shots).workers(workers));
+
+        if let Some(seed) = self.seed {
+            builder = builder.seed(seed);
+        }
 
         if let Some(n) = noise {
             builder = builder.noise(n);
         }
 
-        match self.backend.as_str() {
+        match backend.as_str() {
             "stabmps" => {
                 let config = self.stabmps_config.clone().unwrap_or_default();
                 builder = builder.quantum(pecos_neo::tool::custom_backend_from_factory(config));
@@ -581,8 +659,7 @@ impl PySimNeoBuilder {
             }
             _ => {
                 return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                    "Unknown backend: {}",
-                    self.backend
+                    "Unknown backend: {backend}"
                 )));
             }
         }
@@ -590,7 +667,7 @@ impl PySimNeoBuilder {
         let mut sim = builder.build();
         let results = sim.run();
 
-        let mut all_shots = Vec::with_capacity(self.shots);
+        let mut all_shots = Vec::with_capacity(shots);
         for shot_outcomes in &results.outcomes {
             let meas: Vec<u8> = shot_outcomes.iter().map(|o| u8::from(o.outcome)).collect();
             all_shots.push(meas);
@@ -601,43 +678,120 @@ impl PySimNeoBuilder {
 }
 
 impl PySimNeoBuilder {
+    /// Resolve the sampling strategy, mirroring the Rust builder's rules
+    /// and error messages.
+    fn resolved_sampling(&self) -> PyResult<(usize, usize)> {
+        match (self.sampling, self.legacy_shots) {
+            (Some(sampling), None) => Ok(sampling),
+            (Some(_), Some(_)) => Err(pyo3::exceptions::PyValueError::new_err(
+                "Conflicting sampling configuration: deprecated .shots() cannot be combined \
+                 with .sampling(). Set shots on the sampler builder, e.g. \
+                 .sampling(monte_carlo(1000)).",
+            )),
+            (None, Some(shots)) => Ok((shots, 1)),
+            (None, None) => Err(pyo3::exceptions::PyValueError::new_err(
+                "No sampling strategy set. Use .sampling(monte_carlo(shots)).",
+            )),
+        }
+    }
+
+    /// Resolve the quantum backend, mirroring the Rust builder's rules:
+    /// explicit `.quantum()` wins; `.auto()` opts into automatic selection;
+    /// otherwise fail fast. Auto selects the stabilizer backend, except for
+    /// circuits with inline channel operations, which route to the
+    /// density-matrix path (the stabilizer cannot execute arbitrary
+    /// channels).
+    fn resolved_backend(&self) -> PyResult<String> {
+        if let Some(backend) = &self.backend {
+            return Ok(backend.clone());
+        }
+        if self.auto {
+            let auto_backend = if self.tick_circuit.has_channel_operations() {
+                "statevec"
+            } else {
+                "stabilizer"
+            };
+            return Ok(auto_backend.to_string());
+        }
+        Err(pyo3::exceptions::PyValueError::new_err(
+            "No quantum backend set. Use .quantum(stabilizer()) or .quantum(statevec()), \
+             or call .auto() to let sim_neo choose.",
+        ))
+    }
+
+    /// Concrete seed for execution paths that require one. Unset seed means
+    /// nondeterministic (mirroring the Rust builder), so draw fresh entropy.
+    fn resolved_seed_u64(&self) -> u64 {
+        use std::hash::{BuildHasher, Hasher};
+        self.seed.unwrap_or_else(|| {
+            std::collections::hash_map::RandomState::new()
+                .build_hasher()
+                .finish()
+        })
+    }
+
     fn run_inline_channel_circuit(&self) -> PyResult<PyRawMeasurementResult> {
         if self.noise_config.is_some() {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "sim_neo received a TickCircuit with inline channel operations; do not also pass .noise()",
             ));
         }
+        let backend = self.resolved_backend()?;
+        match backend.as_str() {
+            "statevec" | "stabilizer" => {}
+            "stabmps" => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "stab_mps backend does not support inline channel operations; use statevec() for density-matrix execution",
+                ));
+            }
+            "meas_sampling" => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "meas_sampling backend builds its own measurement model and does not consume inline channel operations",
+                ));
+            }
+            other => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Unknown backend: {other}"
+                )));
+            }
+        }
+        let (shots, workers) = self.resolved_sampling()?;
+        if workers > 1 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "inline-channel execution does not support parallel workers; use monte_carlo(shots) without .workers()",
+            ));
+        }
+        let seed = self.resolved_seed_u64();
 
-        match self.backend.as_str() {
-            "statevec" => self.run_inline_channel_density_matrix(),
-            "stabilizer" => self.run_inline_pauli_channel_stabilizer(),
-            "stabmps" => Err(pyo3::exceptions::PyValueError::new_err(
-                "stab_mps backend does not support inline channel operations; use statevec()/default for density-matrix execution",
-            )),
-            "meas_sampling" => Err(pyo3::exceptions::PyValueError::new_err(
-                "meas_sampling backend builds its own measurement model and does not consume inline channel operations",
-            )),
-            other => Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Unknown backend: {other}"
-            ))),
+        match backend.as_str() {
+            "statevec" => self.run_inline_channel_density_matrix(shots, seed),
+            _ => self.run_inline_pauli_channel_stabilizer(shots, seed),
         }
     }
 
-    fn run_inline_channel_density_matrix(&self) -> PyResult<PyRawMeasurementResult> {
+    fn run_inline_channel_density_matrix(
+        &self,
+        shots: usize,
+        seed: u64,
+    ) -> PyResult<PyRawMeasurementResult> {
         let rows = pecos_neo::inline_channel::run_inline_channels_density_matrix(
             &self.tick_circuit,
-            self.shots,
-            self.seed,
+            shots,
+            seed,
         )
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(PyRawMeasurementResult::from_rows(rows))
     }
 
-    fn run_inline_pauli_channel_stabilizer(&self) -> PyResult<PyRawMeasurementResult> {
+    fn run_inline_pauli_channel_stabilizer(
+        &self,
+        shots: usize,
+        seed: u64,
+    ) -> PyResult<PyRawMeasurementResult> {
         let rows = pecos_neo::inline_channel::run_inline_pauli_channels_stabilizer(
             &self.tick_circuit,
-            self.shots,
-            self.seed,
+            shots,
+            seed,
         )
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(PyRawMeasurementResult::from_rows(rows))
@@ -645,6 +799,12 @@ impl PySimNeoBuilder {
 
     /// DEM sampling backend: dispatches to stochastic or coherent path based on method.
     fn run_meas_sampling(&self) -> PyResult<PyRawMeasurementResult> {
+        let (_, workers) = self.resolved_sampling()?;
+        if workers > 1 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "meas_sampling does its own batch sampling and does not support parallel workers; use monte_carlo(shots) without .workers()",
+            ));
+        }
         let noise_config = self.noise_config.as_ref().ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err("DEM sampling requires .noise() to be set")
         })?;
@@ -704,7 +864,8 @@ impl PySimNeoBuilder {
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
         let plan = RawMeasurementPlan::new(&history, mechanisms);
-        let result = plan.sample(self.shots, self.seed);
+        let (shots, _) = self.resolved_sampling()?;
+        let result = plan.sample(shots, self.resolved_seed_u64());
 
         Ok(PyRawMeasurementResult::from_columnar(result))
     }
@@ -781,13 +942,14 @@ impl PySimNeoBuilder {
         let gates = commands_to_gates(&self.commands);
         let generator = select_generator(method, noise_config.idle_rz_angle);
 
+        let (shots, _) = self.resolved_sampling()?;
         let result = run_dem_simulation(
             &gates,
             &noise,
             &meta,
             generator.as_ref(),
-            self.shots,
-            self.seed,
+            shots,
+            self.resolved_seed_u64(),
         );
         Ok(result.measurements)
     }
@@ -825,11 +987,16 @@ fn commands_to_gates(commands: &pecos_neo::command::CommandQueue) -> Vec<pecos_c
 
 /// Create a sim_neo simulation builder from a TickCircuit.
 ///
+/// Explicit-by-default, mirroring the Rust builder: a quantum backend
+/// (`.quantum(..)` or `.auto()`) and a sampling strategy
+/// (`.sampling(monte_carlo(shots))`) are required; missing either is an
+/// error at `.run()`. The seed is optional; unset means nondeterministic.
+///
 /// Example:
 ///     results = (sim_neo(tc)
 ///         .quantum(stab_mps().lazy_measure().max_bond_dim(128))
 ///         .noise(depolarizing().p1(0.003).p2(0.003).p_meas(0.003).idle_rz(0.05))
-///         .shots(5000)
+///         .sampling(monte_carlo(5000))
 ///         .seed(42)
 ///         .run())
 #[pyfunction]
@@ -847,10 +1014,12 @@ pub fn py_sim_neo(tick_circuit: &Bound<'_, PyAny>) -> PyResult<PySimNeoBuilder> 
     Ok(PySimNeoBuilder {
         commands,
         tick_circuit: std::sync::Arc::new(tc),
-        shots: 1,
-        seed: 42,
+        sampling: None,
+        legacy_shots: None,
+        seed: None,
+        auto: false,
         noise_config: None,
-        backend: "statevec".to_string(),
+        backend: None,
         stabmps_config: None,
         meas_sampling_method: None,
     })

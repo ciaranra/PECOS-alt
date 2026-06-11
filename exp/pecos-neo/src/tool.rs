@@ -96,11 +96,12 @@ pub use importance::{
 pub use plugin::{Plugin, PluginGroup};
 pub use resource::{Resource, Resources};
 pub use simulation::{
-    Circuit, CustomBackendBuilder, ImportanceSamplingBuilder, NoiseResource, QuantumBackend,
-    Sampling, SimConfig, SimNeoBuilder, SimNeoInput, Simulation, SimulationResults,
+    Circuit, CustomBackendBuilder, ImportanceSamplingBuilder, MonteCarloBuilder, NoiseResource,
+    QuantumBackend, Sampling, SimConfig, SimNeoBuilder, SimNeoInput, Simulation, SimulationResults,
     SimulatorFactory, SparseStabBuilder, StabilizerBuilder, StateVecBuilder, StoredOverrides,
     custom_backend, custom_backend_from_factory, custom_backend_with_rotations,
-    importance_sampling, sim_neo, sim_neo_builder, sparse_stab, stabilizer, state_vector,
+    importance_sampling, monte_carlo, sim_neo, sim_neo_builder, sparse_stab, stabilizer,
+    state_vector,
 };
 pub use simulation::{PendingEngineBuilder, TypedProgram};
 pub use system::{IntoSystem, Schedule, System};
