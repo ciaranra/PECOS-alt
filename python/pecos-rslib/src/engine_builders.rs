@@ -83,6 +83,7 @@ impl PyQasmEngineBuilder {
                 noise_builder: None,
                 explicit_num_qubits: None,
                 foreign_object: None,
+                stack: None,
             }),
         })
     }
@@ -258,6 +259,7 @@ pub struct PyQasmSimBuilder {
     pub(crate) noise_builder: Option<Py<PyAny>>,
     pub(crate) explicit_num_qubits: Option<usize>,
     pub(crate) foreign_object: Option<Py<PyAny>>,
+    pub(crate) stack: Option<crate::sim::PySimStack>,
 }
 
 /// Python wrapper for built QASM simulation
@@ -573,6 +575,7 @@ impl PyHugrEngineBuilder {
                 foreign_object: None,
                 keep_intermediate_files: false,
                 hugr_bytes: None,
+                stack: None,
             }),
         })
     }
@@ -589,6 +592,7 @@ pub struct PyHugrSimBuilder {
     pub(crate) foreign_object: Option<Py<PyAny>>,
     pub(crate) keep_intermediate_files: bool,
     pub(crate) hugr_bytes: Option<Vec<u8>>,
+    pub(crate) stack: Option<crate::sim::PySimStack>,
 }
 
 /// Python wrapper for built HUGR simulation

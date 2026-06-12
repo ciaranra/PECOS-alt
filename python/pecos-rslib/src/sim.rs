@@ -10,7 +10,7 @@ use crate::prelude::*;
 // Import QASM WASM support
 use pecos_qasm::QasmEngineWasm;
 
-use pyo3::exceptions::{PyRuntimeError, PyTypeError};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
@@ -106,6 +106,7 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
                 noise_builder: None,
                 explicit_num_qubits: None,
                 foreign_object: None,
+                stack: None,
             }),
         })
     } else if let Ok(qis_prog) = program.extract::<PyQis>(py) {
@@ -177,6 +178,7 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
                 foreign_object: None,
                 keep_intermediate_files: false,
                 hugr_bytes: Some(hugr_bytes),
+                stack: None,
             }),
         })
     } else if let Ok(phir_prog) = program.extract::<PyPhirJson>(py) {
@@ -208,6 +210,14 @@ pub fn sim_builder() -> PySimBuilder {
     PySimBuilder {
         inner: SimBuilderInner::Empty,
     }
+}
+
+/// Which simulation stack `run()` uses, mirroring the Rust facade's
+/// `pecos::SimStack`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum PySimStack {
+    Engines,
+    Neo,
 }
 
 /// Python simulation builder
@@ -374,6 +384,43 @@ impl PySimBuilder {
             SimBuilderInner::PhirJson(builder) => builder.seed = Some(seed),
             SimBuilderInner::Phir(builder) => builder.seed = Some(seed),
             SimBuilderInner::Empty => {} // No-op for empty builder
+        }
+        Ok(PySimBuilder {
+            inner: self.inner.clone(),
+        })
+    }
+
+    /// Select the simulation stack: "engines" (the default) or "neo"
+    /// (experimental), mirroring the Rust facade's `.stack(SimStack)`.
+    fn stack(&mut self, stack: &str) -> PyResult<Self> {
+        let parsed = match stack {
+            "engines" => PySimStack::Engines,
+            "neo" => PySimStack::Neo,
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "Unknown simulation stack '{other}'; expected \"engines\" or \"neo\""
+                )));
+            }
+        };
+        match &mut self.inner {
+            SimBuilderInner::Qasm(builder) => builder.stack = Some(parsed),
+            SimBuilderInner::Hugr(builder) => builder.stack = Some(parsed),
+            SimBuilderInner::QisControl(_)
+            | SimBuilderInner::PhirJson(_)
+            | SimBuilderInner::Phir(_) => {
+                if parsed == PySimStack::Neo {
+                    return Err(PyValueError::new_err(
+                        "Only QASM and HUGR programs are routed to the neo stack so far; \
+                         this program type runs on the engines stack",
+                    ));
+                }
+                // "engines" is already the default for every program type.
+            }
+            SimBuilderInner::Empty => {
+                return Err(PyTypeError::new_err(
+                    "Cannot select a stack on an empty builder - create with a program first",
+                ));
+            }
         }
         Ok(PySimBuilder {
             inner: self.inner.clone(),
@@ -708,6 +755,9 @@ impl PySimBuilder {
 
         match &self.inner {
             SimBuilderInner::Qasm(builder) => {
+                if builder.stack == Some(PySimStack::Neo) {
+                    return run_qasm_neo(builder, shots);
+                }
                 let mut builder_lock = builder.engine_builder.lock().expect("lock poisoned");
                 let engine_builder = builder_lock
                     .take()
@@ -1002,6 +1052,9 @@ impl PySimBuilder {
                 }
             }
             SimBuilderInner::Hugr(builder) => {
+                if builder.stack == Some(PySimStack::Neo) {
+                    return run_hugr_neo(builder, shots);
+                }
                 // Direct HUGR interpreter
                 let mut builder_lock = builder.engine_builder.lock().expect("lock poisoned");
                 let engine_builder = builder_lock
@@ -1138,6 +1191,18 @@ impl PySimBuilder {
         };
         use crate::engine_builders::{PyPhirJsonSimulation, PyPhirSimulation, PyQasmSimulation};
         use pyo3::exceptions::PyRuntimeError;
+
+        let neo_selected = match &self.inner {
+            SimBuilderInner::Qasm(builder) => builder.stack == Some(PySimStack::Neo),
+            SimBuilderInner::Hugr(builder) => builder.stack == Some(PySimStack::Neo),
+            _ => false,
+        };
+        if neo_selected {
+            return Err(PyRuntimeError::new_err(
+                "build() is not available on the neo stack (it has no reusable \
+                 MonteCarloEngine); call run(shots) directly or use the engines stack",
+            ));
+        }
 
         Python::attach(|py| {
             match &self.inner {
@@ -1697,6 +1762,131 @@ impl PySimBuilder {
     }
 }
 
+/// Route a QASM program through the unified `pecos::sim()` facade onto the
+/// neo stack. Noise mapping stays centralized in the facade
+/// (`map_noise_to_neo`); nothing is translated here.
+fn run_qasm_neo(
+    builder: &PyQasmSimBuilder,
+    shots: usize,
+) -> PyResult<crate::shot_results_bindings::PyShotVec> {
+    if builder.foreign_object.is_some() {
+        return Err(PyRuntimeError::new_err(
+            "WASM foreign objects are not routed to the neo stack; \
+             remove .foreign_object() or use the engines stack",
+        ));
+    }
+    let program = {
+        let lock = builder.engine_builder.lock().expect("lock poisoned");
+        let engine = lock
+            .as_ref()
+            .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
+        if engine.has_wasm() {
+            return Err(PyRuntimeError::new_err(
+                "WASM foreign objects are not routed to the neo stack; \
+                 remove .wasm() or use the engines stack",
+            ));
+        }
+        engine
+            .get_program()
+            .ok_or_else(|| PyRuntimeError::new_err("No QASM program configured"))?
+    };
+    run_program_neo(
+        pecos::sim(program),
+        builder.seed,
+        builder.workers,
+        builder.explicit_num_qubits,
+        builder.quantum_engine_builder.as_ref(),
+        builder.noise_builder.as_ref(),
+        shots,
+    )
+}
+
+/// Route a HUGR program through the unified `pecos::sim()` facade onto the
+/// neo stack (direct HUGR interpretation, no LLVM).
+fn run_hugr_neo(
+    builder: &crate::engine_builders::PyHugrSimBuilder,
+    shots: usize,
+) -> PyResult<crate::shot_results_bindings::PyShotVec> {
+    if builder.foreign_object.is_some() {
+        return Err(PyRuntimeError::new_err(
+            "WASM foreign objects are not routed to the neo stack; \
+             remove .foreign_object() or use the engines stack",
+        ));
+    }
+    let bytes = builder.hugr_bytes.clone().ok_or_else(|| {
+        PyRuntimeError::new_err("HUGR program bytes are not available for the neo stack route")
+    })?;
+    let program = pecos_programs::Hugr::from_bytes(bytes);
+    run_program_neo(
+        pecos::sim(program),
+        builder.seed,
+        builder.workers,
+        builder.explicit_num_qubits,
+        builder.quantum_engine_builder.as_ref(),
+        builder.noise_builder.as_ref(),
+        shots,
+    )
+}
+
+/// Apply the shared configuration to a facade builder pointed at the neo
+/// stack and run it.
+fn run_program_neo(
+    facade: pecos::ProgrammedSimBuilder,
+    seed: Option<u64>,
+    workers: Option<usize>,
+    qubits: Option<usize>,
+    quantum: Option<&Py<PyAny>>,
+    noise: Option<&Py<PyAny>>,
+    shots: usize,
+) -> PyResult<crate::shot_results_bindings::PyShotVec> {
+    use crate::engine_builders::{
+        PyBiasedDepolarizingNoiseModelBuilder, PyDepolarizingNoiseModelBuilder,
+        PyGeneralNoiseModelBuilder,
+    };
+
+    if quantum.is_some() {
+        return Err(PyRuntimeError::new_err(
+            "Explicit quantum backends are not yet routed to the neo stack (it uses the \
+             default sparse stabilizer); remove .quantum() or use the engines stack",
+        ));
+    }
+
+    let mut facade = facade.stack(pecos::SimStack::Neo);
+    if let Some(seed) = seed {
+        facade = facade.seed(seed);
+    }
+    if let Some(workers) = workers {
+        facade = facade.workers(workers);
+    }
+    if let Some(n) = qubits {
+        facade = facade.qubits(n);
+    }
+    if let Some(noise_py) = noise {
+        facade = Python::attach(|py| -> PyResult<_> {
+            if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
+                Ok(facade.noise(general.inner.clone()))
+            } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py)
+            {
+                Ok(facade.noise(depolarizing.inner.clone()))
+            } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py)
+            {
+                Ok(facade.noise(biased.inner.clone()))
+            } else {
+                // The engines path silently ignores unknown noise objects;
+                // the neo route refuses instead so nothing runs noiseless
+                // by accident.
+                Err(PyRuntimeError::new_err(
+                    "Unrecognized noise builder type for the neo stack route",
+                ))
+            }
+        })?;
+    }
+    match facade.run(shots) {
+        Ok(shot_vec) => Ok(crate::shot_results_bindings::PyShotVec::new(shot_vec)),
+        Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {e}"))),
+    }
+}
+
 // Clone implementations for the inner types
 impl Clone for SimBuilderInner {
     fn clone(&self) -> Self {
@@ -1712,6 +1902,7 @@ impl Clone for SimBuilderInner {
                 noise_builder: builder.noise_builder.as_ref().map(|obj| obj.clone_ref(py)),
                 explicit_num_qubits: builder.explicit_num_qubits,
                 foreign_object: builder.foreign_object.as_ref().map(|obj| obj.clone_ref(py)),
+                stack: builder.stack,
             }),
             SimBuilderInner::QisControl(builder) => {
                 SimBuilderInner::QisControl(PyQisControlSimBuilder {
@@ -1753,6 +1944,7 @@ impl Clone for SimBuilderInner {
                 foreign_object: builder.foreign_object.as_ref().map(|obj| obj.clone_ref(py)),
                 keep_intermediate_files: builder.keep_intermediate_files,
                 hugr_bytes: builder.hugr_bytes.clone(),
+                stack: builder.stack,
             }),
             SimBuilderInner::Phir(builder) => SimBuilderInner::Phir(PyPhirSimBuilder {
                 engine_builder: builder.engine_builder.clone(),
