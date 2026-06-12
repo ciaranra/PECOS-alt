@@ -754,132 +754,7 @@ impl PySimBuilder {
         log::debug!("PySimBuilder::run() called with {shots} shots");
 
         match &self.inner {
-            SimBuilderInner::Qasm(builder) => {
-                if builder.stack == Some(PySimStack::Neo) {
-                    return run_qasm_neo(builder, shots);
-                }
-                let mut builder_lock = builder.engine_builder.lock().expect("lock poisoned");
-                let engine_builder = builder_lock
-                    .take()
-                    .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
-
-                // Apply foreign object if present
-                let engine_builder = if let Some(ref fo_py) = builder.foreign_object {
-                    Python::attach(|py| -> PyResult<_> {
-                        let fo_bound = fo_py.bind(py);
-                        let wasm_obj: PyRef<'_, PyWasmForeignObject> =
-                            fo_bound.cast::<PyWasmForeignObject>()?.borrow();
-                        // Get WASM bytes and create QasmEngineWasm
-                        let wasm_bytes = wasm_obj.inner.wasm_bytes().to_vec();
-                        let qasm_wasm = QasmEngineWasm::from_bytes(wasm_bytes);
-                        Ok(engine_builder.wasm(qasm_wasm))
-                    })?
-                } else {
-                    engine_builder
-                };
-
-                // Create the Rust SimBuilder
-                let mut sim_builder = engine_builder.to_sim();
-
-                // Apply configuration
-                if let Some(seed) = builder.seed {
-                    sim_builder = sim_builder.seed(seed);
-                }
-                if let Some(workers) = builder.workers {
-                    sim_builder = sim_builder.workers(workers);
-                }
-                if let Some(n) = builder.explicit_num_qubits {
-                    sim_builder = sim_builder.qubits(n);
-                }
-
-                // Apply quantum engine builder if present
-                if let Some(ref qe_py) = builder.quantum_engine_builder {
-                    sim_builder = Python::attach(|py| -> PyResult<_> {
-                        if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
-                            if let Some(inner) = state_vec.inner.take() {
-                                Ok(sim_builder.quantum(inner))
-                            } else {
-                                Err(PyErr::new::<PyRuntimeError, _>(
-                                    "Quantum engine builder has already been consumed",
-                                ))
-                            }
-                        } else if let Ok(mut sparse_stab) =
-                            qe_py.extract::<PySparseStabEngineBuilder>(py)
-                        {
-                            if let Some(inner) = sparse_stab.inner.take() {
-                                Ok(sim_builder.quantum(inner))
-                            } else {
-                                Err(PyErr::new::<PyRuntimeError, _>(
-                                    "Quantum engine builder has already been consumed",
-                                ))
-                            }
-                        } else if let Ok(mut stab_vec) = qe_py.extract::<PyStabVecEngineBuilder>(py)
-                        {
-                            if let Some(inner) = stab_vec.inner.take() {
-                                Ok(sim_builder.quantum(inner))
-                            } else {
-                                Err(PyErr::new::<PyRuntimeError, _>(
-                                    "Quantum engine builder has already been consumed",
-                                ))
-                            }
-                        } else if let Ok(mut density_mat) =
-                            qe_py.extract::<PyDensityMatrixEngineBuilder>(py)
-                        {
-                            if let Some(inner) = density_mat.inner.take() {
-                                Ok(sim_builder.quantum(inner))
-                            } else {
-                                Err(PyErr::new::<PyRuntimeError, _>(
-                                    "Quantum engine builder has already been consumed",
-                                ))
-                            }
-                        } else if let Ok(mut stab) = qe_py.extract::<PyStabilizerEngineBuilder>(py)
-                        {
-                            if let Some(inner) = stab.inner.take() {
-                                Ok(sim_builder.quantum(inner))
-                            } else {
-                                Err(PyErr::new::<PyRuntimeError, _>(
-                                    "Quantum engine builder has already been consumed",
-                                ))
-                            }
-                        } else if let Ok(mut ct) = qe_py.extract::<PyCoinTossEngineBuilder>(py) {
-                            if let Some(inner) = ct.inner.take() {
-                                Ok(sim_builder.quantum(inner))
-                            } else {
-                                Err(PyErr::new::<PyRuntimeError, _>(
-                                    "Quantum engine builder has already been consumed",
-                                ))
-                            }
-                        } else {
-                            Ok(sim_builder)
-                        }
-                    })?;
-                }
-
-                // Apply noise builder if present
-                if let Some(ref noise_py) = builder.noise_builder {
-                    sim_builder = Python::attach(|py| -> PyResult<_> {
-                        if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
-                            Ok(sim_builder.noise(general.inner.clone()))
-                        } else if let Ok(depolarizing) =
-                            noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py)
-                        {
-                            Ok(sim_builder.noise(depolarizing.inner.clone()))
-                        } else if let Ok(biased) =
-                            noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py)
-                        {
-                            Ok(sim_builder.noise(biased.inner.clone()))
-                        } else {
-                            Ok(sim_builder)
-                        }
-                    })?;
-                }
-
-                // Run directly
-                match sim_builder.run(shots) {
-                    Ok(shot_vec) => Ok(PyShotVec::new(shot_vec)),
-                    Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {e}"))),
-                }
-            }
+            SimBuilderInner::Qasm(builder) => run_qasm_via_facade(builder, shots),
             SimBuilderInner::QisControl(builder) => {
                 // Implementation for QIS Engine
                 let mut builder_lock = builder.engine_builder.lock().expect("lock poisoned");
@@ -973,7 +848,10 @@ impl PySimBuilder {
                                 ))
                             }
                         } else {
-                            Ok(sim_builder)
+                            Err(PyTypeError::new_err(
+                                "Unrecognized quantum engine builder type; expected state_vector(), \\
+                                 sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
+                            ))
                         }
                     })?;
                 }
@@ -992,7 +870,10 @@ impl PySimBuilder {
                         {
                             Ok(sim_builder.noise(biased.inner.clone()))
                         } else {
-                            Ok(sim_builder)
+                            Err(PyTypeError::new_err(
+                                "Unrecognized noise builder type; expected depolarizing_noise(), \\
+                                 biased_depolarizing_noise(), or general_noise()",
+                            ))
                         }
                     })?;
                 }
@@ -1143,7 +1024,10 @@ impl PySimBuilder {
                                 ))
                             }
                         } else {
-                            Ok(sim_builder)
+                            Err(PyTypeError::new_err(
+                                "Unrecognized quantum engine builder type; expected state_vector(), \\
+                                 sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
+                            ))
                         }
                     })?;
                 }
@@ -1162,7 +1046,10 @@ impl PySimBuilder {
                         {
                             Ok(sim_builder.noise(biased.inner.clone()))
                         } else {
-                            Ok(sim_builder)
+                            Err(PyTypeError::new_err(
+                                "Unrecognized noise builder type; expected depolarizing_noise(), \\
+                                 biased_depolarizing_noise(), or general_noise()",
+                            ))
                         }
                     })?;
                 }
@@ -1302,7 +1189,10 @@ impl PySimBuilder {
                                     ))
                                 }
                             } else {
-                                Ok(sim_builder)
+                                Err(PyTypeError::new_err(
+                                    "Unrecognized quantum engine builder type; expected state_vector(), \\
+                                 sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
+                                ))
                             }
                         })?;
                     }
@@ -1322,7 +1212,10 @@ impl PySimBuilder {
                             {
                                 Ok(sim_builder.noise(biased.inner.clone()))
                             } else {
-                                Ok(sim_builder)
+                                Err(PyTypeError::new_err(
+                                    "Unrecognized noise builder type; expected depolarizing_noise(), \\
+                                 biased_depolarizing_noise(), or general_noise()",
+                                ))
                             }
                         })?;
                     }
@@ -1496,7 +1389,10 @@ impl PySimBuilder {
                                     ))
                                 }
                             } else {
-                                Ok(sim_builder)
+                                Err(PyTypeError::new_err(
+                                    "Unrecognized quantum engine builder type; expected state_vector(), \\
+                                 sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
+                                ))
                             }
                         })?;
                     }
@@ -1516,7 +1412,10 @@ impl PySimBuilder {
                             {
                                 Ok(sim_builder.noise(biased.inner.clone()))
                             } else {
-                                Ok(sim_builder)
+                                Err(PyTypeError::new_err(
+                                    "Unrecognized noise builder type; expected depolarizing_noise(), \\
+                                 biased_depolarizing_noise(), or general_noise()",
+                                ))
                             }
                         })?;
                     }
@@ -1673,7 +1572,10 @@ impl PySimBuilder {
                                     ))
                                 }
                             } else {
-                                Ok(sim_builder)
+                                Err(PyTypeError::new_err(
+                                    "Unrecognized quantum engine builder type; expected state_vector(), \\
+                                 sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
+                                ))
                             }
                         })?;
                     }
@@ -1693,7 +1595,10 @@ impl PySimBuilder {
                             {
                                 Ok(sim_builder.noise(biased.inner.clone()))
                             } else {
-                                Ok(sim_builder)
+                                Err(PyTypeError::new_err(
+                                    "Unrecognized noise builder type; expected depolarizing_noise(), \\
+                                 biased_depolarizing_noise(), or general_noise()",
+                                ))
                             }
                         })?;
                     }
@@ -1762,43 +1667,141 @@ impl PySimBuilder {
     }
 }
 
-/// Route a QASM program through the unified `pecos::sim()` facade onto the
-/// neo stack. Noise mapping stays centralized in the facade
-/// (`map_noise_to_neo`); nothing is translated here.
-fn run_qasm_neo(
+/// Run a QASM program through the unified `pecos::sim()` facade.
+///
+/// Both stacks flow through this one entry: when no stack was selected the
+/// facade default governs, so a future default flip in crates/pecos carries
+/// the Python surface automatically. Noise mapping for the neo stack stays
+/// centralized in the facade (`map_noise_to_neo`); nothing is translated
+/// here.
+fn run_qasm_via_facade(
     builder: &PyQasmSimBuilder,
     shots: usize,
 ) -> PyResult<crate::shot_results_bindings::PyShotVec> {
-    if builder.foreign_object.is_some() {
+    let engine_builder = builder
+        .engine_builder
+        .lock()
+        .expect("lock poisoned")
+        .take()
+        .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
+
+    // Apply a foreign object (WASM) if present, as the direct path did.
+    let engine_builder = if let Some(ref fo_py) = builder.foreign_object {
+        Python::attach(|py| -> PyResult<_> {
+            let fo_bound = fo_py.bind(py);
+            let wasm_obj: PyRef<'_, PyWasmForeignObject> =
+                fo_bound.cast::<PyWasmForeignObject>()?.borrow();
+            let wasm_bytes = wasm_obj.inner.wasm_bytes().to_vec();
+            let qasm_wasm = QasmEngineWasm::from_bytes(wasm_bytes);
+            Ok(engine_builder.wasm(qasm_wasm))
+        })?
+    } else {
+        engine_builder
+    };
+
+    if builder.stack == Some(PySimStack::Neo) && engine_builder.has_wasm() {
         return Err(PyRuntimeError::new_err(
             "WASM foreign objects are not routed to the neo stack; \
-             remove .foreign_object() or use the engines stack",
+             remove .wasm()/.foreign_object() or use the engines stack",
         ));
     }
-    let program = {
-        let lock = builder.engine_builder.lock().expect("lock poisoned");
-        let engine = lock
-            .as_ref()
-            .ok_or_else(|| PyRuntimeError::new_err("Builder already consumed"))?;
-        if engine.has_wasm() {
-            return Err(PyRuntimeError::new_err(
-                "WASM foreign objects are not routed to the neo stack; \
-                 remove .wasm() or use the engines stack",
-            ));
+
+    // The Python QasmEngineBuilder can only carry a program and a WASM
+    // module. A plain program re-enters through the facade's auto
+    // selection (identical construction); a WASM-configured engine is
+    // kept verbatim via the classical override, where the facade never
+    // reads the program field.
+    let mut facade = match engine_builder.get_program() {
+        Some(program) if !engine_builder.has_wasm() => pecos::sim(program),
+        program => {
+            pecos::sim(program.unwrap_or_else(|| pecos_programs::Qasm::from_string(String::new())))
+                .classical(engine_builder)
         }
-        engine
-            .get_program()
-            .ok_or_else(|| PyRuntimeError::new_err("No QASM program configured"))?
     };
-    run_program_neo(
-        pecos::sim(program),
-        builder.seed,
-        builder.workers,
-        builder.explicit_num_qubits,
-        builder.quantum_engine_builder.as_ref(),
-        builder.noise_builder.as_ref(),
-        shots,
-    )
+
+    match builder.stack {
+        None => {} // the facade default stack governs
+        Some(PySimStack::Engines) => facade = facade.stack(pecos::SimStack::Engines),
+        Some(PySimStack::Neo) => facade = facade.stack(pecos::SimStack::Neo),
+    }
+    if let Some(seed) = builder.seed {
+        facade = facade.seed(seed);
+    }
+    if let Some(workers) = builder.workers {
+        facade = facade.workers(workers);
+    }
+    if let Some(n) = builder.explicit_num_qubits {
+        facade = facade.qubits(n);
+    }
+    if let Some(ref qe_py) = builder.quantum_engine_builder {
+        facade = apply_quantum_to_facade(facade, qe_py)?;
+    }
+    if let Some(ref noise_py) = builder.noise_builder {
+        facade = apply_noise_to_facade(facade, noise_py)?;
+    }
+    match facade.run(shots) {
+        Ok(shot_vec) => Ok(crate::shot_results_bindings::PyShotVec::new(shot_vec)),
+        Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {e}"))),
+    }
+}
+
+/// Extract a Python quantum-engine builder and apply it to the facade.
+fn apply_quantum_to_facade(
+    facade: pecos::ProgrammedSimBuilder,
+    qe_py: &Py<PyAny>,
+) -> PyResult<pecos::ProgrammedSimBuilder> {
+    use crate::engine_builders::{
+        PyCoinTossEngineBuilder, PyDensityMatrixEngineBuilder, PySparseStabEngineBuilder,
+        PyStabVecEngineBuilder, PyStabilizerEngineBuilder, PyStateVectorEngineBuilder,
+    };
+
+    let consumed = || PyRuntimeError::new_err("Quantum engine builder has already been consumed");
+    Python::attach(|py| -> PyResult<_> {
+        if let Ok(mut state_vec) = qe_py.extract::<PyStateVectorEngineBuilder>(py) {
+            Ok(facade.quantum(state_vec.inner.take().ok_or_else(consumed)?))
+        } else if let Ok(mut sparse_stab) = qe_py.extract::<PySparseStabEngineBuilder>(py) {
+            Ok(facade.quantum(sparse_stab.inner.take().ok_or_else(consumed)?))
+        } else if let Ok(mut stab_vec) = qe_py.extract::<PyStabVecEngineBuilder>(py) {
+            Ok(facade.quantum(stab_vec.inner.take().ok_or_else(consumed)?))
+        } else if let Ok(mut density_mat) = qe_py.extract::<PyDensityMatrixEngineBuilder>(py) {
+            Ok(facade.quantum(density_mat.inner.take().ok_or_else(consumed)?))
+        } else if let Ok(mut stab) = qe_py.extract::<PyStabilizerEngineBuilder>(py) {
+            Ok(facade.quantum(stab.inner.take().ok_or_else(consumed)?))
+        } else if let Ok(mut ct) = qe_py.extract::<PyCoinTossEngineBuilder>(py) {
+            Ok(facade.quantum(ct.inner.take().ok_or_else(consumed)?))
+        } else {
+            Err(PyTypeError::new_err(
+                "Unrecognized quantum engine builder type; expected state_vector(), \
+                 sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
+            ))
+        }
+    })
+}
+
+/// Extract a Python noise builder and apply it to the facade.
+fn apply_noise_to_facade(
+    facade: pecos::ProgrammedSimBuilder,
+    noise_py: &Py<PyAny>,
+) -> PyResult<pecos::ProgrammedSimBuilder> {
+    use crate::engine_builders::{
+        PyBiasedDepolarizingNoiseModelBuilder, PyDepolarizingNoiseModelBuilder,
+        PyGeneralNoiseModelBuilder,
+    };
+
+    Python::attach(|py| -> PyResult<_> {
+        if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
+            Ok(facade.noise(general.inner.clone()))
+        } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py) {
+            Ok(facade.noise(depolarizing.inner.clone()))
+        } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py) {
+            Ok(facade.noise(biased.inner.clone()))
+        } else {
+            Err(PyTypeError::new_err(
+                "Unrecognized noise builder type; expected depolarizing_noise(), \
+                 biased_depolarizing_noise(), or general_noise()",
+            ))
+        }
+    })
 }
 
 /// Route a HUGR program through the unified `pecos::sim()` facade onto the
