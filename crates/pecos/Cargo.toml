@@ -122,10 +122,20 @@ pecos-phir-json.workspace = true
 pecos-random.workspace = true
 log.workspace = true
 serde_json.workspace = true
+# Surface-code LER equivalence test (neo validation gate)
+pecos-qec.workspace = true
+pecos-quantum.workspace = true
+pecos-decoder-core.workspace = true
+pecos-fusion-blossom.workspace = true
+pecos-num.workspace = true
 
 [[test]]
 name = "unified_sim_api_test"
 required-features = ["runtime", "qis"]
+
+[[test]]
+name = "neo_surface_ler_test"
+required-features = ["neo"]
 
 [[example]]
 name = "sim_api_final"

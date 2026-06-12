@@ -264,3 +264,26 @@ multiple-crate-versions = "allow"
 similar-names = "allow"
 many-single-char-names = "allow"
 too-many-lines = "allow"         # ~114 hits across 11 crates -- sim algorithms, tests, benchmarks
+
+# Simulation-heavy crates run at opt-level 2 even in dev/test builds:
+# statistical validation tests (e.g. the surface-code LER equivalence
+# gate) need tens of thousands of simulated shots and are unusably slow
+# unoptimized (>10 min vs ~2 min). Debug assertions remain enabled.
+[profile.dev.package.pecos-core]
+opt-level = 2
+[profile.dev.package.pecos-random]
+opt-level = 2
+[profile.dev.package.pecos-simulators]
+opt-level = 2
+[profile.dev.package.pecos-engines]
+opt-level = 2
+[profile.dev.package.pecos-neo]
+opt-level = 2
+[profile.dev.package.pecos-qasm]
+opt-level = 2
+[profile.dev.package.pecos-qec]
+opt-level = 2
+[profile.dev.package.pecos-fusion-blossom]
+opt-level = 2
+[profile.dev.package.fusion-blossom]
+opt-level = 2
