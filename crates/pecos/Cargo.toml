@@ -137,6 +137,10 @@ required-features = ["runtime", "qis"]
 name = "neo_surface_ler_test"
 required-features = ["neo"]
 
+[[test]]
+name = "neo_equivalence_matrix_test"
+required-features = ["neo"]
+
 [[example]]
 name = "sim_api_final"
 required-features = ["runtime", "qis"]
