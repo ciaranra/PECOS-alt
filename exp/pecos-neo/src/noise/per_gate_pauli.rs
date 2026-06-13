@@ -81,7 +81,12 @@ impl PerGatePauliChannel {
         self
     }
 
-    /// Set the default measurement X-flip and preparation X-error rates.
+    /// Set the default measurement and preparation error rates.
+    ///
+    /// The measurement error is a physical X injected before readout (it
+    /// propagates into the post-measurement state, matching the DEM's
+    /// measurement-fault convention), and the preparation error is a
+    /// physical X after prep.
     #[must_use]
     pub fn with_meas_init(mut self, p_meas: f64, p_init: f64) -> Self {
         assert_probability_vector(&[p_meas], "p_meas");
@@ -247,26 +252,33 @@ impl PerGatePauliChannel {
         }
     }
 
-    fn apply_after_measurement(
+    fn apply_before_measurement(
         &self,
         qubits: &[QubitId],
         ctx: &NoiseContext,
         rng: &mut PecosRng,
     ) -> NoiseResponse {
-        let mut flips: SmallVec<[QubitId; 4]> = SmallVec::new();
+        // The DEM models a measurement error as a physical X at the
+        // measurement location (see pecos-qec's
+        // `process_meas_fault_source_tracked`: "Measurement error is a
+        // bit flip (X error)"), which propagates into the post-measurement
+        // state. Inject X before readout to match that convention, so this
+        // channel runs the same measurement physics the DEM encodes —
+        // a re-measured (un-reset) qubit flips at 2p(1-p), not p.
+        let mut gates: SmallVec<[GateCommand; 4]> = SmallVec::new();
         for &qubit in qubits {
             if ctx.is_leaked(qubit) {
                 continue;
             }
             let p = *self.measurement_rates.get(&qubit).unwrap_or(&self.p_meas);
             if p > 0.0 && rng.random::<f64>() < p {
-                flips.push(qubit);
+                gates.push(GateCommand::new(GateType::X, smallvec::smallvec![qubit]));
             }
         }
-        if flips.is_empty() {
+        if gates.is_empty() {
             NoiseResponse::None
         } else {
-            NoiseResponse::FlipOutcomes(flips)
+            NoiseResponse::inject_gates(gates)
         }
     }
 
@@ -302,7 +314,7 @@ impl NoiseChannel for PerGatePauliChannel {
                     && (gate_type.is_single_qubit() || gate_type.is_two_qubit())
                     && self.has_any_gate_noise()
             }
-            NoiseEvent::AfterMeasurement { .. } => {
+            NoiseEvent::BeforeMeasurement { .. } => {
                 self.p_meas > 0.0 || !self.measurement_rates.is_empty()
             }
             NoiseEvent::AfterPreparation { .. } => self.p_init > 0.0 || !self.init_rates.is_empty(),
@@ -320,8 +332,8 @@ impl NoiseChannel for PerGatePauliChannel {
             NoiseEvent::AfterGate {
                 gate_type, qubits, ..
             } => self.apply_after_gate(*gate_type, qubits, ctx, rng),
-            NoiseEvent::AfterMeasurement { qubits, .. } => {
-                self.apply_after_measurement(qubits, ctx, rng)
+            NoiseEvent::BeforeMeasurement { qubits } => {
+                self.apply_before_measurement(qubits, ctx, rng)
             }
             NoiseEvent::AfterPreparation { qubits } => {
                 self.apply_after_preparation(qubits, ctx, rng)
@@ -498,6 +510,39 @@ mod tests {
         assert!(
             (rate1 - 0.4).abs() < five_sigma(0.4),
             "per-qubit meas rate: got {rate1}, expected 0.4"
+        );
+    }
+
+    #[test]
+    fn measurement_error_propagates_to_a_re_measured_qubit() {
+        // The measurement error is a physical X before readout (DEM
+        // convention), so measuring the same qubit twice without a reset
+        // sees the second outcome flipped at 2p(1-p), not p. A record-only
+        // flip (the bug this guards) would give p.
+        let p = 0.25;
+        let channel = PerGatePauliChannel::new().with_meas_init(p, 0.0);
+        let model = ComposableNoiseModel::new().add_channel(channel);
+
+        let commands = CommandBuilder::new().pz(&[0]).mz(&[0]).mz(&[0]).build();
+        let mut state = SparseStab::new(2);
+        let mut runner = CircuitRunner::<SparseStab>::new()
+            .with_noise(model)
+            .with_seed(42);
+        let mut second_ones = 0usize;
+        for _ in 0..SHOTS {
+            state.reset();
+            let outcomes = runner.apply_circuit(&mut state, &commands).unwrap();
+            let bits: Vec<bool> = outcomes.iter().map(|o| o.outcome).collect();
+            assert_eq!(bits.len(), 2);
+            if bits[1] {
+                second_ones += 1;
+            }
+        }
+        let rate = second_ones as f64 / SHOTS as f64;
+        let expected = 2.0 * p * (1.0 - p);
+        assert!(
+            (rate - expected).abs() < five_sigma(expected),
+            "second-measure rate: got {rate}, expected {expected}"
         );
     }
 

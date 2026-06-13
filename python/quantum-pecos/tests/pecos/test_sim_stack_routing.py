@@ -116,3 +116,19 @@ def test_missing_qasm_source_reports_the_real_problem() -> None:
     for stack in ["engines", "neo"]:
         with pytest.raises(RuntimeError, match="No QASM source specified"):
             qasm_engine().to_sim().stack(stack).run(2)
+
+
+def test_neo_stack_rejects_explicit_classical_engine() -> None:
+    """An explicit .classical() engine must be refused on neo rather than
+    silently dropped (regression: review finding S9). The engines stack
+    still accepts it."""
+    from pecos_rslib import qasm_engine
+
+    explicit = qasm_engine().program(Qasm.from_string(X_MEASURE))
+
+    with pytest.raises(RuntimeError, match="not routed to the neo stack"):
+        sim(Qasm.from_string(X_MEASURE)).classical(explicit).stack("neo").run(5)
+
+    # Same configuration is fine on the engines stack.
+    results = sim(Qasm.from_string(X_MEASURE)).classical(explicit).stack("engines").run(5)
+    assert len(list(results["c"])) == 5

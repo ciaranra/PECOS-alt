@@ -1357,7 +1357,14 @@ impl Sampling {
             Self::MonteCarlo { shots, .. } => *shots,
             Self::ImportanceSampling { config } => config.shots(),
             Self::SubsetSimulation { config } => config.samples_per_level,
-            Self::PathEnumeration { config } => 1usize << config.max_measurements,
+            // Saturate rather than overflow the shift: an out-of-range
+            // max_measurements is rejected with a friendly message at
+            // build time (the <= 24 path-enumeration assert), and this
+            // accessor must not panic with a raw shift overflow first.
+            Self::PathEnumeration { config } => u32::try_from(config.max_measurements)
+                .ok()
+                .and_then(|bits| 1usize.checked_shl(bits))
+                .unwrap_or(usize::MAX),
         }
     }
 }
@@ -3312,6 +3319,22 @@ fn unified_simulation_post_shot(resources: &mut Resources) {
             .push(shot);
     }
 
+    // `shots[i]` is consumed as the register view of `outcomes[i]`, so the
+    // two must stay index-aligned: a source must produce a shot record for
+    // every shot or for none. Anything in between (a source that returns
+    // Some on some shots and None on others) silently misaligns them.
+    let results = resources.get::<SimulationResults>();
+    debug_assert!(
+        results
+            .shots
+            .as_ref()
+            .is_none_or(|shots| shots.shots.len() == results.outcomes.len()),
+        "shot records and outcomes are misaligned ({} shot records vs {} outcomes); \
+         a CommandSource must return shot_results() for every shot or for none",
+        results.shots.as_ref().map_or(0, |s| s.shots.len()),
+        results.outcomes.len(),
+    );
+
     // Increment shot counter
     resources.get_mut::<UnifiedShotState>().shot_index += 1;
 }
@@ -3452,13 +3475,19 @@ fn is_sim_startup(resources: &mut Resources) {
 }
 
 /// Pre-shot system for importance sampling: derive and set per-shot seeds.
+///
+/// Only reseeds when a base seed was configured, mirroring the unified
+/// Monte Carlo path ([`unified_simulation_pre_shot`]): an unseeded run
+/// keeps the runner's entropy-seeded RNG rather than silently forcing a
+/// deterministic stream.
 fn is_sim_pre_shot(resources: &mut Resources) {
     let config = resources.get::<SimConfig>().clone();
     let state = resources.get_mut::<ISShotState>();
 
-    let base_seed = config.seed.unwrap_or(0);
-    let shot_index = state.shot_index;
-    seed_importance_runner(&mut state.runner, base_seed, shot_index);
+    if let Some(base_seed) = config.seed {
+        let shot_index = state.shot_index;
+        seed_importance_runner(&mut state.runner, base_seed, shot_index);
+    }
 }
 
 /// Execute system for importance sampling: run one shot with biased noise.
@@ -3971,7 +4000,10 @@ impl Simulation {
     ) -> SimulationResults {
         let shots = config.shots;
         let num_workers = is_config.workers;
-        let base_seed = config.seed.unwrap_or(0);
+        // Reseed per shot only when a base seed was configured; an
+        // unseeded run keeps each worker's entropy-seeded runner, matching
+        // the Monte Carlo path rather than forcing a deterministic stream.
+        let base_seed = config.seed;
 
         let shots_per_worker = distribute_shots(shots, num_workers);
         let mut start_indices = vec![0usize; num_workers];
@@ -3995,7 +4027,9 @@ impl Simulation {
                 let mut runner = build_importance_runner(is_config, spec.num_qubits);
                 let start = start_indices[worker_id];
                 for shot_index in start..start + worker_shots {
-                    seed_importance_runner(&mut runner, base_seed, shot_index);
+                    if let Some(base_seed) = base_seed {
+                        seed_importance_runner(&mut runner, base_seed, shot_index);
+                    }
                     let result = runner.run_shot_fresh(&spec.circuit);
                     outcomes.push(result.outcomes);
                     weights.push(result.weight);
@@ -4100,6 +4134,20 @@ impl Simulation {
                     .extend(worker_shots.shots);
             }
         }
+
+        // Cross-worker alignment: each worker's records are index-aligned
+        // (the post-shot debug-assert enforces it per worker), but merging
+        // a worker that produced shot records with one that did not would
+        // desync the flattened vectors. Guard the merged invariant too.
+        debug_assert!(
+            shots
+                .as_ref()
+                .is_none_or(|s| s.shots.len() == outcomes.len()),
+            "merged shot records and outcomes are misaligned ({} shot records vs {} \
+             outcomes); all workers must agree on whether the source produces shot records",
+            shots.as_ref().map_or(0, |s| s.shots.len()),
+            outcomes.len(),
+        );
 
         SimulationResults {
             outcomes,

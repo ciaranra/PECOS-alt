@@ -84,6 +84,7 @@ impl PyQasmEngineBuilder {
                 explicit_num_qubits: None,
                 foreign_object: None,
                 stack: None,
+                classical_override: false,
             }),
         })
     }
@@ -260,6 +261,10 @@ pub struct PyQasmSimBuilder {
     pub(crate) explicit_num_qubits: Option<usize>,
     pub(crate) foreign_object: Option<Py<PyAny>>,
     pub(crate) stack: Option<crate::sim::PySimStack>,
+    /// True once `.classical()` has supplied an explicit engine builder.
+    /// The neo route rejects it (the facade contract has no classical
+    /// override on neo), matching the Rust `sim().stack(Neo)` behavior.
+    pub(crate) classical_override: bool,
 }
 
 /// Python wrapper for built QASM simulation

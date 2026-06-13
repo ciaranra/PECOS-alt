@@ -107,6 +107,7 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
                 explicit_num_qubits: None,
                 foreign_object: None,
                 stack: None,
+                classical_override: false,
             }),
         })
     } else if let Ok(qis_prog) = program.extract::<PyQis>(py) {
@@ -266,6 +267,7 @@ impl PySimBuilder {
                         drop(existing_engine_lock);
 
                         sim_builder.engine_builder = Arc::new(Mutex::new(Some(qasm_engine.inner)));
+                        sim_builder.classical_override = true;
                         Ok(PySimBuilder {
                             inner: self.inner.clone(),
                         })
@@ -693,7 +695,10 @@ impl PySimBuilder {
                             ));
                         }
                     } else {
-                        sim_builder
+                        return Err(PyTypeError::new_err(
+                            "Unrecognized quantum engine builder type; expected state_vector(), \
+                             sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
+                        ));
                     };
                 }
 
@@ -710,7 +715,10 @@ impl PySimBuilder {
                         {
                             sim_builder.noise(biased.inner.clone())
                         } else {
-                            sim_builder
+                            return Err(PyTypeError::new_err(
+                                "Unrecognized noise builder type; expected depolarizing_noise(), \
+                                 biased_depolarizing_noise(), or general_noise()",
+                            ));
                         };
                 }
 
@@ -1705,6 +1713,16 @@ fn run_qasm_via_facade(
              remove .wasm()/.foreign_object() or use the engines stack",
         ));
     }
+    if builder.stack == Some(PySimStack::Neo) && builder.classical_override {
+        // The facade contract has no classical-engine override on the neo
+        // stack (the Rust sim().stack(Neo) path rejects it the same way).
+        // Refuse rather than silently dropping the explicit engine and
+        // running with only its program.
+        return Err(PyRuntimeError::new_err(
+            "Explicit .classical() engine builders are not routed to the neo stack; \
+             remove .classical() or use the engines stack",
+        ));
+    }
 
     // The Python QasmEngineBuilder can only carry a program and a WASM
     // module. A plain program re-enters through the facade's auto
@@ -1847,11 +1865,6 @@ fn run_program_neo(
     noise: Option<&Py<PyAny>>,
     shots: usize,
 ) -> PyResult<crate::shot_results_bindings::PyShotVec> {
-    use crate::engine_builders::{
-        PyBiasedDepolarizingNoiseModelBuilder, PyDepolarizingNoiseModelBuilder,
-        PyGeneralNoiseModelBuilder,
-    };
-
     if quantum.is_some() {
         return Err(PyRuntimeError::new_err(
             "Explicit quantum backends are not yet routed to the neo stack (it uses the \
@@ -1870,24 +1883,10 @@ fn run_program_neo(
         facade = facade.qubits(n);
     }
     if let Some(noise_py) = noise {
-        facade = Python::attach(|py| -> PyResult<_> {
-            if let Ok(general) = noise_py.extract::<PyGeneralNoiseModelBuilder>(py) {
-                Ok(facade.noise(general.inner.clone()))
-            } else if let Ok(depolarizing) = noise_py.extract::<PyDepolarizingNoiseModelBuilder>(py)
-            {
-                Ok(facade.noise(depolarizing.inner.clone()))
-            } else if let Ok(biased) = noise_py.extract::<PyBiasedDepolarizingNoiseModelBuilder>(py)
-            {
-                Ok(facade.noise(biased.inner.clone()))
-            } else {
-                // The engines path silently ignores unknown noise objects;
-                // the neo route refuses instead so nothing runs noiseless
-                // by accident.
-                Err(PyRuntimeError::new_err(
-                    "Unrecognized noise builder type for the neo stack route",
-                ))
-            }
-        })?;
+        // Shared with the QASM route: extracts the known noise builder
+        // types and refuses unrecognized objects with a typed error
+        // listing the accepted constructors.
+        facade = apply_noise_to_facade(facade, noise_py)?;
     }
     match facade.run(shots) {
         Ok(shot_vec) => Ok(crate::shot_results_bindings::PyShotVec::new(shot_vec)),
@@ -1911,6 +1910,7 @@ impl Clone for SimBuilderInner {
                 explicit_num_qubits: builder.explicit_num_qubits,
                 foreign_object: builder.foreign_object.as_ref().map(|obj| obj.clone_ref(py)),
                 stack: builder.stack,
+                classical_override: builder.classical_override,
             }),
             SimBuilderInner::QisControl(builder) => {
                 SimBuilderInner::QisControl(PyQisControlSimBuilder {
