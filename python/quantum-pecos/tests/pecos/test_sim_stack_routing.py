@@ -132,3 +132,14 @@ def test_neo_stack_rejects_explicit_classical_engine() -> None:
     # Same configuration is fine on the engines stack.
     results = sim(Qasm.from_string(X_MEASURE)).classical(explicit).stack("engines").run(5)
     assert len(list(results["c"])) == 5
+
+
+def test_missing_source_wins_over_classical_override_on_neo() -> None:
+    """A sourceless .classical() builder must report the missing source,
+    not the neo classical-override rejection, since the missing source is
+    the more fundamental error (re-review S2/S9 ordering gap)."""
+    from pecos_rslib import qasm_engine
+
+    for stack in ["engines", "neo"]:
+        with pytest.raises(RuntimeError, match="No QASM source specified"):
+            qasm_engine().to_sim().classical(qasm_engine()).stack(stack).run(1)

@@ -1707,6 +1707,15 @@ fn run_qasm_via_facade(
         engine_builder
     };
 
+    // A builder with no resolvable QASM program is invalid regardless of
+    // stack or classical/WASM configuration. Resolve the program first so
+    // this fundamental error is reported ahead of the neo-specific
+    // rejections below — otherwise a sourceless `.classical()` + neo would
+    // misreport the missing source as an unrouted classical override.
+    let program = engine_builder.get_program().ok_or_else(|| {
+        PyRuntimeError::new_err("No QASM source specified. Use .qasm() or .qasm_file()")
+    })?;
+
     if builder.stack == Some(PySimStack::Neo) && engine_builder.has_wasm() {
         return Err(PyRuntimeError::new_err(
             "WASM foreign objects are not routed to the neo stack; \
@@ -1729,17 +1738,10 @@ fn run_qasm_via_facade(
     // selection (identical construction); a WASM-configured engine is
     // kept verbatim via the classical override, where the facade never
     // reads the program field.
-    let mut facade = match engine_builder.get_program() {
-        Some(program) if !engine_builder.has_wasm() => pecos::sim(program),
-        Some(program) => pecos::sim(program).classical(engine_builder),
-        None => {
-            // Error here rather than letting the classical-override
-            // placeholder reach the facade, which would misreport the
-            // problem as an unrouted .classical() configuration.
-            return Err(PyRuntimeError::new_err(
-                "No QASM source specified. Use .qasm() or .qasm_file()",
-            ));
-        }
+    let mut facade = if engine_builder.has_wasm() {
+        pecos::sim(program).classical(engine_builder)
+    } else {
+        pecos::sim(program)
     };
 
     match builder.stack {
