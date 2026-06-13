@@ -63,8 +63,14 @@ use ndarray::{Array, ArrayView, Axis, Dimension, RemoveAxis};
 ///
 /// # Panics
 ///
-/// Panics if `trials == 0`, `successes > trials`, or `confidence` is not
-/// in (0, 1) — these are contract violations, not numeric edge cases.
+/// Panics if `trials == 0`, `trials > 10^12`, `successes > trials`, or
+/// `confidence` is not in (0, 1). The first three are contract
+/// violations; the trials cap marks the scale beyond which the
+/// underlying incomplete-beta continued fraction has not been validated
+/// (it can converge spuriously for extreme shape parameters, returning a
+/// nonsense interval without warning). Also panics if the computed
+/// bounds come back inverted — a numeric-breakdown trip-wire that should
+/// be unreachable within the supported scales.
 ///
 /// # Examples
 ///
@@ -81,9 +87,16 @@ use ndarray::{Array, ArrayView, Axis, Dimension, RemoveAxis};
 /// ```
 #[must_use]
 #[allow(clippy::cast_precision_loss)]
-// Cast is safe: trial counts in practice are much smaller than f64 mantissa precision
+// Cast is safe: the trials cap keeps counts far below f64 mantissa precision
 pub fn jeffreys_interval(successes: u64, trials: u64, confidence: f64) -> (f64, f64) {
+    const MAX_TRIALS: u64 = 1_000_000_000_000;
+
     assert!(trials > 0, "jeffreys_interval requires trials > 0");
+    assert!(
+        trials <= MAX_TRIALS,
+        "jeffreys_interval supports at most {MAX_TRIALS} trials (got {trials}); the \
+         incomplete-beta evaluation is not validated beyond that scale"
+    );
     assert!(
         successes <= trials,
         "jeffreys_interval requires successes ({successes}) <= trials ({trials})"
@@ -107,6 +120,11 @@ pub fn jeffreys_interval(successes: u64, trials: u64, confidence: f64) -> (f64, 
     } else {
         betainc_inv(a, b, 1.0 - alpha / 2.0)
     };
+    assert!(
+        lower <= upper,
+        "jeffreys_interval produced inverted bounds ({lower} > {upper}) for k={successes}, \
+         n={trials}; this indicates incomplete-beta breakdown and is a bug"
+    );
     (lower, upper)
 }
 
@@ -740,6 +758,14 @@ mod tests {
     #[should_panic(expected = "trials > 0")]
     fn jeffreys_interval_rejects_zero_trials() {
         let _ = jeffreys_interval(0, 0, 0.95);
+    }
+
+    #[test]
+    #[should_panic(expected = "at most")]
+    fn jeffreys_interval_rejects_unvalidated_trial_scales() {
+        // Beyond ~1e12 trials the incomplete-beta continued fraction can
+        // converge spuriously (observed at 2e15: inverted bounds).
+        let _ = jeffreys_interval(1_000_000_000_000_000, 2_000_000_000_000_000, 0.95);
     }
 
     #[test]

@@ -1204,11 +1204,16 @@ impl From<SubsetSimulationBuilder> for Sampling {
 /// Create a subset simulation strategy builder running `samples_per_level`
 /// samples at each level.
 ///
-/// Subset simulation estimates rare event probabilities (1e-6 and below)
-/// by decomposing them into a product of conditional probabilities across
-/// adaptive levels. It needs a `.score()` function (how close an outcome is
-/// to failure) and a `.failure()` predicate (did the rare event occur);
+/// Subset simulation estimates rare event probabilities by decomposing
+/// them into a product of conditional probabilities across adaptive
+/// levels. It needs a `.score()` function (how close an outcome is to
+/// failure) and a `.failure()` predicate (did the rare event occur);
 /// both are required.
+///
+/// Accuracy caveat: the current multi-level estimator biases upward once
+/// more than one level engages (see `sampling::subset` module docs);
+/// treat deep-rare-event estimates as approximate until the estimator
+/// overhaul lands.
 ///
 /// The result arrives in [`SimulationResults::subset`]; per-shot
 /// `outcomes` are empty for subset runs.

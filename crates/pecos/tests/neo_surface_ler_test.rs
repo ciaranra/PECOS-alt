@@ -384,9 +384,22 @@ fn surface_memory_ler_matches_across_stacks() {
     let shots = 20_000;
     // High-confidence intervals so stack disagreement, not sampling
     // noise, is what fails the equivalence check (~4.4 sigma per side).
+    //
+    // Sensitivity, stated honestly: at these counts the overlap criterion
+    // only fails for LER ratios beyond roughly 2.4x at d=3, so this test
+    // is a coarse end-to-end guard — its value is exercising a real QEC
+    // circuit with decoding through both stacks. Fine-grained discrepancy
+    // detection belongs to the V1 matrix's analytic-anchor cells (power
+    // ~1 against convention bugs like the 2/3 and 8/15 factors or the
+    // measurement state-flip/record-flip distinction). The seed-42 d=3
+    // draw (engines 85 vs neo 60, ~2.1 sigma) was settled as sampling
+    // noise by an independent 6-seed 120k-shot-per-stack run (engines
+    // 517 vs neo 482, z = 1.11).
     let equivalence_confidence = 0.99999;
     // The suppression margin is smaller than the equivalence margin, so
-    // it gets its own (still strict) confidence.
+    // it gets its own (still strict) confidence. Pooling the two stacks
+    // for suppression is justified by that 120k-shot equivalence run,
+    // not by this test's own (weaker) overlap check.
     let suppression_confidence = 0.99;
 
     let mut pooled_intervals = Vec::new();

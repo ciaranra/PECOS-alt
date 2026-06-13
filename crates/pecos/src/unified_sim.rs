@@ -271,14 +271,24 @@ impl ProgrammedSimBuilder {
 
 /// Translate an engines noise config into the neo stack's noise model.
 ///
-/// The depolarizing family has identical sampling conventions on both
-/// stacks (uniform X/Y/Z at p1, uniform 15 two-qubit Paulis at p2, X
-/// before prep/measure for `p_prep`/`p_meas`), verified by
-/// `exp/pecos-neo/tests/noise_comparison_test.rs`, so probabilities map
-/// one-to-one. `GeneralNoiseModel` is NOT mapped: its full configuration
-/// (leakage, idle, crosstalk, emission models) is not readable from the
-/// built model and uses the "average" probability convention; configure
-/// `sim_neo()` directly with neo's `GeneralNoiseModelBuilder` for those.
+/// Gate and prep conventions are identical on both stacks (uniform X/Y/Z
+/// at p1, uniform 15 two-qubit Paulis at p2, X after prep for `p_prep`)
+/// and probabilities map one-to-one. Measurement noise differs BY MODEL
+/// on the engines side and the mapping preserves each model's physics:
+///
+/// - The depolarizing family injects a physical X into the state before
+///   each measurement (the error persists and propagates — a qubit
+///   measured twice without a reset flips at `2p(1-p)` the second time),
+///   mapped to neo's `MeasurementStateFlipChannel` via
+///   `with_p_meas_state_flip`.
+/// - `GeneralNoiseModel` flips only the classical record (the
+///   post-measurement state is untouched), mapped to neo's
+///   record-flipping `MeasurementChannel` via `with_p_meas`.
+///
+/// `GeneralNoiseModel` beyond the simple probability subset is NOT
+/// mapped: its full configuration (leakage, idle, crosstalk, emission
+/// models) is not readable from the built model; configure `sim_neo()`
+/// directly with neo's `GeneralNoiseModelBuilder` for those.
 ///
 /// Returns `Ok(None)` for pass-through (no noise).
 #[cfg(feature = "neo")]
@@ -292,7 +302,7 @@ fn map_noise_to_neo(
     let uniform = |p_prep: f64, p_meas: f64, p1: f64, p2: f64| {
         GeneralNoiseModelBuilder::new()
             .with_p_prep(p_prep)
-            .with_p_meas_symmetric(p_meas)
+            .with_p_meas_state_flip(p_meas)
             .with_p1(p1)
             .with_p2(p2)
     };

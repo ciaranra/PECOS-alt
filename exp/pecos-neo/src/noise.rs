@@ -132,7 +132,7 @@ pub use gate_id_dependent::{GateIdDependentChannel, GateIdNoiseConfig};
 pub use general_builder::{GeneralNoiseModelBuilder, general_noise};
 pub use idle::IdleChannel;
 pub use leakage::LeakageChannel;
-pub use measurement::MeasurementChannel;
+pub use measurement::{MeasurementChannel, MeasurementStateFlipChannel};
 pub use per_gate_pauli::PerGatePauliChannel;
 pub use plugin::{ContextObserver, EventHandler, NoiseModelConfig, NoisePlugin};
 pub use preparation::PreparationChannel;

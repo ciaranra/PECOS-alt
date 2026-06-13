@@ -191,8 +191,15 @@ pub fn betainc_reg(a: f64, b: f64, x: f64) -> f64 {
 /// Inverse of the regularized incomplete beta function: returns `x` such
 /// that `betainc_reg(a, b, x) == p`.
 ///
-/// Drop-in replacement for `scipy.special.betaincinv`. This is also the
-/// quantile (inverse CDF) of the Beta(a, b) distribution.
+/// Matches `scipy.special.betaincinv` (this is the quantile / inverse CDF
+/// of the Beta(a, b) distribution) over the parameter scales validated by
+/// the test module: shape parameters up to roughly binomial-trial counts
+/// of 1e12 and `p` away from the extreme tails by more than ~1e-15. The
+/// upper tail is computed through the symmetry
+/// `betainc_inv(a, b, p) = 1 - betainc_inv(b, a, 1 - p)` so both tails
+/// share the well-conditioned lower-tail path; beyond those scales the
+/// continued fraction can converge spuriously, so callers with extreme
+/// parameters must validate independently.
 ///
 /// Follows Numerical Recipes 3rd ed., section 6.4: an initial guess from
 /// Abramowitz & Stegun 26.5.22 refined by Halley iterations.
@@ -218,6 +225,13 @@ pub fn betainc_inv(a: f64, b: f64, p: f64) -> f64 {
     }
     if p >= 1.0 {
         return 1.0;
+    }
+    // Compute upper-tail quantiles through the lower tail of the mirrored
+    // distribution: `err = betainc_reg(...) - p` loses all precision when
+    // p is within ~1e-10 of 1 (the Halley correction then stalls on a
+    // cancelled residual), while 1 - p is exact in the mirrored call.
+    if p > 0.5 {
+        return 1.0 - betainc_inv(b, a, 1.0 - p);
     }
 
     let a1 = a - 1.0;
@@ -364,6 +378,58 @@ mod tests {
         ];
         for (a, b, p, expected) in cases {
             assert_close(betainc_inv(a, b, p), expected, 1e-8);
+        }
+    }
+
+    // Reference values generated with:
+    //   uv run python -c "from scipy import special; print(special.betaincinv(a, b, p))"
+    // Upper-tail quantiles exercise the symmetry path (the direct Halley
+    // iteration loses the residual to cancellation beyond p ~ 1 - 1e-10).
+    #[test]
+    fn betainc_inv_upper_tail_matches_scipy() {
+        let cases: [(f64, f64, f64, f64); 4] = [
+            (2.0, 3.0, 0.999_999_9, 0.997_073_840_091_498_9),
+            (100.5, 900.5, 1.0 - 1e-12, 0.179_649_794_238_11),
+            (7.5, 19_993.5, 1.0 - 2.3e-16, 0.002_728_615_291_135_757_6),
+            (0.5, 0.5, 0.999_999, 0.999_999_999_997_532_6),
+        ];
+        for (a, b, p, expected) in cases {
+            let actual = betainc_inv(a, b, p);
+            let scale: f64 = expected.abs();
+            assert!(
+                ((actual - expected).abs() / scale) < 1e-8,
+                "betainc_inv({a}, {b}, {p}): expected {expected:.12e}, got {actual:.12e}"
+            );
+        }
+    }
+
+    #[test]
+    fn betainc_inv_tails_are_symmetric() {
+        // Relative comparison, with cases chosen so neither side hits
+        // f64 representation limits: p stays >= 1e-6 (forming `1 - p`
+        // closer to 1 destroys p's precision before the function is even
+        // called) and the quantiles stay far enough from 0 and 1 that
+        // `1 - upper` keeps its significant digits. Outside those limits
+        // a mirrored comparison measures representation error, not
+        // implementation error.
+        let cases: [(f64, f64, &[f64]); 3] = [
+            (2.0, 3.0, &[1e-6, 0.01, 0.3]),
+            (50.5, 19_950.5, &[1e-6, 0.01, 0.3]),
+            // Quantiles for this shape at small p sit below 1e-13, where
+            // the mirrored side cannot represent them; compare only at
+            // moderate p.
+            (0.5, 20.5, &[0.01, 0.3]),
+        ];
+        for (a, b, ps) in cases {
+            for &p in ps {
+                let lower = betainc_inv(a, b, p);
+                let upper = betainc_inv(b, a, 1.0 - p);
+                let mirrored = 1.0 - upper;
+                assert!(
+                    ((lower - mirrored) / lower).abs() < 1e-8,
+                    "tail symmetry failed for a={a}, b={b}, p={p}: {lower} vs {mirrored}"
+                );
+            }
         }
     }
 

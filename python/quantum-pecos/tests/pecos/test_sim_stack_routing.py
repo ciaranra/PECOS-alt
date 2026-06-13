@@ -106,3 +106,13 @@ def test_neo_stack_rejects_explicit_quantum_backend() -> None:
 def test_neo_stack_rejects_build() -> None:
     with pytest.raises(RuntimeError, match="build"):
         sim(Qasm.from_string(X_MEASURE)).stack("neo").build()
+
+
+def test_missing_qasm_source_reports_the_real_problem() -> None:
+    """A builder with no program must say so, not misreport an unrouted
+    .classical() configuration (regression: review finding S2)."""
+    from pecos_rslib import qasm_engine
+
+    for stack in ["engines", "neo"]:
+        with pytest.raises(RuntimeError, match="No QASM source specified"):
+            qasm_engine().to_sim().stack(stack).run(2)

@@ -13,8 +13,18 @@
 //! Subset simulation for estimating very rare event probabilities.
 //!
 //! Subset simulation is a multilevel Monte Carlo method that decomposes a rare event
-//! into a sequence of more frequent intermediate events. This allows efficient estimation
-//! of probabilities as low as 1e-10 or smaller.
+//! into a sequence of more frequent intermediate events, reducing the sample count
+//! needed compared to direct Monte Carlo.
+//!
+//! ## Accuracy caveat
+//!
+//! The multi-level resampling in this implementation does not yet condition the
+//! resampled population correctly across levels, which biases estimates upward and
+//! degrades confidence-interval coverage once more than one level engages (measured:
+//! ~+21% bias and ~15% CI coverage at event probabilities near 1e-3). Treat results
+//! that engaged multiple levels as approximate until the estimator overhaul lands;
+//! single-level runs (event probability within reach of `samples_per_level`) behave
+//! like direct Monte Carlo and are unbiased.
 //!
 //! ## Algorithm
 //!

@@ -54,6 +54,16 @@ const RESET_MEASURE: &str = r#"
     measure q[0] -> c[0];
 "#;
 
+const MEASURE_TWICE: &str = r#"
+    OPENQASM 2.0;
+    include "qelib1.inc";
+    qreg q[1];
+    creg c[1];
+    reset q[0];
+    measure q[0] -> c[0];
+    measure q[0] -> c[0];
+"#;
+
 const BELL: &str = r#"
     OPENQASM 2.0;
     include "qelib1.inc";
@@ -260,5 +270,23 @@ fn feedback_under_measurement_noise_matches() {
         &NoiseCell::Meas(0.1),
         &["11"],
         None,
+    );
+}
+
+#[test]
+fn meas_twice_without_reset_matches() {
+    // Measurement noise in the depolarizing family is a physical X
+    // injected before readout, so the error persists in the state: the
+    // SECOND measurement of an un-reset qubit flips at 2p(1-p), not p.
+    // The creg bit is overwritten, so c reads the second outcome. A
+    // record-flip mapping (the bug this cell guards against) would
+    // produce p here.
+    let p = 0.25;
+    check_cell(
+        "meas_twice",
+        MEASURE_TWICE,
+        &NoiseCell::Meas(p),
+        &["1"],
+        Some(2.0 * p * (1.0 - p)),
     );
 }

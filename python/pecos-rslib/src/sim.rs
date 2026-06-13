@@ -849,7 +849,7 @@ impl PySimBuilder {
                             }
                         } else {
                             Err(PyTypeError::new_err(
-                                "Unrecognized quantum engine builder type; expected state_vector(), \\
+                                "Unrecognized quantum engine builder type; expected state_vector(), \
                                  sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
                             ))
                         }
@@ -871,7 +871,7 @@ impl PySimBuilder {
                             Ok(sim_builder.noise(biased.inner.clone()))
                         } else {
                             Err(PyTypeError::new_err(
-                                "Unrecognized noise builder type; expected depolarizing_noise(), \\
+                                "Unrecognized noise builder type; expected depolarizing_noise(), \
                                  biased_depolarizing_noise(), or general_noise()",
                             ))
                         }
@@ -1025,7 +1025,7 @@ impl PySimBuilder {
                             }
                         } else {
                             Err(PyTypeError::new_err(
-                                "Unrecognized quantum engine builder type; expected state_vector(), \\
+                                "Unrecognized quantum engine builder type; expected state_vector(), \
                                  sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
                             ))
                         }
@@ -1047,7 +1047,7 @@ impl PySimBuilder {
                             Ok(sim_builder.noise(biased.inner.clone()))
                         } else {
                             Err(PyTypeError::new_err(
-                                "Unrecognized noise builder type; expected depolarizing_noise(), \\
+                                "Unrecognized noise builder type; expected depolarizing_noise(), \
                                  biased_depolarizing_noise(), or general_noise()",
                             ))
                         }
@@ -1190,7 +1190,7 @@ impl PySimBuilder {
                                 }
                             } else {
                                 Err(PyTypeError::new_err(
-                                    "Unrecognized quantum engine builder type; expected state_vector(), \\
+                                    "Unrecognized quantum engine builder type; expected state_vector(), \
                                  sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
                                 ))
                             }
@@ -1213,7 +1213,7 @@ impl PySimBuilder {
                                 Ok(sim_builder.noise(biased.inner.clone()))
                             } else {
                                 Err(PyTypeError::new_err(
-                                    "Unrecognized noise builder type; expected depolarizing_noise(), \\
+                                    "Unrecognized noise builder type; expected depolarizing_noise(), \
                                  biased_depolarizing_noise(), or general_noise()",
                                 ))
                             }
@@ -1390,7 +1390,7 @@ impl PySimBuilder {
                                 }
                             } else {
                                 Err(PyTypeError::new_err(
-                                    "Unrecognized quantum engine builder type; expected state_vector(), \\
+                                    "Unrecognized quantum engine builder type; expected state_vector(), \
                                  sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
                                 ))
                             }
@@ -1413,7 +1413,7 @@ impl PySimBuilder {
                                 Ok(sim_builder.noise(biased.inner.clone()))
                             } else {
                                 Err(PyTypeError::new_err(
-                                    "Unrecognized noise builder type; expected depolarizing_noise(), \\
+                                    "Unrecognized noise builder type; expected depolarizing_noise(), \
                                  biased_depolarizing_noise(), or general_noise()",
                                 ))
                             }
@@ -1573,7 +1573,7 @@ impl PySimBuilder {
                                 }
                             } else {
                                 Err(PyTypeError::new_err(
-                                    "Unrecognized quantum engine builder type; expected state_vector(), \\
+                                    "Unrecognized quantum engine builder type; expected state_vector(), \
                                  sparse_stab(), stabilizer(), stab_vec(), density_matrix(), or coin_toss()",
                                 ))
                             }
@@ -1596,7 +1596,7 @@ impl PySimBuilder {
                                 Ok(sim_builder.noise(biased.inner.clone()))
                             } else {
                                 Err(PyTypeError::new_err(
-                                    "Unrecognized noise builder type; expected depolarizing_noise(), \\
+                                    "Unrecognized noise builder type; expected depolarizing_noise(), \
                                  biased_depolarizing_noise(), or general_noise()",
                                 ))
                             }
@@ -1713,9 +1713,14 @@ fn run_qasm_via_facade(
     // reads the program field.
     let mut facade = match engine_builder.get_program() {
         Some(program) if !engine_builder.has_wasm() => pecos::sim(program),
-        program => {
-            pecos::sim(program.unwrap_or_else(|| pecos_programs::Qasm::from_string(String::new())))
-                .classical(engine_builder)
+        Some(program) => pecos::sim(program).classical(engine_builder),
+        None => {
+            // Error here rather than letting the classical-override
+            // placeholder reach the facade, which would misreport the
+            // problem as an unrouted .classical() configuration.
+            return Err(PyRuntimeError::new_err(
+                "No QASM source specified. Use .qasm() or .qasm_file()",
+            ));
         }
     };
 
