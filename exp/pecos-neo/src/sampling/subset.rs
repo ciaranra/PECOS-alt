@@ -1264,6 +1264,9 @@ impl ProperSubsetSimulation {
         // Step 2: Iteratively apply subset simulation levels
         let mut current_threshold = 0.0;
         let mut cumulative_prob = 1.0;
+        // Conditionals actually committed into the estimate (terminal
+        // levels are recorded but not multiplied in); CV uses these.
+        let mut committed_conditionals: Vec<f64> = Vec::new();
 
         for level in 0..self.config.max_levels {
             // Sort trajectories by final score (descending)
@@ -1330,6 +1333,7 @@ impl ProperSubsetSimulation {
             }
 
             cumulative_prob *= conditional_prob;
+            committed_conditionals.push(conditional_prob);
 
             current_threshold = new_threshold;
 
@@ -1414,7 +1418,7 @@ impl ProperSubsetSimulation {
 
         // Independent-levels CV, including the final failure-fraction term.
         let cv_squared = independent_levels_cv_squared(
-            self.levels.iter().map(|l| l.conditional_prob),
+            committed_conditionals.iter().copied(),
             final_failure_fraction,
             n,
         );
@@ -1497,6 +1501,9 @@ impl ProperSubsetSimulation {
         // Step 4: Iteratively apply subset simulation at each threshold
         let mut current_threshold = 0.0;
         let mut cumulative_prob = 1.0;
+        // Conditionals actually committed into the estimate (terminal
+        // levels are recorded but not multiplied in); CV uses these.
+        let mut committed_conditionals: Vec<f64> = Vec::new();
 
         for (level, &target_threshold) in thresholds.iter().enumerate() {
             if level >= self.config.max_levels {
@@ -1576,6 +1583,7 @@ impl ProperSubsetSimulation {
 
             if conditional_prob > 0.0 {
                 cumulative_prob *= conditional_prob;
+                committed_conditionals.push(conditional_prob);
             }
 
             current_threshold = actual_threshold;
@@ -1661,7 +1669,7 @@ impl ProperSubsetSimulation {
 
         // Independent-levels CV, including the final failure-fraction term.
         let cv_squared = independent_levels_cv_squared(
-            self.levels.iter().map(|l| l.conditional_prob),
+            committed_conditionals.iter().copied(),
             final_failure_fraction,
             n,
         );
@@ -2083,6 +2091,9 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
         let mut current_threshold = 0.0;
         let mut cumulative_prob = 1.0;
         let mut levels = Vec::new();
+        // Conditionals actually committed into the estimate (terminal
+        // levels are recorded but not multiplied in); CV uses these.
+        let mut committed_conditionals: Vec<f64> = Vec::new();
 
         for level in 0..self.config.base.max_levels {
             // Sort by final score (descending)
@@ -2148,6 +2159,7 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
             }
 
             cumulative_prob *= conditional_prob;
+            committed_conditionals.push(conditional_prob);
 
             current_threshold = new_threshold;
 
@@ -2238,7 +2250,7 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
 
         // Independent-levels CV, including the final failure-fraction term.
         let cv_squared = independent_levels_cv_squared(
-            levels.iter().map(|l| l.conditional_prob),
+            committed_conditionals.iter().copied(),
             final_failure_fraction,
             n,
         );
@@ -2594,12 +2606,17 @@ mod tests {
             .run();
             estimates.push(result.probability);
             reported_cv.push(result.coefficient_of_variation);
-            // Reconstruct the pre-fix CV (intermediate levels only, no final
-            // failure-fraction term) for the materiality check.
+            // Reconstruct the COMMITTED-intermediate CV (no final term) for
+            // the materiality check. Committed levels are those that did not
+            // trigger a terminal break (all-failed or threshold-reaches-
+            // failure); a terminal level is recorded in `levels` but its
+            // conditional is never a factor in the estimate, so it must be
+            // excluded here exactly as the production CV excludes it.
             let nf = n as f64;
             let intermediate: f64 = result
                 .levels
                 .iter()
+                .filter(|l| l.num_failures != n && l.threshold < failure_threshold)
                 .map(|l| {
                     let p = l.conditional_prob;
                     if p > 0.0 && p < 1.0 {
@@ -2649,6 +2666,83 @@ mod tests {
             mean_reported_cv > mean_cv_dropping_final,
             "the final failure-fraction term must be included (reported {mean_reported_cv:.3} \
              must exceed the intermediate-levels-only {mean_cv_dropping_final:.3})"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn proper_subset_cv_counts_committed_factors_not_recorded_levels() {
+        // Discriminating regression for the CV double-count: a terminal level
+        // — one whose new threshold reaches the failure level — is RECORDED in
+        // `levels` for reporting, but its conditional is never multiplied into
+        // the estimator. The CV must be a function of the committed product
+        // factors only; including a terminal conditional double-counts the
+        // boundary (the terminal conditional is itself a measure of the
+        // failure tail, the same quantity the final failure fraction already
+        // captures). This reconstructs both the committed-only and the
+        // all-recorded-levels CV^2 from the result and asserts the reported
+        // CV uses the former. On the pre-fix code (CV over all recorded
+        // levels) the first assertion fails, so this test discriminates.
+        let (p_damage, increment, num_rounds, failure_threshold) = (0.1, 1.0, 40, 11.0);
+        let n = 2000;
+        let config = SubsetConfig::new()
+            .with_samples_per_level(n)
+            .with_threshold_fraction(0.2)
+            .with_max_levels(20)
+            .with_seed(1);
+        let result =
+            ProperSubsetSimulation::new(p_damage, increment, failure_threshold, num_rounds, config)
+                .run();
+
+        // The committed factors are exactly the non-terminal recorded levels.
+        let committed: Vec<f64> = result
+            .levels
+            .iter()
+            .filter(|l| l.num_failures != n && l.threshold < failure_threshold)
+            .map(|l| l.conditional_prob)
+            .collect();
+        // A terminal level must actually be present, or the test proves nothing.
+        assert!(
+            result.levels.len() > committed.len(),
+            "test regime must produce a terminal recorded-but-uncommitted level \
+             (recorded {}, committed {})",
+            result.levels.len(),
+            committed.len()
+        );
+
+        // The estimate is prod(committed) * q, so recover the final failure
+        // fraction q = probability / prod(committed) to rebuild the CV terms.
+        let nf = n as f64;
+        let prod_committed: f64 = committed.iter().product();
+        let q = result.probability / prod_committed;
+        let term = |p: f64| {
+            if p > 0.0 && p < 1.0 {
+                (1.0 - p) / (nf * p)
+            } else {
+                0.0
+            }
+        };
+        let committed_cv_sq: f64 = committed.iter().map(|&p| term(p)).sum::<f64>() + term(q);
+        let all_levels_cv_sq: f64 = result
+            .levels
+            .iter()
+            .map(|l| term(l.conditional_prob))
+            .sum::<f64>()
+            + term(q);
+        let reported_cv_sq = result.coefficient_of_variation.powi(2);
+
+        // The reported CV is built from committed factors only...
+        assert!(
+            (reported_cv_sq - committed_cv_sq).abs() <= 1e-9 * committed_cv_sq.max(1e-12),
+            "reported CV^2 {reported_cv_sq:.6e} must equal the committed-only formula \
+             {committed_cv_sq:.6e}, not the all-recorded-levels formula {all_levels_cv_sq:.6e}"
+        );
+        // ...and the all-recorded-levels formula (the pre-fix behavior) is a
+        // genuinely different, larger value, so the check above is not vacuous.
+        assert!(
+            all_levels_cv_sq > committed_cv_sq + 1e-9,
+            "all-recorded-levels CV^2 {all_levels_cv_sq:.6e} must exceed the committed-only \
+             CV^2 {committed_cv_sq:.6e}: the terminal level must double-count the boundary"
         );
     }
 
