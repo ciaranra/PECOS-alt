@@ -1296,11 +1296,16 @@ pub enum Sampling {
         config: ImportanceSamplingBuilder,
     },
 
-    /// Subset simulation for very rare event estimation (~1e-6 and below).
+    /// Subset simulation: decompose a rare-event probability into a product
+    /// of conditional probabilities across adaptive levels. Produces an
+    /// estimate in [`SimulationResults::subset`] instead of per-shot
+    /// outcomes.
     ///
-    /// Decomposes the rare event probability into a product of conditional
-    /// probabilities across adaptive levels. Produces an estimate in
-    /// [`SimulationResults::subset`] instead of per-shot outcomes.
+    /// Accuracy caveat: the current multi-level estimator biases upward
+    /// once more than one level engages (see the `sampling::subset` module
+    /// docs); treat deep-rare-event estimates as approximate until the
+    /// estimator overhaul lands. Single-level runs behave like direct
+    /// Monte Carlo and are unbiased.
     ///
     /// Use the [`subset_simulation()`] builder function to create this variant.
     SubsetSimulation {
