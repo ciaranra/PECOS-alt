@@ -296,12 +296,20 @@ pub fn betainc_inv(a: f64, b: f64, p: f64) -> f64 {
 mod tests {
     use super::*;
 
-    /// Assert relative agreement with a `SciPy` reference value.
+    /// Assert `actual` matches `expected` to a RELATIVE tolerance.
+    ///
+    /// A pure relative check: callers that legitimately expect a value of
+    /// exactly zero must handle that case separately (the `ln_gamma` test
+    /// does). An earlier version OR'd in an absolute `abs_err <= rel_tol`
+    /// fallback, which silently weakened the relative tolerance to an
+    /// absolute one for `|expected| < 1` (e.g. a claimed 1e-12 relative
+    /// became 1e-12 absolute — ~1000x looser at `expected = 1e-3`).
     fn assert_close(actual: f64, expected: f64, rel_tol: f64) {
-        let scale = expected.abs().max(f64::MIN_POSITIVE);
+        let denom = expected.abs().max(f64::MIN_POSITIVE);
+        let rel_err = (actual - expected).abs() / denom;
         assert!(
-            (actual - expected).abs() / scale <= rel_tol || (actual - expected).abs() <= rel_tol,
-            "expected {expected:.17e}, got {actual:.17e}"
+            rel_err <= rel_tol,
+            "expected {expected:.17e}, got {actual:.17e} (relative error {rel_err:.3e} > {rel_tol:.3e})"
         );
     }
 
