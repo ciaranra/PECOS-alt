@@ -1240,10 +1240,14 @@ impl ProperSubsetSimulation {
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
 
-            // Find adaptive threshold: score at (1-p0) quantile
+            // Find the adaptive threshold so the top p0 fraction survives.
+            // Trajectories are sorted DESCENDING (highest score first), so
+            // the survivor threshold is the score at index floor(p0 * n) —
+            // index (1 - p0) * n would pick the BOTTOM fraction and invert
+            // the conditioning (~1-p0 survive instead of ~p0).
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            // p0 in [0,1] so (1-p0)*n fits in usize
-            let threshold_idx = ((1.0 - p0) * n as f64).floor() as usize;
+            // p0 in [0,1] so p0*n fits in usize
+            let threshold_idx = (p0 * n as f64).floor() as usize;
             let threshold_idx = threshold_idx.min(n - 1);
             let new_threshold = self.trajectories[threshold_idx].score;
 
@@ -1488,10 +1492,11 @@ impl ProperSubsetSimulation {
 
             // If no trajectories exceed this threshold, use quantile-based threshold
             let actual_threshold = if num_above == 0 {
-                // Use the (1-p0) quantile as the new threshold
+                // Top p0 fraction survives: descending sort, so index
+                // floor(p0 * n) (index (1-p0)*n would pick the bottom).
                 #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                // p0 in [0,1] so (1-p0)*n fits in usize
-                let threshold_idx = ((1.0 - p0) * n as f64).floor() as usize;
+                // p0 in [0,1] so p0*n fits in usize
+                let threshold_idx = (p0 * n as f64).floor() as usize;
                 let threshold_idx = threshold_idx.min(n - 1);
                 self.trajectories[threshold_idx].score
             } else {
@@ -2068,10 +2073,12 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
 
-            // Find adaptive threshold: score at (1-p0) quantile
+            // Top p0 fraction survives: histories sorted DESCENDING, so the
+            // survivor threshold is at index floor(p0 * n); index (1-p0)*n
+            // would pick the BOTTOM fraction and invert the conditioning.
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            // p0 in [0,1] so (1-p0)*n fits in usize
-            let threshold_idx = ((1.0 - p0) * n as f64).floor() as usize;
+            // p0 in [0,1] so p0*n fits in usize
+            let threshold_idx = (p0 * n as f64).floor() as usize;
             let threshold_idx = threshold_idx.min(n - 1);
             let new_threshold = histories[indices[threshold_idx]].final_score;
 
@@ -2451,6 +2458,85 @@ mod tests {
 
         // The key point: subset sim uses ~500 samples per level but can
         // estimate probabilities that direct MC would need many more samples for
+    }
+
+    #[test]
+    fn proper_subset_threshold_keeps_top_fraction_not_bottom() {
+        // Directly pins the threshold-selection fix. Trajectories are sorted
+        // DESCENDING, so the survivor threshold must be the score at index
+        // floor(p0 * n) (keep the TOP p0). The pre-fix code indexed
+        // (1 - p0) * n, which kept the BOTTOM fraction and made each level's
+        // measured conditional ~ (1 - p0) instead of ~ p0.
+        //
+        // This is the discriminating assertion: with the fix the first
+        // level's conditional is near threshold_fraction (~0.2); with the
+        // inverted index it is near 1 - threshold_fraction (~0.8). The
+        // analytical-match check below does NOT catch this on its own (the
+        // estimate telescopes to the right value either way because the
+        // conditioning is correct — the quantile only controls how
+        // aggressively each level cuts), which is exactly why this explicit
+        // conditional check is needed.
+        let config = SubsetConfig::new()
+            .with_samples_per_level(3000)
+            .with_threshold_fraction(0.2)
+            .with_max_levels(20)
+            .with_seed(42);
+        let result = ProperSubsetSimulation::new(0.05, 1.0, 15.0, 100, config).run();
+
+        let first = result
+            .levels
+            .first()
+            .expect("at least one level")
+            .conditional_prob;
+        assert!(
+            first < 0.5,
+            "first-level conditional {first:.3} must be near threshold_fraction (0.2), \
+             not its complement (0.8) — the threshold must keep the top fraction"
+        );
+    }
+
+    #[test]
+    fn proper_subset_simulation_matches_analytical() {
+        // Unbiasedness regression guard for ProperSubsetSimulation against
+        // the EXACT analytical probability of the same Bernoulli damage
+        // process. This guard was MISSING entirely: the existing analytical
+        // tests only exercised BernoulliSubsetSimulation (direct MC), never
+        // the multi-level Au-Beck path. It validates that the multi-level
+        // estimator is unbiased (it is, because the checkpoint resample
+        // conditions correctly); the inverted-quantile defect is pinned
+        // separately by proper_subset_threshold_keeps_top_fraction_not_bottom.
+        let p_damage = 0.05;
+        let increment = 1.0;
+        let num_rounds = 100;
+        // P(Binom(100, 0.05) >= 15), mean 5: well below 1/samples, so direct
+        // MC over samples_per_level would essentially never reach it; only
+        // multi-level conditioning estimates it stably.
+        let failure_threshold = 15.0;
+        let samples_per_level = 3000;
+
+        let analytical = BernoulliSubsetSimulation::new(p_damage, num_rounds, failure_threshold)
+            .analytical_probability();
+        assert!(
+            analytical > 0.0 && analytical < 1.0 / samples_per_level as f64,
+            "test setup: analytical {analytical:.2e} must be nonzero AND below 1/samples",
+        );
+
+        let config = SubsetConfig::new()
+            .with_samples_per_level(samples_per_level)
+            .with_threshold_fraction(0.2)
+            .with_max_levels(20)
+            .with_seed(42);
+        let estimate =
+            ProperSubsetSimulation::new(p_damage, increment, failure_threshold, num_rounds, config)
+                .run()
+                .probability();
+
+        let ratio = (estimate / analytical).max(analytical / estimate);
+        assert!(
+            estimate > 0.0 && ratio < 3.0,
+            "ProperSubsetSimulation estimate {estimate:.3e} should be within 3x of \
+             analytical {analytical:.3e} (ratio {ratio:.2})"
+        );
     }
 
     // ========================================================================
