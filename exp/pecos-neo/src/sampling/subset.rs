@@ -692,6 +692,39 @@ impl BernoulliSubsetSimulation {
         prob
     }
 }
+/// Squared coefficient of variation for a subset-simulation estimate under
+/// the standard independent-levels approximation (Au & Beck 2001).
+///
+/// The estimate is `P(F) = (prod_i p_i) * q`, where `p_i` are the committed
+/// intermediate-level conditionals and `q = P(F | E_k)` is the final
+/// failure fraction. Each factor estimated from `n` samples contributes a
+/// relative variance `(1 - p) / (n * p)`; the total CV^2 is their sum. The
+/// final-fraction term `(1 - q) / (n * q)` MUST be included — omitting it
+/// (as the earlier code did) reports CIs that are too tight.
+///
+/// This is the INDEPENDENT-levels estimate: it assumes the per-level
+/// estimators are uncorrelated. The resampling that conditions each level
+/// on the previous induces positive inter-level correlation, so this is a
+/// LOWER bound on the true CV. The correlation-corrected Au-Beck estimator
+/// scales each term by `(1 + gamma_i)` with `gamma_i` the level's chain
+/// autocorrelation, which is not estimated here. Callers reporting this CV
+/// should treat it as an optimistic (lower) bound, not an exact CV.
+#[allow(clippy::cast_precision_loss)] // sample counts are far below f64 precision
+fn independent_levels_cv_squared(
+    level_conditionals: impl Iterator<Item = f64>,
+    final_fraction: f64,
+    n: usize,
+) -> f64 {
+    let relative_variance = |p: f64| {
+        if p > 0.0 && p < 1.0 {
+            (1.0 - p) / (n as f64 * p)
+        } else {
+            0.0
+        }
+    };
+    level_conditionals.map(relative_variance).sum::<f64>() + relative_variance(final_fraction)
+}
+
 /// Binomial probability mass function: C(n,k) * p^k * (1-p)^(n-k)
 #[allow(clippy::cast_precision_loss)] // mathematical calculation
 fn binomial_pmf(n: usize, k: usize, p: f64) -> f64 {
@@ -1379,18 +1412,12 @@ impl ProperSubsetSimulation {
         // The probability estimate
         let probability = cumulative_prob * final_failure_fraction;
 
-        // Coefficient of variation estimate
-        let cv_squared: f64 = self
-            .levels
-            .iter()
-            .map(|l| {
-                if l.conditional_prob > 0.0 && l.conditional_prob < 1.0 {
-                    (1.0 - l.conditional_prob) / (n as f64 * l.conditional_prob)
-                } else {
-                    0.0
-                }
-            })
-            .sum();
+        // Independent-levels CV, including the final failure-fraction term.
+        let cv_squared = independent_levels_cv_squared(
+            self.levels.iter().map(|l| l.conditional_prob),
+            final_failure_fraction,
+            n,
+        );
 
         SubsetResult {
             levels: self.levels,
@@ -1632,18 +1659,12 @@ impl ProperSubsetSimulation {
         // The probability estimate
         let probability = cumulative_prob * final_failure_fraction;
 
-        // Coefficient of variation estimate
-        let cv_squared: f64 = self
-            .levels
-            .iter()
-            .map(|l| {
-                if l.conditional_prob > 0.0 && l.conditional_prob < 1.0 {
-                    (1.0 - l.conditional_prob) / (n as f64 * l.conditional_prob)
-                } else {
-                    0.0
-                }
-            })
-            .sum();
+        // Independent-levels CV, including the final failure-fraction term.
+        let cv_squared = independent_levels_cv_squared(
+            self.levels.iter().map(|l| l.conditional_prob),
+            final_failure_fraction,
+            n,
+        );
 
         SubsetResult {
             levels: self.levels,
@@ -2215,17 +2236,12 @@ impl<S: pecos_simulators::CliffordGateable + Clone> QecSubsetSimulation<S> {
             traj.is_failure = hist.is_failure;
         }
 
-        // Coefficient of variation estimate
-        let cv_squared: f64 = levels
-            .iter()
-            .map(|l| {
-                if l.conditional_prob > 0.0 && l.conditional_prob < 1.0 {
-                    (1.0 - l.conditional_prob) / (n as f64 * l.conditional_prob)
-                } else {
-                    0.0
-                }
-            })
-            .sum();
+        // Independent-levels CV, including the final failure-fraction term.
+        let cv_squared = independent_levels_cv_squared(
+            levels.iter().map(|l| l.conditional_prob),
+            final_failure_fraction,
+            n,
+        );
 
         self.levels = levels
             .iter()
@@ -2536,6 +2552,103 @@ mod tests {
             estimate > 0.0 && ratio < 3.0,
             "ProperSubsetSimulation estimate {estimate:.3e} should be within 3x of \
              analytical {analytical:.3e} (ratio {ratio:.2})"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn proper_subset_reported_cv_tracks_the_empirical_spread() {
+        // Validate the reported coefficient of variation (now including the
+        // final failure-fraction term) against the EMPIRICAL CV measured
+        // across many independent runs. The reported CV is the
+        // independent-levels estimate, so it is a LOWER bound on the true
+        // spread (resampling correlation inflates the real variance). For
+        // this regime the empirical CV (~0.155) is ~1.8x the reported CV
+        // (~0.088), quantifying that correlation gap — which is exactly why
+        // the doc on `independent_levels_cv_squared` calls it an optimistic
+        // bound. The test requires the reported CV to be a right-order lower
+        // bound, and that the final-fraction term is genuinely included
+        // (dropping it, as the pre-fix code did, gives a strictly smaller
+        // CV).
+        let (p_damage, increment, num_rounds, failure_threshold) = (0.1, 1.0, 40, 11.0);
+        let n = 2000;
+        let k_runs = 200usize;
+
+        let mut estimates = Vec::with_capacity(k_runs);
+        let mut reported_cv = Vec::with_capacity(k_runs);
+        let mut cv_sq_dropping_final = Vec::with_capacity(k_runs);
+
+        for seed in 0..k_runs {
+            let config = SubsetConfig::new()
+                .with_samples_per_level(n)
+                .with_threshold_fraction(0.2)
+                .with_max_levels(20)
+                .with_seed(seed as u64 + 1);
+            let result = ProperSubsetSimulation::new(
+                p_damage,
+                increment,
+                failure_threshold,
+                num_rounds,
+                config,
+            )
+            .run();
+            estimates.push(result.probability);
+            reported_cv.push(result.coefficient_of_variation);
+            // Reconstruct the pre-fix CV (intermediate levels only, no final
+            // failure-fraction term) for the materiality check.
+            let nf = n as f64;
+            let intermediate: f64 = result
+                .levels
+                .iter()
+                .map(|l| {
+                    let p = l.conditional_prob;
+                    if p > 0.0 && p < 1.0 {
+                        (1.0 - p) / (nf * p)
+                    } else {
+                        0.0
+                    }
+                })
+                .sum();
+            cv_sq_dropping_final.push(intermediate);
+        }
+
+        let mean_est = estimates.iter().sum::<f64>() / k_runs as f64;
+        let var_est = estimates
+            .iter()
+            .map(|e| (e - mean_est).powi(2))
+            .sum::<f64>()
+            / (k_runs as f64 - 1.0);
+        let empirical_cv = var_est.sqrt() / mean_est;
+        let mean_reported_cv = reported_cv.iter().sum::<f64>() / k_runs as f64;
+        let mean_cv_dropping_final =
+            (cv_sq_dropping_final.iter().sum::<f64>() / k_runs as f64).sqrt();
+
+        println!(
+            "CV check: empirical={empirical_cv:.3}, reported={mean_reported_cv:.3}, \
+             dropping_final_term={mean_cv_dropping_final:.3}"
+        );
+
+        // The reported CV is a right-order LOWER bound on the empirical
+        // spread: it should not substantially exceed empirical (it is a
+        // lower bound; allow 30% for finite-sample noise in the per-run
+        // conditionals) and should be within ~2.5x below it (it captures the
+        // right order, not a token number).
+        assert!(
+            mean_reported_cv < empirical_cv * 1.3,
+            "reported CV {mean_reported_cv:.3} should not exceed empirical {empirical_cv:.3} \
+             by much (it is an independent-levels lower bound)"
+        );
+        assert!(
+            mean_reported_cv > empirical_cv * 0.4,
+            "reported CV {mean_reported_cv:.3} should be the right order vs empirical \
+             {empirical_cv:.3}, not a token value"
+        );
+        // The final failure-fraction term is genuinely included: dropping it
+        // (the pre-fix behavior) gives a strictly smaller CV.
+        assert!(
+            mean_reported_cv > mean_cv_dropping_final,
+            "the final failure-fraction term must be included (reported {mean_reported_cv:.3} \
+             must exceed the intermediate-levels-only {mean_cv_dropping_final:.3})"
         );
     }
 
