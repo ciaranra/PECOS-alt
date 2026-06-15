@@ -99,7 +99,18 @@ enum NoiseCell {
 
 impl NoiseCell {
     fn run(&self, qasm: &str, stack: SimStack) -> ShotVec {
-        let builder = sim(Qasm::from_string(qasm)).stack(stack).seed(SEED);
+        // Independent seed per stack. Each cell compares the two stacks'
+        // empirical rates (Jeffreys overlap), so the comparison must be
+        // between INDEPENDENT samples — a shared seed would make it
+        // tautological if the two stacks' per-shot RNG streams ever
+        // converged. Each stack is also checked against its analytic value,
+        // which holds for any seed.
+        let seed = if matches!(stack, SimStack::Neo) {
+            SEED ^ 0xA5A5
+        } else {
+            SEED
+        };
+        let builder = sim(Qasm::from_string(qasm)).stack(stack).seed(seed);
         let depol = |p_prep: f64, p_meas: f64, p1: f64, p2: f64| {
             pecos_engines::noise::DepolarizingNoiseModel::builder()
                 .with_prep_probability(p_prep)

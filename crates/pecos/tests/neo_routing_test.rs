@@ -143,14 +143,21 @@ fn neo_stack_measurement_noise_rate_matches_engines() {
 #[test]
 fn neo_stack_uniform_depolarizing_rate_matches_engines() {
     // Uniform depolarizing through the convenience struct: the compound
-    // error rate must agree across stacks (same conventions, different
-    // RNG streams).
+    // error rate must agree across stacks. This is a direct stack-vs-stack
+    // comparison, so the two stacks use INDEPENDENT seeds — agreement must
+    // come from matching conventions, not from a shared RNG stream (which
+    // would make the check tautological if the streams ever converged).
     let shots = 4000;
     let run = |stack: SimStack| {
+        let seed = if matches!(stack, SimStack::Neo) {
+            7 ^ 0xA5A5
+        } else {
+            7
+        };
         sim(x_measure_qasm())
             .stack(stack)
             .noise(pecos_engines::DepolarizingNoise { p: 0.1 })
-            .seed(7)
+            .seed(seed)
             .run(shots)
             .expect("run")
     };
