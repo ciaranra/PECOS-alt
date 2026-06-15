@@ -290,3 +290,27 @@ fn meas_twice_without_reset_matches() {
         Some(2.0 * p * (1.0 - p)),
     );
 }
+
+#[test]
+fn meas_twice_gnm_is_record_flip_not_state_flip() {
+    // The COMPLEMENT of `meas_twice_without_reset_matches`, locking the
+    // OTHER engines measurement convention. GeneralNoiseModel readout error
+    // flips only the recorded outcome, never the post-measurement state, so
+    // the qubit stays |0> across both measurements and the SECOND outcome
+    // flips at exactly p (record flip) — NOT 2p(1-p) (state flip). Both
+    // stacks must agree (engines GNM record-flip maps to neo's record-
+    // flipping MeasurementChannel). Together with the depolarizing cell
+    // above, this pins the engines depolarizing-vs-GNM measurement-physics
+    // distinction (the B1 root cause) on BOTH sides, cross-stack.
+    let p = 0.25;
+    check_cell(
+        "meas_twice_gnm",
+        MEASURE_TWICE,
+        &NoiseCell::GnmSimple {
+            average_p1: 0.0,
+            p_meas: p,
+        },
+        &["1"],
+        Some(p),
+    );
+}
