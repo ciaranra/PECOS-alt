@@ -127,3 +127,37 @@ def test_subset_callable_exception_propagates() -> None:
         sim_neo(three_h_circuit()).auto().sampling(
             subset_simulation(50).score(bad_score).failure(lambda _bits: False),
         ).run()
+
+
+def _ones_score(bits: list[int]) -> float:
+    return float(sum(bits))
+
+
+def _all_ones(bits: list[int]) -> bool:
+    return all(b == 1 for b in bits)
+
+
+def test_subset_multilevel_without_opt_in_raises() -> None:
+    """max_levels > 1 engages the biased multi-level estimator and must be
+    refused unless explicitly acknowledged (mirrors the Rust guard)."""
+    with pytest.raises(ValueError, match="biased upward"):
+        sim_neo(three_h_circuit()).auto().sampling(
+            subset_simulation(100).score(_ones_score).failure(_all_ones).max_levels(5),
+        ).run()
+
+
+def test_subset_multilevel_runs_with_opt_in() -> None:
+    result = (
+        sim_neo(three_h_circuit())
+        .auto()
+        .sampling(
+            subset_simulation(500)
+            .score(_ones_score)
+            .failure(_all_ones)
+            .max_levels(5)
+            .allow_biased_multilevel(),
+        )
+        .seed(42)
+        .run()
+    )
+    assert result.subset is not None

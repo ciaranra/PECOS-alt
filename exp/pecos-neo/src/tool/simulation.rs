@@ -1129,6 +1129,10 @@ pub struct SubsetSimulationBuilder {
     threshold_fraction: f64,
     max_levels: usize,
     min_conditional_prob: f64,
+    /// Explicit acknowledgment that the multi-level estimator is biased.
+    /// Required before `max_levels > 1` is allowed (see
+    /// [`SubsetSimulationBuilder::allow_biased_multilevel`]).
+    allow_biased_multilevel: bool,
     score: Option<SubsetScoreFn>,
     failure: Option<SubsetFailureFn>,
 }
@@ -1139,6 +1143,7 @@ impl std::fmt::Debug for SubsetSimulationBuilder {
             .field("samples_per_level", &self.samples_per_level)
             .field("threshold_fraction", &self.threshold_fraction)
             .field("max_levels", &self.max_levels)
+            .field("allow_biased_multilevel", &self.allow_biased_multilevel)
             .field("min_conditional_prob", &self.min_conditional_prob)
             .field("score", &self.score.as_ref().map(|_| "Fn(..) -> f64"))
             .field("failure", &self.failure.as_ref().map(|_| "Fn(..) -> bool"))
@@ -1179,10 +1184,32 @@ impl SubsetSimulationBuilder {
         self
     }
 
-    /// Set the maximum number of levels before giving up (default 20).
+    /// Set the maximum number of levels before giving up.
+    ///
+    /// Defaults to 1 (a single level, which is an unbiased direct-Monte-
+    /// Carlo estimate of the failure fraction). Setting more than one level
+    /// engages the multi-level estimator, which is currently BIASED upward
+    /// (the resample is unconditioned; see the `sampling::subset` module
+    /// docs). Requesting `levels > 1` therefore also requires an explicit
+    /// [`Self::allow_biased_multilevel`] acknowledgment, or `.run()` fails
+    /// at build time.
     #[must_use]
     pub fn max_levels(mut self, levels: usize) -> Self {
         self.max_levels = levels;
+        self
+    }
+
+    /// Acknowledge and accept the known upward bias of the multi-level
+    /// subset estimator, enabling `max_levels > 1`.
+    ///
+    /// Without this, [`subset_simulation`] runs a single unbiased level
+    /// (direct Monte Carlo). The multi-level path provides rare-event
+    /// reach but is currently biased (see the `sampling::subset` module
+    /// docs and the estimator-overhaul follow-up); call this only when an
+    /// approximate, biased estimate is acceptable.
+    #[must_use]
+    pub fn allow_biased_multilevel(mut self) -> Self {
+        self.allow_biased_multilevel = true;
         self
     }
 
@@ -1251,8 +1278,12 @@ pub fn subset_simulation(samples_per_level: usize) -> SubsetSimulationBuilder {
     SubsetSimulationBuilder {
         samples_per_level,
         threshold_fraction: defaults.threshold_fraction,
-        max_levels: defaults.max_levels,
+        // Default to a single, unbiased level. The multi-level estimator is
+        // biased upward, so engaging it (`max_levels > 1`) requires an
+        // explicit `.allow_biased_multilevel()` acknowledgment.
+        max_levels: 1,
         min_conditional_prob: defaults.min_conditional_prob,
+        allow_biased_multilevel: false,
         score: None,
         failure: None,
     }
@@ -2725,6 +2756,13 @@ impl SimNeoBuilder {
                     ss_config.score.is_some() && ss_config.failure.is_some(),
                     "Subset simulation requires both .score(..) and .failure(..) on the \
                      subset_simulation(..) builder; neither has a sensible default."
+                );
+                assert!(
+                    ss_config.max_levels <= 1 || ss_config.allow_biased_multilevel,
+                    "subset_simulation with max_levels > 1 engages the multi-level estimator, \
+                     which is currently biased upward (the resample is unconditioned). Either \
+                     keep a single level (an unbiased direct-Monte-Carlo failure-fraction \
+                     estimate) or call .allow_biased_multilevel() to accept the documented bias."
                 );
                 let circuit = match &source {
                     ProgramSource::Static(circuit) => circuit.clone(),
@@ -5380,6 +5418,59 @@ mod tests {
             .quantum(state_vector())
             .sampling(subset_simulation(100).score(count_ones).failure(all_ones))
             .build();
+    }
+
+    #[test]
+    #[should_panic(expected = "biased upward")]
+    fn test_sim_neo_subset_multilevel_without_opt_in_is_build_error() {
+        // max_levels > 1 engages the biased multi-level estimator and must
+        // be refused unless explicitly acknowledged.
+        let _ = sim_neo(three_qubit_h_circuit())
+            .auto()
+            .sampling(
+                subset_simulation(100)
+                    .score(count_ones)
+                    .failure(all_ones)
+                    .max_levels(5),
+            )
+            .build();
+    }
+
+    #[test]
+    fn test_sim_neo_subset_multilevel_runs_with_opt_in() {
+        // With the explicit acknowledgment, the multi-level path runs.
+        let results = sim_neo(three_qubit_h_circuit())
+            .auto()
+            .sampling(
+                subset_simulation(500)
+                    .score(count_ones)
+                    .failure(all_ones)
+                    .max_levels(5)
+                    .allow_biased_multilevel(),
+            )
+            .seed(42)
+            .run();
+        assert!(
+            results.subset.is_some(),
+            "multi-level opt-in must produce an estimate"
+        );
+    }
+
+    #[test]
+    fn test_sim_neo_subset_default_is_single_level() {
+        // The default (no .max_levels) is a single unbiased level: exactly
+        // one level in the result.
+        let results = sim_neo(three_qubit_h_circuit())
+            .auto()
+            .sampling(subset_simulation(500).score(count_ones).failure(all_ones))
+            .seed(42)
+            .run();
+        let subset = results.subset.expect("subset estimate");
+        assert_eq!(
+            subset.levels.len(),
+            1,
+            "default subset_simulation must run a single (unbiased) level"
+        );
     }
 
     #[test]

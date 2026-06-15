@@ -586,6 +586,7 @@ pub struct PySubsetSimulationBuilder {
     threshold_fraction: f64,
     max_levels: usize,
     min_conditional_prob: f64,
+    allow_biased_multilevel: bool,
     score: Option<Py<PyAny>>,
     failure: Option<Py<PyAny>>,
 }
@@ -597,6 +598,7 @@ impl Clone for PySubsetSimulationBuilder {
             threshold_fraction: self.threshold_fraction,
             max_levels: self.max_levels,
             min_conditional_prob: self.min_conditional_prob,
+            allow_biased_multilevel: self.allow_biased_multilevel,
             score: self.score.as_ref().map(|f| f.clone_ref(py)),
             failure: self.failure.as_ref().map(|f| f.clone_ref(py)),
         })
@@ -629,10 +631,25 @@ impl PySubsetSimulationBuilder {
         c
     }
 
-    /// Maximum number of levels before giving up (default 20).
+    /// Maximum number of levels before giving up.
+    ///
+    /// Defaults to 1 (a single, unbiased direct-Monte-Carlo level).
+    /// Setting more than one level engages the multi-level estimator,
+    /// which is currently biased upward, and therefore also requires an
+    /// explicit `.allow_biased_multilevel()` acknowledgment, or `.run()`
+    /// raises.
     fn max_levels(&self, levels: usize) -> Self {
         let mut c = self.clone();
         c.max_levels = levels;
+        c
+    }
+
+    /// Acknowledge and accept the known upward bias of the multi-level
+    /// subset estimator, enabling `max_levels > 1`. Without it, subset
+    /// simulation runs a single unbiased level (direct Monte Carlo).
+    fn allow_biased_multilevel(&self) -> Self {
+        let mut c = self.clone();
+        c.allow_biased_multilevel = true;
         c
     }
 
@@ -653,8 +670,11 @@ pub fn subset_simulation(samples_per_level: usize) -> PySubsetSimulationBuilder 
     PySubsetSimulationBuilder {
         samples_per_level,
         threshold_fraction: defaults.threshold_fraction,
-        max_levels: defaults.max_levels,
+        // Default to a single, unbiased level; the biased multi-level path
+        // requires an explicit .allow_biased_multilevel() opt-in.
+        max_levels: 1,
         min_conditional_prob: defaults.min_conditional_prob,
+        allow_biased_multilevel: false,
         score: None,
         failure: None,
     }
@@ -1019,6 +1039,14 @@ impl PySimNeoBuilder {
                  subset_simulation(..) builder; neither has a sensible default.",
             ));
         };
+        if config.max_levels > 1 && !config.allow_biased_multilevel {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "subset_simulation with max_levels > 1 engages the multi-level estimator, \
+                 which is currently biased upward (the resample is unconditioned). Either \
+                 keep a single level (an unbiased direct-Monte-Carlo failure-fraction \
+                 estimate) or call .allow_biased_multilevel() to accept the documented bias.",
+            ));
+        }
 
         let noise = self
             .noise_config
