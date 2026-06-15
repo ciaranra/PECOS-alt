@@ -23,6 +23,7 @@
 
 use pecos_core::QubitId;
 use pecos_core::gate_type::GateType;
+use pecos_neo::noise::PerGatePauliChannel;
 use pecos_neo::prelude::*;
 use pecos_qec::fault_tolerance::dem_builder::{NoiseConfig, PerGateTypeNoise};
 use pecos_simulators::SparseStab;
@@ -233,4 +234,61 @@ fn idle_gate_entries_are_rejected_not_dropped() {
     let noise = PerGateTypeNoise::from_base_noise(NoiseConfig::uniform(0.0))
         .with_1q_rates(GateType::Idle, [0.001, 0.0, 0.0]);
     let _ = noise.to_neo_channel();
+}
+
+#[test]
+#[allow(clippy::cast_precision_loss)]
+fn default_noise_config_carries_realistic_base_rates_without_idle_panic() {
+    // The realistic-nonzero-defaults trap: NoiseConfig::default() is 0.01
+    // EVERYWHERE (p1/p2/p_meas/p_prep), not off — it bit the GNM and qec
+    // mappings before. Lock that to_neo_channel on the default config
+    // (a) does NOT trip the idle guard (default has p_idle = 0, t1/t2 = None,
+    // so this call would panic if it did) and (b) carries the 0.01
+    // base/meas/init rates EXACTLY — bit-identical to the neo channel built
+    // by hand with those values (a mishandling that dropped or rescaled the
+    // defaults would diverge).
+    let from_default = PerGateTypeNoise::from_base_noise(NoiseConfig::default()).to_neo_channel();
+    let by_hand = PerGatePauliChannel::new()
+        .with_base(0.01, 0.01)
+        .with_meas_init(0.01, 0.01);
+
+    let commands = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
+
+    let count_ones = |channel: PerGatePauliChannel| -> usize {
+        let model = ComposableNoiseModel::new().add_channel(channel);
+        let mut state = SparseStab::new(1);
+        let mut runner = CircuitRunner::<SparseStab>::new()
+            .with_noise(model)
+            .with_seed(42);
+        let qubits = [QubitId(0)];
+        let mut ones = 0usize;
+        for _ in 0..SHOTS {
+            state.reset();
+            let outcomes = runner.apply_circuit(&mut state, &commands).unwrap();
+            if let Some(bits) = outcomes.bitstring(&qubits)
+                && bits[0]
+            {
+                ones += 1;
+            }
+        }
+        ones
+    };
+
+    let default_ones = count_ones(from_default);
+    let hand_ones = count_ones(by_hand);
+
+    assert_eq!(
+        default_ones, hand_ones,
+        "to_neo_channel(NoiseConfig::default()) must carry the 0.01 base/meas/init rates \
+         exactly (got {default_ones} vs hand-built {hand_ones})"
+    );
+    // The defaults are NOT silently dropped: the circuit's nominal outcome
+    // is 1 (X flips |0> to |1>), so the error rate is the fraction reading
+    // 0 — a small but nonzero value from the combined 0.01 prep/gate/meas
+    // sources (~0.027), confirming the defaults carry rather than vanish.
+    let error_rate = 1.0 - default_ones as f64 / SHOTS as f64;
+    assert!(
+        error_rate > 0.0 && error_rate < 0.1,
+        "the realistic 0.01 defaults must produce a small nonzero error rate, got {error_rate}"
+    );
 }
