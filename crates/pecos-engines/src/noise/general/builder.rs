@@ -5,6 +5,14 @@ use crate::noise::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+/// The plain-Pauli probabilities plus optional angle-dependent two-qubit
+/// scaling, as returned by
+/// [`GeneralNoiseModelBuilder::pauli_with_angle_scaling`].
+///
+/// Layout: `(p_prep, p_meas_0, p_meas_1, p1, p2, angle)` where `angle` is
+/// `Some((a, b, c, d, power))` when angle scaling is configured.
+pub type PauliWithAngleScaling = (f64, f64, f64, f64, f64, Option<(f64, f64, f64, f64, f64)>);
+
 /// Builder for creating general noise models
 #[derive(Debug, Clone)]
 pub struct GeneralNoiseModelBuilder {
@@ -760,6 +768,51 @@ impl GeneralNoiseModelBuilder {
     /// common configuration without re-deriving probability conventions.
     #[must_use]
     pub fn simple_probabilities(&self) -> Option<(f64, f64, f64, f64, f64)> {
+        if self.is_plain_pauli_except_angle() && self.resolved_angle_scaling().is_none() {
+            Some(self.resolved_base_probabilities())
+        } else {
+            None
+        }
+    }
+
+    /// Like [`Self::simple_probabilities`], but ALSO permits angle-dependent
+    /// two-qubit scaling and returns it alongside the base probabilities.
+    ///
+    /// Returns `(p_prep, p_meas_0, p_meas_1, p1, p2, angle)` where `angle` is
+    /// `Some((a, b, c, d, power))` when any `p2_angle_*` parameter is
+    /// configured (the unset components take their model defaults), and `None`
+    /// otherwise. This lets other simulation stacks translate the common
+    /// "plain Pauli, plus optional angle-dependent two-qubit gate noise"
+    /// configuration — the angle-dependent error rate is
+    /// `p2 * (coeff * |theta/pi|^power + offset)` with separate
+    /// `(a, b)` for negative and `(c, d)` for positive angles
+    /// (see [`GeneralNoiseModel::p2_angle_error_rate`]).
+    ///
+    /// All the non-angle feature requirements of [`Self::simple_probabilities`]
+    /// still apply (leakage, emission, idle, crosstalk, scales, custom
+    /// samplers, and noiseless gates must be off).
+    #[must_use]
+    pub fn pauli_with_angle_scaling(&self) -> Option<PauliWithAngleScaling> {
+        if self.is_plain_pauli_except_angle() {
+            let (p_prep, p_meas_0, p_meas_1, p1, p2) = self.resolved_base_probabilities();
+            Some((
+                p_prep,
+                p_meas_0,
+                p_meas_1,
+                p1,
+                p2,
+                self.resolved_angle_scaling(),
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// True when every non-Pauli feature is off EXCEPT possibly the
+    /// angle-dependent two-qubit scaling. Shared by `simple_probabilities`
+    /// (which additionally requires the angle scaling to be unset) and
+    /// `pauli_with_angle_scaling` (which extracts it).
+    fn is_plain_pauli_except_angle(&self) -> bool {
         let explicitly_zero = |v: Option<f64>| v == Some(0.0);
         let zero_or_unset = |v: Option<f64>| v.is_none() || v == Some(0.0);
         let one_or_unset = |v: Option<f64>| v.is_none() || v == Some(1.0);
@@ -779,15 +832,14 @@ impl GeneralNoiseModelBuilder {
             && zero_or_unset(self.p_meas_crosstalk_local);
 
         // Custom samplers/models could change the Pauli distribution; the
-        // model defaults are uniform, so unset is standard.
-        let models_off = self.p_idle_linear_model.is_none()
+        // model defaults are uniform, so unset is standard. (Angle scaling is
+        // intentionally NOT required here — it is handled separately.)
+        let custom_models_off = self.p_idle_linear_model.is_none()
             && self.p1_emission_model.is_none()
             && self.p1_pauli_model.is_none()
             && self.p2_emission_model.is_none()
             && self.p2_pauli_model.is_none()
-            && self.p_meas_crosstalk_model.is_none()
-            && self.p2_angle_params.is_none()
-            && self.p2_angle_power.is_none();
+            && self.p_meas_crosstalk_model.is_none();
 
         let scales_neutral = one_or_unset(self.scale)
             && one_or_unset(self.idle_scale)
@@ -800,26 +852,44 @@ impl GeneralNoiseModelBuilder {
 
         let gates_default = self.noiseless_gates.as_ref().is_none_or(BTreeSet::is_empty);
 
-        if defaulted_features_off
+        defaulted_features_off
             && optional_features_off
-            && models_off
+            && custom_models_off
             && scales_neutral
             && gates_default
-        {
-            // Unset probabilities take the model defaults; read them from
-            // GeneralNoiseModel::default() so they cannot drift.
-            let (d_prep, d_meas_0, d_meas_1, d_p1, d_p2, _) =
-                GeneralNoiseModel::default().probabilities();
-            Some((
-                self.p_prep.unwrap_or(d_prep),
-                self.p_meas_0.unwrap_or(d_meas_0),
-                self.p_meas_1.unwrap_or(d_meas_1),
-                self.p1.unwrap_or(d_p1),
-                self.p2.unwrap_or(d_p2),
-            ))
-        } else {
-            None
+    }
+
+    /// Resolve the base Pauli probabilities `(p_prep, p_meas_0, p_meas_1, p1,
+    /// p2)`, filling unset values from `GeneralNoiseModel::default()` so they
+    /// cannot drift from the model's own defaults.
+    fn resolved_base_probabilities(&self) -> (f64, f64, f64, f64, f64) {
+        let (d_prep, d_meas_0, d_meas_1, d_p1, d_p2, _) =
+            GeneralNoiseModel::default().probabilities();
+        (
+            self.p_prep.unwrap_or(d_prep),
+            self.p_meas_0.unwrap_or(d_meas_0),
+            self.p_meas_1.unwrap_or(d_meas_1),
+            self.p1.unwrap_or(d_p1),
+            self.p2.unwrap_or(d_p2),
+        )
+    }
+
+    /// The configured angle-dependent two-qubit scaling `(a, b, c, d, power)`,
+    /// or `None` when no `p2_angle_*` parameter is set. Unset components take
+    /// the model default (read from `GeneralNoiseModel::default()` so they
+    /// cannot drift).
+    fn resolved_angle_scaling(&self) -> Option<(f64, f64, f64, f64, f64)> {
+        if self.p2_angle_params.is_none() && self.p2_angle_power.is_none() {
+            return None;
         }
+        let default = GeneralNoiseModel::default();
+        let (a, b, c, d) = self
+            .p2_angle_params
+            .unwrap_or_else(|| default.p2_angle_params());
+        let power = self
+            .p2_angle_power
+            .unwrap_or_else(|| default.p2_angle_power());
+        Some((a, b, c, d, power))
     }
 
     // scaling
@@ -962,5 +1032,86 @@ mod tests {
         let (d_prep, d_meas_0, d_meas_1, d_p1, d_p2, _) =
             GeneralNoiseModel::default().probabilities();
         assert_eq!(simple, (d_prep, d_meas_0, d_meas_1, d_p1, d_p2));
+    }
+
+    /// The angle-aware extractor returns the same base probabilities as
+    /// `simple_probabilities` with `None` angle when no `p2_angle_*` is set.
+    #[test]
+    fn pauli_with_angle_scaling_matches_simple_when_no_angle() {
+        let builder = GeneralNoiseModelBuilder::new()
+            .with_average_p1_probability(0.2)
+            .with_average_p2_probability(0.4)
+            .with_p1_emission_ratio(0.0)
+            .with_p2_emission_ratio(0.0)
+            .with_prep_leak_ratio(0.0)
+            .with_p_idle_linear_rate(0.0);
+
+        let simple = builder.simple_probabilities().expect("simple config");
+        let (p_prep, p_meas_0, p_meas_1, p1, p2, angle) = builder
+            .pauli_with_angle_scaling()
+            .expect("simple config is also pauli-with-angle");
+        assert_eq!((p_prep, p_meas_0, p_meas_1, p1, p2), simple);
+        assert!(angle.is_none());
+    }
+
+    /// Setting angle parameters keeps the config out of the strict simple
+    /// subset but inside the angle-aware subset, with the coefficients and
+    /// power surfaced verbatim.
+    #[test]
+    fn pauli_with_angle_scaling_extracts_configured_angle() {
+        let builder = GeneralNoiseModelBuilder::new()
+            .with_p2_probability(0.3)
+            .with_p2_angle_params(1.5, 0.0, 1.0, 0.0)
+            .with_p2_angle_power(2.0)
+            .with_average_p1_probability(0.0)
+            .with_p1_emission_ratio(0.0)
+            .with_p2_emission_ratio(0.0)
+            .with_prep_leak_ratio(0.0)
+            .with_p_idle_linear_rate(0.0)
+            .with_prep_probability(0.0)
+            .with_meas_0_probability(0.0)
+            .with_meas_1_probability(0.0);
+
+        // Angle scaling is outside the STRICT simple subset.
+        assert!(builder.simple_probabilities().is_none());
+
+        let (_, _, _, _, p2, angle) = builder
+            .pauli_with_angle_scaling()
+            .expect("plain Pauli plus angle is in the angle-aware subset");
+        assert!((p2 - 0.3).abs() < 1e-12);
+        assert_eq!(angle, Some((1.5, 0.0, 1.0, 0.0, 2.0)));
+    }
+
+    /// An unset power takes the model default rather than dropping the angle.
+    #[test]
+    fn pauli_with_angle_scaling_fills_unset_power_from_default() {
+        let builder = GeneralNoiseModelBuilder::new()
+            .with_p2_probability(0.3)
+            .with_p2_angle_params(1.5, 0.0, 1.0, 0.0)
+            .with_average_p1_probability(0.0)
+            .with_p1_emission_ratio(0.0)
+            .with_p2_emission_ratio(0.0)
+            .with_prep_leak_ratio(0.0)
+            .with_p_idle_linear_rate(0.0)
+            .with_prep_probability(0.0)
+            .with_meas_0_probability(0.0)
+            .with_meas_1_probability(0.0);
+
+        let (_, _, _, _, _, angle) = builder
+            .pauli_with_angle_scaling()
+            .expect("angle-aware subset");
+        let default_power = GeneralNoiseModel::default().p2_angle_power();
+        assert_eq!(angle, Some((1.5, 0.0, 1.0, 0.0, default_power)));
+    }
+
+    /// Non-angle features beyond the subset still force `None`, even with an
+    /// angle configured.
+    #[test]
+    fn pauli_with_angle_scaling_rejects_non_angle_features() {
+        // Default emission ratio (0.5) is left in place -> beyond the subset.
+        let builder = GeneralNoiseModelBuilder::new()
+            .with_p2_probability(0.3)
+            .with_p2_angle_params(1.5, 0.0, 1.0, 0.0);
+        assert!(builder.pauli_with_angle_scaling().is_none());
     }
 }
