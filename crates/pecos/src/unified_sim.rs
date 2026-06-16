@@ -315,14 +315,32 @@ impl ProgrammedSimBuilder {
 fn map_noise_to_neo(
     noise: &(dyn std::any::Any + Send),
 ) -> Result<Option<pecos_neo::noise::GeneralNoiseModelBuilder>, PecosError> {
-    use pecos_engines::noise::{DepolarizingNoiseModelBuilder, PassThroughNoiseModelBuilder};
-    use pecos_engines::{DepolarizingNoise, PassThroughNoise};
+    use pecos_engines::noise::{
+        BiasedDepolarizingNoiseModelBuilder, DepolarizingNoiseModelBuilder,
+        PassThroughNoiseModelBuilder,
+    };
+    use pecos_engines::{BiasedDepolarizingNoise, DepolarizingNoise, PassThroughNoise};
     use pecos_neo::noise::{AngleScaling, GeneralNoiseModelBuilder};
 
     let uniform = |p_prep: f64, p_meas: f64, p1: f64, p2: f64| {
         GeneralNoiseModelBuilder::new()
             .with_p_prep(p_prep)
             .with_p_meas_state_flip(p_meas)
+            .with_p1(p1)
+            .with_p2(p2)
+    };
+
+    // The biased-depolarizing family applies its measurement bias to the
+    // RECORDED outcome AFTER readout (`apply_bias_to_measurement`), never to
+    // the state -- the opposite of the plain depolarizing family, which injects
+    // a physical X BEFORE measurement. So its measurement maps to neo's
+    // record-flipping channel (`with_p_meas`), which also carries the
+    // asymmetric `p_meas_0` (0->1) / `p_meas_1` (1->0) bias one-to-one. Gate
+    // and prep noise are ordinary uniform depolarizing.
+    let biased = |p_prep: f64, p_meas_0: f64, p_meas_1: f64, p1: f64, p2: f64| {
+        GeneralNoiseModelBuilder::new()
+            .with_p_prep(p_prep)
+            .with_p_meas(p_meas_0, p_meas_1)
             .with_p1(p1)
             .with_p2(p2)
     };
@@ -344,6 +362,16 @@ fn map_noise_to_neo(
         // path would.
         let (p_prep, p_meas, p1, p2) = builder.clone().build().probabilities();
         return Ok(Some(uniform(p_prep, p_meas, p1, p2)));
+    }
+    if let Some(biased_noise) = noise.downcast_ref::<BiasedDepolarizingNoise>() {
+        // `BiasedDepolarizingNoise { p }` builds `new_uniform(p)`: every rate is
+        // `p`, with symmetric measurement bias.
+        let p = biased_noise.p;
+        return Ok(Some(biased(p, p, p, p, p)));
+    }
+    if let Some(builder) = noise.downcast_ref::<BiasedDepolarizingNoiseModelBuilder>() {
+        let (p_prep, p_meas_0, p_meas_1, p1, p2) = builder.clone().build().probabilities();
+        return Ok(Some(biased(p_prep, p_meas_0, p_meas_1, p1, p2)));
     }
     if let Some(builder) = noise.downcast_ref::<pecos_engines::noise::GeneralNoiseModelBuilder>() {
         // The stored p1/p2 are already in standard depolarizing convention
@@ -392,7 +420,8 @@ fn map_noise_to_neo(
 
     Err(PecosError::Input(
         "This noise type is not yet mapped to the neo stack (mapped so far: PassThroughNoise, \
-         DepolarizingNoise, DepolarizingNoiseModelBuilder, GeneralNoiseModelBuilder's simple \
+         DepolarizingNoise, DepolarizingNoiseModelBuilder, BiasedDepolarizingNoise, \
+         BiasedDepolarizingNoiseModelBuilder, GeneralNoiseModelBuilder's simple \
          probability subset). Remove .noise(), use .stack(SimStack::Engines), or configure \
          sim_neo() directly with a neo noise model."
             .to_string(),

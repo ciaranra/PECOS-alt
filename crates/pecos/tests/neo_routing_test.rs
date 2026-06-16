@@ -172,6 +172,35 @@ fn neo_stack_uniform_depolarizing_rate_matches_engines() {
 }
 
 #[test]
+fn neo_stack_biased_depolarizing_struct_rate_matches_engines() {
+    // The BiasedDepolarizingNoise convenience struct (uniform p, with the
+    // biased family's record-flip measurement) must agree cross-stack through
+    // the facade mapping. Independent seeds, as above.
+    let shots = 4000;
+    let run = |stack: SimStack| {
+        let seed = if matches!(stack, SimStack::Neo) {
+            7 ^ 0xA5A5
+        } else {
+            7
+        };
+        sim(x_measure_qasm())
+            .stack(stack)
+            .noise(pecos_engines::BiasedDepolarizingNoise { p: 0.1 })
+            .seed(seed)
+            .run(shots)
+            .expect("run")
+    };
+
+    let engines_rate = rate_of(&run(SimStack::Engines), "0");
+    let neo_rate = rate_of(&run(SimStack::Neo), "0");
+
+    assert!(
+        (engines_rate - neo_rate).abs() < 0.035,
+        "biased struct compound rates should agree: engines={engines_rate}, neo={neo_rate}"
+    );
+}
+
+#[test]
 fn neo_stack_general_noise_average_convention_matches() {
     // The critical convention test: engines' with_average_p1_probability
     // stores p1 = 1.5 x average internally (standard depolarizing

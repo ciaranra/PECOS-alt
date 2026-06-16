@@ -133,6 +133,15 @@ enum NoiseCell {
         angle_params: (f64, f64, f64, f64),
         angle_power: f64,
     },
+    /// `BiasedDepolarizingNoiseModel` with zero gate/prep noise and asymmetric
+    /// record-flip measurement: `p_meas_0` flips a 0 outcome to 1, `p_meas_1`
+    /// flips a 1 outcome to 0. The bias is applied to the recorded outcome
+    /// after readout (never the state), so it must map to neo's record-flip
+    /// channel, not the state-flip one.
+    BiasedMeas {
+        p_meas_0: f64,
+        p_meas_1: f64,
+    },
 }
 
 impl NoiseCell {
@@ -202,6 +211,17 @@ impl NoiseCell {
                         .with_prep_probability(0.0)
                         .with_meas_0_probability(0.0)
                         .with_meas_1_probability(0.0),
+                )
+                .run(SHOTS),
+            Self::BiasedMeas { p_meas_0, p_meas_1 } => builder
+                .noise(
+                    // Asymmetric record-flip measurement, no gate/prep noise.
+                    pecos_engines::noise::BiasedDepolarizingNoiseModel::builder()
+                        .with_prep_probability(0.0)
+                        .with_meas_0_probability(p_meas_0)
+                        .with_meas_1_probability(p_meas_1)
+                        .with_single_qubit_probability(0.0)
+                        .with_two_qubit_probability(0.0),
                 )
                 .run(SHOTS),
         };
@@ -435,5 +455,61 @@ fn gnm_angle_scaling_negative_matches() {
         &ANGLE_CELL,
         &["01", "10"],
         Some(8.0 * (0.3 * 0.75) / 15.0),
+    );
+}
+
+#[test]
+fn biased_meas_flip_1_to_0_matches() {
+    // BiasedDepolarizing flips the RECORDED outcome after readout. A |1> (from
+    // X, with gate noise zeroed) reads 0 with probability p_meas_1 (the 1->0
+    // rate). The bias is asymmetric (p_meas_0 = 0.1 != p_meas_1 = 0.3), so a
+    // swapped 0<->1 mapping would read 0.1 here instead of 0.3.
+    check_cell(
+        "biased_meas_1to0",
+        X_MEASURE,
+        &NoiseCell::BiasedMeas {
+            p_meas_0: 0.1,
+            p_meas_1: 0.3,
+        },
+        &["0"],
+        Some(0.3),
+    );
+}
+
+#[test]
+fn biased_meas_flip_0_to_1_matches() {
+    // The complementary direction: a |0> (from reset) reads 1 with probability
+    // p_meas_0 (the 0->1 rate, 0.1). Together with the cell above this pins
+    // both the magnitude AND the direction of the asymmetric bias.
+    check_cell(
+        "biased_meas_0to1",
+        RESET_MEASURE,
+        &NoiseCell::BiasedMeas {
+            p_meas_0: 0.1,
+            p_meas_1: 0.3,
+        },
+        &["1"],
+        Some(0.1),
+    );
+}
+
+#[test]
+fn biased_meas_twice_is_record_flip_not_state_flip() {
+    // Like meas_twice_gnm: BiasedDepolarizing flips the record, never the
+    // state, so a qubit reset to |0> and measured twice reads 1 on the SECOND
+    // measurement at exactly p_meas_0 = 0.25 -- NOT 2p(1-p) = 0.375 (state
+    // flip). This pins that BiasedDepolarizing maps to neo's record-flip
+    // channel (with_p_meas), not the state-flip channel the plain
+    // depolarizing family uses.
+    let p = 0.25;
+    check_cell(
+        "biased_meas_twice",
+        MEASURE_TWICE,
+        &NoiseCell::BiasedMeas {
+            p_meas_0: p,
+            p_meas_1: p,
+        },
+        &["1"],
+        Some(p),
     );
 }
