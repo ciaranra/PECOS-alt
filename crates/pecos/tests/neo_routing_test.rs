@@ -248,6 +248,27 @@ fn neo_stack_rejects_unrouted_quantum_backend() {
 }
 
 #[test]
+fn neo_stack_rejects_hugr_until_result_contract_reconciled() {
+    // HUGR runs on neo with correct physics, but the neo HUGR engine emits a
+    // different result contract (per-qubit q0/q1 plus a `measurements` array)
+    // than the engines/QASM path (the program's named classical register) for
+    // programs without explicit result() captures. Rather than silently return
+    // a non-drop-in ShotVec, the neo route rejects HUGR until that contract is
+    // reconciled (see `run_neo` in unified_sim.rs).
+    let hugr =
+        pecos_programs::Hugr::from_bytes(include_bytes!("test_data/hugr/bell_state.hugr").to_vec());
+    let err = sim(hugr)
+        .stack(SimStack::Neo)
+        .run(5)
+        .expect_err("HUGR is not yet contract-compatible on the neo stack");
+    assert!(
+        err.to_string()
+            .contains("HUGR programs are not yet routed to the neo stack"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn neo_stack_rejects_build() {
     let Err(err) = sim(deterministic_conditional_qasm())
         .stack(SimStack::Neo)

@@ -34,7 +34,8 @@ pub enum SimStack {
     /// The data-oriented `pecos-neo` stack (experimental).
     ///
     /// Requires building pecos with the `neo` cargo feature. Currently
-    /// routes QASM and HUGR programs with the default quantum backend.
+    /// routes QASM programs with the default quantum backend (HUGR runs but
+    /// does not yet match the engines result contract, so it is rejected).
     /// Depolarizing-family noise (`PassThroughNoise`, `DepolarizingNoise`,
     /// `DepolarizingNoiseModel`) is translated with identical conventions;
     /// other noise types, explicit `.classical()`, and explicit
@@ -219,10 +220,29 @@ impl ProgrammedSimBuilder {
             ));
         }
         match &self.program {
-            Program::Qasm(_) | Program::Hugr(_) => {}
+            Program::Qasm(_) => {}
+            Program::Hugr(_) => {
+                // HUGR runs on neo via pecos_hugr::hugr_engine, whose result
+                // contract differs from the engines/QASM path: for HUGR programs
+                // without explicit result() captures it emits per-qubit `q0`/`q1`
+                // values and a `measurements` array instead of the program's
+                // named classical register (e.g. "c"). Returning that silently
+                // would break consumers that index `shot.data["c"]`, so reject
+                // until the neo HUGR result contract is reconciled (the physics
+                // is already correct; only the register naming diverges).
+                return Err(PecosError::Input(
+                    "HUGR programs are not yet routed to the neo stack: the neo HUGR \
+                     engine emits a different result contract (per-qubit q0/q1 plus a \
+                     `measurements` array) than the engines and QASM paths (the \
+                     program's named classical register, e.g. \"c\") for programs \
+                     without explicit result() captures, so neo HUGR results are not \
+                     yet drop-in compatible. Use .stack(SimStack::Engines) for HUGR."
+                        .to_string(),
+                ));
+            }
             _ => {
                 return Err(PecosError::Input(
-                    "Only QASM and HUGR programs are routed to the neo stack so far; \
+                    "Only QASM programs are routed to the neo stack so far; \
                      use .stack(SimStack::Engines) for other program types."
                         .to_string(),
                 ));
