@@ -137,7 +137,7 @@ pub use per_gate_pauli::PerGatePauliChannel;
 pub use plugin::{ContextObserver, EventHandler, NoiseModelConfig, NoisePlugin};
 pub use preparation::PreparationChannel;
 pub use single_qubit::SingleQubitChannel;
-pub use two_qubit::TwoQubitChannel;
+pub use two_qubit::{AngleScaling, TwoQubitChannel};
 
 use crate::command::GateCommand;
 use crate::command::GateType;

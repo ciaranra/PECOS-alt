@@ -86,6 +86,32 @@ const FEEDBACK: &str = r#"
     measure q[1] -> c[1];
 "#;
 
+/// RZZ at +pi/2 on |00> (a ZZ=+1 eigenstate): the gate leaves the state in
+/// |00> (up to phase), so the only outcome change is from the angle-scaled
+/// two-qubit depolarizing noise on the RZZ. The 8 of 15 non-identity Paulis
+/// that anticommute with Z(x)Z flip the parity, giving `P(01 or 10) = 8*p_eff/15`.
+const RZZ_POS: &str = r#"
+    OPENQASM 2.0;
+    include "qelib1.inc";
+    qreg q[2];
+    creg c[2];
+    rzz(0.5*pi) q[0],q[1];
+    measure q[0] -> c[0];
+    measure q[1] -> c[1];
+"#;
+
+/// Same as `RZZ_POS` but at -pi/2, exercising the NEGATIVE-angle branch of the
+/// asymmetric scaling (engines `(a, b)` / neo `neg_*`).
+const RZZ_NEG: &str = r#"
+    OPENQASM 2.0;
+    include "qelib1.inc";
+    qreg q[2];
+    creg c[2];
+    rzz(-0.5*pi) q[0],q[1];
+    measure q[0] -> c[0];
+    measure q[1] -> c[1];
+"#;
+
 /// One noise configuration of the matrix, applied identically to both
 /// stacks (the facade maps it to neo's noise channels).
 enum NoiseCell {
@@ -94,7 +120,19 @@ enum NoiseCell {
     P1(f64),
     P2(f64),
     Uniform(f64),
-    GnmSimple { average_p1: f64, p_meas: f64 },
+    GnmSimple {
+        average_p1: f64,
+        p_meas: f64,
+    },
+    /// `GeneralNoiseModel` two-qubit noise with angle-dependent scaling: stored
+    /// `p2`, asymmetric coefficients `(a, b, c, d)` and `power`. Everything
+    /// outside the two-qubit channel is zeroed so the physics is exactly the
+    /// angle-scaled depolarizing channel on the RZZ gate.
+    GnmAngle {
+        p2: f64,
+        angle_params: (f64, f64, f64, f64),
+        angle_power: f64,
+    },
 }
 
 impl NoiseCell {
@@ -141,6 +179,29 @@ impl NoiseCell {
                         .with_prep_probability(0.0)
                         .with_meas_0_probability(p_meas)
                         .with_meas_1_probability(p_meas),
+                )
+                .run(SHOTS),
+            Self::GnmAngle {
+                p2,
+                angle_params: (a, b, c, d),
+                angle_power,
+            } => builder
+                .noise(
+                    // Plain Pauli two-qubit noise with angle scaling; zero
+                    // every other channel and the non-neutral GNM defaults so
+                    // only the angle-scaled RZZ depolarizing noise remains.
+                    pecos_engines::noise::GeneralNoiseModel::builder()
+                        .with_p2_probability(p2)
+                        .with_p2_angle_params(a, b, c, d)
+                        .with_p2_angle_power(angle_power)
+                        .with_average_p1_probability(0.0)
+                        .with_p1_emission_ratio(0.0)
+                        .with_p2_emission_ratio(0.0)
+                        .with_prep_leak_ratio(0.0)
+                        .with_p_idle_linear_rate(0.0)
+                        .with_prep_probability(0.0)
+                        .with_meas_0_probability(0.0)
+                        .with_meas_1_probability(0.0),
                 )
                 .run(SHOTS),
         };
@@ -323,5 +384,56 @@ fn meas_twice_gnm_is_record_flip_not_state_flip() {
         },
         &["1"],
         Some(p),
+    );
+}
+
+/// One `GnmAngle` configuration shared by both angle cells: stored p2 = 0.3,
+/// asymmetric coefficients with the NEGATIVE branch (a = 1.5) steeper than the
+/// POSITIVE branch (c = 1.0), linear power. The facade translates engines'
+/// `(a, b, c, d, power)` into neo's asymmetric `AngleScaling`; both cells pin
+/// the cross-stack rate AND the analytic value, so a dropped or neg/pos-swapped
+/// mapping fails loudly.
+const ANGLE_CELL: NoiseCell = NoiseCell::GnmAngle {
+    p2: 0.3,
+    angle_params: (1.5, 0.0, 1.0, 0.0),
+    angle_power: 1.0,
+};
+
+#[test]
+fn gnm_angle_scaling_positive_matches() {
+    // RZZ(+pi/2): the POSITIVE branch scales p2 by c*|theta/pi|^power + d =
+    // 1.0*0.5 + 0 = 0.5, so the effective p2 is 0.3*0.5 = 0.15 and the 8/15
+    // parity-flipping Paulis give P(01 or 10) = 8*0.15/15 = 0.08. Dropping the
+    // angle scaling (the pre-mapping behavior) would give the unscaled
+    // 8*0.3/15 = 0.16, and the neg/pos-swapped mapping would give 0.12 — both
+    // far outside the band, so this discriminates.
+    check_cell(
+        "gnm_angle_pos",
+        RZZ_POS,
+        &ANGLE_CELL,
+        &["01", "10"],
+        Some(8.0 * (0.3 * 0.5) / 15.0),
+    );
+}
+
+#[test]
+fn gnm_angle_scaling_negative_matches() {
+    // RZZ(-pi/2): the NEGATIVE branch scales p2 by a*|theta/pi|^power + b =
+    // 1.5*0.5 + 0 = 0.75, so the effective p2 is 0.3*0.75 = 0.225 and the rate
+    // is 8*0.225/15 = 0.12. Both stacks read the gate angle as the SIGNED
+    // principal value (-pi, pi] -- neo always did; engines' noise call site was
+    // aligned with its own gate unitaries (which all use `to_radians_signed`),
+    // fixing a bug where the unsigned [0, 2pi) angle made RZZ(-pi/2) take the
+    // POSITIVE branch as 3pi/2 and never reached the negative coefficients. So
+    // the stacks AGREE here, and the value differs from the positive cell
+    // (0.08), locking the asymmetry direction. A regression to the unsigned
+    // angle would push engines to 8*0.45/15 = 0.24 and fail the cross-stack
+    // overlap and the analytic containment.
+    check_cell(
+        "gnm_angle_neg",
+        RZZ_NEG,
+        &ANGLE_CELL,
+        &["01", "10"],
+        Some(8.0 * (0.3 * 0.75) / 15.0),
     );
 }

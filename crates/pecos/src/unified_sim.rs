@@ -297,7 +297,7 @@ fn map_noise_to_neo(
 ) -> Result<Option<pecos_neo::noise::GeneralNoiseModelBuilder>, PecosError> {
     use pecos_engines::noise::{DepolarizingNoiseModelBuilder, PassThroughNoiseModelBuilder};
     use pecos_engines::{DepolarizingNoise, PassThroughNoise};
-    use pecos_neo::noise::GeneralNoiseModelBuilder;
+    use pecos_neo::noise::{AngleScaling, GeneralNoiseModelBuilder};
 
     let uniform = |p_prep: f64, p_meas: f64, p1: f64, p2: f64| {
         GeneralNoiseModelBuilder::new()
@@ -328,24 +328,46 @@ fn map_noise_to_neo(
     if let Some(builder) = noise.downcast_ref::<pecos_engines::noise::GeneralNoiseModelBuilder>() {
         // The stored p1/p2 are already in standard depolarizing convention
         // (the with_average_* setters convert on the way in), so they map
-        // one-to-one onto neo's builder.
-        let Some((p_prep, p_meas_0, p_meas_1, p1, p2)) = builder.simple_probabilities() else {
+        // one-to-one onto neo's builder. Angle-dependent two-qubit scaling, if
+        // present, is translated below; everything else outside the simple
+        // Pauli subset is still rejected.
+        let Some((p_prep, p_meas_0, p_meas_1, p1, p2, angle)) = builder.pauli_with_angle_scaling()
+        else {
             return Err(PecosError::Input(
                 "This GeneralNoiseModel configuration uses features beyond the simple \
-                 probability subset (leakage, emission, seepage, idle, crosstalk, \
-                 angle-dependent noise, scales, or noiseless gates), which are not yet \
-                 mapped to the neo stack. Use .stack(SimStack::Engines) or configure \
-                 sim_neo() directly with a neo noise model."
+                 probability subset (leakage, emission, seepage, idle, crosstalk, scales, \
+                 or noiseless gates), which are not yet mapped to the neo stack. Use \
+                 .stack(SimStack::Engines) or configure sim_neo() directly with a neo \
+                 noise model."
                     .to_string(),
             ));
         };
-        return Ok(Some(
-            GeneralNoiseModelBuilder::new()
-                .with_p_prep(p_prep)
-                .with_p_meas(p_meas_0, p_meas_1)
-                .with_p1(p1)
-                .with_p2(p2),
-        ));
+        let mut neo_builder = GeneralNoiseModelBuilder::new()
+            .with_p_prep(p_prep)
+            .with_p_meas(p_meas_0, p_meas_1)
+            .with_p1(p1)
+            .with_p2(p2);
+        if let Some((a, b, c, d, power)) = angle {
+            // Engines' angle-dependent two-qubit error rate is
+            //   p2 * (a*|theta/pi|^power + b)  for theta < 0
+            //   p2 * (c*|theta/pi|^power + d)  for theta > 0
+            // (GeneralNoiseModel::p2_angle_error_rate). neo's AngleScaling
+            // evaluates offset + linear*|theta/pi| + scale*|theta/pi|^power per
+            // sign, so the engines coefficients map to scale (the power term)
+            // and the engines offsets map to offset, with the linear terms
+            // zero. This reproduces engines exactly, including the zero-angle
+            // (b+d)/2 average. (NOT AngleScaling::from_general_params, which is
+            // a different symmetric offset/linear/scale parameterization.)
+            //
+            // Both stacks read the gate angle as the SIGNED principal value
+            // (-pi, pi] -- neo via `to_radians_signed`, engines likewise after
+            // its noise call site was aligned with its gate unitaries -- so the
+            // sign-dependent coefficients agree cross-stack at every angle
+            // (locked by `gnm_angle_scaling_negative_matches`).
+            neo_builder = neo_builder
+                .with_p2_angle_scaling(AngleScaling::asymmetric(b, 0.0, a, d, 0.0, c, power));
+        }
+        return Ok(Some(neo_builder));
     }
 
     Err(PecosError::Input(
