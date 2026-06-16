@@ -36,11 +36,12 @@ pub enum SimStack {
     /// Requires building pecos with the `neo` cargo feature. Currently
     /// routes QASM programs with the default quantum backend (HUGR runs but
     /// does not yet match the engines result contract, so it is rejected).
-    /// Depolarizing-family noise (`PassThroughNoise`, `DepolarizingNoise`,
-    /// `DepolarizingNoiseModel`) is translated with identical conventions;
-    /// other noise types, explicit `.classical()`, and explicit
-    /// `.quantum()` configuration are not yet translated and are rejected
-    /// with an error at `run()`.
+    /// The translated noise surface is the depolarizing family
+    /// (`PassThroughNoise`, `DepolarizingNoise`, `BiasedDepolarizingNoise`,
+    /// and their builders) and the `GeneralNoiseModel` simple-probability
+    /// subset, including angle-dependent two-qubit scaling. Other noise
+    /// configurations, explicit `.classical()`, and explicit `.quantum()`
+    /// are not yet translated and are rejected with an error at `run()`.
     Neo,
 }
 
