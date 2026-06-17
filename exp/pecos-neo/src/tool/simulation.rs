@@ -966,81 +966,20 @@ pub fn importance_sampling(shots: usize) -> ImportanceSamplingBuilder {
     ImportanceSamplingBuilder::new(shots)
 }
 
-/// Builder for the Monte Carlo sampling strategy.
-///
-/// Created by [`monte_carlo()`]. Shots is the defining argument; workers
-/// defaults to 1 (sequential).
-#[derive(Debug, Clone)]
-pub struct MonteCarloBuilder {
-    shots: usize,
-    workers: usize,
-}
-
-impl MonteCarloBuilder {
-    /// Set the number of parallel workers.
-    ///
-    /// Parallel execution distributes shots across workers using rayon,
-    /// with each worker getting its own simulator, command source, and
-    /// noise model built from the shared configuration. Per-shot seeding
-    /// uses global shot indices, so results are identical for any worker
-    /// count.
-    ///
-    /// Requires a per-worker construction path: a static circuit or a
-    /// classical engine builder source, on any backend (built-in, adapted,
-    /// or custom factory). Pre-built dynamic command sources cannot build
-    /// per-worker state; `.build()` rejects that combination.
-    #[must_use]
-    pub fn workers(mut self, workers: usize) -> Self {
-        self.workers = workers;
-        self
-    }
-
-    /// Set the worker count from available parallelism.
-    ///
-    /// See [`workers()`](Self::workers) for requirements.
-    #[must_use]
-    pub fn auto_workers(mut self) -> Self {
-        self.workers = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
-        self
-    }
-}
+// The Monte Carlo sampling vocabulary (`monte_carlo()` + `MonteCarloBuilder`)
+// is shared with the engines stack and lives in `pecos-engines` so BOTH stacks
+// accept the same `monte_carlo(n).workers(m)` spelling (the engines
+// `MonteCarloEngine`'s run-spec). Re-exported here so `pecos_neo::tool::*`
+// paths are unchanged; neo maps it into its own `Sampling` strategy below.
+pub use pecos_engines::sampling::{MonteCarloBuilder, monte_carlo};
 
 impl From<MonteCarloBuilder> for Sampling {
     fn from(builder: MonteCarloBuilder) -> Self {
         Sampling::MonteCarlo {
-            shots: builder.shots,
-            workers: builder.workers,
+            shots: builder.shots(),
+            workers: builder.resolved_workers(),
         }
     }
-}
-
-/// Create a Monte Carlo sampling strategy builder running `shots` shots.
-///
-/// This is the standard execution strategy: each shot runs the program
-/// once and records its outcomes. Sequential by default; add
-/// `.workers(n)` or `.auto_workers()` for parallel execution.
-///
-/// # Example
-///
-/// ```no_run
-/// use pecos_neo::tool::{monte_carlo, sim_neo};
-/// use pecos_neo::prelude::*;
-///
-/// let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
-///
-/// // Sequential
-/// let results = sim_neo(circuit.clone()).auto()
-///     .sampling(monte_carlo(1000))
-///     .run();
-///
-/// // Parallel with 8 workers
-/// let results = sim_neo(circuit).auto()
-///     .sampling(monte_carlo(1000).workers(8))
-///     .run();
-/// ```
-#[must_use]
-pub fn monte_carlo(shots: usize) -> MonteCarloBuilder {
-    MonteCarloBuilder { shots, workers: 1 }
 }
 
 /// Builder for the path enumeration sampling strategy.
@@ -1908,12 +1847,13 @@ pub struct SimNeoBuilder {
     config: SimConfig,
     /// Sampling strategy (data). None until `.sampling()` is called.
     sampling: Option<Sampling>,
-    /// Shot count from the deprecated top-level `.shots()` forwarder.
-    legacy_shots: Option<usize>,
+    /// Shot count from the top-level `.shots()` shortcut (sugar for the
+    /// default Monte Carlo sampler). Mutually exclusive with `.sampling()`.
+    shots_shortcut: Option<usize>,
     /// Worker count from the deprecated top-level `.workers()` forwarder.
     legacy_workers: Option<usize>,
     /// Auto worker-count request from `.auto()`/deprecated `.auto_workers()`,
-    /// honored only on the legacy `.shots()` path.
+    /// honored only on the top-level `.shots()` shortcut path.
     auto_workers_hint: bool,
     /// Backend auto-selection opt-in from `.auto()`.
     auto_backend: bool,
@@ -1940,7 +1880,7 @@ impl SimNeoBuilder {
             definitions: None,
             config: SimConfig::default(),
             sampling: None,
-            legacy_shots: None,
+            shots_shortcut: None,
             legacy_workers: None,
             auto_workers_hint: false,
             auto_backend: false,
@@ -2210,14 +2150,20 @@ impl SimNeoBuilder {
         self
     }
 
-    /// Set the number of shots.
-    #[deprecated(
-        since = "0.2.0",
-        note = "shots lives on the sampler builder: use .sampling(monte_carlo(shots))"
-    )]
+    /// Set the number of Monte Carlo shots to run.
+    ///
+    /// This is the shorthand for the common case: `.shots(n)` is exactly
+    /// `.sampling(monte_carlo(n))`. Reach for [`sampling()`](Self::sampling)
+    /// directly when you need worker parallelism or a non-Monte-Carlo strategy
+    /// (e.g. `.sampling(monte_carlo(n).workers(8))` or
+    /// `.sampling(importance_sampling(n))`). Setting both `.shots()` and
+    /// `.sampling()` is rejected at build time rather than silently picking one.
+    ///
+    /// The facade (`pecos::sim().stack(...)`) exposes the same `.shots(n)`, so
+    /// both stacks share the `.shots(n).run()` shape.
     #[must_use]
     pub fn shots(mut self, shots: usize) -> Self {
-        self.legacy_shots = Some(shots);
+        self.shots_shortcut = Some(shots);
         self
     }
 
@@ -2575,9 +2521,10 @@ impl SimNeoBuilder {
         };
 
         // Resolve the sampling strategy: the .sampling() path carries its own
-        // shot count; the deprecated top-level .shots()/.workers() forwarders
-        // map onto Monte Carlo. Mixing the two is ambiguous and rejected.
-        let sampling = match (self.sampling, self.legacy_shots) {
+        // shot count; the top-level .shots() shortcut (and the deprecated
+        // .workers() forwarder) map onto Monte Carlo. Mixing .shots()/.workers()
+        // with .sampling() is ambiguous and rejected.
+        let sampling = match (self.sampling, self.shots_shortcut) {
             (Some(sampling), None) => {
                 assert!(
                     self.legacy_workers.is_none(),
@@ -2588,9 +2535,9 @@ impl SimNeoBuilder {
                 sampling
             }
             (Some(_), Some(_)) => panic!(
-                "Conflicting sampling configuration: deprecated .shots() cannot be combined \
-                 with .sampling(). Set shots on the sampler builder, e.g. \
-                 .sampling(monte_carlo(1000))."
+                "Conflicting sampling configuration: .shots() cannot be combined with \
+                 .sampling() (both set the shot count). Use one: .shots(1000) for the common \
+                 case, or .sampling(monte_carlo(1000).workers(8)) for parallel/other strategies."
             ),
             (None, Some(shots)) => {
                 let workers = self.legacy_workers.unwrap_or_else(|| {
@@ -4919,10 +4866,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "deprecated .shots() cannot be combined")]
-    fn test_sim_neo_legacy_shots_conflicts_with_sampling() {
+    #[should_panic(expected = ".shots() cannot be combined with")]
+    fn test_sim_neo_shots_conflicts_with_sampling() {
         let circuit = CommandBuilder::new().pz(&[0]).mz(&[0]).build();
-        #[allow(deprecated)]
         let _ = sim_neo(circuit)
             .auto()
             .sampling(monte_carlo(10))
@@ -4959,30 +4905,29 @@ mod tests {
     }
 
     #[test]
-    fn test_sim_neo_legacy_shots_forwarder_matches_new_api() {
-        // Deprecated .shots(n) must behave exactly like
-        // .sampling(monte_carlo(n)) during the transition window.
+    fn test_sim_neo_shots_shortcut_matches_sampling() {
+        // .shots(n) must behave exactly like .sampling(monte_carlo(n)) -- it is
+        // the blessed shorthand for that common case.
         let circuit = CommandBuilder::new().pz(&[0]).h(&[0]).mz(&[0]).build();
 
-        #[allow(deprecated)]
-        let legacy = sim_neo(circuit.clone()).auto().shots(40).seed(11).run();
-        let new = sim_neo(circuit)
+        let shortcut = sim_neo(circuit.clone()).auto().shots(40).seed(11).run();
+        let explicit = sim_neo(circuit)
             .auto()
             .sampling(monte_carlo(40))
             .seed(11)
             .run();
 
-        assert_eq!(legacy.outcomes.len(), 40);
-        assert_eq!(legacy.outcomes.len(), new.outcomes.len());
-        for (o1, o2) in legacy.outcomes.iter().zip(new.outcomes.iter()) {
+        assert_eq!(shortcut.outcomes.len(), 40);
+        assert_eq!(shortcut.outcomes.len(), explicit.outcomes.len());
+        for (o1, o2) in shortcut.outcomes.iter().zip(explicit.outcomes.iter()) {
             assert_eq!(o1.get_bit(QubitId(0)), o2.get_bit(QubitId(0)));
         }
     }
 
     #[test]
-    fn test_sim_neo_legacy_shots_workers_combo_still_parallel() {
-        // Old-style .workers(n).shots(m) (both deprecated) maps onto
-        // MonteCarlo { shots: m, workers: n } and still runs.
+    fn test_sim_neo_shots_with_deprecated_workers_still_parallel() {
+        // Blessed .shots(m) combined with the deprecated .workers(n) forwarder
+        // maps onto MonteCarlo { shots: m, workers: n } and still runs.
         let circuit = CommandBuilder::new().pz(&[0]).x(&[0]).mz(&[0]).build();
 
         #[allow(deprecated)]

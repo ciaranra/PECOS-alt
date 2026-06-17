@@ -194,11 +194,13 @@ pub use engine_type::{DynamicEngineBuilder, EngineType, sim_dynamic};
 #[cfg(feature = "cppsparsestab")]
 pub use pecos_cppsparsestab::CppSparseStab;
 #[cfg(feature = "sim")]
+pub use pecos_engines::sampling::monte_carlo;
+#[cfg(feature = "sim")]
 pub use pecos_engines::{
     BiasedDepolarizingNoise, DepolarizingNoise, GeneralNoiseModelBuilder, PassThroughNoiseModel,
 };
 #[cfg(feature = "sim")]
-pub use pecos_engines::{SimInput, sim_builder};
+pub use pecos_engines::{MonteCarloBuilder, SimInput, sim_builder};
 #[cfg(feature = "sim")]
 pub use pecos_engines::{
     coin_toss, density_matrix, sparse_stab, stab_vec, stabilizer, state_vector,
