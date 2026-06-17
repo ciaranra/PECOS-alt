@@ -78,6 +78,65 @@ fn neo_stack_parallel_matches_engines() {
     assert_eq!(engines, neo);
 }
 
+#[test]
+fn neo_stack_worker_count_invariant_for_noisy_program() {
+    // The neo determinism guarantee (V4): each shot's RNG is derived from its
+    // GLOBAL shot index, so a STOCHASTIC program's results must be bit-identical
+    // regardless of how the shots are split across workers. The depolarizing
+    // noise is what makes this a real RNG test -- a deterministic program would
+    // pass trivially. (Same seed throughout; only the worker count varies.)
+    let noise = pecos_engines::DepolarizingNoise { p: 0.3 };
+    let run = |workers: usize| {
+        sim(x_measure_qasm())
+            .stack(SimStack::Neo)
+            .noise(noise)
+            .seed(42)
+            .workers(workers)
+            .run(128)
+            .expect("neo run")
+    };
+    let w1 = run(1);
+    // Self-check: the noise must actually produce a MIX of outcomes, or
+    // worker-invariance would hold trivially (all shots identical).
+    let rate0 = rate_of(&w1, "0");
+    assert!(
+        rate0 > 0.0 && rate0 < 1.0,
+        "noisy program should produce varied outcomes (got rate(0)={rate0}), \
+         otherwise worker-invariance is vacuous"
+    );
+    assert_eq!(
+        w1,
+        run(2),
+        "neo noisy results must be invariant to worker count (1 vs 2)"
+    );
+    assert_eq!(
+        w1,
+        run(4),
+        "neo noisy results must be invariant to worker count (1 vs 4)"
+    );
+}
+
+#[test]
+fn neo_stack_same_seed_is_reproducible() {
+    // V3 reproducibility: identical config + identical seed -> bit-identical
+    // ShotVec on neo across independent runs (a noisy program, so the RNG is
+    // genuinely exercised).
+    let noise = pecos_engines::DepolarizingNoise { p: 0.1 };
+    let run = || {
+        sim(x_measure_qasm())
+            .stack(SimStack::Neo)
+            .noise(noise)
+            .seed(123)
+            .run(64)
+            .expect("neo run")
+    };
+    assert_eq!(
+        run(),
+        run(),
+        "neo must reproduce identical results for a fixed seed"
+    );
+}
+
 /// One-qubit program whose only error source is what the noise model adds.
 fn x_measure_qasm() -> Qasm {
     Qasm::from_string(
