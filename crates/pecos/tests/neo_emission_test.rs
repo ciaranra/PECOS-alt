@@ -131,3 +131,91 @@ fn emission_is_gate_removing_and_matches_engines() {
         "engines and neo emission rates disagree: {engines}/{SHOTS} vs {neo}/{SHOTS}"
     );
 }
+
+// --- Two-qubit emission ---------------------------------------------------
+
+const P2: f64 = 0.6;
+
+/// `x q0; cx q0,q1; measure q1`. Pure two-qubit emission (`emission=1.0`,
+/// `p1=0`) on the CX. If the CX is DROPPED, q1 stays 0 and a uniform two-qubit
+/// Pauli flips it on 8/15 -> `P(q1=0) = p2 * 7/15`. If the CX is KEPT, q1 is 1
+/// and the Pauli flips it on 8/15 -> `P(q1=0) = p2 * 8/15`. At `p2=0.6` that is
+/// `0.28` (gate-removing) vs `0.32` (gate-preserving).
+const CX_MEASURE: &str = r#"
+    OPENQASM 2.0;
+    include "qelib1.inc";
+    qreg q[2];
+    creg c[1];
+    x q[0];
+    cx q[0], q[1];
+    measure q[1] -> c[0];
+"#;
+
+fn engines_2q_zero_count() -> u64 {
+    let noise = pecos_engines::noise::GeneralNoiseModel::builder()
+        .with_p1_probability(0.0)
+        .with_p2_probability(P2)
+        .with_p2_emission_ratio(1.0)
+        .with_prep_probability(0.0)
+        .with_meas_0_probability(0.0)
+        .with_meas_1_probability(0.0)
+        .with_prep_leak_ratio(0.0)
+        .with_p_idle_linear_rate(0.0);
+    let results = sim(Qasm::from_string(CX_MEASURE))
+        .stack(SimStack::Engines)
+        .noise(noise)
+        .seed(42)
+        .run(SHOTS)
+        .expect("engines run");
+    rate_zero(&results).0
+}
+
+fn neo_2q_zero_count() -> u64 {
+    use pecos_neo::noise::GeneralNoiseModelBuilder;
+    use pecos_neo::tool::{monte_carlo, sim_neo};
+
+    let noise = GeneralNoiseModelBuilder::new()
+        .with_p1(0.0)
+        .with_p2(P2)
+        .with_p2_emission_ratio(1.0)
+        .with_p_prep(0.0)
+        .with_p_meas_symmetric(0.0);
+    let results = sim_neo(Qasm::from_string(CX_MEASURE))
+        .auto()
+        .sampling(monte_carlo(SHOTS))
+        .noise(noise)
+        .seed(99)
+        .run();
+    let shots = results.shots.expect("neo produced shots");
+    rate_zero(&shots).0
+}
+
+#[test]
+fn two_qubit_emission_is_gate_removing_and_matches_engines() {
+    let analytic = P2 * 7.0 / 15.0; // 0.28 (gate-preserving would be P2*8/15 = 0.32)
+
+    let engines = engines_2q_zero_count();
+    let neo = neo_2q_zero_count();
+    let engines_ci = jeffreys_interval(engines, SHOTS as u64, CONFIDENCE);
+    let neo_ci = jeffreys_interval(neo, SHOTS as u64, CONFIDENCE);
+    println!(
+        "2q emission: engines {engines}/{SHOTS} CI [{:.4}, {:.4}], neo {neo}/{SHOTS} CI \
+         [{:.4}, {:.4}], gate-removing analytic {analytic:.4} (gate-preserving would be {:.4})",
+        engines_ci.0,
+        engines_ci.1,
+        neo_ci.0,
+        neo_ci.1,
+        P2 * 8.0 / 15.0
+    );
+
+    for (name, ci) in [("engines", engines_ci), ("neo", neo_ci)] {
+        assert!(
+            ci.0 <= analytic && analytic <= ci.1,
+            "{name} P(q1=0) excludes the gate-removing analytic {analytic}"
+        );
+    }
+    assert!(
+        engines_ci.0 <= neo_ci.1 && neo_ci.0 <= engines_ci.1,
+        "engines and neo 2q emission rates disagree: {engines}/{SHOTS} vs {neo}/{SHOTS}"
+    );
+}

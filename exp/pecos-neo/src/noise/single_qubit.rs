@@ -384,7 +384,7 @@ impl SingleQubitChannel {
                         smallvec::smallvec![qubit],
                         angles.iter().copied().collect::<SmallVec<[Angle64; 2]>>(),
                     );
-                    if let Some(dagger) = original.single_qubit_dagger() {
+                    if let Some(dagger) = original.dagger() {
                         gates.push(dagger);
                     }
                     // Emission error - sample from emission weights
