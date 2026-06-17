@@ -44,9 +44,12 @@ pub enum SimStack {
     /// The translated noise surface is the depolarizing family
     /// (`PassThroughNoise`, `DepolarizingNoise`, `BiasedDepolarizingNoise`,
     /// and their builders) and the `GeneralNoiseModel` simple-probability
-    /// subset, including angle-dependent two-qubit scaling. Other noise
-    /// configurations, explicit `.classical()`, and explicit `.quantum()`
-    /// are not yet translated and are rejected with an error at `run()`.
+    /// subset, including angle-dependent two-qubit scaling and the
+    /// gate-removing spontaneous-emission ratios (with the default uniform
+    /// emission distribution). Other noise configurations (leakage, idle,
+    /// crosstalk, custom emission distributions, ...), explicit
+    /// `.classical()`, and explicit `.quantum()` are not yet translated and
+    /// are rejected with an error at `run()`.
     Neo,
 }
 
@@ -398,25 +401,34 @@ fn map_noise_to_neo(
     if let Some(builder) = noise.downcast_ref::<pecos_engines::noise::GeneralNoiseModelBuilder>() {
         // The stored p1/p2 are already in standard depolarizing convention
         // (the with_average_* setters convert on the way in), so they map
-        // one-to-one onto neo's builder. Angle-dependent two-qubit scaling, if
-        // present, is translated below; everything else outside the simple
-        // Pauli subset is still rejected.
-        let Some((p_prep, p_meas_0, p_meas_1, p1, p2, angle)) = builder.pauli_with_angle_scaling()
+        // one-to-one onto neo's builder. Angle-dependent two-qubit scaling and
+        // the spontaneous-emission ratios, if present, are translated below;
+        // everything else outside the simple Pauli subset is still rejected.
+        let Some((p_prep, p_meas_0, p_meas_1, p1, p2, angle, p1_emission, p2_emission)) =
+            builder.pauli_with_angle_scaling()
         else {
             return Err(PecosError::Input(
                 "This GeneralNoiseModel configuration uses features beyond the simple \
-                 probability subset (leakage, emission, seepage, idle, crosstalk, scales, \
-                 or noiseless gates), which are not yet mapped to the neo stack. Use \
-                 .stack(SimStack::Engines) or configure sim_neo() directly with a neo \
-                 noise model."
+                 probability subset (leakage, seepage, idle, crosstalk, scales, custom \
+                 emission distributions, or noiseless gates), which are not yet mapped to \
+                 the neo stack. Use .stack(SimStack::Engines) or configure sim_neo() \
+                 directly with a neo noise model."
                     .to_string(),
             ));
         };
+        // Emission is gate-removing in both stacks with the default uniform
+        // emission distribution, so carrying the resolved ratios reproduces it
+        // exactly. The ratios are set unconditionally (with the engines-resolved
+        // values, defaults included) so neo cannot silently fall back to its own
+        // default emission fraction. (Locked by the facade emission differential
+        // test in `neo_emission_test.rs`.)
         let mut neo_builder = GeneralNoiseModelBuilder::new()
             .with_p_prep(p_prep)
             .with_p_meas(p_meas_0, p_meas_1)
             .with_p1(p1)
-            .with_p2(p2);
+            .with_p2(p2)
+            .with_p1_emission_ratio(p1_emission)
+            .with_p2_emission_ratio(p2_emission);
         if let Some((a, b, c, d, power)) = angle {
             // Engines' angle-dependent two-qubit error rate is
             //   p2 * (a*|theta/pi|^power + b)  for theta < 0

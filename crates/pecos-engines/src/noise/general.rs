@@ -526,6 +526,19 @@ impl GeneralNoiseModel {
         self.p2_angle_power
     }
 
+    /// Get the single-qubit spontaneous-emission ratio (fraction of 1q gate
+    /// errors that are emission faults, which replace the gate).
+    #[must_use]
+    pub fn p1_emission_ratio(&self) -> f64 {
+        self.p1_emission_ratio
+    }
+
+    /// Get the two-qubit spontaneous-emission ratio.
+    #[must_use]
+    pub fn p2_emission_ratio(&self) -> f64 {
+        self.p2_emission_ratio
+    }
+
     /// Apply noise at the start of `QuantumSystem` processing (typically a collection of gates)
     ///
     /// # Panics

@@ -310,10 +310,11 @@ fn neo_stack_general_noise_average_convention_matches() {
 
 #[test]
 fn neo_stack_rejects_unmapped_noise() {
-    // A bare GeneralNoiseModel keeps its realistic defaults (emission
-    // ratio 0.5, prep leak 0.5, idle 0.001) — physics beyond the simple
-    // Pauli subset, so the mapping must refuse rather than silently
-    // change the model.
+    // A bare GeneralNoiseModel keeps its realistic defaults for prep leak
+    // (0.5) and linear idling (0.001) — physics beyond the simple Pauli
+    // subset, so the mapping must refuse rather than silently change the
+    // model. (Spontaneous emission IS now mapped, so it is the prep-leak
+    // and idle defaults that force the rejection here.)
     let general =
         pecos_engines::noise::GeneralNoiseModel::builder().with_average_p1_probability(0.01);
     let err = sim(deterministic_conditional_qasm())
