@@ -143,3 +143,29 @@ def test_missing_source_wins_over_classical_override_on_neo() -> None:
     for stack in ["engines", "neo"]:
         with pytest.raises(RuntimeError, match="No QASM source specified"):
             qasm_engine().to_sim().classical(qasm_engine()).stack(stack).run(1)
+
+
+# --- Unified .shots(n) / argless .run() (mirrors the Rust facade) ----------
+
+
+@pytest.mark.parametrize("stack", ["engines", "neo"])
+def test_shots_builder_matches_run_argument(stack: str) -> None:
+    """`.shots(n).run()` must equal `.run(n)` on both stacks: shots is a
+    builder concern, and the argless run is the unified spelling."""
+    via_shots = sim(Qasm.from_string(DETERMINISTIC_CONDITIONAL)).stack(stack).seed(42).shots(5).run()
+    via_arg = sim(Qasm.from_string(DETERMINISTIC_CONDITIONAL)).stack(stack).seed(42).run(5)
+    assert list(via_shots["c"]) == list(via_arg["c"])
+    assert len(list(via_shots["c"])) == 5
+
+
+def test_run_argument_overrides_shots_builder() -> None:
+    """A `run(shots)` argument wins over a prior `.shots(n)`."""
+    results = sim(Qasm.from_string(DETERMINISTIC_CONDITIONAL)).seed(42).shots(99).run(5)
+    assert len(list(results["c"])) == 5
+
+
+def test_run_without_shots_fails_fast() -> None:
+    """Neither `.shots(n)` nor a `run()` argument -> a loud error, never a
+    silent default."""
+    with pytest.raises(ValueError, match="No shot count configured"):
+        sim(Qasm.from_string(X_MEASURE)).seed(42).run()

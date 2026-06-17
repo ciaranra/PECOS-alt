@@ -102,6 +102,7 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
                 engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
                 seed: None,
                 workers: None,
+                shots: None,
                 quantum_engine_builder: None,
                 noise_builder: None,
                 explicit_num_qubits: None,
@@ -148,6 +149,7 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
                 engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
                 seed: None,
                 workers: None,
+                shots: None,
                 quantum_engine_builder: None,
                 noise_builder: None,
                 explicit_num_qubits: None,
@@ -173,6 +175,7 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
                 engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
                 seed: None,
                 workers: None,
+                shots: None,
                 quantum_engine_builder: None,
                 noise_builder: None,
                 explicit_num_qubits: None,
@@ -190,6 +193,7 @@ pub fn sim(py: Python, program: Py<PyAny>) -> PyResult<PySimBuilder> {
                 engine_builder: Arc::new(Mutex::new(Some(engine_builder))),
                 seed: None,
                 workers: None,
+                shots: None,
                 quantum_engine_builder: None,
                 noise_builder: None,
                 explicit_num_qubits: None,
@@ -335,6 +339,7 @@ impl PySimBuilder {
                                 engine_builder: Arc::new(Mutex::new(Some(qis_engine))),
                                 seed: sim_builder.seed,
                                 workers: sim_builder.workers,
+                                shots: sim_builder.shots,
                                 quantum_engine_builder: clone_py_any_option(
                                     py,
                                     sim_builder.quantum_engine_builder.as_ref(),
@@ -448,6 +453,25 @@ impl PySimBuilder {
     fn auto_workers(&mut self) -> PyResult<Self> {
         let workers = std::thread::available_parallelism().map_or(4, std::num::NonZero::get);
         self.workers(workers)
+    }
+
+    /// Set the number of Monte Carlo shots to run.
+    ///
+    /// Mirrors the Rust facade's `.shots(n)`: configure the shot count on the
+    /// builder, then call `.run()` with no argument. The legacy `.run(shots)`
+    /// still works and, when given, overrides this.
+    fn shots(&mut self, shots: usize) -> PyResult<Self> {
+        match &mut self.inner {
+            SimBuilderInner::Qasm(builder) => builder.shots = Some(shots),
+            SimBuilderInner::QisControl(builder) => builder.shots = Some(shots),
+            SimBuilderInner::Hugr(builder) => builder.shots = Some(shots),
+            SimBuilderInner::PhirJson(builder) => builder.shots = Some(shots),
+            SimBuilderInner::Phir(builder) => builder.shots = Some(shots),
+            SimBuilderInner::Empty => {}
+        }
+        Ok(PySimBuilder {
+            inner: self.inner.clone(),
+        })
     }
 
     /// Set quantum simulator/engine
@@ -745,9 +769,14 @@ impl PySimBuilder {
         }
     }
 
-    /// Run the simulation
+    /// Run the simulation.
+    ///
+    /// `shots` may be passed here (`run(1000)`) or configured on the builder
+    /// first (`.shots(1000).run()`); a `run()` argument overrides `.shots(n)`.
+    /// With neither set, this fails fast rather than defaulting silently.
+    #[pyo3(signature = (shots=None))]
     #[allow(clippy::too_many_lines)] // Complex simulation dispatch with multiple engine types
-    fn run(&self, shots: usize) -> PyResult<crate::shot_results_bindings::PyShotVec> {
+    fn run(&self, shots: Option<usize>) -> PyResult<crate::shot_results_bindings::PyShotVec> {
         use crate::engine_builders::{
             PyBiasedDepolarizingNoiseModelBuilder, PyDepolarizingNoiseModelBuilder,
             PyGeneralNoiseModelBuilder,
@@ -758,6 +787,23 @@ impl PySimBuilder {
         };
         use crate::shot_results_bindings::PyShotVec;
         use pyo3::exceptions::PyRuntimeError;
+
+        // Resolve the shot count: an explicit `run(shots)` argument wins, then
+        // the builder's `.shots(n)`, else fail fast (no silent default).
+        let configured = match &self.inner {
+            SimBuilderInner::Qasm(b) => b.shots,
+            SimBuilderInner::QisControl(b) => b.shots,
+            SimBuilderInner::Hugr(b) => b.shots,
+            SimBuilderInner::PhirJson(b) => b.shots,
+            SimBuilderInner::Phir(b) => b.shots,
+            SimBuilderInner::Empty => None,
+        };
+        let shots = shots.or(configured).ok_or_else(|| {
+            PyValueError::new_err(
+                "No shot count configured; pass run(shots) or set .shots(n) before .run(). \
+                 Example: sim(program).shots(1000).run()",
+            )
+        })?;
 
         log::debug!("PySimBuilder::run() called with {shots} shots");
 
@@ -1904,6 +1950,7 @@ impl Clone for SimBuilderInner {
                 engine_builder: builder.engine_builder.clone(),
                 seed: builder.seed,
                 workers: builder.workers,
+                shots: builder.shots,
                 quantum_engine_builder: builder
                     .quantum_engine_builder
                     .as_ref()
@@ -1919,6 +1966,7 @@ impl Clone for SimBuilderInner {
                     engine_builder: builder.engine_builder.clone(),
                     seed: builder.seed,
                     workers: builder.workers,
+                    shots: builder.shots,
                     quantum_engine_builder: builder
                         .quantum_engine_builder
                         .as_ref()
@@ -1934,6 +1982,7 @@ impl Clone for SimBuilderInner {
                 engine_builder: builder.engine_builder.clone(),
                 seed: builder.seed,
                 workers: builder.workers,
+                shots: builder.shots,
                 quantum_engine_builder: builder
                     .quantum_engine_builder
                     .as_ref()
@@ -1945,6 +1994,7 @@ impl Clone for SimBuilderInner {
                 engine_builder: builder.engine_builder.clone(),
                 seed: builder.seed,
                 workers: builder.workers,
+                shots: builder.shots,
                 quantum_engine_builder: builder
                     .quantum_engine_builder
                     .as_ref()
@@ -1960,6 +2010,7 @@ impl Clone for SimBuilderInner {
                 engine_builder: builder.engine_builder.clone(),
                 seed: builder.seed,
                 workers: builder.workers,
+                shots: builder.shots,
                 quantum_engine_builder: builder
                     .quantum_engine_builder
                     .as_ref()
