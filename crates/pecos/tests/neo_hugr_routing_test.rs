@@ -33,7 +33,8 @@ fn neo_hugr_c(bytes: &[u8], seed: u64, shots: usize) -> Vec<u32> {
     let results = sim(Hugr::from_bytes(bytes.to_vec()))
         .stack(SimStack::Neo)
         .seed(seed)
-        .run(shots)
+        .shots(shots)
+        .run()
         .expect("neo HUGR run");
     results
         .shots
@@ -72,7 +73,8 @@ fn neo_hugr_results_use_the_named_c_register() {
     let results = sim(Hugr::from_bytes(bytes.to_vec()))
         .stack(SimStack::Neo)
         .seed(42)
-        .run(5)
+        .shots(5)
+        .run()
         .expect("neo HUGR run");
     let keys: Vec<&String> = results.shots[0].data.keys().collect();
     assert!(
@@ -151,7 +153,8 @@ fn neo_hugr_control_flow_is_rejected() {
         let err = sim(Hugr::from_bytes(fixture.to_vec()))
             .stack(SimStack::Neo)
             .seed(42)
-            .run(4)
+            .shots(4)
+            .run()
             .expect_err("control-flow HUGR must be rejected on the neo stack");
         assert!(
             err.to_string().contains("classical control flow"),

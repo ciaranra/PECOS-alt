@@ -1764,7 +1764,7 @@ fn run_qasm_via_facade(
     if let Some(ref noise_py) = builder.noise_builder {
         facade = apply_noise_to_facade(facade, noise_py)?;
     }
-    match facade.run(shots) {
+    match facade.shots(shots).run() {
         Ok(shot_vec) => Ok(crate::shot_results_bindings::PyShotVec::new(shot_vec)),
         Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {e}"))),
     }
@@ -1890,7 +1890,7 @@ fn run_program_neo(
         // listing the accepted constructors.
         facade = apply_noise_to_facade(facade, noise_py)?;
     }
-    match facade.run(shots) {
+    match facade.shots(shots).run() {
         Ok(shot_vec) => Ok(crate::shot_results_bindings::PyShotVec::new(shot_vec)),
         Err(e) => Err(PyRuntimeError::new_err(format!("Simulation failed: {e}"))),
     }

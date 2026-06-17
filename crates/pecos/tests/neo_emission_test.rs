@@ -79,7 +79,8 @@ fn engines_zero_count() -> u64 {
         .stack(SimStack::Engines)
         .noise(emission_noise_1q())
         .seed(42)
-        .run(SHOTS)
+        .shots(SHOTS)
+        .run()
         .expect("engines run");
     rate_zero(&results).0
 }
@@ -91,7 +92,8 @@ fn neo_facade_zero_count() -> u64 {
         .stack(SimStack::Neo)
         .noise(emission_noise_1q())
         .seed(7) // independent seed; agreement must be physical
-        .run(SHOTS)
+        .shots(SHOTS)
+        .run()
         .expect("neo facade run");
     rate_zero(&results).0
 }
@@ -202,7 +204,8 @@ fn engines_2q_zero_count() -> u64 {
         .stack(SimStack::Engines)
         .noise(emission_noise_2q())
         .seed(42)
-        .run(SHOTS)
+        .shots(SHOTS)
+        .run()
         .expect("engines run");
     rate_zero(&results).0
 }
@@ -212,7 +215,8 @@ fn neo_facade_2q_zero_count() -> u64 {
         .stack(SimStack::Neo)
         .noise(emission_noise_2q())
         .seed(7)
-        .run(SHOTS)
+        .shots(SHOTS)
+        .run()
         .expect("neo facade run");
     rate_zero(&results).0
 }

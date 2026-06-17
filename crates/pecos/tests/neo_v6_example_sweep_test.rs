@@ -92,8 +92,9 @@ fn run(program: &str, stack: SimStack, seed: u64, noise: Option<f64>) -> ShotVec
     let results = match noise {
         Some(p) => builder
             .noise(pecos_engines::DepolarizingNoise { p })
-            .run(SHOTS),
-        None => builder.run(SHOTS),
+            .shots(SHOTS)
+            .run(),
+        None => builder.shots(SHOTS).run(),
     };
     results.expect("simulation run")
 }

@@ -305,7 +305,8 @@ fn run_stack(
         .noise(depolarizing_noise(p))
         .seed(seed)
         .workers(4)
-        .run(shots)
+        .shots(shots)
+        .run()
         .expect("simulation run")
 }
 
@@ -351,7 +352,8 @@ fn noiseless_surface_memory_is_silent_on_both_stacks() {
         let results = sim(Qasm::from_string(&experiment.qasm))
             .stack(stack)
             .seed(11)
-            .run(25)
+            .shots(25)
+            .run()
             .expect("noiseless run");
         let (syndromes, masks) = shots_to_syndromes(&results, &experiment);
         for (shot_idx, syndrome) in syndromes.iter().enumerate() {

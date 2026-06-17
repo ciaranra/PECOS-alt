@@ -4,7 +4,10 @@
 //! from pecos-engines, adding automatic engine selection based on program type.
 
 use pecos_core::errors::PecosError;
-use pecos_engines::{ClassicalControlEngineBuilder, MonteCarloEngine, SimBuilder, sim_builder};
+use pecos_engines::sampling::monte_carlo;
+use pecos_engines::{
+    ClassicalControlEngineBuilder, MonteCarloBuilder, MonteCarloEngine, SimBuilder, sim_builder,
+};
 use pecos_programs::Program;
 use pecos_qasm::qasm_engine;
 #[cfg(feature = "qis")]
@@ -91,6 +94,10 @@ struct RoutedConfig {
     workers: Option<usize>,
     auto_workers: bool,
     qubits: Option<usize>,
+    /// Monte Carlo shot count, set via `.shots(n)` and consumed by the argless
+    /// `.run()`. `None` until configured -- `.run()` fails fast rather than
+    /// defaulting silently.
+    shots: Option<usize>,
     /// The noise config as passed, for translation to the neo stack.
     /// Type-erased because `.noise()` is generic; the neo route downcasts
     /// against the known engines noise types.
@@ -183,22 +190,69 @@ impl ProgrammedSimBuilder {
     pub fn build(self) -> Result<MonteCarloEngine, PecosError> {
         if self.stack == SimStack::Neo {
             return Err(PecosError::Input(
-                "The neo stack does not expose a MonteCarloEngine; call .run(shots) directly."
+                "The neo stack does not expose a MonteCarloEngine; call .shots(n).run() directly."
                     .to_string(),
             ));
         }
         self.configure_engine()?.build()
     }
 
-    /// Build and run the simulation with automatic engine selection
+    /// Set the number of Monte Carlo shots to run.
+    ///
+    /// Shorthand for [`sampling(monte_carlo(shots))`](Self::sampling). Shots are
+    /// a builder concern, not a `run()` argument: configure the count here, then
+    /// call the argless [`run()`](Self::run). Both stacks (and the neo
+    /// `sim_neo()` builder) share this `.shots(n).run()` shape.
+    #[must_use]
+    pub fn shots(self, shots: usize) -> Self {
+        self.sampling(monte_carlo(shots))
+    }
+
+    /// Set the Monte Carlo sampling strategy (shot count plus optional worker
+    /// parallelism), e.g. `.sampling(monte_carlo(1000).workers(8))`.
+    ///
+    /// [`monte_carlo()`](pecos_engines::sampling::monte_carlo) is the shared
+    /// cross-stack run-spec, so the SAME spelling works on both the engines and
+    /// neo stacks. The shot count is required; worker settings are applied only
+    /// when explicitly configured on the spec, so this never silently overrides
+    /// a separate [`workers()`](Self::workers) call unless the spec sets workers
+    /// too. (Richer rare-event strategies -- importance sampling, subset
+    /// simulation -- are neo-only and configured via `sim_neo()` directly.)
+    #[must_use]
+    pub fn sampling(mut self, sampling: impl Into<MonteCarloBuilder>) -> Self {
+        let mc = sampling.into();
+        self.routed.shots = Some(mc.shots());
+        if mc.auto_workers_requested() {
+            self.routed.auto_workers = true;
+            self.base_builder = self.base_builder.auto_workers();
+        } else if let Some(workers) = mc.worker_count() {
+            self.routed.workers = Some(workers);
+            self.base_builder = self.base_builder.workers(workers);
+        }
+        self
+    }
+
+    /// Build and run the simulation with automatic engine selection.
+    ///
+    /// The shot count must be configured first via [`shots()`](Self::shots);
+    /// `run()` takes no argument and fails fast if no count was set, rather than
+    /// defaulting silently.
     ///
     /// # Errors
     ///
     /// Returns an error if:
+    /// - No shot count was configured via [`shots()`](Self::shots)
     /// - The program type is not yet supported (WASM, WAT, PHIR JSON, `SeleneInterface`)
     /// - Engine building or running fails
     /// - The neo stack is selected with configuration it cannot route yet
-    pub fn run(self, shots: usize) -> Result<pecos_engines::shot_results::ShotVec, PecosError> {
+    pub fn run(self) -> Result<pecos_engines::shot_results::ShotVec, PecosError> {
+        let shots = self.routed.shots.ok_or_else(|| {
+            PecosError::Input(
+                "No shot count configured; set one with .shots(n) before .run(). \
+                 Example: sim(program).shots(1000).run()."
+                    .to_string(),
+            )
+        })?;
         match self.stack {
             SimStack::Engines => self.configure_engine()?.run(shots),
             SimStack::Neo => self.run_neo(shots),
@@ -567,7 +621,8 @@ impl ProgrammedSimBuilder {
 ///     .quantum(sparse_stab())
 ///     .noise(DepolarizingNoise { p: 0.01 })
 ///     .seed(42)
-///     .run(100)?;
+///     .shots(100)
+///     .run()?;
 /// # Ok::<(), pecos_core::errors::PecosError>(())
 /// ```
 pub fn sim<P: Into<Program>>(program: P) -> ProgrammedSimBuilder {

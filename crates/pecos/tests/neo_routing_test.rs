@@ -18,7 +18,7 @@
 
 #![cfg(feature = "neo")]
 
-use pecos::{SimStack, sim};
+use pecos::{SimStack, monte_carlo, sim};
 use pecos_programs::Qasm;
 
 /// Deterministic program exercising measurement feedback: c ends as "11".
@@ -42,13 +42,15 @@ fn neo_stack_matches_engines_for_deterministic_qasm() {
     let engines = sim(deterministic_conditional_qasm())
         .stack(SimStack::Engines)
         .seed(42)
-        .run(5)
+        .shots(5)
+        .run()
         .expect("engines run");
 
     let neo = sim(deterministic_conditional_qasm())
         .stack(SimStack::Neo)
         .seed(42)
-        .run(5)
+        .shots(5)
+        .run()
         .expect("neo run");
 
     assert_eq!(engines.shots.len(), 5);
@@ -67,14 +69,16 @@ fn neo_stack_parallel_matches_engines() {
         .stack(SimStack::Engines)
         .seed(7)
         .workers(2)
-        .run(6)
+        .shots(6)
+        .run()
         .expect("engines run");
 
     let neo = sim(deterministic_conditional_qasm())
         .stack(SimStack::Neo)
         .seed(7)
         .workers(2)
-        .run(6)
+        .shots(6)
+        .run()
         .expect("neo run");
 
     assert_eq!(engines, neo);
@@ -94,7 +98,8 @@ fn neo_stack_worker_count_invariant_for_noisy_program() {
             .noise(noise)
             .seed(42)
             .workers(workers)
-            .run(128)
+            .shots(128)
+            .run()
             .expect("neo run")
     };
     let w1 = run(1);
@@ -129,7 +134,8 @@ fn neo_stack_same_seed_is_reproducible() {
             .stack(SimStack::Neo)
             .noise(noise)
             .seed(123)
-            .run(64)
+            .shots(64)
+            .run()
             .expect("neo run")
     };
     assert_eq!(
@@ -179,13 +185,15 @@ fn neo_stack_measurement_noise_rate_matches_engines() {
         .stack(SimStack::Engines)
         .noise(noise.clone())
         .seed(42)
-        .run(shots)
+        .shots(shots)
+        .run()
         .expect("engines run");
     let neo = sim(x_measure_qasm())
         .stack(SimStack::Neo)
         .noise(noise)
         .seed(42)
-        .run(shots)
+        .shots(shots)
+        .run()
         .expect("neo run");
 
     let engines_rate = rate_of(&engines, "0");
@@ -220,7 +228,8 @@ fn neo_stack_uniform_depolarizing_rate_matches_engines() {
             .stack(stack)
             .noise(pecos_engines::DepolarizingNoise { p: 0.1 })
             .seed(seed)
-            .run(shots)
+            .shots(shots)
+            .run()
             .expect("run")
     };
 
@@ -249,7 +258,8 @@ fn neo_stack_biased_depolarizing_struct_rate_matches_engines() {
             .stack(stack)
             .noise(pecos_engines::BiasedDepolarizingNoise { p: 0.1 })
             .seed(seed)
-            .run(shots)
+            .shots(shots)
+            .run()
             .expect("run")
     };
 
@@ -291,7 +301,8 @@ fn neo_stack_general_noise_average_convention_matches() {
             .stack(stack)
             .noise(noise)
             .seed(11)
-            .run(shots)
+            .shots(shots)
+            .run()
             .expect("run")
     };
 
@@ -320,7 +331,8 @@ fn neo_stack_rejects_unmapped_noise() {
     let err = sim(deterministic_conditional_qasm())
         .stack(SimStack::Neo)
         .noise(general)
-        .run(5)
+        .shots(5)
+        .run()
         .expect_err("beyond-subset GeneralNoiseModel configs are not mapped");
     assert!(
         err.to_string()
@@ -334,7 +346,8 @@ fn neo_stack_rejects_unrouted_quantum_backend() {
     let err = sim(deterministic_conditional_qasm())
         .stack(SimStack::Neo)
         .quantum(pecos_engines::state_vector())
-        .run(5)
+        .shots(5)
+        .run()
         .expect_err("explicit quantum backends are not yet routed");
     assert!(err.to_string().contains("not yet routed to the neo stack"));
 }
@@ -348,4 +361,64 @@ fn neo_stack_rejects_build() {
         panic!("neo stack has no MonteCarloEngine; build() must error");
     };
     assert!(err.to_string().contains("MonteCarloEngine"));
+}
+
+// --- Shared sampling vocabulary (.sampling(monte_carlo(n))) ----------------
+
+/// The shared `monte_carlo()` run-spec drives BOTH stacks through the facade,
+/// and `.shots(n)` is exactly its shorthand. A deterministic program lets us
+/// assert exact `ShotVec` equality across the two spellings and the two stacks.
+#[test]
+fn facade_sampling_monte_carlo_drives_both_stacks() {
+    for stack in [SimStack::Engines, SimStack::Neo] {
+        let via_sampling = sim(deterministic_conditional_qasm())
+            .stack(stack)
+            .seed(42)
+            .sampling(monte_carlo(5))
+            .run()
+            .expect("sampling run");
+        let via_shots = sim(deterministic_conditional_qasm())
+            .stack(stack)
+            .seed(42)
+            .shots(5)
+            .run()
+            .expect("shots run");
+
+        assert_eq!(via_sampling.shots.len(), 5);
+        assert_eq!(
+            via_sampling, via_shots,
+            "{stack:?}: .sampling(monte_carlo(5)) must equal .shots(5)"
+        );
+        for shot in &via_sampling.shots {
+            assert_eq!(shot.data["c"].to_bitstring().unwrap(), "11");
+        }
+    }
+}
+
+/// `monte_carlo(n).workers(w)` carries worker parallelism through the facade on
+/// both stacks; the deterministic program's results are worker-count invariant.
+#[test]
+fn facade_sampling_workers_runs_parallel_on_both_stacks() {
+    for stack in [SimStack::Engines, SimStack::Neo] {
+        let serial = sim(deterministic_conditional_qasm())
+            .stack(stack)
+            .seed(7)
+            .sampling(monte_carlo(6))
+            .run()
+            .expect("serial run");
+        let parallel = sim(deterministic_conditional_qasm())
+            .stack(stack)
+            .seed(7)
+            .sampling(monte_carlo(6).workers(2))
+            .run()
+            .expect("parallel run");
+
+        assert_eq!(parallel.shots.len(), 6);
+        // A deterministic program yields identical outcomes regardless of how
+        // shots are split across workers, on either stack.
+        assert_eq!(
+            serial, parallel,
+            "{stack:?}: worker count must not change deterministic results"
+        );
+    }
 }

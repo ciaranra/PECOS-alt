@@ -81,7 +81,7 @@ fn run_stack(qasm: &str, stack: SimStack, noisy: bool) {
     if noisy {
         builder = builder.noise(pecos_engines::DepolarizingNoise { p: 0.001 });
     }
-    let results = builder.run(SHOTS).expect("run");
+    let results = builder.shots(SHOTS).run().expect("run");
     assert_eq!(results.shots.len(), SHOTS);
 }
 

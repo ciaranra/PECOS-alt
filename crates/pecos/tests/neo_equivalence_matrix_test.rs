@@ -166,13 +166,14 @@ impl NoiseCell {
                 .with_p2_probability(p2)
         };
         let results = match *self {
-            Self::Meas(p) => builder.noise(depol(0.0, p, 0.0, 0.0)).run(SHOTS),
-            Self::Prep(p) => builder.noise(depol(p, 0.0, 0.0, 0.0)).run(SHOTS),
-            Self::P1(p) => builder.noise(depol(0.0, 0.0, p, 0.0)).run(SHOTS),
-            Self::P2(p) => builder.noise(depol(0.0, 0.0, 0.0, p)).run(SHOTS),
+            Self::Meas(p) => builder.noise(depol(0.0, p, 0.0, 0.0)).shots(SHOTS).run(),
+            Self::Prep(p) => builder.noise(depol(p, 0.0, 0.0, 0.0)).shots(SHOTS).run(),
+            Self::P1(p) => builder.noise(depol(0.0, 0.0, p, 0.0)).shots(SHOTS).run(),
+            Self::P2(p) => builder.noise(depol(0.0, 0.0, 0.0, p)).shots(SHOTS).run(),
             Self::Uniform(p) => builder
                 .noise(pecos_engines::DepolarizingNoise { p })
-                .run(SHOTS),
+                .shots(SHOTS)
+                .run(),
             Self::GnmSimple { average_p1, p_meas } => builder
                 .noise(
                     // GeneralNoiseModel has realistic non-zero defaults;
@@ -189,7 +190,8 @@ impl NoiseCell {
                         .with_meas_0_probability(p_meas)
                         .with_meas_1_probability(p_meas),
                 )
-                .run(SHOTS),
+                .shots(SHOTS)
+                .run(),
             Self::GnmAngle {
                 p2,
                 angle_params: (a, b, c, d),
@@ -212,7 +214,8 @@ impl NoiseCell {
                         .with_meas_0_probability(0.0)
                         .with_meas_1_probability(0.0),
                 )
-                .run(SHOTS),
+                .shots(SHOTS)
+                .run(),
             Self::BiasedMeas { p_meas_0, p_meas_1 } => builder
                 .noise(
                     // Asymmetric record-flip measurement, no gate/prep noise.
@@ -223,7 +226,8 @@ impl NoiseCell {
                         .with_single_qubit_probability(0.0)
                         .with_two_qubit_probability(0.0),
                 )
-                .run(SHOTS),
+                .shots(SHOTS)
+                .run(),
         };
         results.expect("simulation run")
     }
