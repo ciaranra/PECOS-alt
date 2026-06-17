@@ -412,7 +412,7 @@ impl PySimBuilder {
             | SimBuilderInner::Phir(_) => {
                 if parsed == PySimStack::Neo {
                     return Err(PyValueError::new_err(
-                        "Only QASM programs are routed to the neo stack so far; \
+                        "Only QASM and HUGR programs are routed to the neo stack so far; \
                          this program type runs on the engines stack",
                     ));
                 }

@@ -33,9 +33,10 @@ pub enum SimStack {
     Engines,
     /// The data-oriented `pecos-neo` stack (experimental).
     ///
-    /// Requires building pecos with the `neo` cargo feature. Currently
-    /// routes QASM programs with the default quantum backend (HUGR runs but
-    /// does not yet match the engines result contract, so it is rejected).
+    /// Requires building pecos with the `neo` cargo feature. Routes QASM and
+    /// HUGR programs with the default quantum backend (HUGR runs through the
+    /// PHIR engine so its results use the same named-register contract as the
+    /// engines/QASM path, with no Selene/LLVM dependency).
     /// The translated noise surface is the depolarizing family
     /// (`PassThroughNoise`, `DepolarizingNoise`, `BiasedDepolarizingNoise`,
     /// and their builders) and the `GeneralNoiseModel` simple-probability
@@ -200,7 +201,7 @@ impl ProgrammedSimBuilder {
     /// Run the program on the pecos-neo stack.
     #[cfg(feature = "neo")]
     fn run_neo(self, shots: usize) -> Result<pecos_engines::shot_results::ShotVec, PecosError> {
-        use pecos_neo::tool::{monte_carlo, sim_neo};
+        use pecos_neo::tool::{monte_carlo, sim_neo, sim_neo_builder};
 
         if self.override_classical {
             return Err(PecosError::Input(
@@ -220,35 +221,6 @@ impl ProgrammedSimBuilder {
                     .to_string(),
             ));
         }
-        match &self.program {
-            Program::Qasm(_) => {}
-            Program::Hugr(_) => {
-                // HUGR runs on neo via pecos_hugr::hugr_engine, whose result
-                // contract differs from the engines/QASM path: for HUGR programs
-                // without explicit result() captures it emits per-qubit `q0`/`q1`
-                // values and a `measurements` array instead of the program's
-                // named classical register (e.g. "c"). Returning that silently
-                // would break consumers that index `shot.data["c"]`, so reject
-                // until the neo HUGR result contract is reconciled (the physics
-                // is already correct; only the register naming diverges).
-                return Err(PecosError::Input(
-                    "HUGR programs are not yet routed to the neo stack: the neo HUGR \
-                     engine emits a different result contract (per-qubit q0/q1 plus a \
-                     `measurements` array) than the engines and QASM paths (the \
-                     program's named classical register, e.g. \"c\") for programs \
-                     without explicit result() captures, so neo HUGR results are not \
-                     yet drop-in compatible. Use .stack(SimStack::Engines) for HUGR."
-                        .to_string(),
-                ));
-            }
-            _ => {
-                return Err(PecosError::Input(
-                    "Only QASM programs are routed to the neo stack so far; \
-                     use .stack(SimStack::Engines) for other program types."
-                        .to_string(),
-                ));
-            }
-        }
 
         let mut sampler = monte_carlo(shots);
         if let Some(workers) = self.routed.workers {
@@ -258,7 +230,33 @@ impl ProgrammedSimBuilder {
             sampler = sampler.auto_workers();
         }
 
-        let mut builder = sim_neo(self.program).auto().sampling(sampler);
+        // QASM auto-selects the QASM engine. HUGR is routed through the PHIR
+        // engine (HUGR -> PHIR), which emits the program's NAMED classical
+        // register (e.g. "c") -- matching the engines/QASM result contract --
+        // and needs no Selene/LLVM. (neo's own `hugr_engine` would instead emit
+        // per-qubit `q0`/`q1` and a `measurements` array, which is not
+        // drop-in compatible; the named-register PHIR path is, so it is the one
+        // routed here.)
+        let configured = match self.program {
+            Program::Qasm(qasm) => sim_neo(qasm).auto(),
+            Program::Hugr(hugr) => {
+                let phir_engine = pecos_phir::phir_engine()
+                    .from_hugr_bytes(&hugr.hugr)
+                    .map_err(|e| {
+                        PecosError::Generic(format!("Failed to load HUGR program: {e}"))
+                    })?;
+                sim_neo_builder().with_engine(phir_engine).auto()
+            }
+            _ => {
+                return Err(PecosError::Input(
+                    "Only QASM and HUGR programs are routed to the neo stack so far; \
+                     use .stack(SimStack::Engines) for other program types."
+                        .to_string(),
+                ));
+            }
+        };
+
+        let mut builder = configured.sampling(sampler);
         if let Some(seed) = self.routed.seed {
             builder = builder.seed(seed);
         }
