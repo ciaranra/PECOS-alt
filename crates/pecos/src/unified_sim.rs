@@ -34,9 +34,13 @@ pub enum SimStack {
     /// The data-oriented `pecos-neo` stack (experimental).
     ///
     /// Requires building pecos with the `neo` cargo feature. Routes QASM and
-    /// HUGR programs with the default quantum backend (HUGR runs through the
-    /// PHIR engine so its results use the same named-register contract as the
-    /// engines/QASM path, with no Selene/LLVM dependency).
+    /// HUGR programs with the default quantum backend. HUGR runs through the
+    /// PHIR engine, so its results use the same named-register contract as the
+    /// engines/QASM path with no Selene/LLVM dependency -- but only for the
+    /// PHIR converter's STRAIGHT-LINE subset; HUGR with classical control flow
+    /// (loops, conditionals) is rejected (use `SimStack::Engines` for those).
+    /// (Note: the engines stack runs HUGR through QIS/Selene, a different and
+    /// broader HUGR engine -- a consideration for the eventual default flip.)
     /// The translated noise surface is the depolarizing family
     /// (`PassThroughNoise`, `DepolarizingNoise`, `BiasedDepolarizingNoise`,
     /// and their builders) and the `GeneralNoiseModel` simple-probability
@@ -236,7 +240,10 @@ impl ProgrammedSimBuilder {
         // and needs no Selene/LLVM. (neo's own `hugr_engine` would instead emit
         // per-qubit `q0`/`q1` and a `measurements` array, which is not
         // drop-in compatible; the named-register PHIR path is, so it is the one
-        // routed here.)
+        // routed here.) The PHIR converter is STRAIGHT-LINE only: HUGR with
+        // classical control flow is rejected by `from_hugr_bytes` below (and
+        // any residual empty-result shape is caught by the contract guard after
+        // `run`).
         let configured = match self.program {
             Program::Qasm(qasm) => sim_neo(qasm).auto(),
             Program::Hugr(hugr) => {
@@ -268,13 +275,29 @@ impl ProgrammedSimBuilder {
         }
 
         let results = builder.run();
-        results.shots.ok_or_else(|| {
+        let shot_vec = results.shots.ok_or_else(|| {
             PecosError::Generic(
                 "The neo stack produced no register results for a classical-engine program; \
                  this is a bug in the neo routing."
                     .to_string(),
             )
-        })
+        })?;
+
+        // Result-contract guard. A HUGR shape the straight-line PHIR converter
+        // cannot represent can yield shots with NO register data instead of a
+        // clean load error (e.g. an op silently skipped during conversion).
+        // Surface that as an error rather than returning empty results that
+        // look like a successful run. (QASM always carries its cregs, so this
+        // never trips there.)
+        if !shot_vec.shots.is_empty() && shot_vec.shots.iter().all(|shot| shot.data.is_empty()) {
+            return Err(PecosError::Input(
+                "The neo stack produced empty results (no register data) for this program. \
+                 If it is a HUGR program, it likely uses features the straight-line PHIR \
+                 route does not support; use .stack(SimStack::Engines)."
+                    .to_string(),
+            ));
+        }
+        Ok(shot_vec)
     }
 
     /// Stub when pecos is built without the `neo` feature.

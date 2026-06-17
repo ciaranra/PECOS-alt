@@ -134,3 +134,28 @@ fn neo_hugr_support_matches_engines_phir() {
     );
     assert_eq!(neo, BTreeSet::from([0, 3]));
 }
+
+#[test]
+fn neo_hugr_control_flow_is_rejected() {
+    // The PHIR HUGR converter is straight-line only. HUGR with classical
+    // control flow (loops, conditionals) must be REJECTED up front, not
+    // silently converted into empty/partial results that look like a
+    // successful run. Each of these fixtures compiles to a CFG with multiple
+    // basic blocks.
+    for fixture in [
+        &include_bytes!("test_data/hugr/simple_while_loop.hugr")[..],
+        &include_bytes!("test_data/hugr/forloop_h_test.hugr")[..],
+        &include_bytes!("test_data/hugr/simple_conditional.hugr")[..],
+        &include_bytes!("test_data/hugr/conditional_x.hugr")[..],
+    ] {
+        let err = sim(Hugr::from_bytes(fixture.to_vec()))
+            .stack(SimStack::Neo)
+            .seed(42)
+            .run(4)
+            .expect_err("control-flow HUGR must be rejected on the neo stack");
+        assert!(
+            err.to_string().contains("classical control flow"),
+            "expected a control-flow rejection, got: {err}"
+        );
+    }
+}
