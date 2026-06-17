@@ -40,6 +40,7 @@ fn deterministic_conditional_qasm() -> Qasm {
 #[test]
 fn neo_stack_matches_engines_for_deterministic_qasm() {
     let engines = sim(deterministic_conditional_qasm())
+        .stack(SimStack::Engines)
         .seed(42)
         .run(5)
         .expect("engines run");
@@ -63,6 +64,7 @@ fn neo_stack_matches_engines_for_deterministic_qasm() {
 #[test]
 fn neo_stack_parallel_matches_engines() {
     let engines = sim(deterministic_conditional_qasm())
+        .stack(SimStack::Engines)
         .seed(7)
         .workers(2)
         .run(6)
@@ -174,6 +176,7 @@ fn neo_stack_measurement_noise_rate_matches_engines() {
         .with_p2_probability(0.0);
 
     let engines = sim(x_measure_qasm())
+        .stack(SimStack::Engines)
         .noise(noise.clone())
         .seed(42)
         .run(shots)
